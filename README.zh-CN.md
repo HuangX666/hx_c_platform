@@ -10,7 +10,7 @@
 [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md)
 [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md)
 [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md)
-[![本地 32/32 组测试通过][tests-badge]](docs/VALIDATION.zh-CN.md)
+[![本地 33/33 组测试通过][tests-badge]](docs/VALIDATION.zh-CN.md)
 [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md)
 
 系统信息可通过 C 接口或 `hx::SystemInfo` 直接查询；
@@ -282,5 +282,5 @@ C++ 封装按项目的 C++ 类名和方法名规范命名。
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-32%2F32%20suites%20local-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-33%2F33%20suites%20local-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey

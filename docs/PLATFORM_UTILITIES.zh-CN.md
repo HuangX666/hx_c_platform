@@ -445,3 +445,19 @@ if (status == HX_OS_OK && !inside)
 	status = hx_os_task_wait_until(task, deadline, &work_status, &error);
 /* Inside a worker, continue asynchronously instead of waiting for new work. */
 ```
+
+## 原生错误文本
+
+hx_os_error_message 为 GAI 错误追加严格 UTF-8 的原生说明，Apple 上还支持
+Mach 域。既有状态／domain／code 前缀和其他域行为保持不变。说明不可用、过长、
+不符合 UTF-8 或原生值超出 int 范围时，保留数值诊断；原始 error 中的
+cause_code 不变。required 包含 NUL，小缓冲区会终止，但截断结果不保证落在
+UTF-8 字符边界；按所需容量取得完整文本。
+
+POSIX 使用 gai_strerror，Apple 增加 mach_error_string。Windows 用调用内
+宽字符缓冲区接收 FormatMessageW，再严格转为 UTF-8；无须 WSAStartup，
+NETWORK 关闭也可用。[Microsoft 文档](https://learn.microsoft.com/en-us/windows/win32/api/ws2tcpip/nf-ws2tcpip-gai_strerrorw)
+明确 gai_strerrorW 使用非线程安全存储。原生措辞取决于系统及 locale，不应用于
+程序分支判断，也不要并发修改进程 locale。C 路径不新增本库分配或锁。
+C++ StatusError::message() 返回持有完整原生详情的 std::string；what() 的
+原有非抛异常状态名行为和对象布局不变。hello C 示例已接入详细错误输出。

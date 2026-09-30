@@ -3,6 +3,7 @@
 
 #include <hx_os_base.h>
 #include <exception>
+#include <string>
 
 namespace hx {
 
@@ -27,6 +28,23 @@ public:
 	const hx_os_error &error() const noexcept
 	{
 		return m_error_;
+	}
+	/* Explicit allocation; what() retains its existing nonthrowing
+	 * behavior. */
+	std::string message() const
+	{
+		size_t required;
+		hx_os_status status =
+			hx_os_error_message(&m_error_, NULL, 0, &required);
+		if (status != HX_OS_OUTPUT_FULL)
+			throw StatusError(status);
+		std::string text(required, '\0');
+		status = hx_os_error_message(
+			&m_error_, &text[0], text.size(), &required);
+		if (status != HX_OS_OK)
+			throw StatusError(status);
+		text.resize(required - 1);
+		return text;
 	}
 
 private:

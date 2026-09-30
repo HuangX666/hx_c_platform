@@ -482,3 +482,14 @@ compiled independently as C99/C++11. Identity tests distinguish the host, the
 own worker, its cleanup and another pool. Self-wait/close reject deadlock, while
 finished own-pool tasks remain readable. No layout, allocation, lock, syscall or
 worker-path change; the query reuses existing TLS. Native target runs pending.
+
+## OBS completion batch 13 (2026-09-30)
+
+Windows/WSL full CTest passed 33/33; ASan/UBSan and TSan each passed 3/3
+(core, error_text, cpp_platform). NETWORK=OFF passed 3/3 per host, with GAI
+messages available without network initialization. Tests cover native text,
+UTF-8 validity, unchanged numeric fallback, out-of-range codes, capacity/NUL/
+canary handling, four concurrent callers and the C++ owned message. Public
+headers compiled as C99/C++11. A Windows SDK macro collision in a test-local
+variable was corrected before the final Windows build. Mach implementation and
+its guarded test remain pending on macOS; Win7 and embedded runs are pending.

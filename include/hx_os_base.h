@@ -105,6 +105,11 @@ typedef struct hx_os_context_options {
 
 HX_OS_API const char *HX_OS_CALL hx_os_status_name(hx_os_status status);
 HX_OS_API void HX_OS_CALL hx_os_error_clear(hx_os_error *error);
+/* required includes NUL; a small buffer is NUL-terminated when capacity > 0.
+ * Native GAI text and Apple Mach text are appended only when valid UTF-8.
+ * Other targets retain numeric Mach diagnostics. No network initialization.
+ * Locale-dependent text is diagnostic, not a stable machine-readable key.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_error_message(const hx_os_error *error,
 	char *buffer, size_t capacity, size_t *required);
 HX_OS_API void HX_OS_CALL hx_os_context_options_init(

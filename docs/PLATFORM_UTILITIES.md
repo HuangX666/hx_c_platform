@@ -558,3 +558,24 @@ if (status == HX_OS_OK && !inside)
 	status = hx_os_task_wait_until(task, deadline, &work_status, &error);
 /* Inside a worker, continue asynchronously instead of waiting for new work. */
 ```
+
+## Native error text
+
+hx_os_error_message now appends a strict UTF-8 diagnostic for GAI errors and,
+on Apple, Mach errors. The existing status/domain/code prefix and all other
+domain behavior are preserved. Unavailable, oversized, non-UTF-8 or out-of-int
+native messages keep the numeric fallback. cause_code remains available in the
+original error object; formatting never modifies it. required includes NUL;
+a short buffer is terminated when capacity is nonzero, but partial output need
+not end on a UTF-8 boundary. Use the reported capacity for the complete message.
+
+POSIX uses gai_strerror; Apple additionally uses mach_error_string. Windows
+uses FormatMessageW into call-local storage followed by strict UTF-8 conversion,
+without WSAStartup, working even with NETWORK disabled. Microsoft's
+[gai_strerrorW documentation](https://learn.microsoft.com/en-us/windows/win32/api/ws2tcpip/nf-ws2tcpip-gai_strerrorw)
+warns about shared, non-thread-safe storage. Diagnostic wording is native and
+locale dependent; do not match it for control flow or concurrently change the
+process locale. There is no new first-party heap allocation or lock in C.
+C++ StatusError::message() returns an owned std::string with full native detail;
+what() retains its existing nonthrowing status-only behavior and object layout.
+The hello C example now uses the detailed diagnostic on failure.

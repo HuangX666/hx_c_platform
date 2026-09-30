@@ -98,6 +98,12 @@ static void test_cpp_pipe()
 int main(int argc, char **argv)
 {
 	CHECK(argc == 2);
+	{
+		hx_os_error native = {HX_OS_IO_ERROR, HX_OS_ERROR_NONE, 123, 0};
+		hx::StatusError error(native);
+		CHECK(error.message() == "I/O error [domain=0 code=123]");
+		CHECK(std::string(error.what()) == "I/O error");
+	}
 	TestSystemInfo();
 	test_cpp_pipe();
 	if (hx_os_capabilities() & HX_OS_CAP_TIMER) {

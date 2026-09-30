@@ -26,7 +26,7 @@ embedded target runs remain separately identified target validation.
 | 10 | Configuration serialization and floating point | Windows/Linux 30/30; ASan 4/4; TSan 4/4; native targets pending |
 | 11 | Periodic timers | Windows/Linux 32/32; ASan 6/6; TSan 6/6; native targets pending |
 | 12 | Pool worker identity query | Windows/Linux 32/32; ASan 3/3; TSan 3/3; native targets pending |
-| 13 | GAI and Mach error text | Pending |
+| 13 | GAI and Mach error text | Windows/Linux 33/33; ASan 3/3; TSan 3/3; Mach target pending |
 | 14 | Random, UUID, CRC32, secure zero | Pending |
 | 15 | Pages and mappings | Pending |
 | 16 | File locks, timestamps, permissions | Pending |

@@ -5,6 +5,11 @@
 
 #if defined(_WIN32)
 #include <windows.h>
+#else
+#include <netdb.h>
+#if defined(__APPLE__)
+#include <mach/mach_error.h>
+#endif
 #endif
 
 typedef union hx_os_i_memory_header {
@@ -197,6 +202,48 @@ const char *hx_os_status_name(hx_os_status status)
 	}
 }
 
+/* Only the newly supported domains use this strict, bounded snapshot. */
+static void hx_os_error_extra_text(
+	const hx_os_error *error, char *buffer, size_t capacity)
+{
+	size_t invalid;
+	if (error->native_code < INT_MIN || error->native_code > INT_MAX)
+		return;
+#if defined(_WIN32)
+	if (error->domain == HX_OS_ERROR_GAI) {
+		wchar_t wide[1024];
+		DWORD count = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM |
+				FORMAT_MESSAGE_IGNORE_INSERTS,
+			NULL, (DWORD)error->native_code, 0, wide, 1024, NULL);
+		/* gai_strerrorW shares static storage on Windows. */
+		if (count &&
+			!WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+				wide, -1, buffer, (int)capacity, NULL, NULL))
+			buffer[0] = '\0';
+	}
+#else
+	{
+		const char *message = NULL;
+		if (error->domain == HX_OS_ERROR_GAI)
+			message = gai_strerror((int)error->native_code);
+#if defined(__APPLE__)
+		else if (error->domain == HX_OS_ERROR_MACH)
+			message = mach_error_string((int)error->native_code);
+#endif
+		if (message) {
+			size_t bytes = strlen(message);
+			if (bytes < capacity &&
+				hx_os_text_validate_utf8(
+					message, bytes, &invalid) == HX_OS_OK)
+				memcpy(buffer, message, bytes + 1);
+		}
+	}
+#endif
+	if (hx_os_text_validate_utf8(buffer, strlen(buffer), &invalid) !=
+		HX_OS_OK)
+		buffer[0] = '\0';
+}
+
 hx_os_status hx_os_error_message(const hx_os_error *error, char *buffer,
 	size_t capacity, size_t *required)
 {
@@ -240,6 +287,9 @@ hx_os_status hx_os_error_message(const hx_os_error *error, char *buffer,
 				message, strlen(message), &offset) == HX_OS_OK)
 			(void)snprintf(native, sizeof(native), "%s", message);
 	}
+	if (error->domain == HX_OS_ERROR_GAI ||
+		error->domain == HX_OS_ERROR_MACH)
+		hx_os_error_extra_text(error, native, sizeof(native));
 	length = snprintf(buffer, capacity,
 		"%s [domain=%u code=%" PRId64 "]%s%s",
 		hx_os_status_name(error->status), error->domain,

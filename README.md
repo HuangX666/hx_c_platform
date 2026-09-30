@@ -10,7 +10,7 @@
 [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md)
 [![macOS validation pending][macos-badge]](docs/VALIDATION.md)
 [![Windows MSVC][windows-badge]](docs/VALIDATION.md)
-[![32 of 32 local test suites passed][tests-badge]](docs/VALIDATION.md)
+[![33 of 33 local test suites passed][tests-badge]](docs/VALIDATION.md)
 [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md)
 
 Query system information directly through C or `hx::SystemInfo`;
@@ -298,5 +298,5 @@ by this new library or a migration.
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-32%2F32%20suites%20local-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-33%2F33%20suites%20local-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey

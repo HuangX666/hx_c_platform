@@ -430,3 +430,12 @@ cpp_pool、lifecycle。THREAD_POOL 关闭两端各 2/2，公共头 C99/C++11 独
 身份测试区分宿主线程、本池工作线程及 cleanup、其他池；自身等待／关闭拒绝，
 本池已经完成的任务仍可读取。复用现有 TLS，未增加布局、分配、锁、系统调用
 或工作线程路径开销。原生目标运行待验证。
+
+## OBS 补齐第 13 批（2026-09-30）
+
+Windows／WSL 全量 CTest 各 33/33，ASan/UBSan、TSan 各 3/3（core、
+error_text、cpp_platform）。NETWORK 关闭两端各 3/3，无网络初始化也能生成
+GAI 说明。覆盖 UTF-8、数值回退、越界代码、容量／NUL／哨兵、四线程并发、
+C++ 持有文本；公共头 C99/C++11 独立编译。测试局部变量与 Windows SDK 宏冲突
+已在最终 Windows 构建前修正。Mach 实现及条件测试待 macOS，Win7 和嵌入式
+实测待补。
