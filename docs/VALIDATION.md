@@ -333,3 +333,12 @@ long paths, BOM policy, exact input limits, output preservation, same-file copy
 rejection, backup collisions, cwd round trips, glob, bounded cleanup and
 allocator ownership. Windows symlink creation was skipped for insufficient
 privilege; Linux no-follow removal passed. Other native targets remain pending.
+
+## OBS completion batch 4 (2026-09-30)
+
+Windows/WSL full CTest passed 18/18; related ASan/UBSan passed 4/4
+(env, environment_example, cpp_platform, file_utils). ENV=OFF checks passed
+on both hosts. Coverage includes empty versus missing values, UTF-8, retained
+outputs, conditional replacement, concurrent library calls and an output
+allocator that reenters environment reading without deadlock. Windows path
+regressions also passed after extracting the shared UTF-8/UTF-16 helper.

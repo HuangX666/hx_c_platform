@@ -149,3 +149,31 @@ while (directory.next(name)) {
 
 `examples/text_file.c` 一次调用读取 UTF-8，并可原子发布到第二个路径；
 CTest 在两个平台运行同一份 C 源码。
+
+## 环境变量
+
+`HX_OS_ENABLE_ENV` 默认 ON。`hx_os_env_get_string` 使用输出字符串的
+context 返回拥有所有权的 UTF-8，`hx::Environment::get` 返回 std::string。
+`getOr` 仅在变量不存在时使用默认值，空值仍然返回空值。
+缓冲区接口所需容量包含 NUL。
+
+`hx_os_env_set(name, value, replace, error)` 明确修改当前进程环境；
+replace=0 保留已有值，包括空值。删除不存在的变量成功。
+输入仅在调用期间借用，名称不得为空或含 '='，无效 UTF-8 会被拒绝。
+操作系统复制设置值，修改影响以后启动的子进程，不影响父进程或已运行子进程。
+
+同一份已加载库内的调用互相同步；原生 API、CRT 或另一份库实例的修改仍需
+宿主协调。输出分配器回调在锁外执行，允许再次调用读取接口。
+字符串容量最多重试八次；值持续增长时返回 BUSY 并保留原输出。
+Windows 使用 Win32 Unicode 环境块，CRT 的 `getenv`／`_environ` 缓存
+独立，可能看不到 Win32 修改，应成组使用本库读写接口。
+POSIX 原生值不是 UTF-8 时返回 INVALID_ENCODING，不修改 locale 或猜测编码。
+
+```cpp
+#include <hx/Environment.hpp>
+auto value = hx::Environment::getOr("APP_MODE", "normal");
+hx::Environment::set("APP_MODE", "diagnostic");
+```
+
+`examples/environment.c` 直接查询指定变量。CTest 只在测试子进程环境中
+注入专用测试值，不修改宿主设置。

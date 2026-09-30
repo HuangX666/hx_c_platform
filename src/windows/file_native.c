@@ -14,21 +14,14 @@ struct hx_os_directory {
 };
 int hx_os_i_file_flags_valid(uint32_t flags);
 
-wchar_t *hx_os_i_windows_path(
-	hx_os_context *context, const char *path, hx_os_error *error)
+wchar_t *hx_os_i_windows_utf16(
+	hx_os_context *context, const char *text, hx_os_error *error)
 {
 	int count;
 	wchar_t *input;
-	wchar_t *full;
-	wchar_t *result;
-	DWORD needed;
-	DWORD written;
 	DWORD code;
-	size_t prefix;
-	if (hx_os_i_path_validate(path, error) != HX_OS_OK)
-		return NULL;
 	count = MultiByteToWideChar(
-		CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, NULL, 0);
+		CP_UTF8, MB_ERR_INVALID_CHARS, text, -1, NULL, 0);
 	if (!count) {
 		(void)hx_os_i_win32(error, GetLastError());
 		return NULL;
@@ -39,12 +32,30 @@ wchar_t *hx_os_i_windows_path(
 		return NULL;
 	}
 	if (!MultiByteToWideChar(
-		    CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, input, count)) {
+		    CP_UTF8, MB_ERR_INVALID_CHARS, text, -1, input, count)) {
 		code = GetLastError();
 		hx_os_memory_free(input);
 		(void)hx_os_i_win32(error, code);
 		return NULL;
 	}
+	return input;
+}
+
+wchar_t *hx_os_i_windows_path(
+	hx_os_context *context, const char *path, hx_os_error *error)
+{
+	wchar_t *input;
+	wchar_t *full;
+	wchar_t *result;
+	DWORD needed;
+	DWORD written;
+	DWORD code;
+	size_t prefix;
+	if (hx_os_i_path_validate(path, error) != HX_OS_OK)
+		return NULL;
+	input = hx_os_i_windows_utf16(context, path, error);
+	if (!input)
+		return NULL;
 	if (!wcsncmp(input, L"\\\\?\\", 4) || !wcsncmp(input, L"\\\\.\\", 4))
 		return input;
 	needed = GetFullPathNameW(input, 0, NULL, NULL);

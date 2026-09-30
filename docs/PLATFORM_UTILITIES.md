@@ -180,3 +180,34 @@ optional convenience layer and returns standard C++ strings/vectors.
 
 `examples/text_file.c` reads UTF-8 in one call and optionally atomically
 publishes it to a second path; CTest runs the same C source on both hosts.
+
+## Environment
+
+`HX_OS_ENABLE_ENV` defaults to ON. `hx_os_env_get_string` returns owned UTF-8
+using the output string's context; `hx::Environment::get` returns std::string.
+`getOr` uses its fallback only when the name is missing. An empty value remains
+an empty value. Buffer queries include NUL in required capacity.
+
+`hx_os_env_set(name, value, replace, error)` explicitly changes the process
+environment; replace=0 leaves even an empty existing value intact. Removing a
+missing name succeeds. Inputs are borrowed during the call, names cannot be
+empty or contain '=', and invalid UTF-8 is rejected. Values are copied by the
+OS. Changes affect future children, not the parent or already-running children.
+
+Calls through one loaded library instance serialize. Native/CRT/another copy
+of the library must not mutate the environment concurrently. Output allocator
+callbacks run outside this lock and may call the getters. String capacity
+retries are limited to eight attempts; continual growth returns BUSY while
+preserving the old output. Windows uses the Win32 Unicode environment; CRT
+`getenv`/`_environ` caches are separate and may not observe Win32 changes.
+Use these getters and setters together. POSIX native non-UTF-8 values report
+INVALID_ENCODING instead of changing the locale or guessing an encoding.
+
+```cpp
+#include <hx/Environment.hpp>
+auto value = hx::Environment::getOr("APP_MODE", "normal");
+hx::Environment::set("APP_MODE", "diagnostic");
+```
+
+`examples/environment.c` queries a named variable directly. Its CTest supplies
+a private test value in the child environment and does not edit host settings.

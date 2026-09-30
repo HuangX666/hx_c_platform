@@ -304,3 +304,11 @@ cpp_platform、text_file_example 为 4/4。两平台 FILE_UTILS=OFF 的 C/C++ �
 读取上限、输出保留、拒绝复制到自身、备份冲突、cwd 往返、glob、有界删除
 和分配器所有权。Windows 因权限不足跳过创建符号链接；Linux 不跟随链接
 删除已通过。其他原生目标仍待验证。
+
+## OBS 补齐第 4 批（2026-09-30）
+
+Windows／WSL 全量 CTest 均为 18/18，env、environment_example、
+cpp_platform、file_utils 的 ASan/UBSan 为 4/4；两平台 ENV=OFF 检查
+通过。覆盖空值与不存在、UTF-8、输出保留、条件替换、库内并发调用，以及
+输出分配器回调重入环境读取而不死锁。提取共用 UTF-8／UTF-16 助手后，
+Windows 文件路径回归亦通过。

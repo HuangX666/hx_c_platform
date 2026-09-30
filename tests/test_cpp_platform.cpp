@@ -1,6 +1,7 @@
 #include <hx/SystemInfo.hpp>
 #include <hx/Library.hpp>
 #include <hx/Files.hpp>
+#include <hx/Environment.hpp>
 #include <hx/ThreadPool.hpp>
 #include <cstdio>
 #include <cstdlib>
@@ -41,6 +42,15 @@ int main(int argc, char **argv)
 {
 	CHECK(argc == 2);
 	TestSystemInfo();
+	if (hx_os_capabilities() & HX_OS_CAP_ENV) {
+		const char *name = "HX_CPP_ENV_TEST_ONLY";
+		hx::Environment::set(name, "value");
+		CHECK(hx::Environment::get(name) == "value");
+		hx::Environment::set(name, "kept", false);
+		CHECK(hx::Environment::get(name) == "value");
+		hx::Environment::remove(name);
+		CHECK(hx::Environment::getOr(name, "fallback") == "fallback");
+	}
 	if (hx_os_capabilities() & HX_OS_CAP_FILE_UTILS) {
 		char root[128];
 		(void)std::snprintf(root, sizeof(root), "hx-cpp-files-%llx",

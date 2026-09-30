@@ -57,6 +57,8 @@ hx_os_status hx_os_i_utf_encode(hx_os_encoding encoding, uint32_t point,
 
 #if defined(_WIN32)
 #include <wchar.h>
+wchar_t *hx_os_i_windows_utf16(
+	hx_os_context *context, const char *text, hx_os_error *error);
 wchar_t *hx_os_i_windows_path(
 	hx_os_context *context, const char *path, hx_os_error *error);
 #endif

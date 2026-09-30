@@ -454,6 +454,9 @@ uint64_t hx_os_capabilities(void)
 #if HX_OS_ENABLE_LIBRARY
 	result |= HX_OS_CAP_LIBRARY;
 #endif
+#if HX_OS_ENABLE_ENV
+	result |= HX_OS_CAP_ENV;
+#endif
 #if HX_OS_ENABLE_FILE_UTILS
 	result |= HX_OS_CAP_FILE_UTILS;
 #if HX_OS_ENABLE_CONTAINERS
