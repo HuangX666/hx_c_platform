@@ -1,0 +1,26 @@
+BasedOnStyle: LLVM
+Language: Cpp
+ColumnLimit: 80
+IndentWidth: 8
+TabWidth: 8
+UseTab: Always
+ContinuationIndentWidth: 8
+AlignAfterOpenBracket: DontAlign
+AlignOperands: DontAlign
+AlignConsecutiveMacros: None
+AllowShortBlocksOnASingleLine: Never
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterFunction: true
+  AfterControlStatement: Never
+  BeforeElse: true
+IndentCaseLabels: false
+PointerAlignment: Right
+RemoveBracesLLVM: true
+SortIncludes: Never
+BreakConstructorInitializers: BeforeComma
+PackConstructorInitializers: Never
+AccessModifierOffset: -8

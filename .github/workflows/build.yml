@@ -1,0 +1,132 @@
+name: C platform contracts
+on: [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, ubuntu-24.04, macos-14]
+        shared: [ON, OFF]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - run: python3 tools/fetch_iconv.py
+        if: runner.os != 'Windows'
+      - run: python tools/fetch_iconv.py
+        if: runner.os == 'Windows'
+      - name: Configure
+        run: >-
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_SHARED_LIBS=${{ matrix.shared }}
+          -DHX_OS_ENABLE_ICONV=ON
+          -DHX_OS_ICONV_SOURCE_DIR="${{ github.workspace }}/.deps/libiconv-1.18"
+      - run: cmake --build build --config Release --parallel 4
+      - run: ctest --test-dir build -C Release --output-on-failure
+      - run: python3 tools/verify_install.py build --config Release
+        if: runner.os != 'Windows'
+      - run: python tools/verify_install.py build --config Release
+        if: runner.os == 'Windows'
+
+  parser_backends:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python tools/fetch_parsers.py
+      - name: Configure optional parsers
+        run: >-
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_SHARED_LIBS=ON
+          -DHX_OS_ENABLE_CJSON=ON
+          -DHX_OS_CJSON_SOURCE_DIR=.deps/cJSON-1.7.19
+          -DHX_OS_ENABLE_LIBYAML=ON
+          -DHX_OS_LIBYAML_SOURCE_DIR=.deps/libyaml-0.2.5
+          -DHX_OS_ENABLE_MINIXML=ON
+          -DHX_OS_MINIXML_SOURCE_DIR=.deps/mxml-4.0.6
+          -DHX_OS_ENABLE_INIH=ON
+          -DHX_OS_INIH_SOURCE_DIR=.deps/inih-r62
+          -DHX_OS_ENABLE_TOMLC=ON
+          -DHX_OS_TOMLC_SOURCE_DIR=.deps/tomlc17-R260821
+      - run: cmake --build build --config Release --parallel 4
+      - run: ctest --test-dir build -C Release --output-on-failure
+      - run: python tools/verify_install.py build --config Release
+
+
+  minimal:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - run: >-
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          -DHX_OS_ENABLE_NETWORK=OFF -DHX_OS_ENABLE_LOOP=OFF
+          -DHX_OS_ENABLE_MEMORY_POOLS=OFF -DHX_OS_ENABLE_THREAD_POOL=OFF
+          -DHX_OS_ENABLE_CONFIG=OFF -DHX_OS_ENABLE_CONTAINERS=OFF
+      - run: cmake --build build --parallel 4
+      - run: ctest --test-dir build --output-on-failure
+
+  sanitizers:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        sanitizer: ["address,undefined", "thread"]
+    steps:
+      - uses: actions/checkout@v6
+      - run: >-
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+          -DHX_OS_SANITIZER=${{ matrix.sanitizer }}
+      - run: cmake --build build --parallel 4
+      - run: ctest --test-dir build --output-on-failure
+
+  musl:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run native musl contracts
+        run: |
+          docker run --rm -v "$PWD:/src:ro" alpine:3.22 sh -ec '
+            apk add --no-cache build-base cmake
+            cmake -S /src -B /tmp/build -DCMAKE_BUILD_TYPE=Release
+            cmake --build /tmp/build --parallel 4
+            ctest --test-dir /tmp/build --output-on-failure
+          '
+
+  arm_linux:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - processor: aarch64
+            triplet: aarch64-linux-gnu
+            emulator: qemu-aarch64
+          - processor: armv7
+            triplet: arm-linux-gnueabihf
+            emulator: qemu-arm
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install cross compiler and emulator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-${{ matrix.triplet }} \
+            g++-${{ matrix.triplet }} qemu-user
+      - name: Configure SDK contract build
+        run: >-
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/embedded-linux.cmake
+          -DHX_OS_TARGET_PROCESSOR=${{ matrix.processor }}
+          -DHX_OS_CROSS_PREFIX=${{ matrix.triplet }}-
+          -DHX_OS_SYSROOT=/
+          -DCMAKE_CROSSCOMPILING_EMULATOR="${{ matrix.emulator
+          }};-L;/usr/${{ matrix.triplet }}"
+      - run: cmake --build build --parallel 4
+      - run: ctest --test-dir build --output-on-failure

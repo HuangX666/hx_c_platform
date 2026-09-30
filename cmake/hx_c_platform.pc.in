@@ -1,0 +1,11 @@
+prefix=${pcfiledir}/@HX_OS_PC_PREFIX_FROM_FILE@
+exec_prefix=${prefix}
+libdir=@HX_OS_PC_LIBDIR@
+includedir=@HX_OS_PC_INCLUDEDIR@
+
+Name: hx_c_platform
+Description: Independent C99 OS primitives and UTF-8 strings
+Version: @PROJECT_VERSION@
+Libs: -L"${libdir}" -lhx_c_platform
+Libs.private: @HX_OS_PC_LIBS_PRIVATE@
+Cflags: -I"${includedir}" @HX_OS_PC_DEFINITIONS@

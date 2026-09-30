@@ -1,0 +1,8 @@
+#define ICONV_CONST const
+#define ENABLE_EXTRA 0
+#define HAVE_MBRTOWC 0
+#define HAVE_WCRTOMB 0
+#define HAVE_LANGINFO_CODESET 0
+#define HAVE_VISIBILITY 0
+#define WORDS_LITTLEENDIAN @hx_iconv_little@
+
