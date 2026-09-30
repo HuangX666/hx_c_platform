@@ -1,7 +1,7 @@
 foreach(example IN ITEMS hello async_timer configuration containers system_info
 	load_plugin text_file environment special_paths thread_options
 	pipe_transfer positioned_read file_info config_save periodic_timer
-	random_uuid mapped_file file_attributes)
+	random_uuid mapped_file file_attributes watch_directory)
 	add_executable(hx_os_${example} ${example}.c)
 	target_link_libraries(hx_os_${example} PRIVATE hx_c_platform)
 	set_target_properties(hx_os_${example} PROPERTIES
@@ -77,6 +77,10 @@ if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_FILE_EXTRA)
 	add_test(NAME file_attributes_example COMMAND hx_os_file_attributes
 		"${CMAKE_CURRENT_BINARY_DIR}/attributes-fixture.txt")
 	set_tests_properties(file_attributes_example PROPERTIES TIMEOUT 20)
+endif()
+if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_WATCH)
+	add_test(NAME watch_directory_example COMMAND hx_os_watch_directory)
+	set_tests_properties(watch_directory_example PROPERTIES TIMEOUT 20)
 endif()
 if(CMAKE_CXX_COMPILER_LOADED)
 	add_executable(hx_os_cpp_thread_pool thread_pool.cpp)

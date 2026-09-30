@@ -10,7 +10,7 @@
 [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md)
 [![macOS validation pending][macos-badge]](docs/VALIDATION.md)
 [![Windows MSVC][windows-badge]](docs/VALIDATION.md)
-[![Windows 39/39 and Linux 41/41 local suites passed][tests-badge]](docs/VALIDATION.md)
+[![Windows 42/42 and Linux 44/44 local suites passed][tests-badge]](docs/VALIDATION.md)
 [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md)
 
 Query system information directly through C or `hx::SystemInfo`;
@@ -148,6 +148,8 @@ Conversion never changes the process locale or assumes an ANSI codepage.
 | HX_OS_ENABLE_RANDOM | ON | System cryptographic random bytes and UUID v4 |
 | HX_OS_ENABLE_VIRTUAL_MEMORY | ON | Anonymous pages and file mappings |
 | HX_OS_ENABLE_FILE_EXTRA | ON | Range locks, timestamps and permission summary updates |
+| HX_OS_ENABLE_WATCH | ON | Bounded directory notifications with explicit shutdown |
+| HX_OS_ENABLE_LOOP_FD | ON | POSIX descriptor readiness; needs LOOP |
 | HX_OS_ENABLE_CJSON/LIBYAML/MINIXML/INIH/TOMLC | OFF | Native parser adapters |
 | HX_OS_BUILD_TESTS | ON | Contract tests and isolated public headers |
 | HX_OS_BUILD_EXAMPLES | ON | C examples; C++ task example when CXX is enabled |
@@ -301,5 +303,5 @@ by this new library or a migration.
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%2039%2F39%20Linux%2041%2F41-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%2042%2F42%20Linux%2044%2F44-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey

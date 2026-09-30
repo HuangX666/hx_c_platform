@@ -478,3 +478,22 @@ file_extra、cpp_platform、file_attributes_example）。FILE_EXTRA 关闭各
 的原生错误一致性、只读属性、POSIX owner/group 位和 /tmp 链接不跟随更新；
 容量哨兵、C++ 锁转移通过。macOS、Win7、32 位 POSIX 时间范围及特殊文件系统
 仍待目标验证。
+
+## OBS 补齐第 17 批（2026-09-30）
+
+Windows 全量 42/42，Linux 44/44；ASan/UBSan、TSan 各 7/7，覆盖 watch、
+loop_fd、pipe、timer、loop_concurrency、cpp_platform 和监听示例。两个模块
+关闭各 4/4；Windows 开启 WATCH、关闭 LOOP 5/5；Linux 关闭 NETWORK、
+本地 LOOP 和两种监听开启 5/5。公共头 C99/C++11 通过，Windows x86 监听／
+不支持桩运行 2/2；布局值记录在平台工具契约。
+
+覆盖分配故障与拒绝不接管清理、中文／补充平面字符、目录限制／重建溢出、
+非法 POSIX 文件名、清理一次、自身关闭、超时保留重试、C++ 异常与捕获释放。
+外部描述符覆盖关闭原 fd 后的独立持有、就绪 I/O、请求预算、原生不支持类型、
+cleanup 重入和 loop 销毁顺序。
+
+初次 WSL 在 Windows 挂载的源码目录监听收不到通知。直接原生 inotify 探针
+分别用路径和 /proc/self/fd 订阅，/tmp 两例各返回 96 字节，/mnt/e 两例均为
+0；statfs 确认为 tmpfs 与 9p。适配现对 9p 保守拒绝，Linux 测试改用唯一
+/tmp 目录，并测试了拒绝行为，没有用延长超时掩盖问题。原生内核缓冲饱和、
+取消注册失败重试、缺少 procfs、Apple 原生编译运行、Win7、嵌入式硬件待验证。

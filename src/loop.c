@@ -230,8 +230,9 @@ static hx_os_status hx_os_loop_validate(hx_os_loop *loop,
 }
 
 hx_os_status hx_os_i_loop_submit(hx_os_loop *loop, const hx_os_operation *op,
-	hx_os_pipe *pipe, hx_os_completion_fn completion, void *user,
-	hx_os_request **out, hx_os_error *error)
+	hx_os_pipe *pipe, hx_os_loop_watch *watch,
+	hx_os_completion_fn completion, void *user, hx_os_request **out,
+	hx_os_error *error)
 {
 	hx_os_request *request = NULL;
 	hx_os_status status;
@@ -280,6 +281,7 @@ hx_os_status hx_os_i_loop_submit(hx_os_loop *loop, const hx_os_operation *op,
 	hx_os_atomic_store(&request->references, 1, HX_OS_RELAXED);
 	request->operation = *op;
 	request->pipe = pipe;
+	request->fd_watch = watch;
 	request->loop = loop;
 	request->budget = budget;
 	request->directions = directions;
@@ -312,6 +314,11 @@ hx_os_status hx_os_i_loop_submit(hx_os_loop *loop, const hx_os_operation *op,
 		memcpy(request->owned_host, op->host, budget);
 		request->operation.host = request->owned_host;
 		status = hx_os_loop_start_dns(loop, request, error);
+		if (status != HX_OS_OK)
+			goto rejected;
+	}
+	if (watch) {
+		status = hx_os_i_loop_fd_register(watch, error);
 		if (status != HX_OS_OK)
 			goto rejected;
 	}
@@ -369,7 +376,7 @@ hx_os_status hx_os_loop_submit(hx_os_loop *loop, const hx_os_operation *op,
 	hx_os_error *error)
 {
 	return hx_os_i_loop_submit(
-		loop, op, NULL, completion, user, out, error);
+		loop, op, NULL, NULL, completion, user, out, error);
 }
 
 void hx_os_request_cancel(hx_os_request *request)
@@ -510,6 +517,8 @@ static size_t hx_os_loop_pump(hx_os_loop *loop, hx_os_deadline *next)
 			request->ready = 1;
 		else if (request->timer)
 			completed += hx_os_i_timer_step(request);
+		else if (request->fd_watch)
+			completed += hx_os_i_loop_fd_step(request);
 		else if (kind == HX_OS_OP_TIMER)
 			request->ready = request->stop_status ||
 				hx_os_deadline_expired(deadline);
@@ -530,6 +539,35 @@ static size_t hx_os_loop_pump(hx_os_loop *loop, hx_os_deadline *next)
 		}
 	}
 	return completed;
+}
+
+/* Caller retains request and owns the reentry flag through this call. */
+hx_os_status hx_os_i_loop_cancel_until(hx_os_loop *loop, hx_os_request *request,
+	hx_os_deadline deadline, int *close_running, hx_os_error *error)
+{
+	hx_os_status status = HX_OS_OK;
+	if (!hx_os_loop_owner(loop))
+		return hx_os_i_error(error, HX_OS_BUSY, 0, 0);
+	if (*close_running)
+		return hx_os_i_error(error, HX_OS_DEADLOCK, 0, 0);
+	hx_os_request_cancel(request);
+	if (hx_os_atomic_load(&request->state, HX_OS_ACQUIRE) == 2)
+		return hx_os_i_error(error, HX_OS_OK, 0, 0);
+	if (loop->running)
+		return hx_os_i_error(error, HX_OS_DEADLOCK, 0, 0);
+	*close_running = 1;
+	while (hx_os_atomic_load(&request->state, HX_OS_ACQUIRE) != 2) {
+		status = hx_os_loop_poll_until(loop, deadline, error);
+		if (status != HX_OS_OK)
+			break;
+		if (hx_os_atomic_load(&request->state, HX_OS_ACQUIRE) != 2 &&
+			hx_os_deadline_expired(deadline)) {
+			status = hx_os_i_error(error, HX_OS_TIMEOUT, 0, 0);
+			break;
+		}
+	}
+	*close_running = 0;
+	return status;
 }
 
 hx_os_status hx_os_loop_poll_until(
@@ -644,7 +682,7 @@ hx_os_status hx_os_loop_destroy(hx_os_loop **loop, hx_os_error *error)
 	value = *loop;
 	if (!hx_os_loop_owner(value) || value->running || !value->closed ||
 		value->sockets || value->pipes || value->timers ||
-		hx_os_loop_pending(value))
+		value->fd_watches || hx_os_loop_pending(value))
 		return hx_os_i_error(error, HX_OS_BUSY, 0, 0);
 	network = value->network;
 	hx_os_i_loop_native_destroy(value);

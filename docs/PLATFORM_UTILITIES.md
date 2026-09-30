@@ -712,3 +712,83 @@ FileAttributes::setTimes/permissions and examples/file_attributes.c offer direct
 calls. Windows path conversion/attribute handles are transient; POSIX uses
 native metadata calls without injected heap allocation. The new public times
 structure is 40/8 bytes on Windows x86/x64 and Linux x64; old layouts are intact.
+
+## Directory monitoring and external descriptor readiness
+
+WATCH defaults to ON, independently of LOOP/NETWORK/FILE_UTILS. One
+hx_os_watch_create(context, path, recursive, callback, user, &watch, &error)
+starts one joinable worker and waits for its subscription to be armed. No worker
+starts merely by linking/enabling the module. The output pointer is assigned
+before callbacks can begin, although a callback may run before create returns.
+User callbacks run on that worker outside locks; stop can be requested there.
+close_until stops, joins, includes cleanup/TLS return, and consumes a retired
+watch even when reporting a terminal backend error. TIMEOUT retains the same
+object for retry; self-close is DEADLOCK. Exclude concurrent destruction/users.
+Acceptance transfers optional cleanup exactly once; rejection transfers nothing.
+
+Events borrow strict UTF-8 relative paths with slash separators through callback
+return. Empty path is root. CHANGED/ADDED/REMOVED/RENAMED are best effort, without
+transaction order or an exact audit history. old_path may be NULL; Linux reports
+observed rename paths when the pair is not assembled, Windows pairs adjacent
+old/new names in one buffer, Apple supplies observed paths. DIRECTORY is positive
+evidence only (Windows notifications do not provide this type). ERROR ends the
+watch; OVERFLOW means reconcile a fresh directory snapshot, not just retry the
+last event. Invalid native filename encoding also reports overflow/error detail.
+
+Defaults: 64 KiB native input buffer, 32 KiB maximum path storage, 1024 software
+watch records, depth 64 and 4 MiB retained variable-storage budget. Allocation
+headers and transient old/new copies during growth/rebuild count against that
+budget. Fixed thread/event controls, native thread stacks, bounded temporary
+Windows path conversion and OS/CF-managed storage are outside it. Path scratch
+and tree records grow as needed; there is no library event queue. Slow callbacks
+can overflow native buffers. The directory/depth bounds apply to software scans
+on Linux; Windows/Apple tree subscriptions use one native source.
+
+Windows uses overlapped ReadDirectoryChangesW and private stop/completion events.
+Cancellation retires the native operation on the worker before buffer release.
+Linux uses inotify/eventfd, openat with O_NOFOLLOW and /proc/self/fd to pin each
+watched directory. Missing procfs, duplicate inode aliases and 9p return
+NOT_SUPPORTED. Topology changes rebuild bounded recursive coverage, then emit
+OVERFLOW because notifications can be lost during the scan. Lookup is linear
+in the bounded record count; rebuilding can temporarily hold both trees. A limit
+or scan failure is terminal, not silent partial recursion. Root move/deletion
+ends coverage. Other remote filesystem delivery remains a native limitation.
+
+Apple uses native C FSEvents/CoreFoundation, with no Objective-C or third-party
+runtime. Its stream runs on the owned worker's CFRunLoop; the retained run loop
+survives stop requests until join. The localized deprecated scheduling call
+preserves this single-thread callback contract and the 10.13 baseline. Dropped,
+coalesced and root-change flags become overflow/terminal events. Source is
+implemented; native compile/run and sandbox behavior remain pending.
+[Apple scheduling contract](https://developer.apple.com/documentation/coreservices/1447824-fseventstreamschedulewithrunloop)
+describes the run-loop lifecycle. C++ DirectoryWatch keeps a host-owned C pointer,
+requires closeUntil, captures callback exceptions, and releases captures during
+cleanup. rethrowCallbackError is valid after close. See watch_directory.c.
+
+LOOP_FD is a separate default-on POSIX extension requiring LOOP. attach_fd
+owns a CLOEXEC duplicate and one persistent request slot; it does not change
+O_NONBLOCK. The creator polls; callbacks borrow the watcher and perform their
+own nonblocking descriptor I/O. READ/WRITE also indicate EOF/error readiness,
+which the actual I/O resolves. The descriptor getter is owner-only; do not close
+its borrowed result. Original descriptors may close independently, but offsets
+and open-file flags remain shared, and POSIX record-lock close rules apply.
+Windows returns NOT_SUPPORTED without advertising a capability bit.
+
+Caller-owned user state stays valid through the final callback and cleanup.
+The owner-only close pumps cancellation; failed native unregistration retains
+the source for retry. After unregistration, descriptor-close errors consume it.
+Loop destruction is BUSY until all watcher objects close. No allocation occurs
+per readiness notification. Timer and descriptor close share one cancellation/
+pump implementation. C++ DescriptorWatch provides lambda/exception convenience.
+A private pointer is added to each loop/request (8 measured bytes per object on
+Windows x86/x64 and Linux x64); existing public layouts are unchanged. Watch
+size/alignment is 152/8 on Windows x86 and 216/8 on both x64 hosts; options/event
+are 28/4 and 48/8 on x86, 48/8 and 56/8 on x64. Descriptor watch is 44/4 or 72/8.
+
+```c
+hx_os_loop_watch *watch = NULL;
+hx_os_status status = hx_os_loop_attach_fd(loop, fd, HX_OS_WAIT_READ,
+	ready_callback, user, &watch, &error);
+/* The callback can use hx_os_loop_watch_descriptor(watch), then request stop. */
+/* Drive loop; finally check hx_os_loop_detach_fd(&watch, &error). */
+```

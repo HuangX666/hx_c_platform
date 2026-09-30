@@ -545,6 +545,12 @@ uint64_t hx_os_capabilities(void)
 #if HX_OS_ENABLE_FILE_EXTRA
 	result |= HX_OS_CAP_FILE_EXTRA;
 #endif
+#if HX_OS_ENABLE_WATCH
+	result |= HX_OS_CAP_WATCH;
+#endif
+#if HX_OS_ENABLE_LOOP_FD && HX_OS_ENABLE_LOOP && !defined(_WIN32)
+	result |= HX_OS_CAP_LOOP_FD;
+#endif
 #if HX_OS_ENABLE_PIPE
 	result |= HX_OS_CAP_PIPE;
 #if HX_OS_ENABLE_LOOP

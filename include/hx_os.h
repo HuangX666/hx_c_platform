@@ -19,6 +19,8 @@
 #include "hx_os_util.h"
 #include "hx_os_vm.h"
 #include "hx_os_file_extra.h"
+#include "hx_os_watch.h"
+#include "hx_os_loop_fd.h"
 #include "hx_string.h"
 #include "hx_config.h"
 #include "hx_container.h"

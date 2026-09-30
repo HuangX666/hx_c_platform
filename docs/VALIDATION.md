@@ -541,3 +541,28 @@ Metadata tests cover selected timestamps, omitted access time, native errors
 with and without error output, read-only flags, POSIX owner/group bits and
 symlink nofollow updates on /tmp. Capacity canaries and C++ lock transfer pass.
 macOS, Win7, 32-bit POSIX time ranges and remote/limited filesystems are pending.
+
+## OBS completion batch 17 (2026-09-30)
+
+Windows full CTest passed 42/42; Linux 44/44. ASan/UBSan and TSan each passed
+7/7 (watch, loop_fd, pipe, timer, loop_concurrency, cpp_platform and the watch
+example). Both modules off passed 4/4 per host; WATCH on with LOOP off passed
+5/5 on Windows. Linux NETWORK off/local LOOP plus both watchers passed 5/5.
+Public C99/C++11 headers passed. Windows x86 watch/stub tests passed 2/2.
+Layout probes measured the values recorded in PLATFORM_UTILITIES.
+
+Tests cover injected allocation failures with no transferred cleanup on
+rejection, Unicode/supplementary-plane names, directory limits/rebuild overflow,
+invalid POSIX names, callback cleanup once, self-close, timeout retention/retry
+and C++ exception/capture release. External descriptor tests cover duplicated
+ownership after original close, readiness I/O, request budgets, unsupported
+native descriptors, cleanup reentry and loop destruction ordering.
+
+Initial WSL watch tests on the Windows-mounted checkout received no events.
+A direct native inotify probe, using both paths and /proc/self/fd, confirmed
+96 notification bytes per native /tmp case and zero per /mnt/e case. statfs
+identified tmpfs versus 9p. The adapter now conservatively rejects 9p instead
+of accepting silent coverage; Linux tests use unique /tmp fixtures, and the
+rejection is itself tested. No timeout increase was used to hide this behavior.
+Native kernel-buffer saturation, unregister-failure retry, missing procfs,
+Apple compilation/runtime, Win7 and embedded hardware remain target validation.

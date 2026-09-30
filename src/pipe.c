@@ -146,7 +146,7 @@ hx_os_status hx_os_loop_submit_pipe(hx_os_loop *loop,
 	native.send_mode = op->send_mode;
 	native.deadline = op->deadline;
 	return hx_os_i_loop_submit(
-		loop, &native, op->pipe, completion, user, out, error);
+		loop, &native, op->pipe, NULL, completion, user, out, error);
 #else
 	(void)loop;
 	(void)op;

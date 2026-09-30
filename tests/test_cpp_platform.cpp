@@ -9,6 +9,7 @@
 #include <hx/Random.hpp>
 #include <hx/Mapping.hpp>
 #include <hx/FileExtra.hpp>
+#include <hx/Watch.hpp>
 #include <hx/SocketOptions.hpp>
 #include <hx/Text.hpp>
 #include <hx/Config.hpp>
@@ -16,6 +17,10 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#if !defined(_WIN32)
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 
 #define CHECK(value)                                                           \
 	do {                                                                   \
@@ -109,6 +114,36 @@ int main(int argc, char **argv)
 	}
 	TestSystemInfo();
 	test_cpp_pipe();
+#if !defined(_WIN32)
+	if (hx_os_capabilities() & HX_OS_CAP_LOOP_FD) {
+		int descriptors[2];
+		CHECK(pipe(descriptors) == 0);
+		CHECK(fcntl(descriptors[0], F_SETFL, O_NONBLOCK) == 0);
+		hx_os_loop *loopOwner = NULL;
+		hx_os_loop_watch *watchOwner = NULL;
+		auto loop = hx::IoLoop::create(loopOwner);
+		int calls = 0;
+		auto watch = hx::DescriptorWatch::create(watchOwner, loop,
+			descriptors[0], HX_OS_WAIT_READ,
+			[&calls](hx_os_loop_watch *native, int events) {
+				char data;
+				CHECK(events & HX_OS_WAIT_READ);
+				CHECK(read(hx_os_loop_watch_descriptor(native),
+					      &data, 1) == 1);
+				CHECK(data == 'x');
+				++calls;
+				hx_os_loop_watch_stop(native);
+			});
+		CHECK(close(descriptors[0]) == 0);
+		CHECK(write(descriptors[1], "x", 1) == 1);
+		CHECK(loop.runUntil(hx_os_deadline_after_ms(2000)) == HX_OS_OK);
+		watch.rethrowCallbackError();
+		CHECK(calls == 1);
+		CHECK(watch.closeUntil(HX_OS_DEADLINE_NOW) == HX_OS_OK);
+		CHECK(loop.closeUntil(HX_OS_DEADLINE_NOW) == HX_OS_OK);
+		CHECK(close(descriptors[1]) == 0);
+	}
+#endif
 	if (hx_os_capabilities() & HX_OS_CAP_VIRTUAL_MEMORY) {
 		hx::Pages original(17);
 		hx::Pages pages(std::move(original));
@@ -227,11 +262,50 @@ int main(int argc, char **argv)
 	}
 	if (hx_os_capabilities() & HX_OS_CAP_FILE_UTILS) {
 		char root[128];
-		(void)std::snprintf(root, sizeof(root), "hx-cpp-files-%llx",
+#if defined(_WIN32)
+		const char *rootPattern = "hx-cpp-files-%llx";
+#else
+		const char *rootPattern = "/tmp/hx-cpp-files-%llx";
+#endif
+		(void)std::snprintf(root, sizeof(root), rootPattern,
 			(unsigned long long)hx_os_monotonic_ns());
 		CHECK(hx_os_directory_create(root, 0, NULL) == HX_OS_OK);
 		const std::string path = std::string(root) + "/text.txt";
 		hx::Files::writeText(path.c_str(), "hello");
+		if (hx_os_capabilities() & HX_OS_CAP_WATCH) {
+			hx_os_watch *owner = NULL;
+			hx_os_event *notified = NULL;
+			CHECK(hx_os_event_create(NULL, 1, 0, &notified, NULL) ==
+				HX_OS_OK);
+			auto token = std::make_shared<int>(1);
+			std::weak_ptr<int> observer = token;
+			auto watch = hx::DirectoryWatch::create(owner, root,
+				[token, notified](hx_os_watch *,
+					const hx_os_watch_event &event) {
+					if (event.path &&
+						!std::strcmp(event.path,
+							"text.txt")) {
+						hx_os_event_set(notified);
+						throw hx::StatusError(
+							HX_OS_CANCELLED);
+					}
+				});
+			token.reset();
+			hx::Files::writeText(path.c_str(), "hello");
+			CHECK(hx_os_event_wait_until(notified,
+				      hx_os_deadline_after_ms(5000),
+				      NULL) == HX_OS_OK);
+			CHECK(watch.closeUntil(hx_os_deadline_after_ms(2000)) ==
+				HX_OS_OK);
+			CHECK(observer.expired());
+			try {
+				watch.rethrowCallbackError();
+				CHECK(false);
+			} catch (const hx::StatusError &error) {
+				CHECK(error.status() == HX_OS_CANCELLED);
+			}
+			hx_os_event_destroy(notified);
+		}
 		if (hx_os_capabilities() & HX_OS_CAP_FILE_EXTRA) {
 			hx::File file(path.c_str(),
 				HX_OS_FILE_READ | HX_OS_FILE_WRITE);

@@ -564,3 +564,68 @@ READ，不支持 EXECUTE；WRITE 仅控制只读属性，不编辑 ACL、不保�
 及 examples/file_attributes.c 提供直接调用。Windows 路径转换和属性句柄
 为短期资源；POSIX 元数据原生调用不增加注入堆分配。新时间结构在 Windows
 x86/x64 和 Linux x64 均为 40/8 字节大小／对齐；既有布局不变。
+
+## 目录监听与外部描述符就绪通知
+
+WATCH 默认开启，不依赖 LOOP／NETWORK／FILE_UTILS。一次
+hx_os_watch_create(context, path, recursive, callback, user, &watch, &error)
+创建一个可等待退出的线程，并等到原生订阅就绪。仅链接或开启模块不会启动线程。
+回调开始前已经写入输出指针，但回调可能先于 create 返回运行。用户回调在该线程
+锁外执行，可请求 stop。close_until 停止并等待线程、cleanup、TLS 清理返回；
+完成退役后即使报告后端终止错误也消费对象。TIMEOUT 保留对象供重试，自身关闭
+返回 DEADLOCK。排除并发销毁／使用；仅接受成功后接管可选 cleanup，执行一次，
+拒绝不转移用户数据。
+
+事件路径为回调期间借用的严格 UTF-8 相对路径，分隔符为斜线，空字符串表示根。
+变更／新增／删除／重命名为尽力通知，不承诺事务顺序或完整审计历史。old_path
+可为空：Linux 未组装配对时报告观察到的重命名路径，Windows 配对同一缓冲区
+相邻的新旧名称，Apple 提供观察路径。DIRECTORY 标志只表示确定为目录，缺少
+标志可能是未知，Windows 通知不提供类型。ERROR 终止监听；OVERFLOW 要求重新
+扫描目录快照，不能只重试最后一条事件。无法表示的原生文件名也明确报告溢出与
+编码错误详情。
+
+默认原生输入缓冲 64 KiB，路径上限 32 KiB，软件监听记录 1024，深度 64，持有
+可变存储预算 4 MiB。分配头、增长／重建期间并存的新旧副本计入预算。固定线程／
+事件控制对象、原生线程栈、有界的临时 Windows 路径转换、系统和 CF 管理存储
+不在此预算内。路径暂存与树记录按需增长，没有库内事件队列；慢回调可能使
+原生缓冲溢出。目录数／深度限制作用于 Linux 软件递归扫描，Windows／Apple
+树订阅使用一个原生源。
+
+Windows 使用重叠 ReadDirectoryChangesW 和独立停止／完成事件，在线程内等待
+原生取消退役后才释放缓冲。Linux 使用 inotify/eventfd，通过 openat 的
+O_NOFOLLOW 与 /proc/self/fd 固定目录；缺少 procfs、重复 inode 别名或 9p
+返回 NOT_SUPPORTED。目录结构变更后重建有界覆盖，再报告 OVERFLOW，因为扫描
+期间可能丢增量事件。记录查找在有界目录数内线性进行；重建可短期并存两棵树，
+预算或扫描失败会终止，不能静默变成不完整递归。根移动／删除结束覆盖。其他
+远程文件系统的通知仍受原生限制。
+
+Apple 使用纯 C 的 FSEvents/CoreFoundation，无 Objective-C 或第三方运行库。
+stream 在自有线程 CFRunLoop 上运行，run loop 保留到等待退出完成；局部使用
+已弃用的调度 API，以保留单线程回调契约及 10.13 基线。合并／丢弃／根变更标志
+转成溢出或终止事件。源码已实现，原生编译运行及沙箱行为待验证，参见
+[Apple 调度契约](https://developer.apple.com/documentation/coreservices/1447824-fseventstreamschedulewithrunloop)。
+C++ DirectoryWatch 保留宿主 C 指针，显式 closeUntil，捕获回调异常，cleanup
+释放捕获内容；关闭后调用 rethrowCallbackError。C 示例为 watch_directory.c。
+
+LOOP_FD 是单独默认开启的 POSIX 扩展，依赖 LOOP。attach_fd 持有 CLOEXEC
+副本和一个固定请求名额，不修改 O_NONBLOCK；创建线程驱动 loop，回调通过借用
+描述符执行自己的非阻塞 I/O。READ／WRITE 也可表示 EOF／错误就绪，由实际
+I/O 确定。descriptor 查询仅创建线程调用，不得关闭返回的借用句柄。原描述符
+可独立关闭，但文件位置和打开标志仍共享，也受 POSIX 记录锁关闭语义影响。
+Windows 明确返回 NOT_SUPPORTED，不声明对应能力位。
+
+停止／等待／关闭包含最终回调与 cleanup；创建线程的 close 驱动取消，取消
+注册失败保留源供重试；取消注册成功后，描述符关闭错误也消费对象。所有监听
+对象关闭前 loop_destroy 返回 BUSY。每次就绪不分配；定时器和描述符共用同一份
+取消／驱动等待逻辑。C++ DescriptorWatch 提供 lambda 和异常封装。
+loop/request 各增加一个私有指针，Windows x86/x64、Linux x64 实测各增加
+8 字节；既有公共布局不变。watch 大小／对齐：x86 152/8、两端 x64 216/8；
+options/event：x86 28/4、48/8，x64 48/8、56/8；描述符监听为 44/4 或 72/8。
+
+```c
+hx_os_loop_watch *watch = NULL;
+hx_os_status status = hx_os_loop_attach_fd(loop, fd, HX_OS_WAIT_READ,
+	ready_callback, user, &watch, &error);
+/* The callback can use hx_os_loop_watch_descriptor(watch), then request stop. */
+/* Drive loop; finally check hx_os_loop_detach_fd(&watch, &error). */
+```

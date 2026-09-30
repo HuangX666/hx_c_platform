@@ -186,6 +186,8 @@ HX_OS_API const char *HX_OS_CALL hx_os_cpu_name(void);
 #define HX_OS_CAP_RANDOM (UINT64_C(1) << 27)
 #define HX_OS_CAP_VIRTUAL_MEMORY (UINT64_C(1) << 28)
 #define HX_OS_CAP_FILE_EXTRA (UINT64_C(1) << 29)
+#define HX_OS_CAP_WATCH (UINT64_C(1) << 30)
+#define HX_OS_CAP_LOOP_FD (UINT64_C(1) << 31)
 /* required includes NUL. These queries do not need initialization. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_version_string(
 	char *buffer, size_t capacity, size_t *required);

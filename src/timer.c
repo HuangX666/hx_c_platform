@@ -178,32 +178,10 @@ hx_os_status hx_os_timer_close_until(
 		return hx_os_i_error(error, HX_OS_OK, 0, 0);
 	value = *timer;
 	loop = value->loop;
-	if (loop->owner != hx_os_thread_id())
-		return hx_os_i_error(error, HX_OS_BUSY, 0, 0);
-	if (value->close_running)
-		return hx_os_i_error(error, HX_OS_DEADLOCK, 0, 0);
-	hx_os_timer_stop(value);
-	if (hx_os_atomic_load(&value->request->state, HX_OS_ACQUIRE) != 2) {
-		if (loop->running)
-			return hx_os_i_error(error, HX_OS_DEADLOCK, 0, 0);
-		value->close_running = 1;
-		while (hx_os_atomic_load(
-			       &value->request->state, HX_OS_ACQUIRE) != 2) {
-			status = hx_os_loop_poll_until(loop, deadline, error);
-			if (status != HX_OS_OK) {
-				value->close_running = 0;
-				return status;
-			}
-			if (hx_os_atomic_load(&value->request->state,
-				    HX_OS_ACQUIRE) != 2 &&
-				hx_os_deadline_expired(deadline)) {
-				value->close_running = 0;
-				return hx_os_i_error(
-					error, HX_OS_TIMEOUT, 0, 0);
-			}
-		}
-		value->close_running = 0;
-	}
+	status = hx_os_i_loop_cancel_until(
+		loop, value->request, deadline, &value->close_running, error);
+	if (status != HX_OS_OK)
+		return status;
 	status = hx_os_timer_wait_until(value, HX_OS_DEADLINE_NOW, error);
 	for (cursor = &loop->timers; *cursor; cursor = &(*cursor)->next)
 		if (*cursor == value) {

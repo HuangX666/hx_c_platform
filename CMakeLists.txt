@@ -36,6 +36,8 @@ option(HX_OS_ENABLE_TIMER "Build periodic loop timers" ON)
 option(HX_OS_ENABLE_RANDOM "Build secure system randomness and UUID v4" ON)
 option(HX_OS_ENABLE_VIRTUAL_MEMORY "Build pages and file mappings" ON)
 option(HX_OS_ENABLE_FILE_EXTRA "Build range locks, times and permissions" ON)
+option(HX_OS_ENABLE_WATCH "Build bounded native directory monitoring" ON)
+option(HX_OS_ENABLE_LOOP_FD "Build POSIX descriptor readiness integration" ON)
 set(HX_OS_ICONV_SOURCE_DIR "" CACHE PATH "Unmodified GNU libiconv source")
 set(HX_OS_SANITIZER "" CACHE STRING "address,undefined or thread")
 
@@ -167,8 +169,20 @@ add_library(hx_c_platform
 	src/thread_extra.c src/pipe.c src/file_at.c src/net_options.c
 	src/file_info.c src/bom.c src/number.c src/config_serialize.c
 	src/timer.c src/util.c src/vm.c src/file_extra.c
+	src/watch.c src/loop_fd.c
 	${hx_parser_sources} ${hx_parser_objects}
 	${hx_platform_sources})
+if(HX_OS_ENABLE_WATCH)
+	if(WIN32)
+		target_sources(hx_c_platform PRIVATE src/windows/watch_native.c)
+	elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+		target_sources(hx_c_platform PRIVATE src/linux/watch_native.c)
+	else()
+		target_sources(hx_c_platform PRIVATE src/apple/watch_native.c)
+		target_link_libraries(hx_c_platform PRIVATE
+			"-framework CoreServices" "-framework CoreFoundation")
+	endif()
+endif()
 if(HX_OS_ENABLE_RANDOM)
 	if(WIN32)
 		target_sources(hx_c_platform PRIVATE
@@ -373,6 +387,10 @@ install(FILES
 	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/hx_c_platform)
 
 set(HX_OS_PC_LIBS_PRIVATE "")
+if(APPLE AND HX_OS_ENABLE_WATCH)
+	string(APPEND HX_OS_PC_LIBS_PRIVATE
+		" -framework CoreServices -framework CoreFoundation")
+endif()
 if(HX_OS_ENABLE_LIBRARY OR HX_OS_ENABLE_PATHS)
 	foreach(library IN LISTS CMAKE_DL_LIBS)
 		string(APPEND HX_OS_PC_LIBS_PRIVATE " -l${library}")
