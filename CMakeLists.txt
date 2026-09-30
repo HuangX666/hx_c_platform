@@ -35,6 +35,7 @@ option(HX_OS_ENABLE_CONFIG_SERIALIZE "Build configuration serialization" ON)
 option(HX_OS_ENABLE_TIMER "Build periodic loop timers" ON)
 option(HX_OS_ENABLE_RANDOM "Build secure system randomness and UUID v4" ON)
 option(HX_OS_ENABLE_VIRTUAL_MEMORY "Build pages and file mappings" ON)
+option(HX_OS_ENABLE_FILE_EXTRA "Build range locks, times and permissions" ON)
 set(HX_OS_ICONV_SOURCE_DIR "" CACHE PATH "Unmodified GNU libiconv source")
 set(HX_OS_SANITIZER "" CACHE STRING "address,undefined or thread")
 
@@ -165,7 +166,7 @@ add_library(hx_c_platform
 	src/sysinfo.c src/library.c src/path.c src/env.c src/paths.c
 	src/thread_extra.c src/pipe.c src/file_at.c src/net_options.c
 	src/file_info.c src/bom.c src/number.c src/config_serialize.c
-	src/timer.c src/util.c src/vm.c
+	src/timer.c src/util.c src/vm.c src/file_extra.c
 	${hx_parser_sources} ${hx_parser_objects}
 	${hx_platform_sources})
 if(HX_OS_ENABLE_RANDOM)
@@ -182,6 +183,15 @@ if(HX_OS_ENABLE_VIRTUAL_MEMORY)
 		target_sources(hx_c_platform PRIVATE src/windows/vm_native.c)
 	else()
 		target_sources(hx_c_platform PRIVATE src/posix/vm_native.c)
+	endif()
+endif()
+if(HX_OS_ENABLE_FILE_EXTRA)
+	if(WIN32)
+		target_sources(hx_c_platform PRIVATE
+			src/windows/file_extra_native.c)
+	else()
+		target_sources(hx_c_platform PRIVATE
+			src/posix/file_extra_native.c)
 	endif()
 endif()
 if(HX_OS_ENABLE_SYSINFO)

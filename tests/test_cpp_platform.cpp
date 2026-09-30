@@ -8,6 +8,7 @@
 #include <hx/Timer.hpp>
 #include <hx/Random.hpp>
 #include <hx/Mapping.hpp>
+#include <hx/FileExtra.hpp>
 #include <hx/SocketOptions.hpp>
 #include <hx/Text.hpp>
 #include <hx/Config.hpp>
@@ -231,6 +232,20 @@ int main(int argc, char **argv)
 		CHECK(hx_os_directory_create(root, 0, NULL) == HX_OS_OK);
 		const std::string path = std::string(root) + "/text.txt";
 		hx::Files::writeText(path.c_str(), "hello");
+		if (hx_os_capabilities() & HX_OS_CAP_FILE_EXTRA) {
+			hx::File file(path.c_str(),
+				HX_OS_FILE_READ | HX_OS_FILE_WRITE);
+			hx::FileRangeLock lock(file, 0, 1);
+			hx::FileRangeLock moved(std::move(lock));
+			moved.unlock();
+			hx_os_file_times times = HX_OS_FILE_TIMES_INIT;
+			times.fields = HX_OS_TIME_MODIFIED;
+			times.modified_seconds = 1600000000;
+			hx::FileAttributes::setTimes(path.c_str(), times);
+			hx::FileAttributes::permissions(path.c_str(),
+				HX_OS_PERMISSION_OWNER_READ |
+					HX_OS_PERMISSION_OWNER_WRITE);
+		}
 		if (hx_os_capabilities() & HX_OS_CAP_VIRTUAL_MEMORY) {
 			hx::MappedFile original(path.c_str());
 			hx::MappedFile mapped(std::move(original));

@@ -668,3 +668,47 @@ context heap accounting. Map creation adds duplication and mapping system APIs,
 with no shared library lock, background work or access-time wrapper. Layout
 (size/alignment): Windows x86 pages 8/4, map 28/4; Windows x64 16/8, 56/8;
 Linux x64 16/8, 40/8. Existing public structures remain unchanged.
+
+## File range locks, timestamps and permission summaries
+
+FILE_EXTRA defaults to ON and needs neither FILE_INFO nor FILE_UTILS.
+lock_at(file, offset, bytes, shared, deadline, error) attempts a positive byte
+range without moving the cursor; its signed-64-bit end must be representable.
+Shared locks require READ, exclusive locks WRITE. NOW attempts once; conflicts
+then become TIMEOUT. Finite/infinite waits use monotonic deadlines and native
+nonblocking lock attempts with requested sleep increments up to 10 ms. Native
+calls/scheduling can overrun a deadline. Failure retains the file, with native
+conflict detail on TIMEOUT. Unlock matches a successfully acquired range.
+There is no library allocation, mutex or worker for lock/unlock.
+
+POSIX fcntl record locks are process-owned and advisory; closing any descriptor
+for the inode, including a mapping's duplicate, can drop the process's locks.
+Windows LockFileEx locks belong to the handle and affect ordinary conflicting
+I/O, but not mapped views. Its positioned I/O adapter uses a different handle,
+so use cursor I/O through the locking handle while the region is held. Do not
+use these locks as thread mutexes, overlap/upgrade/reenter ranges, or assume
+fairness. See [POSIX/Linux locking](https://www.man7.org/linux/man-pages/man2/fcntl_locking.2.html)
+and [Windows range locks](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-lockfileex).
+C++ FileRangeLock borrows File through unlock/destruction, uses NOW by default,
+and transfers a lock only by move construction. Explicit unlock reports errors.
+
+Initialize file times with HX_OS_FILE_TIMES_INIT or the capacity-checked init.
+fields selects access/modify seconds plus nanoseconds since Unix epoch; omitted
+fields are unchanged. Zero fields is a no-op, not an existence/access check.
+Nanoseconds outside [0,1e9), unsupported native time ranges or bad size/version
+are errors. POSIX uses utimensat with UTIME_OMIT and explicit nofollow; Windows
+uses a wide-path attribute handle and SetFileTime, truncating to 100 ns. Native
+filesystem precision can be coarser. Creation/metadata-change time is not set.
+Windows cannot represent dates before 1601; 32-bit time_t targets may reject
+otherwise valid 64-bit times. Updates can already be applied if close fails.
+
+Permission changes replace POSIX owner read/write/execute bits while preserving
+group/other mode. Concurrent path replacement and permission changes need caller
+exclusion. Nofollow must be supported or fail, never silently follow a symlink.
+On Windows READ must be present and EXECUTE is unsupported; WRITE only controls
+the read-only attribute. No ACL editing/effective-access guarantee is provided.
+The existing v1 stat permission summary remains read/write only. C++
+FileAttributes::setTimes/permissions and examples/file_attributes.c offer direct
+calls. Windows path conversion/attribute handles are transient; POSIX uses
+native metadata calls without injected heap allocation. The new public times
+structure is 40/8 bytes on Windows x86/x64 and Linux x64; old layouts are intact.

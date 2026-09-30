@@ -462,3 +462,19 @@ Windows x86 本批运行测试及 x86/x64 布局探针通过，布局详见平�
 冲刷并重开、追加／管道拒绝、C++ 移动与 RAII。允许系统策略以原生错误拒绝
 可执行保护，未执行动态生成代码。截断故障、网络文件系统一致性、原生 unmap
 失败、Apple hardened runtime、Win7、嵌入式仍待目标验证。
+
+## OBS 补齐第 16 批（2026-09-30）
+
+Windows 全量 39/39，Linux 41/41；ASan/UBSan、TSan 各 4/4（file_info、
+file_extra、cpp_platform、file_attributes_example）。FILE_EXTRA 关闭各
+3/3；开启且 FILE_INFO 关闭各 4/4，Windows 同时关闭 FILE_UTILS。C99/C++11
+公共头独立通过。Windows x86 运行跨进程／元数据用例，三个 ABI 的 file_times
+布局实测均为 40/8。
+
+项目测试子程序验证共享／排他冲突、单调超时、超时后重试与其他区间可用、文件
+位置不变。初次 Windows 子程序失败原因是窄字符 CRT argv 未保留 UTF-8；
+改为读取并转换原生 Unicode 命令行后，中文文件名通过。Shell32 仅作为这个
+测试目标的参数转换依赖。元数据覆盖指定字段／访问时间保留、是否传 error
+的原生错误一致性、只读属性、POSIX owner/group 位和 /tmp 链接不跟随更新；
+容量哨兵、C++ 锁转移通过。macOS、Win7、32 位 POSIX 时间范围及特殊文件系统
+仍待目标验证。

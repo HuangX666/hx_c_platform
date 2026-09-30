@@ -2,6 +2,7 @@
 #include "thread_private.h"
 #include "file_private.h"
 #include "vm_private.h"
+#include "hx_os_file_extra.h"
 #include <stdio.h>
 
 #define HX_OS_LAYOUT(type)                                                     \
@@ -31,5 +32,6 @@ int main(void)
 	HX_OS_LAYOUT(hx_os_timer);
 	HX_OS_LAYOUT(hx_os_pages);
 	HX_OS_LAYOUT(hx_os_file_map);
+	HX_OS_LAYOUT(hx_os_file_times);
 	return 0;
 }

@@ -29,7 +29,7 @@ embedded target runs remain separately identified target validation.
 | 13 | GAI and Mach error text | Windows/Linux 33/33; ASan 3/3; TSan 3/3; Mach target pending |
 | 14 | Random, UUID, CRC32, secure zero | Windows 35/35; Linux 37/37; ASan/TSan 7/7; targets pending |
 | 15 | Pages and mappings | Windows 37/37; Linux 39/39; ASan/TSan 4/4; x86 VM passed |
-| 16 | File locks, timestamps, permissions | Pending |
+| 16 | File locks, timestamps, permissions | Windows 39/39; Linux 41/41; ASan/TSan 4/4; x86 batch passed |
 | 17 | Directory watch and external descriptor integration | Pending |
 | 18 | Processes, capture and system helpers | Pending |
 | 19 | Priority, affinity and delayed tasks | Pending |

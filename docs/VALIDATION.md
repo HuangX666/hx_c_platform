@@ -522,3 +522,22 @@ shared durable flush/reopen, append/pipe rejection and C++ moves/RAII. Native
 execute policy rejection is permitted with a native error; no generated code is
 executed. Truncation faults, network filesystem coherence, native unmap failure,
 Apple hardened runtime, Win7 and embedded machines remain target validation.
+
+## OBS completion batch 16 (2026-09-30)
+
+Windows full CTest passed 39/39; Linux 41/41. ASan/UBSan and TSan each passed
+4/4 (file_info, file_extra, cpp_platform, file_attributes_example). FILE_EXTRA
+off passed 3/3 per host; on with FILE_INFO off passed 4/4 per host, also with
+FILE_UTILS off on Windows. Public C99/C++11 headers passed. Windows x86 ran the
+cross-process/metadata suite; layout probes measured file_times 40/8 on all
+three tested ABIs.
+
+Own test subprocesses verify shared/exclusive conflicts, elapsed monotonic
+timeouts, retry after timeout, unrelated ranges and unchanged cursors. The
+initial Windows helper failed because narrow CRT argv did not preserve UTF-8;
+it now converts the native Unicode command line explicitly and passes with
+Chinese filenames. Shell32 is a test-only dependency for this conversion.
+Metadata tests cover selected timestamps, omitted access time, native errors
+with and without error output, read-only flags, POSIX owner/group bits and
+symlink nofollow updates on /tmp. Capacity canaries and C++ lock transfer pass.
+macOS, Win7, 32-bit POSIX time ranges and remote/limited filesystems are pending.

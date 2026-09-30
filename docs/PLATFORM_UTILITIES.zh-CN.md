@@ -529,3 +529,38 @@ C++ Pages／MappedFile 提供只移动的同步 RAII，显式 close 可观察释
 映射创建增加复制和映射原生 API，无库内共享锁、后台工作或逐次访问封装。
 实测大小／对齐：Windows x86 pages 8/4、map 28/4；Windows x64 16/8、56/8；
 Linux x64 16/8、40/8。既有公共结构体保持不变。
+
+## 文件区间锁、时间戳与权限摘要
+
+FILE_EXTRA 默认开启，不依赖 FILE_INFO 或 FILE_UTILS。lock_at(file, offset,
+bytes, shared, deadline, error) 对正数字节范围尝试加锁，不改变文件位置，
+区间终点须可用有符号 64 位表达。共享锁要求 READ，排他锁要求 WRITE。NOW
+尝试一次，冲突返回 TIMEOUT；有限／无限等待使用单调截止时间，原生非阻塞尝试
+与最多请求 10 ms 的睡眠间隔。系统调用和调度可能越过截止时间。失败保留文件，
+超时保留原生冲突详情；按已取得锁的原区间解锁。库不为锁操作分配、加内部锁或
+启动线程。
+
+POSIX fcntl 记录锁属于进程且为建议锁，关闭同一 inode 的任何描述符，包括
+映射持有的副本，都可能释放进程的锁。Windows LockFileEx 按句柄持有，会限制
+普通冲突 I/O，不限制映射访问。Windows 定位 I/O 使用另一个句柄，因此持锁时
+应通过加锁句柄使用带游标的读写。不要用区间锁代替线程互斥，不重叠、升级或
+重入同一区间，也不承诺公平性。参见 [Linux 记录锁](https://www.man7.org/linux/man-pages/man2/fcntl_locking.2.html)
+和 [Windows 区间锁](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-lockfileex)。
+C++ FileRangeLock 借用 File 到解锁／析构，默认 NOW，允许移动构造转移持有；
+显式 unlock 可报告错误。
+
+时间结构用 HX_OS_FILE_TIMES_INIT 或按容量初始化。fields 选择访问／修改
+时间，单位是 Unix 秒加纳秒；未选择字段保持不变。fields=0 是无操作，不检查
+路径是否存在或权限。纳秒越过 [0,1e9)、原生时间范围不足、size/version 错误
+均明确报告。POSIX 使用 utimensat/UTIME_OMIT 并指定是否跟随链接；Windows
+使用宽字符属性句柄和 SetFileTime，截断到 100 ns，文件系统精度可更低。
+不设置创建／元数据变更时间；Windows 不表达 1601 年前日期，time_t 为 32 位
+的目标可能拒绝部分 64 位秒值。关闭句柄失败时，时间更新可能已经完成。
+
+POSIX 权限更新替换 owner 的读／写／执行位，保留 group/other；调用方排除
+并发路径替换和权限修改。不跟随链接必须真正支持，否则失败。Windows 必须包含
+READ，不支持 EXECUTE；WRITE 仅控制只读属性，不编辑 ACL、不保证有效访问权限。
+原有 v1 stat 权限摘要仍只覆盖读写。C++ FileAttributes::setTimes/permissions
+及 examples/file_attributes.c 提供直接调用。Windows 路径转换和属性句柄
+为短期资源；POSIX 元数据原生调用不增加注入堆分配。新时间结构在 Windows
+x86/x64 和 Linux x64 均为 40/8 字节大小／对齐；既有布局不变。
