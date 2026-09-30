@@ -63,3 +63,45 @@ C++ convenience methods throw the existing `hx::StatusError`, including its
 native error fields. `CpuUsage` owns its sampler and supports moves. These
 headers need C++11; the underlying library remains C99. The standalone C
 example is `examples/system_info.c`.
+
+## Dynamic libraries
+
+`HX_OS_ENABLE_LIBRARY` defaults to ON. `hx_os_library_open`, `symbol` and
+`close` provide the basic C interface; `_ex` variants also accept an initialized
+`hx_string` for owned diagnostic text. `hx::Library` supplies movable ownership
+and `symbol<Pointer>(name)`; a failure throws `LibraryError` with an owned
+message and the original status/domain/code.
+
+```cpp
+#include <hx/Library.hpp>
+hx::Library plugin("./plugin.so");
+using Abi = uint32_t(HX_OS_CALL *)(void);
+auto abi = plugin.symbol<Abi>("hx_plugin_abi_version");
+// Check ABI before calling the rest of the plugin interface.
+```
+
+Paths are UTF-8 filesystem paths; a relative filename is resolved against the
+current directory rather than searched as a bare POSIX soname. Dependencies
+still follow the native loader policy. POSIX uses RTLD_NOW and LOCAL/GLOBAL;
+Windows ignores the visibility flag. No function changes loader search paths.
+The POSIX loader has text errors instead of a portable numeric error code, so
+the main error uses HX_OS_ERROR_LOADER and the optional diagnostic captures the
+text. It copies up to 2047 native bytes before any allocator callback can
+reenter the loader, marks truncation and escapes non-UTF-8 bytes when necessary.
+Diagnostic allocation failure never replaces the primary operation error.
+
+Serialize each handle with its close. A symbol borrows module storage, and
+NULL can be a successful POSIX data-symbol address. Stop calls, release plugin
+objects, disconnect callbacks and finish plugin TLS destructors before unload.
+Close consumes the handle even on native failure; an explicit C++ close can
+report errors, whereas the destructor cannot throw. Loading/unloading may run
+module constructors/destructors and can block.
+
+`examples/load_plugin.c` loads the test module, negotiates ABI using the
+library's ABI query, and reads the plugin version. CTest builds this fixture
+itself; the example needs no preinstalled plugin or external process.
+
+C callers can use `hx_os_library_bind` or `_bind_ex` to write a native
+function pointer directly into a typed variable, passing its address and
+`sizeof(variable)`. This avoids repeating pointer conversion code. The
+destination stays unchanged on failure.

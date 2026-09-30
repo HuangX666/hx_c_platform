@@ -451,6 +451,9 @@ uint64_t hx_os_capabilities(void)
 #if HX_OS_ENABLE_SYSINFO
 	result |= HX_OS_CAP_SYSINFO;
 #endif
+#if HX_OS_ENABLE_LIBRARY
+	result |= HX_OS_CAP_LIBRARY;
+#endif
 #if HX_OS_HAVE_TIMED_JOIN
 	result |= HX_OS_CAP_TIMED_JOIN;
 #endif

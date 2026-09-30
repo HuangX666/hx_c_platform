@@ -69,7 +69,8 @@ enum {
 	HX_OS_ERROR_WINSOCK,
 	HX_OS_ERROR_GAI,
 	HX_OS_ERROR_MACH,
-	HX_OS_ERROR_CONFIG
+	HX_OS_ERROR_CONFIG,
+	HX_OS_ERROR_LOADER
 };
 
 typedef struct hx_os_error {
@@ -160,6 +161,7 @@ HX_OS_API uint64_t HX_OS_CALL hx_os_capabilities(void);
 HX_OS_API const char *HX_OS_CALL hx_os_platform_name(void);
 HX_OS_API const char *HX_OS_CALL hx_os_cpu_name(void);
 #define HX_OS_CAP_SYSINFO (UINT64_C(1) << 11)
+#define HX_OS_CAP_LIBRARY (UINT64_C(1) << 12)
 /* required includes NUL. These queries do not need initialization. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_version_string(
 	char *buffer, size_t capacity, size_t *required);

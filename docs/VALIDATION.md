@@ -315,3 +315,11 @@ latency, allocation count, lock contention and syscalls on the actual target
 before optimizing. A timer heap, reusable request storage or codec batching
 should follow a demonstrated workload need. The locked hx_c_log five-times
 and no-single-thread-regression criteria remain separate future gates.
+
+## OBS completion batch 2 (2026-09-30)
+
+Windows MSVC x64 and WSL GCC passed 14/14 suites; related ASan/UBSan
+passed 3/3 (library, C++ convenience, version-negotiation example). The
+LIBRARY=OFF C/C++ checks passed on both hosts. The test plugin is a separate
+module with a tiny C ABI, avoiding embedding non-PIC static library objects
+into the sanitizer fixture. macOS and Win7 runtime remain pending.

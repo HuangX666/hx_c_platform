@@ -55,3 +55,37 @@ double percent = cpu.query();
 C++ 便利方法抛出现有 `hx::StatusError`，保留其原生错误字段。
 `CpuUsage` 持有采样器并支持移动。这些头文件要求 C++11，底层库仍为 C99。
 独立 C 示例为 `examples/system_info.c`。
+
+## 动态库
+
+`HX_OS_ENABLE_LIBRARY` 默认 ON。`hx_os_library_open`、`symbol`、`close`
+提供基础 C 入口；`_ex` 版本可以接收已初始化的 `hx_string`，保存属于调用者
+的诊断文本。`hx::Library` 提供可移动的所有权和 `symbol<Pointer>(name)`，
+失败时抛出持有错误文本和原状态／错误域／代码的 `LibraryError`。
+
+```cpp
+#include <hx/Library.hpp>
+hx::Library plugin("./plugin.so");
+using Abi = uint32_t(HX_OS_CALL *)(void);
+auto abi = plugin.symbol<Abi>("hx_plugin_abi_version");
+// Check ABI before calling the rest of the plugin interface.
+```
+
+输入是 UTF-8 文件系统路径，相对文件名按当前目录解析，不按裸 POSIX soname
+搜索；被加载模块的依赖仍遵循原生加载器规则。POSIX 使用 RTLD_NOW 和
+LOCAL/GLOBAL，Windows 忽略可见性选项。库不修改加载器搜索路径。
+POSIX 加载错误没有可移植的数值代码，因此主错误使用 HX_OS_ERROR_LOADER，
+可选诊断保存文本。在调用可能重入加载器的分配器前，先复制最多 2047 字节，
+必要时标记截断，并转义无效 UTF-8 字节。诊断分配失败不覆盖原始操作错误。
+
+每个句柄的使用与关闭由调用者串行协调。符号借用模块存储；POSIX 数据符号
+地址即使为 NULL，也可能成功。卸载前必须结束调用、释放插件对象、断开回调，
+并完成插件 TLS 析构。关闭失败也消耗句柄；C++ 显式 close 可报告错误，
+析构不抛异常。加载／卸载可能执行模块构造／析构代码，因此可能阻塞。
+
+`examples/load_plugin.c` 加载测试模块，使用基础库 ABI 查询协商版本，
+再读取插件版本文本。CTest 自行构建配套模块，不依赖预装插件或外部进程。
+
+C 调用者可用 `hx_os_library_bind` 或 `_bind_ex`，传入函数指针变量的地址
+和 `sizeof(variable)`，直接取得可调用的指针，不必重复编写转换代码。
+失败时目标变量保持不变。

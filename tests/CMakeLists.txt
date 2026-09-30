@@ -7,6 +7,30 @@ hx_apply_warnings(hx_os_test_core)
 add_test(NAME core COMMAND hx_os_test_core)
 set_tests_properties(core PROPERTIES TIMEOUT 20)
 
+add_library(hx_os_test_library_module MODULE library_fixture.c)
+target_include_directories(hx_os_test_library_module PRIVATE
+	"${PROJECT_SOURCE_DIR}/include")
+target_compile_definitions(hx_os_test_library_module PRIVATE
+	HX_PLUGIN_VERSION="${PROJECT_VERSION}")
+set_target_properties(hx_os_test_library_module PROPERTIES
+	C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
+if(HX_OS_SANITIZER AND NOT MSVC)
+	target_compile_options(hx_os_test_library_module PRIVATE
+		-fsanitize=${HX_OS_SANITIZER} -fno-omit-frame-pointer)
+	target_link_options(hx_os_test_library_module PRIVATE
+		-fsanitize=${HX_OS_SANITIZER})
+endif()
+hx_apply_warnings(hx_os_test_library_module)
+add_executable(hx_os_test_library test_library.c)
+target_link_libraries(hx_os_test_library PRIVATE hx_c_platform)
+set_target_properties(hx_os_test_library PROPERTIES
+	C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO
+	RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+hx_apply_warnings(hx_os_test_library)
+add_test(NAME library COMMAND hx_os_test_library
+	$<TARGET_FILE:hx_os_test_library_module>)
+set_tests_properties(library PROPERTIES TIMEOUT 20)
+
 set(hx_test_suites data options lifecycle config containers sysinfo)
 if(HX_OS_ENABLE_THREAD_POOL)
 	list(APPEND hx_test_suites pool)
@@ -82,6 +106,7 @@ if(CMAKE_CXX_COMPILER)
 		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
 		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 	hx_apply_warnings(hx_os_test_cpp_platform)
-	add_test(NAME cpp_platform COMMAND hx_os_test_cpp_platform)
+	add_test(NAME cpp_platform COMMAND hx_os_test_cpp_platform
+		$<TARGET_FILE:hx_os_test_library_module>)
 	set_tests_properties(cpp_platform PROPERTIES TIMEOUT 20)
 endif()
