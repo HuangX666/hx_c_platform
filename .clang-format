@@ -1,5 +1,4 @@
 BasedOnStyle: LLVM
-Language: Cpp
 ColumnLimit: 80
 IndentWidth: 8
 TabWidth: 8

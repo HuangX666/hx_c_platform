@@ -33,7 +33,8 @@ set_tests_properties(library PROPERTIES TIMEOUT 20)
 
 set(hx_test_suites data options lifecycle config containers sysinfo file_utils
 	env paths thread_extra pipe io_options file_info config_serialize timer
-	error_text util vm file_extra watch loop_fd system delayed local duplex)
+	error_text util vm file_extra watch loop_fd system delayed local duplex
+	registry power obfuscate)
 if(HX_OS_ENABLE_THREAD_POOL)
 	list(APPEND hx_test_suites pool)
 endif()
@@ -53,8 +54,33 @@ endforeach()
 
 if(WIN32)
 	target_link_libraries(hx_os_test_file_extra PRIVATE shell32)
+	target_link_libraries(hx_os_test_registry PRIVATE advapi32)
 endif()
 set_tests_properties(local PROPERTIES SKIP_RETURN_CODE 77)
+find_package(Python3 QUIET COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+	add_custom_command(
+		OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/obfuscated_fixture.h"
+		COMMAND "${Python3_EXECUTABLE}"
+			"${PROJECT_SOURCE_DIR}/tools/obfuscate_string.py"
+			--name hx_generated --text "generated 中文😀"
+			--output
+			"${CMAKE_CURRENT_BINARY_DIR}/obfuscated_fixture.h"
+		DEPENDS "${PROJECT_SOURCE_DIR}/tools/obfuscate_string.py"
+		VERBATIM)
+	add_executable(hx_os_test_obfuscate_generated test_obfuscate_generated.c
+		"${CMAKE_CURRENT_BINARY_DIR}/obfuscated_fixture.h")
+	target_include_directories(hx_os_test_obfuscate_generated PRIVATE
+		"${CMAKE_CURRENT_BINARY_DIR}")
+	target_link_libraries(hx_os_test_obfuscate_generated PRIVATE
+		hx_c_platform)
+	set_target_properties(hx_os_test_obfuscate_generated PROPERTIES
+		C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
+	hx_apply_warnings(hx_os_test_obfuscate_generated)
+	add_test(NAME obfuscate_generated
+		COMMAND hx_os_test_obfuscate_generated)
+	set_tests_properties(obfuscate_generated PROPERTIES TIMEOUT 20)
+endif()
 add_executable(hx_os_process_fixture process_fixture.c)
 add_executable(hx_os_test_process test_process.c)
 foreach(process_target IN ITEMS hx_os_process_fixture hx_os_test_process)
@@ -91,6 +117,19 @@ include(CheckLanguage)
 check_language(CXX)
 if(CMAKE_CXX_COMPILER)
 	enable_language(CXX)
+	add_executable(hx_os_test_cpp_extensions test_cpp_extensions.cpp)
+	target_link_libraries(hx_os_test_cpp_extensions PRIVATE
+		hx_c_platform::cpp)
+	if(WIN32)
+		target_link_libraries(hx_os_test_cpp_extensions PRIVATE
+			advapi32)
+	endif()
+	set_target_properties(hx_os_test_cpp_extensions PROPERTIES
+		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+	hx_apply_warnings(hx_os_test_cpp_extensions)
+	add_test(NAME cpp_extensions COMMAND hx_os_test_cpp_extensions)
+	set_tests_properties(cpp_extensions PROPERTIES TIMEOUT 20)
 	file(GLOB facade_headers "${PROJECT_SOURCE_DIR}/include/hx/*.hpp")
 	foreach(header IN LISTS facade_headers)
 		get_filename_component(name "${header}" NAME)

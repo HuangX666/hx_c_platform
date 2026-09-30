@@ -682,3 +682,35 @@ sizes did not change. No assembly or new third-party dependency was added.
 Native macOS, Win7 fallback/provider absence, embedded/musl, firewall rejection,
 wrong-peer accept flooding and native close-failure injection remain pending.
 No Windows/WSL interop or TCP performance equivalence is claimed.
+
+
+## OBS completion batch 21 (2026-09-30)
+
+Windows full CTest passed 57/57; WSL Linux 59/59. ASan/UBSan related tests
+passed 8/8. Public headers compiled independently as C99/C++11. All four
+switches off passed 5/5 on each host. Windows x86 related tests passed 5/5.
+Windows registry and performance enabled with RANDOM and SLEEP_INHIBIT off
+passed 6/6, validating independent native linking and trimming.
+
+The Windows suites exercised exclusive temporary HKCU keys, Unicode values,
+REG_EXPAND_SZ literal reads, malformed native UTF-16, type mismatch, capacity
+preservation, readonly access, two independent sleep tokens, allocation failure
+rollback, idempotent activation and ownership transfer to a joined thread.
+Registry fixtures delete only the exclusive leaf created by the current test;
+exit cleanup is registered. Generated encoded C data was compiled and decoded,
+including non-ASCII UTF-8 and C++11 constexpr/empty literals.
+
+Linux power and registry results validate NOT_SUPPORTED paths only. ASan on
+Linux does not validate the native Windows implementations. Native macOS,
+Win7 rejection of execution requests, actual sleep policy behavior, permission
+injection and embedded targets remain pending. Power requests are not a CPU
+frequency guarantee. Apple implementation source is uncompiled on this host.
+No TSan claim is made for Windows-only power ownership tests.
+
+Measured private power state is 56/8 on Windows/Linux x64 and 32/4 on Windows
+x86; obfuscated borrowed view is 24/8 and 12/4 respectively. Existing public
+layouts remain unchanged. Objects allocate only when explicitly created;
+no background thread, global allocator, hot-path hook or assembly was added.
+The formatting configuration now also accepts the isolated Objective-C file;
+C/C++ formatting rules otherwise remain the same. Third-party sources were
+unchanged. Source checks and diff whitespace checks passed.

@@ -560,6 +560,18 @@ uint64_t hx_os_capabilities(void)
 #if HX_OS_ENABLE_DUPLEX_PIPE
 	result |= HX_OS_CAP_DUPLEX_PIPE;
 #endif
+#if HX_OS_ENABLE_REGISTRY && defined(_WIN32)
+	result |= HX_OS_CAP_REGISTRY;
+#endif
+#if HX_OS_ENABLE_SLEEP_INHIBIT && (defined(_WIN32) || defined(__APPLE__))
+	result |= HX_OS_CAP_SLEEP_INHIBIT;
+#endif
+#if HX_OS_ENABLE_PERFORMANCE_REQUEST && (defined(_WIN32) || defined(__APPLE__))
+	result |= HX_OS_CAP_PERFORMANCE_REQUEST;
+#endif
+#if HX_OS_ENABLE_OBFUSCATION
+	result |= HX_OS_CAP_OBFUSCATION;
+#endif
 #if HX_OS_ENABLE_LOOP_FD && HX_OS_ENABLE_LOOP && !defined(_WIN32)
 	result |= HX_OS_CAP_LOOP_FD;
 #endif

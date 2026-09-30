@@ -850,3 +850,45 @@ hx::DuplexPipe::shutdown(channel.first);
 
 可执行示例见 [duplex_message.c](../examples/duplex_message.c)。
 macOS、Win7、嵌入式原生环境仍待验证。
+
+
+## 注册表、电源请求和字符串混淆（第 21 批）
+
+常用入口 `hx_os_registry_open_user` 打开显式 HKCU 相对路径，
+`hx_os_registry_read_string` 直接输出严格 UTF-8 的 `hx_string`；
+`read_string_buffer` 共用解码实现，保留两段式容量协议。字符串读取接收
+REG_SZ/REG_EXPAND_SZ 的字面值，不展开环境变量；原生值上限 1 MiB，容量变化
+最多重试 8 次。损坏 UTF-16、内部 NUL、错误 DWORD 长度和类型不匹配明确失败，
+失败保留输出。注册表路径用反斜杠、相对于指定根键，不按文件路径处理。
+创建、写权限、WOW64 视图均须显式选择；独占创建保护已有键。原生创建可能
+创建父键，不是事务。同一对象调用需串行，并排除并发关闭；关闭即使失败也
+消耗对象。非 Windows 或关闭模块时返回不支持。
+
+`hx_os_sleep_inhibit_create(NULL, "Exporting project", &request, &error)`
+直接创建已激活请求；重复激活不增加引用，销毁只撤销当前对象持有的请求。
+宿主同步后可以跨线程转移，单个对象的并发调用由宿主互斥。不创建后台线程。
+Windows 用 Win7 已有的 PowerCreateRequest/SystemRequired 按句柄隔离消费者；
+原草案 SetThreadExecutionState 会共享线程状态，因此调整为独立句柄。
+性能请求使用 ExecutionRequired，Win8 起可用，Win7 返回不支持，不改变电源
+计划、不保证固定频率或实时调度，系统和用户策略可能覆盖请求。
+Apple 防睡眠使用 IOKit C 接口；性能活动使用 NSProcessInfo 公共接口，所需
+Objective-C 限制在单个实现文件，异常不越过 C ABI。关闭 PERFORMANCE_REQUEST
+即可去掉 Foundation/Objective-C，保留纯 C 的 IOKit 防睡眠。Linux 两项均按
+既定决策返回不支持，不引入 DBus。释放消耗对象并报告原生清理错误。
+C++11 的 Registry、SleepInhibit、PerformanceRequest 提供可移动同步 RAII；
+显式 close 可观察清理错误，析构不会无限等待。
+
+字符串混淆使用可逆 XOR，不提供加密。开发工具
+`tools/obfuscate_string.py --name app_label --text "example"` 输出预编码 C99
+数据，输入严格 UTF-8、最多 1 MiB；Python 不属于核心运行或构建依赖。
+`hx_os_obfuscate_string(&app_label, &text, &error)` 使用输出字符串的 context，
+失败保持输出，清零内部临时明文；结果明文由调用方管理生命周期。
+缓冲入口也支持原始字节，允许完全原地解码或互不重叠缓冲，容量不足不写入。
+C++11 可用 `constexpr auto text = hx::obfuscate<0x5a>("example")`。
+编译器和调试信息仍可能保留字面量，不能据此保护秘密。
+直接调用示例见 `examples/obfuscated_string.c`。
+
+四个独立默认开启的开关为 REGISTRY、SLEEP_INHIBIT、PERFORMANCE_REQUEST、
+OBFUSCATION。能力位表示编入适配，仍需处理运行系统和策略限制。Windows 在
+注册表或原有随机数回退需要时链接 advapi32；Apple 静态消费正确传递 framework
+及 Objective-C runtime 链接依赖。

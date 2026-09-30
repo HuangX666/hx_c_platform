@@ -43,6 +43,10 @@ option(HX_OS_ENABLE_SYSTEM_UTILS "Build process and CPU identity queries" ON)
 option(HX_OS_ENABLE_PROCESS "Build explicit child process control" ON)
 option(HX_OS_ENABLE_LOCAL_SOCKETS "Build pathname local stream sockets" ON)
 option(HX_OS_ENABLE_DUPLEX_PIPE "Build synchronous duplex socket pairs" ON)
+option(HX_OS_ENABLE_REGISTRY "Build Windows registry access" ON)
+option(HX_OS_ENABLE_SLEEP_INHIBIT "Build native idle-sleep requests" ON)
+option(HX_OS_ENABLE_PERFORMANCE_REQUEST "Build native execution activities" ON)
+option(HX_OS_ENABLE_OBFUSCATION "Build reversible string obfuscation" ON)
 set(HX_OS_ICONV_SOURCE_DIR "" CACHE PATH "Unmodified GNU libiconv source")
 set(HX_OS_SANITIZER "" CACHE STRING "address,undefined or thread")
 
@@ -178,6 +182,7 @@ add_library(hx_c_platform
 	src/watch.c src/loop_fd.c
 	src/system.c src/cpu_features.c src/time_posix.c
 	src/process.c src/process_capture.c src/local.c src/duplex_pipe.c
+	src/registry.c src/power.c src/obfuscate.c
 	${hx_parser_sources} ${hx_parser_objects}
 	${hx_platform_sources})
 if(HX_OS_ENABLE_PROCESS)
@@ -186,6 +191,31 @@ if(HX_OS_ENABLE_PROCESS)
 			src/windows/process_native.c)
 	else()
 		target_sources(hx_c_platform PRIVATE src/posix/process_native.c)
+	endif()
+endif()
+if(WIN32 AND HX_OS_ENABLE_REGISTRY)
+	target_link_libraries(hx_c_platform PRIVATE advapi32)
+endif()
+if(HX_OS_ENABLE_SLEEP_INHIBIT OR HX_OS_ENABLE_PERFORMANCE_REQUEST)
+	if(WIN32)
+		target_sources(hx_c_platform PRIVATE src/windows/power_native.c)
+	elseif(APPLE)
+		target_sources(hx_c_platform PRIVATE src/apple/power_native.c)
+		target_link_libraries(hx_c_platform PRIVATE
+			"-framework IOKit" "-framework CoreFoundation")
+		if(HX_OS_ENABLE_PERFORMANCE_REQUEST)
+			enable_language(OBJC)
+			target_sources(hx_c_platform PRIVATE
+				src/apple/power_activity.m)
+			set_source_files_properties(src/apple/power_activity.m
+				PROPERTIES COMPILE_OPTIONS
+				"-fno-objc-arc;-fobjc-exceptions")
+			set_target_properties(hx_c_platform PROPERTIES
+				OBJC_STANDARD 99 OBJC_STANDARD_REQUIRED YES
+				OBJC_EXTENSIONS NO)
+			target_link_libraries(hx_c_platform PRIVATE
+				"-framework Foundation" objc)
+		endif()
 	endif()
 endif()
 if(HX_OS_ENABLE_SYSTEM_UTILS)
@@ -427,6 +457,17 @@ if(APPLE AND HX_OS_ENABLE_WATCH)
 	string(APPEND HX_OS_PC_LIBS_PRIVATE
 		" -framework CoreServices -framework CoreFoundation")
 endif()
+if(APPLE AND (HX_OS_ENABLE_SLEEP_INHIBIT OR HX_OS_ENABLE_PERFORMANCE_REQUEST))
+	string(APPEND HX_OS_PC_LIBS_PRIVATE " -framework IOKit")
+	if(NOT HX_OS_ENABLE_WATCH)
+		string(APPEND HX_OS_PC_LIBS_PRIVATE
+			" -framework CoreFoundation")
+	endif()
+	if(HX_OS_ENABLE_PERFORMANCE_REQUEST)
+		string(APPEND HX_OS_PC_LIBS_PRIVATE
+			" -framework Foundation -lobjc")
+	endif()
+endif()
 if(HX_OS_ENABLE_LIBRARY OR HX_OS_ENABLE_PATHS)
 	foreach(library IN LISTS CMAKE_DL_LIBS)
 		string(APPEND HX_OS_PC_LIBS_PRIVATE " -l${library}")
@@ -437,7 +478,7 @@ if(WIN32)
 	if(HX_OS_ENABLE_PATHS)
 		string(APPEND HX_OS_PC_LIBS_PRIVATE " -lshell32 -lole32 -luuid")
 	endif()
-	if(HX_OS_ENABLE_RANDOM)
+	if(HX_OS_ENABLE_RANDOM OR HX_OS_ENABLE_REGISTRY)
 		string(APPEND HX_OS_PC_LIBS_PRIVATE " -ladvapi32")
 	endif()
 	if(HX_OS_ENABLE_SYSTEM_UTILS AND NOT HX_OS_ENABLE_PATHS)

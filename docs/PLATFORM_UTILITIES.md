@@ -1097,3 +1097,57 @@ See [duplex_message.c](../examples/duplex_message.c).
 [Microsoft AF_UNIX description](https://devblogs.microsoft.com/commandline/af_unix-comes-to-windows/)
 documents the UTF-8 pathname/provider boundary. macOS, Win7 and embedded native
 runs remain pending.
+
+
+## Registry, power requests and obfuscation (batch 21)
+
+Use `hx_os_registry_open_user` to open an explicit HKCU path and
+`hx_os_registry_read_string` to receive strict UTF-8 directly in `hx_string`.
+A two-pass `read_string_buffer` entry shares that decoder. String reads accept
+REG_SZ/REG_EXPAND_SZ literally, never expand environment variables, bound native
+values to 1 MiB and retry capacity races at most eight times. Invalid UTF-16,
+embedded NUL, malformed DWORD and type mismatch remain distinct failures.
+Outputs stay unchanged on failure. Paths are relative registry paths with
+backslash separators, not filesystem paths. Creation, write access and WOW64
+view selection are explicit. Exclusive creation preserves existing keys.
+Native creation may create parents and is not transactional. Serialize use of
+a key and exclude close. Close consumes the handle even on a native error.
+Other systems and disabled builds return NOT_SUPPORTED.
+
+`hx_os_sleep_inhibit_create(NULL, "Exporting project", &request, &error)`
+creates an active request. Repeated set_active(true) is idempotent; destroy
+releases only this object's request. Transfer between threads is allowed after
+host synchronization; concurrent operations on one object require exclusion.
+No worker or global power setting is introduced. Windows uses Win7-compatible
+PowerCreateRequest/SystemRequired handles, rather than thread-shared execution
+state, so independent consumers can compose safely. Performance requests use
+ExecutionRequired (Win8+, Win7 reports NOT_SUPPORTED). User and OS policies
+can override requests; no CPU frequency or real-time guarantee is implied.
+Apple sleep uses the public IOKit C assertion API. Apple performance uses a
+single Objective-C implementation file for the public NSProcessInfo activity
+API, with exceptions contained at the C boundary. Disable PERFORMANCE_REQUEST
+to omit Foundation/Objective-C; sleep remains a C IOKit adapter. Linux returns
+NOT_SUPPORTED for both requests, with no DBus dependency. Release consumes the
+object, reports native cleanup errors, and never changes another token.
+
+`hx::Registry`, `hx::SleepInhibit` and `hx::PerformanceRequest` provide movable
+C++11 synchronous RAII. Explicit close reports cleanup failure. These do not
+own asynchronous work or perform indefinite waits.
+
+String obfuscation is reversible XOR, not cryptography. `tools/obfuscate_string.py
+--name app_label --text "example"` emits C99 pre-encoded data, with UTF-8 input
+bounded to 1 MiB. Python is a development tool, never a core dependency.
+`hx_os_obfuscate_string(&app_label, &text, &error)` returns validated UTF-8 using
+the output's context, preserving it on failure and wiping temporary plaintext.
+The caller owns the returned plaintext and its lifetime. The buffer API also
+supports raw bytes, exact in-place decoding or disjoint buffers; required
+includes NUL and insufficient capacity leaves storage unchanged.
+`constexpr auto text = hx::obfuscate<0x5a>("example")` is the C++11 convenience.
+Compiler/debug artifacts may retain literals; do not use this for secrets.
+The C example is `examples/obfuscated_string.c`.
+
+REGISTRY, SLEEP_INHIBIT, PERFORMANCE_REQUEST and OBFUSCATION are independent
+CMake switches, default ON. Capabilities describe compiled adapters; native
+policy and version restrictions still apply. Windows adds advapi32 only when
+registry or the existing random fallback needs it. Apple propagates framework
+and Objective-C runtime link requirements for static consumers.
