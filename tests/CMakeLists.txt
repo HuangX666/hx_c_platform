@@ -33,7 +33,7 @@ set_tests_properties(library PROPERTIES TIMEOUT 20)
 
 set(hx_test_suites data options lifecycle config containers sysinfo file_utils
 	env paths thread_extra pipe io_options file_info config_serialize timer
-	error_text)
+	error_text util)
 if(HX_OS_ENABLE_THREAD_POOL)
 	list(APPEND hx_test_suites pool)
 endif()
@@ -50,6 +50,13 @@ foreach(suite IN LISTS hx_test_suites)
 	add_test(NAME ${suite} COMMAND hx_os_test_${suite})
 	set_tests_properties(${suite} PROPERTIES TIMEOUT 20)
 endforeach()
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND HX_OS_ENABLE_RANDOM)
+	add_test(NAME random_fallback COMMAND hx_os_test_util fallback)
+	add_test(NAME random_failure COMMAND hx_os_test_util failure)
+	set_tests_properties(random_fallback random_failure PROPERTIES
+		TIMEOUT 20 SKIP_RETURN_CODE 77)
+endif()
 
 file(GLOB headers "${PROJECT_SOURCE_DIR}/include/*.h")
 foreach(header IN LISTS headers)

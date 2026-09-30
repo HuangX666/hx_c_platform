@@ -579,3 +579,44 @@ process locale. There is no new first-party heap allocation or lock in C.
 C++ StatusError::message() returns an owned std::string with full native detail;
 what() retains its existing nonthrowing status-only behavior and object layout.
 The hello C example now uses the detailed diagnostic on failure.
+
+## Randomness, UUID, CRC32 and secure clearing
+
+RANDOM defaults to ON. hx_os_random_bytes fills caller storage using the system
+cryptographic generator; it never substitutes a time-based or ordinary PRNG.
+It may block for native entropy and has no deadline/cancellation promise. NULL
+is valid only for zero bytes. Native failure clears the entire output; invalid
+arguments or disabled-module rejection leave it unchanged. No library context,
+heap allocation or background thread is needed; OS providers can allocate.
+
+Windows resolves BCryptGenRandom from an absolute system-directory DLL path,
+using CryptGenRandom only when that entry is unavailable. Each call releases its
+module/provider; there is no hidden process-lifetime cache. CNG failures retain
+their signed code in the new appended NTSTATUS domain (numeric diagnostic), and
+legacy failures retain Win32 details. advapi32 is a private native dependency,
+also listed for static pkg-config consumers. Linux uses the getrandom syscall,
+retrying short reads/EINTR; only ENOSYS or missing syscall headers take the legacy
+path. That path first reads 32 bytes from /dev/random, then /dev/urandom, checks
+the expected character-device identities and closes both descriptors. It can
+block indefinitely on an entropy-starved old embedded kernel; denied access is
+an error. It uses a private device adapter because public file_open intentionally
+accepts regular files. Apple uses arc4random_buf; native target runs are pending.
+[Linux random-device semantics](https://www.man7.org/linux/man-pages/man4/random.4.html)
+explain why early-boot /dev/urandom alone is insufficient for this fallback.
+
+UUID generation sets v4/version and variant bits and preserves the output on
+failure. Formatting is lowercase 8-4-4-4-12 plus NUL, accepts overlapping input,
+and is available with RANDOM disabled. hx_os_uuid_generate_string(&text, &error)
+combines generation and formatting using the output string's own context;
+allocation failure also preserves the old string. C++ Random::uuid returns an
+owned string, with fill/bytes for raw output. No collision guarantee or entropy
+certification is inferred from tests. See examples/random_uuid.c.
+
+CRC32 is always available: reflected CRC-32/ISO-HDLC, polynomial 0xedb88320,
+initial/final all-ones xor. Seed zero starts a stream; prior output continues it.
+The fixed 16-entry table occupies 64 read-only bytes with two lookups per byte;
+there is no lazy initialization, allocation or lock. It detects accidental
+corruption and is not a cryptographic integrity check. secure_zero uses
+SecureZeroMemory, detected explicit_bzero on Linux, or volatile byte writes.
+It prevents elimination of these writes, not residual copies/registers/swap, and
+provides no synchronization. Neither utility introduces global configuration.

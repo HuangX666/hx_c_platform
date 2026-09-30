@@ -25,7 +25,7 @@ macOS Intel 10.13／ARM64 11.0、Windows 7 SP1 和嵌入式目标实测单独标
 | 11 | 周期定时器 | Windows/Linux 32/32；ASan 6/6；TSan 6/6；目标实测待补 |
 | 12 | 线程池工作线程身份查询 | Windows/Linux 32/32；ASan 3/3；TSan 3/3；目标实测待补 |
 | 13 | GAI 与 Mach 错误文本 | Windows/Linux 33/33；ASan 3/3；TSan 3/3；Mach 目标待验证 |
-| 14 | 随机、UUID、CRC32、安全清零 | 待实现 |
+| 14 | 随机、UUID、CRC32、安全清零 | Windows 35/35；Linux 37/37；ASan/TSan 7/7；目标待验证 |
 | 15 | 按页内存与映射 | 待实现 |
 | 16 | 文件锁、时间戳、权限 | 待实现 |
 | 17 | 目录监听与外部描述符集成 | 待实现 |

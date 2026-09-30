@@ -71,7 +71,8 @@ enum {
 	HX_OS_ERROR_MACH,
 	HX_OS_ERROR_CONFIG,
 	HX_OS_ERROR_LOADER,
-	HX_OS_ERROR_HRESULT
+	HX_OS_ERROR_HRESULT,
+	HX_OS_ERROR_NTSTATUS
 };
 
 typedef struct hx_os_error {
@@ -182,6 +183,7 @@ HX_OS_API const char *HX_OS_CALL hx_os_cpu_name(void);
 #define HX_OS_CAP_TEXT_NUMBER (UINT64_C(1) << 24)
 #define HX_OS_CAP_CONFIG_SERIALIZE (UINT64_C(1) << 25)
 #define HX_OS_CAP_TIMER (UINT64_C(1) << 26)
+#define HX_OS_CAP_RANDOM (UINT64_C(1) << 27)
 /* required includes NUL. These queries do not need initialization. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_version_string(
 	char *buffer, size_t capacity, size_t *required);

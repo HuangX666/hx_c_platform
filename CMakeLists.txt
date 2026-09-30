@@ -33,6 +33,7 @@ option(HX_OS_ENABLE_BOM "Build Unicode BOM helpers" ON)
 option(HX_OS_ENABLE_TEXT_NUMBER "Build public numeric text conversion" ON)
 option(HX_OS_ENABLE_CONFIG_SERIALIZE "Build configuration serialization" ON)
 option(HX_OS_ENABLE_TIMER "Build periodic loop timers" ON)
+option(HX_OS_ENABLE_RANDOM "Build secure system randomness and UUID v4" ON)
 set(HX_OS_ICONV_SOURCE_DIR "" CACHE PATH "Unmodified GNU libiconv source")
 set(HX_OS_SANITIZER "" CACHE STRING "address,undefined or thread")
 
@@ -69,6 +70,8 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR
 	check_symbol_exists(pthread_tryjoin_np pthread.h
 		HX_OS_HAVE_PTHREAD_TRYJOIN)
 	if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+		check_symbol_exists(explicit_bzero string.h
+			HX_OS_HAVE_EXPLICIT_BZERO)
 		check_symbol_exists(pthread_condattr_setclock pthread.h
 			HX_OS_HAVE_COND_CLOCK)
 		if(NOT HX_OS_HAVE_COND_CLOCK)
@@ -161,9 +164,18 @@ add_library(hx_c_platform
 	src/sysinfo.c src/library.c src/path.c src/env.c src/paths.c
 	src/thread_extra.c src/pipe.c src/file_at.c src/net_options.c
 	src/file_info.c src/bom.c src/number.c src/config_serialize.c
-	src/timer.c
+	src/timer.c src/util.c
 	${hx_parser_sources} ${hx_parser_objects}
 	${hx_platform_sources})
+if(HX_OS_ENABLE_RANDOM)
+	if(WIN32)
+		target_sources(hx_c_platform PRIVATE
+			src/windows/random_native.c)
+		target_link_libraries(hx_c_platform PRIVATE advapi32)
+	else()
+		target_sources(hx_c_platform PRIVATE src/posix/random_native.c)
+	endif()
+endif()
 if(HX_OS_ENABLE_SYSINFO)
 	if(WIN32)
 		target_sources(hx_c_platform PRIVATE
@@ -352,6 +364,9 @@ set(HX_OS_PC_DEFINITIONS "")
 if(WIN32)
 	if(HX_OS_ENABLE_PATHS)
 		string(APPEND HX_OS_PC_LIBS_PRIVATE " -lshell32 -lole32 -luuid")
+	endif()
+	if(HX_OS_ENABLE_RANDOM)
+		string(APPEND HX_OS_PC_LIBS_PRIVATE " -ladvapi32")
 	endif()
 	if(HX_OS_ENABLE_NETWORK)
 		string(APPEND HX_OS_PC_LIBS_PRIVATE " -lws2_32")

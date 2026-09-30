@@ -461,3 +461,35 @@ NETWORK 关闭也可用。[Microsoft 文档](https://learn.microsoft.com/en-us/w
 程序分支判断，也不要并发修改进程 locale。C 路径不新增本库分配或锁。
 C++ StatusError::message() 返回持有完整原生详情的 std::string；what() 的
 原有非抛异常状态名行为和对象布局不变。hello C 示例已接入详细错误输出。
+
+## 随机数、UUID、CRC32 和安全清零
+
+RANDOM 默认开启。hx_os_random_bytes 使用系统密码学随机源填满调用方缓冲区，
+不以时间种子或普通 PRNG 回退。可能等待系统熵，不承诺截止时间或取消。NULL
+仅可搭配零长度；原生失败会清零整个输出，无效参数／模块关闭则保持输出不变。
+不需要 context、本库分配或后台线程；操作系统提供程序可能自行分配内存。
+
+Windows 从绝对系统目录加载 BCryptGenRandom，仅入口不可用时回退
+CryptGenRandom；每次释放模块／provider，不建立隐藏的全进程缓存。CNG 失败
+保留有符号 NTSTATUS，使用新增枚举域输出数值；传统路径保留 Win32 错误。
+advapi32 是私有原生依赖，也记入静态 pkg-config 依赖。Linux 使用 getrandom
+系统调用，重试 EINTR／短读，仅 ENOSYS 或目标头无系统调用编号时走旧路径。
+旧路径先从 /dev/random 读 32 字节，再使用 /dev/urandom，核对设备类型与编号，
+关闭描述符；熵不足的旧嵌入式内核可能无限等待，权限拒绝明确失败。由于公开
+file_open 只支持普通文件，随机设备由专用底层适配处理。Apple 使用
+arc4random_buf，原生环境待验证。[Linux 设备契约](https://www.man7.org/linux/man-pages/man4/random.4.html)
+说明了启动早期不能直接依赖 /dev/urandom 的原因。
+
+UUID 设置 v4 版本和 variant 位，失败保持输出。格式化为小写 8-4-4-4-12 加
+NUL，允许输入输出重叠，RANDOM 关闭也能格式化已有 UUID。
+hx_os_uuid_generate_string(&text, &error) 一次完成生成与格式化，使用字符串
+自己的 context；分配失败也保持原值。C++ Random::uuid 返回持有字符串，
+fill/bytes 提供原始字节。测试不代表唯一性保证或熵质量认证，C 示例见
+examples/random_uuid.c。
+
+CRC32 始终可用：反射 CRC-32/ISO-HDLC，多项式 0xedb88320，初末异或全 1；
+种子 0 开始，前次结果继续增量。固定 16 项表占 64 字节只读空间，每字节两次
+查表，无延迟初始化、分配或锁。仅用于意外损坏检测，不是密码学完整性验证。
+secure_zero 使用 SecureZeroMemory、Linux 检测到的 explicit_bzero，或 volatile
+逐字节写入；防止删除这些写入，不保证擦除其他副本／寄存器／交换区，也不提供
+线程同步。两项微工具均不建立全局配置。

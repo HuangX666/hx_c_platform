@@ -439,3 +439,13 @@ GAI 说明。覆盖 UTF-8、数值回退、越界代码、容量／NUL／哨兵�
 C++ 持有文本；公共头 C99/C++11 独立编译。测试局部变量与 Windows SDK 宏冲突
 已在最终 Windows 构建前修正。Mach 实现及条件测试待 macOS，Win7 和嵌入式
 实测待补。
+
+## OBS 补齐第 14 批（2026-09-30）
+
+Windows 全量 35/35，Linux 全量 37/37，后者包含两个独立进程故障测试；
+ASan/UBSan 与 TSan 各 7/7。仅在测试进程用 seccomp 注入 ENOSYS／EIO，
+真实设备回退执行通过，失败清零、原生代码、UUID 输出保留通过，无跳过。
+另覆盖 1 MiB 填充、四线程并发、UUID 位／格式／重叠／字符串、CRC32 已知向量
+与增量、清零边界。公共头 C99/C++11 通过；RANDOM 关闭两端各 3/3，Linux
+最小组合还关闭 explicit_bzero 以验证通用清零路径。既有对象布局和热路径不变。
+Windows 传统 provider 失败、启动早期缺熵、macOS、Win7 和嵌入式仍待目标验证。

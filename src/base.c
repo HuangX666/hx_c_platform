@@ -536,6 +536,9 @@ uint64_t hx_os_capabilities(void)
 #if HX_OS_ENABLE_TIMER && HX_OS_ENABLE_LOOP
 	result |= HX_OS_CAP_TIMER;
 #endif
+#if HX_OS_ENABLE_RANDOM
+	result |= HX_OS_CAP_RANDOM;
+#endif
 #if HX_OS_ENABLE_PIPE
 	result |= HX_OS_CAP_PIPE;
 #if HX_OS_ENABLE_LOOP

@@ -493,3 +493,16 @@ canary handling, four concurrent callers and the C++ owned message. Public
 headers compiled as C99/C++11. A Windows SDK macro collision in a test-local
 variable was corrected before the final Windows build. Mach implementation and
 its guarded test remain pending on macOS; Win7 and embedded runs are pending.
+
+## OBS completion batch 14 (2026-09-30)
+
+Windows full CTest passed 35/35; Linux 37/37 adds two isolated-process fault
+tests. ASan/UBSan and TSan passed 7/7 each. Linux seccomp injected ENOSYS and EIO
+only in the dedicated test executables: the real random-device fallback ran,
+and failure clearing/native code/UUID preservation passed (neither was skipped).
+Other checks cover a 1 MiB fill, four concurrent callers, UUID bits/format/
+overlap/string output, CRC32 known and incremental vectors, and clearing bounds.
+Public C99/C++11 headers and RANDOM=OFF combinations passed (3/3 per host).
+Linux's minimal build also disabled explicit_bzero to exercise portable clearing.
+No existing object layout or hot path changed. Windows legacy-provider failure,
+early-boot entropy starvation, macOS, Win7 and embedded runs remain pending.

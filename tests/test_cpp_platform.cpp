@@ -6,6 +6,7 @@
 #include <hx/Thread.hpp>
 #include <hx/Io.hpp>
 #include <hx/Timer.hpp>
+#include <hx/Random.hpp>
 #include <hx/SocketOptions.hpp>
 #include <hx/Text.hpp>
 #include <hx/Config.hpp>
@@ -106,6 +107,14 @@ int main(int argc, char **argv)
 	}
 	TestSystemInfo();
 	test_cpp_pipe();
+	if (hx_os_capabilities() & HX_OS_CAP_RANDOM) {
+		auto uuid = hx::Random::uuid();
+		CHECK(uuid.size() == 36 && uuid[14] == '4');
+		CHECK(uuid[8] == '-' && uuid[13] == '-' && uuid[18] == '-' &&
+			uuid[23] == '-');
+		CHECK(hx::Random::bytes(513).size() == 513);
+		CHECK(hx::Random::bytes(0).empty());
+	}
 	if (hx_os_capabilities() & HX_OS_CAP_TIMER) {
 		hx_os_loop *loopOwner = NULL;
 		hx_os_timer *timerOwner = NULL;
