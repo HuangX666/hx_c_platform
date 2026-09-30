@@ -1,5 +1,6 @@
 #include <hx/SystemInfo.hpp>
 #include <hx/Library.hpp>
+#include <hx/Files.hpp>
 #include <hx/ThreadPool.hpp>
 #include <cstdio>
 #include <cstdlib>
@@ -40,6 +41,34 @@ int main(int argc, char **argv)
 {
 	CHECK(argc == 2);
 	TestSystemInfo();
+	if (hx_os_capabilities() & HX_OS_CAP_FILE_UTILS) {
+		char root[128];
+		(void)std::snprintf(root, sizeof(root), "hx-cpp-files-%llx",
+			(unsigned long long)hx_os_monotonic_ns());
+		CHECK(hx_os_directory_create(root, 0, NULL) == HX_OS_OK);
+		const std::string path = std::string(root) + "/text.txt";
+		hx::Files::writeText(path.c_str(), "hello");
+		CHECK(hx::Files::readText(path.c_str()) == "hello");
+		CHECK(hx::Files::load(path.c_str()).size() == 5);
+		CHECK(hx::Files::exists(path.c_str()));
+		CHECK(!hx::Files::absolutePath(path.c_str()).empty());
+		CHECK(!hx::Files::currentPath().empty());
+		{
+			hx::File file(path.c_str());
+			hx::File moved(std::move(file));
+			char bytes[8];
+			CHECK(moved.size() == 5);
+			CHECK(moved.readSome(bytes, sizeof(bytes)).bytes == 5);
+			CHECK(moved.readSome(bytes, sizeof(bytes)).eof);
+		}
+		{
+			hx::Directory directory(root);
+			std::string name;
+			CHECK(directory.next(name) && name == "text.txt");
+			CHECK(!directory.next(name));
+		}
+		hx::Files::removeTree(root);
+	}
 	if (hx_os_capabilities() & HX_OS_CAP_LIBRARY) {
 		hx::Library source(argv[1]);
 		hx::Library library(std::move(source));

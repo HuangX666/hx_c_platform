@@ -73,6 +73,10 @@ wchar_t *hx_os_i_windows_path(
 		(void)hx_os_i_win32(error, code);
 		return NULL;
 	}
+	if (!wcsncmp(full, L"\\\\?\\", 4) || !wcsncmp(full, L"\\\\.\\", 4)) {
+		hx_os_memory_free(result);
+		return full;
+	}
 	prefix = !wcsncmp(full, L"\\\\", 2) ? 8 : 4;
 	memcpy(result, prefix == 8 ? L"\\\\?\\UNC\\" : L"\\\\?\\",
 		prefix * sizeof(*result));

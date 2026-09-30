@@ -105,3 +105,78 @@ C callers can use `hx_os_library_bind` or `_bind_ex` to write a native
 function pointer directly into a typed variable, passing its address and
 `sizeof(variable)`. This avoids repeating pointer conversion code. The
 destination stays unchanged on failure.
+
+## File and path conveniences
+
+`HX_OS_ENABLE_FILE_UTILS` defaults to ON. Read text directly with
+`hx_os_file_read_text(path, &text, &error)` and publish an existing `hx_string`
+with `hx_os_file_write_text(path, &text, &error)`. Reading is strict UTF-8,
+removes an initial UTF-8 BOM and limits the entire input to 16 MiB. The explicit
+load APIs accept a different bound/BOM policy. Invalid input, exhausted limits,
+allocation failure and I/O failure leave an existing output string unchanged.
+Binary loads own their returned memory, including an empty allocation for an
+empty file; release it with `hx_os_memory_free`.
+
+Atomic saving creates an exclusive temporary in the target directory, writes
+all bytes, requests file persistence, closes and renames it over the target.
+It replaces the directory entry (including a destination link) and can change
+file identity/metadata. The extended result distinguishes publication from
+parent-directory synchronization. A successful publication is not a guarantee
+against power loss. Windows directory synchronization returns NOT_SUPPORTED in
+the result, without turning completed publication into failure. Failed staging
+attempts remove their temporary where possible; permissions or external
+mutation can prevent that cleanup.
+
+Copy rejects destructive copies onto the same file and does not promise
+metadata preservation or a snapshot of a concurrently changing source. Plain
+save/copy can leave partial output on failure. Explicit backup is a copy,
+without a persistence guarantee. Replace with backup uses native replacement
+on Windows and two renames on POSIX. Existing backup names are rejected; the
+caller excludes concurrent changes to all participating paths. There is no
+automatic rollback if a later step fails. The POSIX path deliberately uses
+ordinary rename after the collision check, including on WSL mounts that do not
+support no-replace rename.
+
+Current/absolute paths have buffer and `hx_string` variants. Absolute resolution
+requires an existing target and resolves links. Changing cwd is explicitly
+process-global: callers coordinate all relative-path operations. Lexical
+basename/dirname/extension views are allocation-free, recognize both separator
+styles, and remain available with FILE_UTILS disabled. An extension includes
+its dot; a leading-only dot does not count.
+
+Glob returns an owned vector of owning `hx_string` values; destroy it with
+`hx_os_sequence_destroy`. Matching supports UTF-8 `*`/`?`, with `?` consuming a
+codepoint, and is case-sensitive within matched components. Literal directory
+prefixes follow native path lookup. No character classes/escaping or recursive
+`**` expansion are provided. Dot names require a literal leading dot. Empty
+matches succeed; order is unspecified. It needs CONTAINERS as well as FILE_UTILS.
+
+Walk defaults are depth 64 (maximum configurable 256), one million visited
+entries, 65,536 matches, and separate 16 MiB budgets for vector storage and
+retained text. Traversal frames are also bounded; native directory buffers are
+outside allocator accounting. Recursive removal does not follow links, uses
+heap traversal frames and can partially complete before a limit or failure.
+POSIX traversal opens children relative to directory descriptors with NOFOLLOW;
+Windows opens reparse points themselves and holds directories against rename.
+Concurrent external mutation remains a caller coordination boundary.
+
+```cpp
+#include <hx/Files.hpp>
+auto text = hx::Files::readText("settings.json");
+hx::Files::writeText("settings.json", text);
+hx::File file("input.bin");
+hx::Directory directory(".");
+std::string name;
+while (directory.next(name)) {
+    // Use the owned UTF-8 name.
+}
+```
+
+`File`/`Directory` uniquely own core handles even when FILE_UTILS is disabled.
+`File::get()` borrows its handle. Position operations require caller
+serialization. `readSome` distinguishes EOF from a zero-byte request, and
+`IoError::completed()` retains byte progress on I/O failure. `Files` wraps the
+optional convenience layer and returns standard C++ strings/vectors.
+
+`examples/text_file.c` reads UTF-8 in one call and optionally atomically
+publishes it to a second path; CTest runs the same C source on both hosts.

@@ -295,3 +295,12 @@ Windows MSVC x64 与 WSL GCC 全量测试均为 14/14；相关 ASan/UBSan
 为 3/3，覆盖加载器、C++ 便利入口和版本协商示例。两平台 LIBRARY=OFF
 的 C/C++ 检查通过。测试插件为仅暴露小型 C ABI 的独立模块，避免将
 非 PIC 静态库对象嵌入 sanitizer 共享模块。macOS 和 Win7 实测仍待补充。
+
+## OBS 补齐第 3 批（2026-09-30）
+
+Windows／WSL 全量 CTest 均为 16/16；ASan/UBSan 相关 data、file_utils、
+cpp_platform、text_file_example 为 4/4。两平台 FILE_UTILS=OFF 的 C/C++ 检查通过，Linux
+的 FILE_UTILS=ON／CONTAINERS=OFF 组合通过。覆盖 UTF-8 长路径、BOM、
+读取上限、输出保留、拒绝复制到自身、备份冲突、cwd 往返、glob、有界删除
+和分配器所有权。Windows 因权限不足跳过创建符号链接；Linux 不跟随链接
+删除已通过。其他原生目标仍待验证。

@@ -323,3 +323,13 @@ passed 3/3 (library, C++ convenience, version-negotiation example). The
 LIBRARY=OFF C/C++ checks passed on both hosts. The test plugin is a separate
 module with a tiny C ABI, avoiding embedding non-PIC static library objects
 into the sanitizer fixture. macOS and Win7 runtime remain pending.
+
+## OBS completion batch 3 (2026-09-30)
+
+Windows/WSL full CTest passed 16/16; ASan/UBSan passed 4/4
+(data, file_utils, cpp_platform, text_file_example). FILE_UTILS=OFF passed C/C++ tests on both
+hosts; FILE_UTILS=ON with CONTAINERS=OFF passed on Linux. Tests exercised UTF-8
+long paths, BOM policy, exact input limits, output preservation, same-file copy
+rejection, backup collisions, cwd round trips, glob, bounded cleanup and
+allocator ownership. Windows symlink creation was skipped for insufficient
+privilege; Linux no-follow removal passed. Other native targets remain pending.

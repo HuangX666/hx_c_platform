@@ -21,6 +21,7 @@ option(HX_OS_ENABLE_CONFIG "Build configuration file parsers" ON)
 option(HX_OS_ENABLE_CONTAINERS "Build generic C containers" ON)
 option(HX_OS_ENABLE_SYSINFO "Build native system information" ON)
 option(HX_OS_ENABLE_LIBRARY "Build native dynamic library loading" ON)
+option(HX_OS_ENABLE_FILE_UTILS "Build file and path conveniences" ON)
 set(HX_OS_ICONV_SOURCE_DIR "" CACHE PATH "Unmodified GNU libiconv source")
 set(HX_OS_SANITIZER "" CACHE STRING "address,undefined or thread")
 
@@ -144,7 +145,7 @@ add_library(hx_c_platform
 	src/string.c src/file.c src/text.c src/optional.c
 	src/config.c src/config_values.c
 	src/containers.c
-	src/sysinfo.c src/library.c
+	src/sysinfo.c src/library.c src/path.c
 	${hx_parser_sources} ${hx_parser_objects}
 	${hx_platform_sources})
 if(HX_OS_ENABLE_SYSINFO)
@@ -158,6 +159,18 @@ if(HX_OS_ENABLE_SYSINFO)
 endif()
 if(HX_OS_ENABLE_LIBRARY)
 	target_link_libraries(hx_c_platform PRIVATE ${CMAKE_DL_LIBS})
+endif()
+if(HX_OS_ENABLE_FILE_UTILS)
+	target_sources(hx_c_platform PRIVATE src/file_utils.c src/path_glob.c)
+	if(WIN32)
+		target_sources(hx_c_platform PRIVATE
+			src/windows/file_utils_native.c)
+	else()
+		target_sources(hx_c_platform PRIVATE
+			src/posix/file_utils_native.c)
+	endif()
+else()
+	target_sources(hx_c_platform PRIVATE src/file_utils_disabled.c)
 endif()
 if(HX_OS_ENABLE_CONTAINERS)
 	target_sources(hx_c_platform PRIVATE src/sequence.c src/map.c)

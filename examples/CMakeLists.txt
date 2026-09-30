@@ -1,5 +1,5 @@
 foreach(example IN ITEMS hello async_timer configuration containers system_info
-	load_plugin)
+	load_plugin text_file)
 	add_executable(hx_os_${example} ${example}.c)
 	target_link_libraries(hx_os_${example} PRIVATE hx_c_platform)
 	set_target_properties(hx_os_${example} PROPERTIES
@@ -11,6 +11,13 @@ if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_LIBRARY)
 	add_test(NAME plugin_example COMMAND hx_os_load_plugin
 		$<TARGET_FILE:hx_os_test_library_module>)
 	set_tests_properties(plugin_example PROPERTIES TIMEOUT 20)
+endif()
+if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_FILE_UTILS)
+	file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/text-fixture.txt"
+		"UTF-8 example: 中文\n")
+	add_test(NAME text_file_example COMMAND hx_os_text_file
+		"${CMAKE_CURRENT_BINARY_DIR}/text-fixture.txt")
+	set_tests_properties(text_file_example PROPERTIES TIMEOUT 20)
 endif()
 if(CMAKE_CXX_COMPILER_LOADED)
 	add_executable(hx_os_cpp_thread_pool thread_pool.cpp)
