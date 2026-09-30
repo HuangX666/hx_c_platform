@@ -1,6 +1,7 @@
 #include "loop_private.h"
 #include "thread_private.h"
 #include "file_private.h"
+#include "vm_private.h"
 #include <stdio.h>
 
 #define HX_OS_LAYOUT(type)                                                     \
@@ -28,5 +29,7 @@ int main(void)
 	HX_OS_LAYOUT(hx_os_request);
 	HX_OS_LAYOUT(hx_os_pipe);
 	HX_OS_LAYOUT(hx_os_timer);
+	HX_OS_LAYOUT(hx_os_pages);
+	HX_OS_LAYOUT(hx_os_file_map);
 	return 0;
 }

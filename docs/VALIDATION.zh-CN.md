@@ -449,3 +449,16 @@ ASan/UBSan 与 TSan 各 7/7。仅在测试进程用 seccomp 注入 ENOSYS／EIO�
 与增量、清零边界。公共头 C99/C++11 通过；RANDOM 关闭两端各 3/3，Linux
 最小组合还关闭 explicit_bzero 以验证通用清零路径。既有对象布局和热路径不变。
 Windows 传统 provider 失败、启动早期缺熵、macOS、Win7 和嵌入式仍待目标验证。
+
+## OBS 补齐第 15 批（2026-09-30）
+
+Windows 全量 37/37，Linux 39/39；ASan/UBSan、TSan 各 4/4，包含 data、
+vm、cpp_platform、mapped_file_example。VM 关闭各 3/3；开启 VM、关闭
+SYSINFO 各 4/4，Windows 同时关闭 FILE_UTILS。公共头 C99/C++11 独立编译，
+Windows x86 本批运行测试及 x86/x64 布局探针通过，布局详见平台工具契约。
+
+覆盖页取整／清零／保护转换、非法权限、分配失败、空／越界／未对齐映射、
+文件位置保持、context 持有、原文件关闭后访问、私有写入隔离、共享持久化
+冲刷并重开、追加／管道拒绝、C++ 移动与 RAII。允许系统策略以原生错误拒绝
+可执行保护，未执行动态生成代码。截断故障、网络文件系统一致性、原生 unmap
+失败、Apple hardened runtime、Win7、嵌入式仍待目标验证。

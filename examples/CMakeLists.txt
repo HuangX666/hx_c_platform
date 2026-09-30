@@ -1,7 +1,7 @@
 foreach(example IN ITEMS hello async_timer configuration containers system_info
 	load_plugin text_file environment special_paths thread_options
 	pipe_transfer positioned_read file_info config_save periodic_timer
-	random_uuid)
+	random_uuid mapped_file)
 	add_executable(hx_os_${example} ${example}.c)
 	target_link_libraries(hx_os_${example} PRIVATE hx_c_platform)
 	set_target_properties(hx_os_${example} PROPERTIES
@@ -63,6 +63,13 @@ endif()
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_RANDOM)
 	add_test(NAME random_uuid_example COMMAND hx_os_random_uuid)
 	set_tests_properties(random_uuid_example PROPERTIES TIMEOUT 20)
+endif()
+if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_VIRTUAL_MEMORY)
+	file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/mapped-fixture.txt"
+		"mapped data")
+	add_test(NAME mapped_file_example COMMAND hx_os_mapped_file
+		"${CMAKE_CURRENT_BINARY_DIR}/mapped-fixture.txt")
+	set_tests_properties(mapped_file_example PROPERTIES TIMEOUT 20)
 endif()
 if(CMAKE_CXX_COMPILER_LOADED)
 	add_executable(hx_os_cpp_thread_pool thread_pool.cpp)

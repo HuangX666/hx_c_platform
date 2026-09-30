@@ -493,3 +493,39 @@ CRC32 始终可用：反射 CRC-32/ISO-HDLC，多项式 0xedb88320，初末异�
 secure_zero 使用 SecureZeroMemory、Linux 检测到的 explicit_bzero，或 volatile
 逐字节写入；防止删除这些写入，不保证擦除其他副本／寄存器／交换区，也不提供
 线程同步。两项微工具均不建立全局配置。
+
+## 按页内存与文件映射
+
+VIRTUAL_MEMORY 默认开启，不依赖 SYSINFO 或 FILE_UTILS。
+hx_os_pages_alloc 把正数字节数向上取整至系统页大小，拥有初始清零的匿名内存
+和使用 context 分配的元数据。支持 NONE、READ、READ|WRITE、READ|EXECUTE、
+READ|WRITE|EXECUTE 请求；缺少 READ 的 WRITE／EXECUTE 返回 NOT_SUPPORTED。
+系统策略可能拒绝可执行页，库不静默降低保护要求；整块 protect 开启 EXECUTE
+时包含指令缓存同步。保护失败可能已经部分生效，须恢复已知权限后使用。
+操作系统／硬件权限不等于安全隔离保证；修改保护与销毁期间由调用方排除访问。
+
+hx_os_file_map_open(path, mode, &map, &error) 一次映射整个 UTF-8 路径普通
+文件；create 可指定 context、已打开文件、字节偏移和长度，长度 0 表示到 EOF。
+空区间返回 EOF，越界返回 RANGE，不延长文件。内部对齐原生偏移，返回用户
+请求的视图，不修改文件位置。每个映射持有独立复制的文件资源，Windows 另持有
+映射对象；create 返回后可关闭原文件，创建期间仍须排除关闭与截断。
+
+READ 返回只读借用视图，write_view 为 NULL；SHARED_WRITE 要求读写打开，
+拒绝 APPEND；PRIVATE_COPY 可从只读文件句柄建立私有写入，不回写文件。
+两种映射都不是快照，其他修改和并发截断需调用方协调。截断或存储失败产生的
+页错误可能表现为 SIGBUS／原生异常，无法由普通 C 状态返回兜底。远程文件系统、
+映射与普通 I/O 混用的一致性遵循原生系统，不额外承诺。
+
+仅 SHARED_WRITE 可以 flush，先用 msync(MS_SYNC)／FlushViewOfFile 写回，
+durable=1 再对独立持有资源调用 fsync／FlushFileBuffers。成功不等于硬件绝对
+持久化；失败保留映射可重试，销毁不隐式 sync。原生 unmap 失败保留对象；
+unmap 成功后，即使句柄关闭报告错误也消费对象。页释放失败同样保留；借用
+视图不得越过对象寿命。参见 [Windows 冲刷契约](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-flushviewoffile)
+及 [Linux 映射契约](https://www.man7.org/linux/man-pages/man2/mmap.2.html)。
+
+C++ Pages／MappedFile 提供只移动的同步 RAII，显式 close 可观察释放错误，
+析构无法报告错误且不隐式冲刷。C 便利示例为 examples/mapped_file.c。
+每个对象增加一次元数据分配，真实页由系统管理、不计入 context 堆字节预算。
+映射创建增加复制和映射原生 API，无库内共享锁、后台工作或逐次访问封装。
+实测大小／对齐：Windows x86 pages 8/4、map 28/4；Windows x64 16/8、56/8；
+Linux x64 16/8、40/8。既有公共结构体保持不变。

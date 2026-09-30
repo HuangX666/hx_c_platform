@@ -506,3 +506,19 @@ Public C99/C++11 headers and RANDOM=OFF combinations passed (3/3 per host).
 Linux's minimal build also disabled explicit_bzero to exercise portable clearing.
 No existing object layout or hot path changed. Windows legacy-provider failure,
 early-boot entropy starvation, macOS, Win7 and embedded runs remain pending.
+
+## OBS completion batch 15 (2026-09-30)
+
+Windows full CTest passed 37/37; Linux 39/39. ASan/UBSan and TSan each passed
+4/4 (data, vm, cpp_platform, mapped_file_example). VM=OFF passed 3/3 per host;
+VM=ON with SYSINFO=OFF passed 4/4 per host, also FILE_UTILS=OFF on Windows.
+New public C99/C++11 headers compile independently. Windows x86 VM tests and
+x86/x64 layout probes ran successfully (layouts in PLATFORM_UTILITIES).
+
+Tests cover rounded/zeroed pages, protection transitions, invalid permissions,
+allocation failures, empty/oversize/unaligned maps, unchanged file cursor,
+context retention, access after original file close, private-write isolation,
+shared durable flush/reopen, append/pipe rejection and C++ moves/RAII. Native
+execute policy rejection is permitted with a native error; no generated code is
+executed. Truncation faults, network filesystem coherence, native unmap failure,
+Apple hardened runtime, Win7 and embedded machines remain target validation.

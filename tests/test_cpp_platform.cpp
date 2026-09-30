@@ -7,6 +7,7 @@
 #include <hx/Io.hpp>
 #include <hx/Timer.hpp>
 #include <hx/Random.hpp>
+#include <hx/Mapping.hpp>
 #include <hx/SocketOptions.hpp>
 #include <hx/Text.hpp>
 #include <hx/Config.hpp>
@@ -107,6 +108,17 @@ int main(int argc, char **argv)
 	}
 	TestSystemInfo();
 	test_cpp_pipe();
+	if (hx_os_capabilities() & HX_OS_CAP_VIRTUAL_MEMORY) {
+		hx::Pages original(17);
+		hx::Pages pages(std::move(original));
+		CHECK(pages.size() >= 17 && pages.data() && !original.data());
+		std::memset(pages.data(), 0x5a, 17);
+		pages.protect(HX_OS_PAGE_READ);
+		CHECK(static_cast<const unsigned char *>(pages.data())[0] ==
+			0x5a);
+		pages.close();
+		CHECK(!pages.data());
+	}
 	if (hx_os_capabilities() & HX_OS_CAP_RANDOM) {
 		auto uuid = hx::Random::uuid();
 		CHECK(uuid.size() == 36 && uuid[14] == '4');
@@ -219,6 +231,23 @@ int main(int argc, char **argv)
 		CHECK(hx_os_directory_create(root, 0, NULL) == HX_OS_OK);
 		const std::string path = std::string(root) + "/text.txt";
 		hx::Files::writeText(path.c_str(), "hello");
+		if (hx_os_capabilities() & HX_OS_CAP_VIRTUAL_MEMORY) {
+			hx::MappedFile original(path.c_str());
+			hx::MappedFile mapped(std::move(original));
+			CHECK(mapped.size() == 5 &&
+				!std::memcmp(mapped.data(), "hello", 5));
+			try {
+				(void)mapped.writableData();
+				CHECK(false);
+			} catch (const hx::StatusError &error) {
+				CHECK(error.status() == HX_OS_ACCESS_DENIED);
+			}
+			mapped.close();
+			hx::MappedFile copy(
+				path.c_str(), HX_OS_MAP_PRIVATE_COPY);
+			static_cast<char *>(copy.writableData())[0] = 'H';
+			copy.close();
+		}
 		CHECK(hx::Files::readText(path.c_str()) == "hello");
 		CHECK(hx::Files::load(path.c_str()).size() == 5);
 		CHECK(hx::Files::exists(path.c_str()));

@@ -539,6 +539,9 @@ uint64_t hx_os_capabilities(void)
 #if HX_OS_ENABLE_RANDOM
 	result |= HX_OS_CAP_RANDOM;
 #endif
+#if HX_OS_ENABLE_VIRTUAL_MEMORY
+	result |= HX_OS_CAP_VIRTUAL_MEMORY;
+#endif
 #if HX_OS_ENABLE_PIPE
 	result |= HX_OS_CAP_PIPE;
 #if HX_OS_ENABLE_LOOP

@@ -620,3 +620,51 @@ corruption and is not a cryptographic integrity check. secure_zero uses
 SecureZeroMemory, detected explicit_bzero on Linux, or volatile byte writes.
 It prevents elimination of these writes, not residual copies/registers/swap, and
 provides no synchronization. Neither utility introduces global configuration.
+
+## Pages and file mappings
+
+VIRTUAL_MEMORY defaults to ON, independently of SYSINFO and FILE_UTILS.
+hx_os_pages_alloc rounds a positive byte count to the native page size and owns
+a zero-initialized anonymous mapping plus context-allocated metadata. NONE,
+READ, READ|WRITE, READ|EXECUTE and READ|WRITE|EXECUTE are supported requests;
+WRITE or EXECUTE without READ is NOT_SUPPORTED. Native policy may reject
+executable pages; the library does not silently weaken protections. Whole-range
+protect includes instruction-cache synchronization when enabling EXECUTE.
+Protection failure can leave native partial changes; restore known permissions
+before use. OS/hardware permissions are not a security-isolation guarantee.
+Callers exclude concurrent access during protection changes and destruction.
+
+hx_os_file_map_open(path, mode, &map, &error) maps a whole regular UTF-8-named
+file in one call. create additionally accepts context, open file, byte offset
+and length (zero means through EOF). Empty ranges are EOF, oversize ranges are
+RANGE; the file is never extended. The implementation aligns the native offset
+and returns the requested subview. File cursor is unchanged. Every mapping owns
+a duplicate native file resource (plus a Windows mapping object), so the caller
+may close its original file after create. Creation still requires exclusion
+from closing/truncating that file.
+
+READ provides a const borrowed view; write_view returns NULL. SHARED_WRITE needs
+read/write file access and rejects APPEND. PRIVATE_COPY permits private writes
+through a read-only file handle and never writes those pages back. Neither mode
+is a snapshot; other file mutations and concurrent truncation must be coordinated.
+A page fault caused by truncation or storage failure can become SIGBUS or a native
+exception outside a C status return. Remote filesystem and mixed mapped/ordinary
+I/O coherence follow the native system, not an added library guarantee.
+
+Only SHARED_WRITE can flush: writeback uses msync(MS_SYNC)/FlushViewOfFile;
+durable=1 also requests fsync/FlushFileBuffers on the owned resource. Success is
+not proof of hardware durability; failure leaves the map usable for retry.
+Destroy does not implicitly sync. An unmap failure retains the object; after
+unmap it is consumed even if native handle close reports an error. Pages free
+similarly retains its object on failure. Borrowed views cannot outlive the object.
+See [Windows flush semantics](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-flushviewoffile)
+and [POSIX/Linux mapping behavior](https://www.man7.org/linux/man-pages/man2/mmap.2.html).
+
+C++ Pages and MappedFile provide move-only synchronous RAII. Call close explicitly
+to observe native release errors; destructors cannot report them and never issue
+implicit flush. C mapping convenience is demonstrated in examples/mapped_file.c.
+Each object adds one metadata allocation; actual pages are OS-managed and outside
+context heap accounting. Map creation adds duplication and mapping system APIs,
+with no shared library lock, background work or access-time wrapper. Layout
+(size/alignment): Windows x86 pages 8/4, map 28/4; Windows x64 16/8, 56/8;
+Linux x64 16/8, 40/8. Existing public structures remain unchanged.
