@@ -129,12 +129,56 @@ static void *hx_os_native_thread_entry(void *argument)
 	return thread->result;
 }
 
-hx_os_status hx_os_i_thread_start(hx_os_thread *thread, hx_os_error *error)
+hx_os_status hx_os_i_thread_start(
+	hx_os_thread *thread, size_t stack_size, hx_os_error *error)
 {
-	return hx_os_i_errno(error,
-		pthread_create(&thread->native.id, NULL,
-			hx_os_native_thread_entry, thread));
+	pthread_attr_t attributes;
+	int code;
+	if (!stack_size)
+		return hx_os_i_errno(error,
+			pthread_create(&thread->native.id, NULL,
+				hx_os_native_thread_entry, thread));
+	code = pthread_attr_init(&attributes);
+	if (code)
+		return hx_os_i_errno(error, code);
+	if (stack_size)
+		code = pthread_attr_setstacksize(&attributes, stack_size);
+	if (!code)
+		code = pthread_create(&thread->native.id, &attributes,
+			hx_os_native_thread_entry, thread);
+	(void)pthread_attr_destroy(&attributes);
+	return hx_os_i_errno(error, code);
 }
+
+#if HX_OS_ENABLE_THREAD_EX
+hx_os_status hx_os_i_thread_name(
+	hx_os_thread *thread, const char *name, hx_os_error *error)
+{
+	char truncated[64];
+	size_t length = strlen(name);
+#if defined(__APPLE__)
+	size_t limit = 63;
+	if (thread && !pthread_equal(thread->native.id, pthread_self()))
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#else
+	size_t limit = 15;
+#endif
+	if (length > limit) {
+		length = limit;
+		while (length && ((unsigned char)name[length] & 0xc0) == 0x80)
+			--length;
+	}
+	memcpy(truncated, name, length);
+	truncated[length] = 0;
+#if defined(__APPLE__)
+	return hx_os_i_errno(error, pthread_setname_np(truncated));
+#else
+	return hx_os_i_errno(error,
+		pthread_setname_np(thread ? thread->native.id : pthread_self(),
+			truncated));
+#endif
+}
+#endif
 
 hx_os_status hx_os_i_thread_join(
 	hx_os_thread *thread, hx_os_deadline deadline, hx_os_error *error)

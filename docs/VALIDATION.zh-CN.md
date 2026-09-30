@@ -320,3 +320,12 @@ file_utils、C++ 封装及两个新增 C 示例）。两平台 PATHS=ON 且 ENV=
 4/4，PATHS=OFF 各 3/3，含 C99/C++11 公共头独立编译。覆盖 XDG 相对及空值
 回退、UTF-8、根路径保留、容量协商、分配失败以及查询不创建目录。Windows
 已知目录在未初始化 COM 的测试进程中通过。macOS、Win7、嵌入式实测仍待补。
+
+## OBS 补齐第 6 批（2026-09-30）
+
+Windows／WSL 全量各 22/22；相关 ASan/UBSan 5/5（core、lifecycle、
+thread_extra、cpp_platform、thread_options_example）。两平台 THREAD_EX=OFF
+各 3/3，含 C99/C++11 独立头编译。覆盖初始化容量哨兵、非法栈大小、Linux
+实际栈预留、UTF-8 名称截断、跨线程命名、信号量溢出不部分修改、截止时间超时
+和后续重试等待退出。默认创建路径不增加锁或分配。Win7 命名回退和 Apple 行为
+仍需目标环境运行验证。

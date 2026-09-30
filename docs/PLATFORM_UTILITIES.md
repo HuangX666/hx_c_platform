@@ -251,3 +251,37 @@ reading shares its lock/codec while public ENV symbols still report unsupported
 when disabled. The host coordinates native environment/cwd mutation. No hidden
 thread or hot-path lock is added; explicit queries allocate native/string scratch.
 `examples/special_paths.c` demonstrates the same direct C call on both hosts.
+
+## Thread options, names and semaphores
+
+THREAD_EX defaults to ON and adds no background threads. Use
+`hx_os_thread_create_with_options` with `HX_OS_THREAD_OPTIONS_INIT` and an
+optional byte-sized stack reservation (zero uses native defaults). The explicit
+initializer receives the caller's capacity and writes only the known prefix;
+creation validates size/version before reading the stack field. POSIX rejects
+sizes below its native minimum or alignment requirement. Windows retains
+_beginthreadex for CRT cleanup and uses STACK_SIZE_PARAM_IS_A_RESERVATION;
+values beyond its unsigned-size parameter return RANGE. Existing create uses
+the same default native path and does not add an allocation or lock.
+
+Names are strict UTF-8. Linux and macOS truncate at a complete codepoint within
+15 and 63 bytes respectively; macOS cannot name another thread. Windows uses
+runtime lookup of SetThreadDescription in KernelBase, as required for early
+Windows 10 versions; unavailable implementations (including Win7) return
+NOT_SUPPORTED. Native failures retain errno/HRESULT. Exclude concurrent join
+and destroy when naming an object. A joined thread returns CLOSED.
+
+The semaphore is a mutex/condition-based bounded token count. post(count>0)
+retains tokens without waiters and atomically rejects overflow with LIMIT.
+wait_until consumes one available token even at NOW, otherwise waits against
+an absolute monotonic deadline. Timeout retains the object; INFINITE is
+explicitly allowed. No FIFO or hard return deadline is promised. Destroy only
+after excluding operations and waiters. Creation uses three context allocations;
+post/wait allocate nothing and take one mutex. It has no worker or queue.
+
+`hx::Semaphore` owns its synchronous resource with movable RAII. `hx::Thread`
+uses the same explicit owner-variable facade as ThreadPool: closeUntil joins
+and destroys on success, retains ownership on timeout, and never waits or
+terminates from its destructor. Callback data remains borrowed until join.
+`examples/thread_options.c` shows stack selection and an explicit close policy;
+small embedded stacks must account for callbacks, TLS and sanitizer overhead.

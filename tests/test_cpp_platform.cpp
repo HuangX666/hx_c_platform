@@ -3,6 +3,7 @@
 #include <hx/Files.hpp>
 #include <hx/Environment.hpp>
 #include <hx/Paths.hpp>
+#include <hx/Thread.hpp>
 #include <hx/ThreadPool.hpp>
 #include <cstdio>
 #include <cstdlib>
@@ -39,10 +40,30 @@ static void TestSystemInfo()
 	CHECK(second.query() >= 0);
 }
 
+static void *thread_sample(void *user)
+{
+	return user;
+}
+
 int main(int argc, char **argv)
 {
 	CHECK(argc == 2);
 	TestSystemInfo();
+	{
+		hx_os_thread *owner = NULL;
+		auto thread = hx::Thread::create(owner, thread_sample);
+		CHECK(thread.closeUntil(hx_os_deadline_after_ms(2000)) ==
+			HX_OS_OK);
+		CHECK(owner == NULL);
+	}
+	if (hx_os_capabilities() & HX_OS_CAP_THREAD_EX) {
+		hx::Semaphore first(1, 1);
+		hx::Semaphore second(std::move(first));
+		CHECK(second.waitUntil(HX_OS_DEADLINE_NOW) == HX_OS_OK);
+		CHECK(second.waitUntil(HX_OS_DEADLINE_NOW) == HX_OS_TIMEOUT);
+		second.post();
+		CHECK(second.waitUntil(HX_OS_DEADLINE_NOW) == HX_OS_OK);
+	}
 	if (hx_os_capabilities() & HX_OS_CAP_PATHS) {
 		CHECK(!hx::Paths::configHome().empty());
 		CHECK(!hx::Paths::dataHome().empty());

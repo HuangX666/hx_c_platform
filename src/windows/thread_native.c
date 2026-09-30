@@ -101,14 +101,48 @@ static unsigned int __stdcall hx_os_native_thread_entry(void *argument)
 	return 0;
 }
 
-hx_os_status hx_os_i_thread_start(hx_os_thread *thread, hx_os_error *error)
+hx_os_status hx_os_i_thread_start(
+	hx_os_thread *thread, size_t stack_size, hx_os_error *error)
 {
-	thread->native.handle = (HANDLE)_beginthreadex(NULL, 0,
-		hx_os_native_thread_entry, thread, 0, &thread->native.id);
+	if (stack_size > UINT_MAX)
+		return hx_os_i_error(error, HX_OS_RANGE, 0, 0);
+	thread->native.handle = (HANDLE)_beginthreadex(NULL,
+		(unsigned)stack_size, hx_os_native_thread_entry, thread,
+		stack_size ? STACK_SIZE_PARAM_IS_A_RESERVATION : 0,
+		&thread->native.id);
 	if (!thread->native.handle)
 		return hx_os_i_errno(error, errno);
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
+
+#if HX_OS_ENABLE_THREAD_EX
+hx_os_status hx_os_i_thread_name(
+	hx_os_thread *thread, const char *name, hx_os_error *error)
+{
+	typedef HRESULT(WINAPI * name_fn)(HANDLE, PCWSTR);
+	HMODULE module = GetModuleHandleW(L"KernelBase.dll");
+	FARPROC address =
+		module ? GetProcAddress(module, "SetThreadDescription") : NULL;
+	name_fn function = NULL;
+	wchar_t *wide;
+	HRESULT result;
+	hx_os_error local;
+	if (!address)
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+	memcpy(&function, &address, sizeof(function));
+	if (!error)
+		error = &local;
+	wide = hx_os_i_windows_utf16(NULL, name, error);
+	if (!wide)
+		return error->status;
+	result = function(
+		thread ? thread->native.handle : GetCurrentThread(), wide);
+	hx_os_memory_free(wide);
+	return hx_os_i_error(error, FAILED(result) ? HX_OS_IO_ERROR : HX_OS_OK,
+		FAILED(result) ? HX_OS_ERROR_HRESULT : 0,
+		FAILED(result) ? result : 0);
+}
+#endif
 
 hx_os_status hx_os_i_thread_join(
 	hx_os_thread *thread, hx_os_deadline deadline, hx_os_error *error)

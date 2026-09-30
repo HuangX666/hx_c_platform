@@ -211,3 +211,29 @@ PATHS 独立于 ENV、FILE_UTILS、LIBRARY 开关。内部环境读取共用锁�
 关闭 ENV 后其公共入口仍报不支持。宿主协调原生环境或 cwd 的并发修改。没有隐藏
 线程，不影响已有热路径；显式查询会分配临时字符串及原生缓冲区。
 `examples/special_paths.c` 在 Windows/Linux 使用同一份 C 源码直接调用。
+
+## 线程选项、命名与信号量
+
+THREAD_EX 默认开启，不自动启动线程。使用 `HX_OS_THREAD_OPTIONS_INIT` 后设置
+以字节表示的栈预留大小，传给 `hx_os_thread_create_with_options`；零保持原生
+默认值。显式初始化函数接收调用方容量，只写已知前缀，创建先验证 size/version。
+POSIX 按原生最小值和对齐要求拒绝无效栈大小。Windows 保留 `_beginthreadex` 的
+CRT 清理，配合 STACK_SIZE_PARAM_IS_A_RESERVATION；超出 unsigned 参数范围报
+RANGE。原有 create 保持默认原生路径，不增加分配或锁。
+
+名称严格使用 UTF-8。Linux/macOS 分别在 15/63 字节内截断到完整码点；macOS
+只能给当前线程命名。Windows 从 KernelBase 动态查找 SetThreadDescription，
+兼容较早 Windows 10 的导出位置；Win7 等不可用环境返回 NOT_SUPPORTED。原生
+失败保留 errno/HRESULT。对对象命名时由调用方排除并发 join/destroy，已 join
+线程报 CLOSED。
+
+信号量用互斥锁和条件变量实现有界计数。post(count>0) 无等待者时仍保留通知，
+超过上限整体报 LIMIT，不部分增加。wait_until 使用单调绝对截止时间；NOW 时
+有令牌立即消费，无令牌报 TIMEOUT；允许显式 INFINITE。超时保留对象可重试，
+不承诺 FIFO 或硬截止时间。销毁前排除所有操作及等待者。创建为三次 context
+分配，post/wait 不分配、各持有一次互斥锁，不建立线程或队列。
+
+`hx::Semaphore` 提供可移动 RAII；`hx::Thread` 沿用 ThreadPool 的显式所有者
+变量封装：closeUntil 成功后 join 并销毁，超时保留所有者，析构不等待、不终止。
+回调数据借用至 join 完成。`examples/thread_options.c` 演示栈配置及明确的关闭
+策略；嵌入式小栈还须计入回调、TLS 和 sanitizer 的额外开销。

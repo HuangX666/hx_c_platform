@@ -32,7 +32,7 @@ add_test(NAME library COMMAND hx_os_test_library
 set_tests_properties(library PROPERTIES TIMEOUT 20)
 
 set(hx_test_suites data options lifecycle config containers sysinfo file_utils
-	env paths)
+	env paths thread_extra)
 if(HX_OS_ENABLE_THREAD_POOL)
 	list(APPEND hx_test_suites pool)
 endif()

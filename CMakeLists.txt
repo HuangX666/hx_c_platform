@@ -24,6 +24,7 @@ option(HX_OS_ENABLE_LIBRARY "Build native dynamic library loading" ON)
 option(HX_OS_ENABLE_FILE_UTILS "Build file and path conveniences" ON)
 option(HX_OS_ENABLE_ENV "Build UTF-8 environment access" ON)
 option(HX_OS_ENABLE_PATHS "Build special path queries" ON)
+option(HX_OS_ENABLE_THREAD_EX "Build thread options, names and semaphore" ON)
 set(HX_OS_ICONV_SOURCE_DIR "" CACHE PATH "Unmodified GNU libiconv source")
 set(HX_OS_SANITIZER "" CACHE STRING "address,undefined or thread")
 
@@ -148,6 +149,7 @@ add_library(hx_c_platform
 	src/config.c src/config_values.c
 	src/containers.c
 	src/sysinfo.c src/library.c src/path.c src/env.c src/paths.c
+	src/thread_extra.c
 	${hx_parser_sources} ${hx_parser_objects}
 	${hx_platform_sources})
 if(HX_OS_ENABLE_SYSINFO)

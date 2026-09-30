@@ -352,3 +352,14 @@ Coverage includes XDG relative/empty fallbacks, UTF-8, root preservation,
 buffer size negotiation, allocation failure and queries without creation.
 Windows known folders work in a test process without COM initialization.
 macOS, Win7 and embedded native validation remain pending.
+
+## OBS completion batch 6 (2026-09-30)
+
+Windows/WSL full CTest passed 22/22; related ASan/UBSan passed 5/5
+(core, lifecycle, thread_extra, cpp_platform, thread_options_example).
+THREAD_EX=OFF passed 3/3 on both hosts with isolated C99/C++11 headers.
+Tests verify capacity-limited initialization with canaries, invalid stack sizes,
+actual Linux stack reservation, UTF-8 name truncation, cross-thread naming,
+semaphore overflow without partial updates, deadline timeout and subsequent
+successful retry/join. No additional lock/allocation enters default creation.
+Native Windows 7 naming fallback and Apple behavior still need target runs.

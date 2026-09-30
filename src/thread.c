@@ -131,9 +131,9 @@ void hx_os_event_destroy(hx_os_event *event)
 	hx_os_memory_free(event);
 }
 
-hx_os_status hx_os_thread_create(hx_os_context *context,
-	hx_os_thread_fn function, void *user, hx_os_thread **out,
-	hx_os_error *error)
+static hx_os_status hx_os_thread_create_internal(hx_os_context *context,
+	size_t stack_size, hx_os_thread_fn function, void *user,
+	hx_os_thread **out, hx_os_error *error)
 {
 	hx_os_thread *thread;
 	hx_os_status status;
@@ -145,13 +145,54 @@ hx_os_status hx_os_thread_create(hx_os_context *context,
 		return hx_os_i_error(error, HX_OS_NO_MEMORY, 0, 0);
 	thread->function = function;
 	thread->user = user;
-	status = hx_os_i_thread_start(thread, error);
+	status = hx_os_i_thread_start(thread, stack_size, error);
 	if (status != HX_OS_OK) {
 		hx_os_memory_free(thread);
 		return status;
 	}
 	*out = thread;
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+}
+
+hx_os_status hx_os_thread_create(hx_os_context *context,
+	hx_os_thread_fn function, void *user, hx_os_thread **out,
+	hx_os_error *error)
+{
+	return hx_os_thread_create_internal(
+		context, 0, function, user, out, error);
+}
+
+hx_os_status hx_os_thread_options_init(
+	hx_os_thread_options *options, size_t capacity)
+{
+	hx_os_thread_options value = HX_OS_THREAD_OPTIONS_INIT;
+	if (!options || capacity < sizeof(value))
+		return HX_OS_INVALID;
+	memcpy(options, &value, sizeof(value));
+	return HX_OS_OK;
+}
+
+hx_os_status hx_os_thread_create_with_options(hx_os_context *context,
+	const hx_os_thread_options *options, hx_os_thread_fn function,
+	void *user, hx_os_thread **out, hx_os_error *error)
+{
+#if HX_OS_ENABLE_THREAD_EX
+	if (out)
+		*out = NULL;
+	if (options &&
+		(options->size < sizeof(*options) || options->version != 1))
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	return hx_os_thread_create_internal(context,
+		options ? options->stack_size : 0, function, user, out, error);
+#else
+	(void)context;
+	(void)options;
+	(void)function;
+	(void)user;
+	if (out)
+		*out = NULL;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
 }
 
 hx_os_status hx_os_thread_join_until(hx_os_thread *thread,

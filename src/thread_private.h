@@ -31,7 +31,10 @@ struct hx_os_tls_key {
 hx_os_status hx_os_i_mutex_init(hx_os_mutex *mutex, hx_os_error *error);
 hx_os_status hx_os_i_condition_init(
 	hx_os_condition *condition, hx_os_error *error);
-hx_os_status hx_os_i_thread_start(hx_os_thread *thread, hx_os_error *error);
+hx_os_status hx_os_i_thread_start(
+	hx_os_thread *thread, size_t stack_size, hx_os_error *error);
+hx_os_status hx_os_i_thread_name(
+	hx_os_thread *thread, const char *name, hx_os_error *error);
 hx_os_status hx_os_i_thread_join(
 	hx_os_thread *thread, hx_os_deadline deadline, hx_os_error *error);
 hx_os_status hx_os_i_thread_dispose(hx_os_thread *thread, hx_os_error *error);
