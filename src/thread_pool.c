@@ -255,6 +255,15 @@ hx_os_context *hx_os_thread_pool_context(const hx_os_thread_pool *pool)
 	return pool ? pool->context : NULL;
 }
 
+hx_os_status hx_os_thread_pool_inside(
+	const hx_os_thread_pool *pool, int *inside)
+{
+	if (!pool || !inside)
+		return HX_OS_INVALID;
+	*inside = hx_os_current_pool == pool;
+	return HX_OS_OK;
+}
+
 int hx_os_task_cancel_requested(hx_os_task *task)
 {
 	return (int)hx_os_atomic_load(&task->cancelled, HX_OS_ACQUIRE);

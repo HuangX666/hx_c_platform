@@ -422,3 +422,11 @@ TIMER=OFF/LOOP=OFF 两端各 4/4；另测 Windows LOOP=ON/TIMER=OFF 3/3，
 Linux NETWORK=OFF/LOOP=ON/TIMER=ON 4/4。布局探针在 Windows x86/x64、
 Linux x64 运行，timer 大小／对齐分别为 40/8、64/8、64/8。
 macOS、Win7、嵌入式运行仍待目标验证，不承诺硬截止时间。
+
+## OBS 补齐第 12 批（2026-09-30）
+
+Windows／WSL 全量 CTest 各 32/32；ASan/UBSan、TSan 各 3/3，包含 pool、
+cpp_pool、lifecycle。THREAD_POOL 关闭两端各 2/2，公共头 C99/C++11 独立编译。
+身份测试区分宿主线程、本池工作线程及 cleanup、其他池；自身等待／关闭拒绝，
+本池已经完成的任务仍可读取。复用现有 TLS，未增加布局、分配、锁、系统调用
+或工作线程路径开销。原生目标运行待验证。

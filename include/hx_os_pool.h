@@ -51,10 +51,21 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_submit_prepared(
 /* Borrowed context. NULL is the immutable default allocator. */
 HX_OS_API hx_os_context *HX_OS_CALL hx_os_thread_pool_context(
 	const hx_os_thread_pool *pool);
+/*
+ * Current thread is a worker of this live pool (also during task cleanup).
+ * No allocation, lock or wait. Caller excludes pool destruction; invalid or
+ * disabled calls leave *inside unchanged. A worker cannot close its own pool
+ * or wait for an unfinished task from it (DEADLOCK). Finished task waits are
+ * allowed. This query does not detect dependency cycles across other pools.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_inside(
+	const hx_os_thread_pool *pool, int *inside);
 HX_OS_API int HX_OS_CALL hx_os_task_cancel_requested(hx_os_task *task);
 HX_OS_API void HX_OS_CALL hx_os_task_cancel(hx_os_task *task);
 HX_OS_API int HX_OS_CALL hx_os_task_state(hx_os_task *task);
-/* Wait success includes cleanup. Work status is separate from wait status. */
+/* Wait success includes cleanup. Work status is separate from wait status.
+ * An unfinished task's own pool worker receives DEADLOCK, even with NOW.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_task_wait_until(hx_os_task *task,
 	hx_os_deadline deadline, hx_os_status *work_status, hx_os_error *error);
 HX_OS_API void HX_OS_CALL hx_os_task_retain(hx_os_task *task);

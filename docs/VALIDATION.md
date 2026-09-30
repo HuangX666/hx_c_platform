@@ -473,3 +473,12 @@ TIMER=OFF/LOOP=OFF passed 4/4 per host. Additional Windows LOOP=ON/TIMER=OFF
 passed 3/3; Linux NETWORK=OFF/LOOP=ON/TIMER=ON passed 4/4. Layout probes ran
 on Windows x86/x64 and Linux x64 (timer 40/8, 64/8, 64/8 bytes respectively).
 macOS, Win7 and embedded runtime remain pending; no hard deadline is claimed.
+
+## OBS completion batch 12 (2026-09-30)
+
+Windows/WSL full CTest passed 32/32; ASan/UBSan and TSan each passed 3/3
+(pool, cpp_pool, lifecycle). THREAD_POOL=OFF passed 2/2 per host. Public headers
+compiled independently as C99/C++11. Identity tests distinguish the host, the
+own worker, its cleanup and another pool. Self-wait/close reject deadlock, while
+finished own-pool tasks remain readable. No layout, allocation, lock, syscall or
+worker-path change; the query reuses existing TLS. Native target runs pending.

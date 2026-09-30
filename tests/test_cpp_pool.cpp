@@ -459,6 +459,15 @@ int main()
 	hx_os_context *context = NULL;
 	CHECK(hx_os_context_create(NULL, &context, NULL) == HX_OS_OK);
 	if (hx_os_capabilities() & HX_OS_CAP_THREAD_POOL) {
+		hx_os_thread_pool *owner = NULL;
+		auto pool = hx::ThreadPool::create(owner, context);
+		CHECK(!pool.inside());
+		auto identity =
+			pool.submit([&pool]() { return pool.inside(); });
+		CHECK(identity.get());
+		CHECK(pool.closeUntil(hx_os_deadline_after_ms(2000)) ==
+			HX_OS_OK);
+		CHECK(pool.destroy() == HX_OS_OK);
 		TestResults(context);
 		TestBoundaries(context);
 		TestCancellationAndDeadlock(context);

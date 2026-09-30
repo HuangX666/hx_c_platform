@@ -426,3 +426,22 @@ C 指针和显式 closeUntil；析构不等待、不隐藏资源。lambda 异常
 退役后通过 rethrowCallbackError 取回；即使封装对象仍存在，捕获数据也在
 cleanup 中释放。wait/close 保留原生终止错误。直接 C 用法见
 examples/periodic_timer.c。
+
+## 线程池身份查询
+
+hx_os_thread_pool_inside(pool, &inside) 查询当前线程是否属于指定的存活线程池，
+任务 cleanup 中也返回真。无效参数／模块关闭返回 INVALID／NOT_SUPPORTED，
+输出不变；调用期间保持池存活，不转移所有权。复用现有线程局部状态，不新增锁、
+分配、系统调用或工作线程记账；C++ 直接调用 pool.inside()。
+
+工作线程等待本池未完成任务返回 DEADLOCK，零截止时间同样如此；等待已经完成
+的任务可以成功。关闭自身线程池也返回 DEADLOCK。查询其他池为假不代表跨池等待
+必然安全，循环依赖仍由调用方避免。本批不加入任务依赖图、窃取或内联执行。
+
+```c
+int inside;
+hx_os_status status = hx_os_thread_pool_inside(pool, &inside);
+if (status == HX_OS_OK && !inside)
+	status = hx_os_task_wait_until(task, deadline, &work_status, &error);
+/* Inside a worker, continue asynchronously instead of waiting for new work. */
+```

@@ -29,6 +29,10 @@ int main(void)
 	}
 	if (!(capabilities & HX_OS_CAP_THREAD_POOL)) {
 		hx_os_thread_pool *pool = NULL;
+		int inside = -1;
+		CHECK(hx_os_thread_pool_inside(NULL, &inside) ==
+				HX_OS_NOT_SUPPORTED &&
+			inside == -1);
 		CHECK(hx_os_thread_pool_create(NULL, NULL, &pool, &error) ==
 			HX_OS_NOT_SUPPORTED);
 		CHECK(!pool && error.status == HX_OS_NOT_SUPPORTED);

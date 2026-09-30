@@ -147,6 +147,14 @@ hx_os_context *hx_os_thread_pool_context(const hx_os_thread_pool *pool)
 	return NULL;
 }
 
+hx_os_status hx_os_thread_pool_inside(
+	const hx_os_thread_pool *pool, int *inside)
+{
+	(void)pool;
+	(void)inside;
+	return HX_OS_NOT_SUPPORTED;
+}
+
 hx_os_status hx_os_thread_pool_submit_prepared(hx_os_thread_pool *pool,
 	hx_os_task_prepare_fn prepare, void *factory, hx_os_task_fn function,
 	hx_os_task_cleanup cleanup, hx_os_task **out, hx_os_error *error)

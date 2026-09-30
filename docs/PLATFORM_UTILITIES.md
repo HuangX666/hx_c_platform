@@ -535,3 +535,26 @@ C pointer. Exceptions stop the timer, then rethrowCallbackError retrieves them
 after retirement. Lambda captures are released in cleanup even if the facade
 still exists. Native terminal errors are preserved by wait/close. See the
 standalone C example examples/periodic_timer.c.
+
+## Pool worker identity
+
+hx_os_thread_pool_inside(pool, &inside) reports whether the calling thread is
+one of that live pool's workers, including its task cleanup callback. Invalid
+arguments and disabled pools report INVALID/NOT_SUPPORTED without changing the
+output. Keep the pool alive during the call; this does not acquire ownership.
+It reads the pool's existing thread-local identity: no lock, allocation, syscall
+or additional worker bookkeeping. The C++ facade exposes pool.inside().
+
+A worker waiting for an unfinished task from its own pool gets DEADLOCK, including
+zero-deadline waits; waiting for an already finished task is permitted. Closing
+one's own pool also reports DEADLOCK. False for another pool does not prove that
+waiting there is safe: cross-pool dependency cycles remain the caller's concern.
+No work stealing, inline task execution or dependency graph is added.
+
+```c
+int inside;
+hx_os_status status = hx_os_thread_pool_inside(pool, &inside);
+if (status == HX_OS_OK && !inside)
+	status = hx_os_task_wait_until(task, deadline, &work_status, &error);
+/* Inside a worker, continue asynchronously instead of waiting for new work. */
+```

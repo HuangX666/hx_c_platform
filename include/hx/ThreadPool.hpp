@@ -533,6 +533,17 @@ public:
 	{
 		return *m_owner_;
 	}
+	bool inside() const
+	{
+		if (!*m_owner_)
+			throw StatusError(HX_OS_CLOSED);
+		int value;
+		hx_os_status status =
+			hx_os_thread_pool_inside(*m_owner_, &value);
+		if (status != HX_OS_OK)
+			throw StatusError(status);
+		return value != 0;
+	}
 	template <typename Function, typename... Arguments>
 	Task<typename detail::ReturnType<false, Function, Arguments...>::type>
 	submit(Function &&function, Arguments &&...arguments) const

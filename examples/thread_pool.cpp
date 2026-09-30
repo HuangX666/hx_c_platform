@@ -10,6 +10,10 @@ int main()
 	}
 	try {
 		auto pool = hx::ThreadPool::create(owner);
+		auto identity =
+			pool.submit([&pool]() { return pool.inside(); });
+		std::printf("On this pool's worker: %s\n",
+			identity.get() ? "yes" : "no");
 		auto answer =
 			pool.submit([](int value) { return value * 2; }, 21);
 		std::printf("Task result: %d\n", answer.get());
