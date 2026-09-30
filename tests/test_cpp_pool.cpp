@@ -268,6 +268,7 @@ struct PreparationRace {
 	hx_os_event *m_entered_;
 	hx_os_event *m_release_;
 	hx_os_atomic m_status_;
+	bool m_delayed_;
 };
 
 struct BlockingCopy {
@@ -295,7 +296,11 @@ static void *prepare_submit(void *user)
 	hx::ThreadPool pool(*race->m_owner_);
 	BlockingCopy callable(race);
 	try {
-		(void)pool.submit(callable);
+		if (race->m_delayed_)
+			(void)pool.submitAfter(
+				std::chrono::milliseconds(30), callable);
+		else
+			(void)pool.submit(callable);
 	} catch (const hx::StatusError &error) {
 		hx_os_atomic_store(
 			&race->m_status_, error.status(), HX_OS_RELEASE);
@@ -303,12 +308,13 @@ static void *prepare_submit(void *user)
 	return NULL;
 }
 
-static void TestPreparationRace(hx_os_context *context)
+static void TestPreparationRace(hx_os_context *context, bool delayed = false)
 {
 	hx_os_thread_pool *owner = NULL;
 	hx_os_thread *producer = NULL;
 	PreparationRace race = {};
 	race.m_owner_ = &owner;
+	race.m_delayed_ = delayed;
 	auto pool = hx::ThreadPool::create(owner, context);
 	CHECK(hx_os_event_create(context, 1, 0, &race.m_entered_, NULL) ==
 		HX_OS_OK);
@@ -416,7 +422,7 @@ static void count_free(void *memory, void *user)
 	std::free(memory);
 }
 
-static void TestAllocationFailure()
+static void TestAllocationFailure(bool delayed = false)
 {
 	AllocationCounter counter = {};
 	hx_os_context_options options;
@@ -435,7 +441,10 @@ static void TestAllocationFailure()
 		hx_os_atomic_store(&counter.m_attempts_, 0, HX_OS_RELAXED);
 		hx_os_atomic_store(&counter.m_fail_, failure, HX_OS_RELAXED);
 		try {
-			auto task = pool.submit([] { return 42; });
+			auto task = delayed
+				? pool.submitAfter(std::chrono::milliseconds(1),
+					  [] { return 42; })
+				: pool.submit([] { return 42; });
 			CHECK(task.get() == 42);
 			succeeded = true;
 		} catch (const hx::StatusError &error) {
@@ -454,6 +463,42 @@ static void TestAllocationFailure()
 	CHECK(hx_os_atomic_load(&counter.m_live_, HX_OS_RELAXED) == 0);
 }
 
+static void test_delayed(hx_os_context *context)
+{
+	hx_os_thread_pool *owner = NULL;
+	auto pool = hx::ThreadPool::create(owner, context);
+	if (!(hx_os_capabilities() & HX_OS_CAP_DELAYED_TASKS)) {
+		try {
+			(void)pool.submitAfter(
+				std::chrono::milliseconds(0), [] { return 1; });
+			CHECK(false);
+		} catch (const hx::StatusError &error) {
+			CHECK(error.status() == HX_OS_NOT_SUPPORTED);
+		}
+	}
+	else {
+		auto result = pool.submitAfter(
+			std::chrono::milliseconds(30),
+			[](std::unique_ptr<int> value) { return *value; },
+			std::unique_ptr<int>(new int(42)));
+		CHECK(result.get() == 42);
+		auto cancelled = pool.submitCancelableAfter(
+			std::chrono::milliseconds(60000),
+			[](hx::CancellationToken token) {
+				token.throwIfCancelled();
+				return 1;
+			});
+		cancelled.cancel();
+		try {
+			(void)cancelled.get();
+			CHECK(false);
+		} catch (const hx::StatusError &error) {
+			CHECK(error.status() == HX_OS_CANCELLED);
+		}
+	}
+	CHECK(pool.closeUntil(hx_os_deadline_after_ms(2000)) == HX_OS_OK);
+	CHECK(pool.destroy() == HX_OS_OK);
+}
 int main()
 {
 	hx_os_context *context = NULL;
@@ -472,8 +517,13 @@ int main()
 		TestBoundaries(context);
 		TestCancellationAndDeadlock(context);
 		TestPreparationRace(context);
+		if (hx_os_capabilities() & HX_OS_CAP_DELAYED_TASKS)
+			TestPreparationRace(context, true);
 		TestIndependentCancellation(context);
 		TestAllocationFailure();
+		if (hx_os_capabilities() & HX_OS_CAP_DELAYED_TASKS)
+			TestAllocationFailure(true);
+		test_delayed(context);
 	}
 	else {
 		hx_os_thread_pool *owner = NULL;

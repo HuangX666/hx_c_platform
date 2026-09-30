@@ -709,3 +709,68 @@ C++11 的 `hx::System` 返回独立字符串／vector；`hx::Process` 和
 析构不会等待、分离或强杀。完整可执行用法见
 [capture_process.c](../examples/capture_process.c)，其中明确选择超时重试和
 达到上限后丢弃未来输出的策略。macOS、Win7、嵌入式目标仍待原生验证。
+
+## 调度请求与延迟任务（第 19 批）
+
+THREAD_EX 增加指定线程及当前线程的优先级、亲和性请求。Windows 映射原生
+idle/normal/time-critical 相对优先级，仍受进程优先级类影响；Linux 请求
+SCHED_IDLE／SCHED_OTHER 的零优先级，或 SCHED_RR 的原生最高优先级。
+Apple 使用原生调度器低／中／高范围，低与普通对应 SCHED_OTHER，高对应 RR。
+权限及原生失败明确返回；这些请求不保证固定 CPU 频率或硬实时响应。
+测试提高被阻塞线程的优先级后，先恢复普通再放行；旧系统恢复优先级也可能
+需要权限。调用者需排除同一目标的并发 join、销毁及调度参数修改。
+
+亲和性零掩码返回 INVALID。Linux 位对应 CPU 0..63，设置后读回实际掩码，
+避免内核与 cpuset／在线 CPU 求交后被误认为完整成功。不一致时返回
+NOT_SUPPORTED 并尝试恢复旧掩码，恢复 errno 放入 error.cause_code。
+失败可能已经短暂或永久改变亲和性，成功读回也不能阻止之后的热插拔／
+cpuset 调整。Windows 位对应线程当前处理器组，受指针宽度限制，x86 高位
+明确返回 NOT_SUPPORTED；macOS 严格绑定返回 NOT_SUPPORTED。
+C++ Thread 提供 setPriority／setAffinity。
+
+DELAYED_TASKS 默认开启，依赖 THREAD_POOL，独立于 LOOP／TIMER／NETWORK，
+有单独能力位。绝对单调 due 时间表示“最早可运行”，不表示完成截止时间。
+NOW 进入普通就绪队列；INFINITE 返回 INVALID。C++ submitAfter 接收毫秒，
+非正值等同 NOW；submitAt 接收库截止时间值。可取消版本沿用现有取消令牌、
+类型化结果、异常和有界准备流程。
+
+有序未来任务链表与就绪 FIFO 共用 queued+submitting 容量，不增加管理
+定时线程、第二份队列额度或任务依赖图。现有工作线程通过条件变量等待
+最早 due 时间或通知；同一 due 按入队顺序转移到已有就绪工作后面。
+多工作线程实际开始／完成顺序仍可能不同。插入和排队取消最多扫描有界
+未来链表的长度；转移时唤醒其他工作线程。时钟或条件等待失败时，受影响
+未来任务返回失败的 work_status，仍走正常 cleanup。
+
+取消未来任务会将其移入就绪队列，不用等到原 due 时间；cleanup 在工作
+线程、池锁外恰好执行一次。DRAIN 保留未来时间；CANCEL_PENDING 将排队的
+未来任务标为取消并尽快清理。超时保留池和任务，重试可从排空升级为取消
+待执行任务；运行中的任务仍靠协作取消。
+
+未来任务的元数据与任务共用一次分配，额外创建一个私有互斥锁。取消方
+先持有此锁再访问池；工作线程在池锁外清除元数据中的池指针，然后才执行
+任务／cleanup。所有工作线程 join 后，保留的任务和取消源可安全晚于池销毁。
+内部关闭路径在池锁下直接标记取消，不取得任务私有锁，避免锁顺序反转。
+分配器和 prepare 回调继续在池锁外执行，关闭与准备并发时也遵守原契约。
+
+开启模块后，普通任务增加一个可空私有指针和分支；没有未来任务时，不增加
+分配次数、锁次数、间接调用、时钟读取或系统调用。关闭模块会裁掉这些私有
+字段和延迟逻辑。实测大小／对齐：Windows／Linux x64 的 task 88/8、
+pool 104/8、延迟元数据 32/8；Windows x86 分别 56/8、64/8、24/8。
+既有公共结构不变。未来任务另承担互斥锁分配、挂起期间的时钟／定时等待
+开销。前后对照见 VALIDATION；这些数据不能替代 hx_c_log 接入及其性能验收。
+
+```c
+hx_os_task *task = NULL;
+hx_os_status status = hx_os_thread_pool_submit_delayed(pool,
+	hx_os_deadline_after_ms(100), work, user, cleanup, &task, &error);
+/* On acceptance, use the ordinary task wait/cancel/release API. */
+```
+
+```cpp
+auto task = pool.submitAfter(std::chrono::milliseconds(100),
+	[](int value) { return value * 2; }, 21);
+int answer = task.get();
+```
+
+C 示例见 [delayed_task.c](../examples/delayed_task.c)；关闭与持有规则沿用
+现有线程池契约。macOS、Win7、ARM/musl、处理器组及真实板卡仍待目标验证。

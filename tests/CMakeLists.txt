@@ -33,7 +33,7 @@ set_tests_properties(library PROPERTIES TIMEOUT 20)
 
 set(hx_test_suites data options lifecycle config containers sysinfo file_utils
 	env paths thread_extra pipe io_options file_info config_serialize timer
-	error_text util vm file_extra watch loop_fd system)
+	error_text util vm file_extra watch loop_fd system delayed)
 if(HX_OS_ENABLE_THREAD_POOL)
 	list(APPEND hx_test_suites pool)
 endif()

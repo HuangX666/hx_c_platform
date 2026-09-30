@@ -9,6 +9,11 @@ target_link_libraries(hx_os_division_benchmark PRIVATE hx_c_platform)
 set_target_properties(hx_os_division_benchmark PROPERTIES
 	C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
 hx_apply_warnings(hx_os_division_benchmark)
+add_executable(hx_os_pool_benchmark thread_pool.c)
+target_link_libraries(hx_os_pool_benchmark PRIVATE hx_c_platform)
+set_target_properties(hx_os_pool_benchmark PROPERTIES
+	C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
+hx_apply_warnings(hx_os_pool_benchmark)
 
 add_executable(hx_os_layout_report ../tools/report_layout.c)
 target_include_directories(hx_os_layout_report PRIVATE

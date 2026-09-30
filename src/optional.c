@@ -140,6 +140,23 @@ void hx_os_arena_destroy(hx_os_arena *arena)
 #endif
 
 #if !HX_OS_ENABLE_THREAD_POOL
+hx_os_status hx_os_thread_pool_submit_delayed(hx_os_thread_pool *pool,
+	hx_os_deadline due, hx_os_task_fn function, void *user,
+	hx_os_task_cleanup cleanup, hx_os_task **out, hx_os_error *error)
+{
+	(void)due;
+	return hx_os_thread_pool_submit(
+		pool, function, user, cleanup, out, error);
+}
+hx_os_status hx_os_thread_pool_submit_delayed_prepared(hx_os_thread_pool *pool,
+	hx_os_deadline due, hx_os_task_prepare_fn prepare, void *factory,
+	hx_os_task_fn function, hx_os_task_cleanup cleanup, hx_os_task **out,
+	hx_os_error *error)
+{
+	(void)due;
+	return hx_os_thread_pool_submit_prepared(
+		pool, prepare, factory, function, cleanup, out, error);
+}
 
 hx_os_context *hx_os_thread_pool_context(const hx_os_thread_pool *pool)
 {

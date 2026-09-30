@@ -1,6 +1,7 @@
 #include "thread_private.h"
 
 #include <time.h>
+#include <sched.h>
 #include <unistd.h>
 #if defined(__linux__)
 #include <sys/syscall.h>
@@ -151,6 +152,67 @@ hx_os_status hx_os_i_thread_start(
 }
 
 #if HX_OS_ENABLE_THREAD_EX
+hx_os_status hx_os_i_thread_priority(
+	hx_os_thread *thread, int level, hx_os_error *error)
+{
+	int policy = SCHED_OTHER, low, high;
+	struct sched_param parameters;
+	memset(&parameters, 0, sizeof(parameters));
+	if (level == HX_OS_THREAD_PRIORITY_TIME_CRITICAL)
+		policy = SCHED_RR;
+#if defined(__linux__) && defined(SCHED_IDLE)
+	else if (level == HX_OS_THREAD_PRIORITY_IDLE)
+		policy = SCHED_IDLE;
+#endif
+	low = sched_get_priority_min(policy);
+	if (low < 0)
+		return hx_os_i_errno(error, errno);
+	high = sched_get_priority_max(policy);
+	if (high < 0)
+		return hx_os_i_errno(error, errno);
+	parameters.sched_priority = level == HX_OS_THREAD_PRIORITY_TIME_CRITICAL
+		? high
+		: level == HX_OS_THREAD_PRIORITY_IDLE ? low
+						      : low + (high - low) / 2;
+	return hx_os_i_errno(error,
+		pthread_setschedparam(
+			thread ? thread->native.id : pthread_self(), policy,
+			&parameters));
+}
+hx_os_status hx_os_i_thread_affinity(
+	hx_os_thread *thread, uint64_t mask, hx_os_error *error)
+{
+#if defined(__linux__)
+	cpu_set_t saved, desired, actual;
+	pthread_t native = thread ? thread->native.id : pthread_self();
+	int code, restored, i;
+	code = pthread_getaffinity_np(native, sizeof(saved), &saved);
+	if (code)
+		return hx_os_i_errno(error, code);
+	CPU_ZERO(&desired);
+	for (i = 0; i < 64; ++i)
+		if (mask & (UINT64_C(1) << i))
+			CPU_SET(i, &desired);
+	code = pthread_setaffinity_np(native, sizeof(desired), &desired);
+	if (code)
+		return hx_os_i_errno(error, code);
+	code = pthread_getaffinity_np(native, sizeof(actual), &actual);
+	if (!code && CPU_EQUAL(&desired, &actual))
+		return hx_os_i_error(error, HX_OS_OK, 0, 0);
+	restored = pthread_setaffinity_np(native, sizeof(saved), &saved);
+	if (code)
+		(void)hx_os_i_errno(error, code);
+	else
+		(void)hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+	if (error)
+		error->cause_code = restored;
+	return code ? hx_os_i_errno(NULL, code) : HX_OS_NOT_SUPPORTED;
+#else
+	(void)thread;
+	(void)mask;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
+}
 hx_os_status hx_os_i_thread_name(
 	hx_os_thread *thread, const char *name, hx_os_error *error)
 {

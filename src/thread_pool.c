@@ -1,4 +1,4 @@
-#include "internal.h"
+#include "thread_pool_private.h"
 
 #if defined(_MSC_VER)
 static __declspec(thread) hx_os_thread_pool *hx_os_current_pool;
@@ -6,34 +6,37 @@ static __declspec(thread) hx_os_thread_pool *hx_os_current_pool;
 static __thread hx_os_thread_pool *hx_os_current_pool;
 #endif
 
-struct hx_os_task {
-	hx_os_atomic references;
-	hx_os_atomic state;
-	hx_os_atomic cancelled;
-	hx_os_event *finished;
-	hx_os_task_fn function;
-	hx_os_task_cleanup cleanup;
-	void *user;
-	hx_os_status result;
-	hx_os_thread_pool *pool;
-	hx_os_task *next;
-};
-
-struct hx_os_thread_pool {
-	hx_os_context *context;
-	hx_os_mutex *mutex;
-	hx_os_condition *condition;
-	hx_os_thread **threads;
-	size_t thread_count;
-	size_t capacity;
-	size_t queued;
-	size_t submitting;
-	hx_os_task *first;
-	hx_os_task *last;
-	hx_os_atomic close_claim;
-	int closing;
-	int joined;
-};
+/* All queue helpers run under the existing pool mutex. */
+static void hx_os_pool_ready(hx_os_thread_pool *pool, hx_os_task *task)
+{
+	task->next = NULL;
+	if (pool->last)
+		pool->last->next = task;
+	else
+		pool->first = task;
+	pool->last = task;
+}
+#if HX_OS_ENABLE_DELAYED_TASKS
+static void hx_os_pool_promote(hx_os_thread_pool *pool, hx_os_status failure)
+{
+	uint64_t now = 0;
+	int promoted = 0;
+	if (!pool->delayed)
+		return;
+	if (failure == HX_OS_OK)
+		failure = hx_os_monotonic_read(&now, NULL);
+	while (pool->delayed &&
+		(failure != HX_OS_OK || pool->delayed->delayed->due <= now)) {
+		hx_os_task *task = pool->delayed;
+		pool->delayed = task->next;
+		task->delayed->failure = failure;
+		hx_os_pool_ready(pool, task);
+		promoted = 1;
+	}
+	if (promoted)
+		hx_os_condition_notify_all(pool->condition);
+}
+#endif
 
 void hx_os_thread_pool_options_init(hx_os_thread_pool_options *options)
 {
@@ -51,9 +54,27 @@ static void *hx_os_pool_worker(void *user)
 	for (;;) {
 		hx_os_task *task;
 		(void)hx_os_mutex_lock(pool->mutex, NULL);
-		while (!pool->first && !pool->closing)
+		for (;;) {
+#if HX_OS_ENABLE_DELAYED_TASKS
+			hx_os_status status;
+			if (pool->delayed)
+				hx_os_pool_promote(pool, HX_OS_OK);
+			if (pool->first || (pool->closing && !pool->delayed))
+				break;
+			status = hx_os_condition_wait_until(pool->condition,
+				pool->mutex,
+				pool->delayed ? pool->delayed->delayed->due
+					      : HX_OS_DEADLINE_INFINITE,
+				NULL);
+			if (status != HX_OS_OK && status != HX_OS_TIMEOUT)
+				hx_os_pool_promote(pool, status);
+#else
+			if (pool->first || pool->closing)
+				break;
 			(void)hx_os_condition_wait_until(pool->condition,
 				pool->mutex, HX_OS_DEADLINE_INFINITE, NULL);
+#endif
+		}
 		task = pool->first;
 		if (!task) {
 			(void)hx_os_mutex_unlock(pool->mutex, NULL);
@@ -66,8 +87,23 @@ static void *hx_os_pool_worker(void *user)
 		hx_os_atomic_store(
 			&task->state, HX_OS_TASK_RUNNING, HX_OS_RELEASE);
 		(void)hx_os_mutex_unlock(pool->mutex, NULL);
+#if HX_OS_ENABLE_DELAYED_TASKS
+		if (task->delayed) {
+			/* Never take this lock under the pool mutex:
+			 * cancellation takes delay->mutex first to pin pool
+			 * lifetime.
+			 */
+			(void)hx_os_mutex_lock(task->delayed->mutex, NULL);
+			task->delayed->pool = NULL;
+			(void)hx_os_mutex_unlock(task->delayed->mutex, NULL);
+		}
+#endif
 		task->result = hx_os_task_cancel_requested(task)
 			? HX_OS_CANCELLED
+#if HX_OS_ENABLE_DELAYED_TASKS
+			: task->delayed && task->delayed->failure
+			? task->delayed->failure
+#endif
 			: task->function(task, task->user);
 		if (task->cleanup)
 			task->cleanup(task->user);
@@ -156,7 +192,7 @@ hx_os_status hx_os_thread_pool_create(hx_os_context *context,
 static hx_os_status hx_os_pool_submit(hx_os_thread_pool *pool,
 	hx_os_task_fn function, void *user, hx_os_task_cleanup cleanup,
 	hx_os_task_prepare_fn prepare, void *factory, hx_os_task **out,
-	hx_os_error *error)
+	hx_os_deadline due, hx_os_error *error)
 {
 	hx_os_task *task;
 	hx_os_status status = HX_OS_OK;
@@ -175,7 +211,12 @@ static hx_os_status hx_os_pool_submit(hx_os_thread_pool *pool,
 	}
 	++pool->submitting;
 	(void)hx_os_mutex_unlock(pool->mutex, NULL);
-	task = hx_os_i_zero(pool->context, sizeof(*task));
+	task = hx_os_i_zero(pool->context,
+		sizeof(*task)
+#if HX_OS_ENABLE_DELAYED_TASKS
+			+ (due ? sizeof(hx_os_delayed_task) : 0)
+#endif
+	);
 	if (!task)
 		status = HX_OS_NO_MEMORY;
 	else {
@@ -183,6 +224,17 @@ static hx_os_status hx_os_pool_submit(hx_os_thread_pool *pool,
 			pool->context, 1, 0, &task->finished, error);
 		event_failed = status != HX_OS_OK;
 	}
+#if HX_OS_ENABLE_DELAYED_TASKS
+	if (status == HX_OS_OK && due) {
+		task->delayed = (hx_os_delayed_task *)(task + 1);
+		task->delayed->due = due;
+		status = hx_os_mutex_create(
+			pool->context, 0, &task->delayed->mutex, error);
+		event_failed = status != HX_OS_OK;
+	}
+#else
+	(void)due;
+#endif
 	if (status == HX_OS_OK && prepare) {
 		user = NULL;
 		status = prepare(factory, &user);
@@ -198,11 +250,18 @@ static hx_os_status hx_os_pool_submit(hx_os_thread_pool *pool,
 		task->user = user;
 		task->pool = pool;
 		hx_os_atomic_store(&task->references, 2, HX_OS_RELAXED);
-		if (pool->last)
-			pool->last->next = task;
+#if HX_OS_ENABLE_DELAYED_TASKS
+		if (task->delayed) {
+			hx_os_task **cursor = &pool->delayed;
+			task->delayed->pool = pool;
+			while (*cursor && (*cursor)->delayed->due <= due)
+				cursor = &(*cursor)->next;
+			task->next = *cursor;
+			*cursor = task;
+		}
 		else
-			pool->first = task;
-		pool->last = task;
+#endif
+			hx_os_pool_ready(pool, task);
 		++pool->queued;
 		*out = task;
 		hx_os_condition_notify_one(pool->condition);
@@ -218,6 +277,10 @@ static hx_os_status hx_os_pool_submit(hx_os_thread_pool *pool,
 			cleanup(user);
 		if (task)
 			hx_os_event_destroy(task->finished);
+#if HX_OS_ENABLE_DELAYED_TASKS
+		if (task && task->delayed)
+			hx_os_mutex_destroy(task->delayed->mutex);
+#endif
 		hx_os_memory_free(task);
 		(void)hx_os_mutex_lock(pool->mutex, NULL);
 		--pool->submitting;
@@ -234,7 +297,7 @@ hx_os_status hx_os_thread_pool_submit(hx_os_thread_pool *pool,
 	hx_os_task **out, hx_os_error *error)
 {
 	return hx_os_pool_submit(
-		pool, function, user, cleanup, NULL, NULL, out, error);
+		pool, function, user, cleanup, NULL, NULL, out, 0, error);
 }
 
 hx_os_status hx_os_thread_pool_submit_prepared(hx_os_thread_pool *pool,
@@ -247,7 +310,55 @@ hx_os_status hx_os_thread_pool_submit_prepared(hx_os_thread_pool *pool,
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 	}
 	return hx_os_pool_submit(
-		pool, function, NULL, cleanup, prepare, factory, out, error);
+		pool, function, NULL, cleanup, prepare, factory, out, 0, error);
+}
+hx_os_status hx_os_thread_pool_submit_delayed(hx_os_thread_pool *pool,
+	hx_os_deadline due, hx_os_task_fn function, void *user,
+	hx_os_task_cleanup cleanup, hx_os_task **out, hx_os_error *error)
+{
+#if HX_OS_ENABLE_DELAYED_TASKS
+	if (due == HX_OS_DEADLINE_INFINITE) {
+		if (out)
+			*out = NULL;
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	}
+	return hx_os_pool_submit(
+		pool, function, user, cleanup, NULL, NULL, out, due, error);
+#else
+	(void)pool;
+	(void)due;
+	(void)function;
+	(void)user;
+	(void)cleanup;
+	if (out)
+		*out = NULL;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
+}
+hx_os_status hx_os_thread_pool_submit_delayed_prepared(hx_os_thread_pool *pool,
+	hx_os_deadline due, hx_os_task_prepare_fn prepare, void *factory,
+	hx_os_task_fn function, hx_os_task_cleanup cleanup, hx_os_task **out,
+	hx_os_error *error)
+{
+#if HX_OS_ENABLE_DELAYED_TASKS
+	if (!prepare || !cleanup || due == HX_OS_DEADLINE_INFINITE) {
+		if (out)
+			*out = NULL;
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	}
+	return hx_os_pool_submit(pool, function, NULL, cleanup, prepare,
+		factory, out, due, error);
+#else
+	(void)pool;
+	(void)due;
+	(void)prepare;
+	(void)factory;
+	(void)function;
+	(void)cleanup;
+	if (out)
+		*out = NULL;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
 }
 
 hx_os_context *hx_os_thread_pool_context(const hx_os_thread_pool *pool)
@@ -272,6 +383,27 @@ int hx_os_task_cancel_requested(hx_os_task *task)
 void hx_os_task_cancel(hx_os_task *task)
 {
 	hx_os_atomic_store(&task->cancelled, 1, HX_OS_RELEASE);
+#if HX_OS_ENABLE_DELAYED_TASKS
+	if (task->delayed) {
+		hx_os_delayed_task *delay = task->delayed;
+		(void)hx_os_mutex_lock(delay->mutex, NULL);
+		if (delay->pool) {
+			hx_os_thread_pool *pool = delay->pool;
+			hx_os_task **cursor;
+			(void)hx_os_mutex_lock(pool->mutex, NULL);
+			for (cursor = &pool->delayed; *cursor;
+				cursor = &(*cursor)->next)
+				if (*cursor == task) {
+					*cursor = task->next;
+					hx_os_pool_ready(pool, task);
+					break;
+				}
+			hx_os_condition_notify_all(pool->condition);
+			(void)hx_os_mutex_unlock(pool->mutex, NULL);
+		}
+		(void)hx_os_mutex_unlock(delay->mutex, NULL);
+	}
+#endif
 }
 
 int hx_os_task_state(hx_os_task *task)
@@ -309,6 +441,10 @@ void hx_os_task_release(hx_os_task *task)
 		return;
 	if (hx_os_atomic_fetch_add(&task->references, -1, HX_OS_ACQ_REL) == 1) {
 		hx_os_event_destroy(task->finished);
+#if HX_OS_ENABLE_DELAYED_TASKS
+		if (task->delayed)
+			hx_os_mutex_destroy(task->delayed->mutex);
+#endif
 		hx_os_memory_free(task);
 	}
 }
@@ -330,9 +466,18 @@ hx_os_status hx_os_thread_pool_close_until(hx_os_thread_pool *pool, int mode,
 		return hx_os_i_error(error, HX_OS_BUSY, 0, 0);
 	(void)hx_os_mutex_lock(pool->mutex, NULL);
 	pool->closing = 1;
-	if (mode == HX_OS_POOL_CANCEL_PENDING)
+	if (mode == HX_OS_POOL_CANCEL_PENDING) {
 		for (task = pool->first; task; task = task->next)
-			hx_os_task_cancel(task);
+			hx_os_atomic_store(&task->cancelled, 1, HX_OS_RELEASE);
+#if HX_OS_ENABLE_DELAYED_TASKS
+		while (pool->delayed) {
+			task = pool->delayed;
+			pool->delayed = task->next;
+			hx_os_atomic_store(&task->cancelled, 1, HX_OS_RELEASE);
+			hx_os_pool_ready(pool, task);
+		}
+#endif
+	}
 	hx_os_condition_notify_all(pool->condition);
 	(void)hx_os_mutex_unlock(pool->mutex, NULL);
 	for (i = 0; i < pool->thread_count; ++i) {

@@ -5,6 +5,7 @@
 #include "hx_os_file_extra.h"
 #include "watch_private.h"
 #include "process_private.h"
+#include "thread_pool_private.h"
 #include <stdio.h>
 
 #define HX_OS_LAYOUT(type)                                                     \
@@ -44,5 +45,8 @@ int main(void)
 	HX_OS_LAYOUT(hx_os_process_options);
 	HX_OS_LAYOUT(hx_os_process_result);
 	HX_OS_LAYOUT(hx_os_process_capture_options);
+	HX_OS_LAYOUT(hx_os_task);
+	HX_OS_LAYOUT(hx_os_thread_pool);
+	HX_OS_LAYOUT(hx_os_delayed_task);
 	return 0;
 }

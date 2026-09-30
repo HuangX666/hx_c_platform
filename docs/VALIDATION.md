@@ -604,3 +604,46 @@ samples: MSVC x64 helper/native 2509100/1998700 ns; WSL Clang x64
 these samples do not establish a speedup or embedded performance claim.
 No assembly was introduced. Native macOS, Win7 console inheritance, ARM/musl,
 missing-procfs/OS-failure injection and actual embedded boards remain pending.
+
+## OBS completion batch 19 (2026-09-30)
+
+Windows MSVC x64 full CTest passed 48/48; WSL Linux passed 50/50.
+Related ASan/UBSan and TSan each passed 7/7 (thread_extra, delayed, pool,
+cpp_pool, cpp_platform, loop_concurrency, delayed_task_example).
+Independent C99/C++11 headers passed. THREAD_EX/pool/delayed disabled
+passed 4/4 per host; pool enabled but delayed disabled passed 5/5 per host;
+enabled thread extensions/delayed tasks without networking passed 6/6
+per host (Windows LOOP also disabled). Windows x86 passed 4/4 related tests.
+
+Tests cover native affinity readback, Linux partial-mask rejection/restoration,
+valid/invalid scheduling requests and permission status; shared capacity,
+ready FIFO versus equal-due work, no early execution, future cancellation,
+drain timeout escalated to cancel-pending, cleanup on workers, 64-task
+cancel/close/destroy racing, retained tasks after pool destruction, C++
+move-only arguments/results and cancellation, delayed allocation failure,
+and close racing delayed callback preparation. Real-time priority is tested
+only on a blocked worker and restored before releasing it.
+
+Measured enabled private sizes/alignment: x64 task/pool/delay metadata
+88/8, 104/8, 32/8 on Windows and Linux; x86 56/8, 64/8, 24/8.
+There is no public layout change. Ordinary work adds no allocation/lock count;
+future work adds one mutex and metadata, sorted insertion/cancel scanning,
+clock sampling and native timed waits.
+
+The Release pool benchmark submits 16384 no-op tasks to one worker in chunks
+of 128, including wait/release. Static baseline executables were saved before
+changing the batch-18 implementation (9ba7624). Each comparison alternates
+baseline/current order across five processes per version, discards each
+process's warmup sample and retains 25 timed samples per version.
+
+Final medians: Windows baseline/current 9003000/9140800 ns (+1.53% elapsed),
+Linux 12575598/12133141 ns (-3.52%). Ranges were 7593800..11159500 versus
+7999800..11217300 ns on Windows, and 11517734..13372403 versus
+11323393..13491747 ns on Linux. An earlier series had the opposite direction
+(Windows 10000500/9567700, Linux 11984708/12118367), before placing the empty
+future-list branch before the scheduler helper. The runs establish noisy
+local observations, not a stable improvement or universal no-regression claim.
+No assembly or extra ordinary-task locks/allocations were introduced.
+Raw results remain ignored build artifacts (batch19-pool*-perf.json).
+Native macOS, Win7, processor groups, CPU hotplug, ARM/musl and embedded boards
+remain pending. This is unrelated to the unperformed hx_c_log migration.

@@ -84,6 +84,32 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_set_name(
 	hx_os_thread *thread, const char *name, hx_os_error *error);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_set_current_name(
 	const char *name, hx_os_error *error);
+enum {
+	HX_OS_THREAD_PRIORITY_IDLE,
+	HX_OS_THREAD_PRIORITY_NORMAL,
+	HX_OS_THREAD_PRIORITY_TIME_CRITICAL
+};
+/* Scheduling requests, not hard real-time guarantees. Linux uses
+ * SCHED_IDLE / SCHED_OTHER / maximum SCHED_RR; privilege failures are
+ * preserved. Windows priorities remain relative to the process class.
+ * Exclude join/destroy and concurrent scheduling changes on the target.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_set_priority(
+	hx_os_thread *thread, int level, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_set_current_priority(
+	int level, hx_os_error *error);
+/* Nonzero mask: Linux CPU IDs 0..63; Windows current processor group,
+ * native pointer-width bits (higher bits return NOT_SUPPORTED on x86).
+ * Apple cannot provide strict binding and returns NOT_SUPPORTED.
+ * Linux verifies readback; mismatch returns NOT_SUPPORTED and attempts
+ * to restore the old mask. Restoration failure is error.cause_code.
+ * Failure can have changed affinity; topology/cpuset changes can occur
+ * after verification. This is not a reservation of CPUs.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_set_affinity(
+	hx_os_thread *thread, uint64_t mask, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_set_current_affinity(
+	uint64_t mask, hx_os_error *error);
 /*
  * One joiner at a time. Timeout leaves thread/user alive. Success includes
  * native TLS cleanup and may be repeated. Returned result is caller-owned.

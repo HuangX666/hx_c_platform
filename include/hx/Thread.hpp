@@ -88,6 +88,20 @@ public:
 		detail::CheckStatus(
 			hx_os_thread_set_name(*m_owner_, name, &error), error);
 	}
+	void setPriority(int level)
+	{
+		hx_os_error error;
+		detail::CheckStatus(
+			hx_os_thread_set_priority(*m_owner_, level, &error),
+			error);
+	}
+	void setAffinity(uint64_t mask)
+	{
+		hx_os_error error;
+		detail::CheckStatus(
+			hx_os_thread_set_affinity(*m_owner_, mask, &error),
+			error);
+	}
 	hx_os_status joinUntil(hx_os_deadline deadline, void **result = NULL,
 		hx_os_error *error = NULL) const noexcept
 	{

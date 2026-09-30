@@ -7,6 +7,9 @@
 #include <string.h>
 #if defined(__linux__)
 #include <pthread.h>
+#include <sched.h>
+#elif defined(_WIN32)
+#include <windows.h>
 #endif
 
 #define CHECK(value)                                                           \
@@ -21,11 +24,71 @@ typedef struct thread_test {
 	hx_os_semaphore *ready;
 	hx_os_semaphore *release;
 	hx_os_status name_status;
+	uint64_t affinity;
 } thread_test;
+#if defined(__linux__)
+static void test_restricted_affinity(const cpu_set_t *available, int selected)
+{
+	cpu_set_t actual;
+	hx_os_error error;
+	hx_os_status status;
+	int unavailable;
+	for (unavailable = 0; unavailable < 64; ++unavailable)
+		if (!CPU_ISSET(unavailable, available))
+			break;
+	if (unavailable == 64)
+		return;
+	status = hx_os_thread_set_current_affinity(
+		(UINT64_C(1) << selected) | (UINT64_C(1) << unavailable),
+		&error);
+	CHECK(status == HX_OS_NOT_SUPPORTED || status == HX_OS_INVALID);
+	CHECK(error.cause_code == 0);
+	CHECK(!pthread_getaffinity_np(pthread_self(), sizeof(actual), &actual));
+	CHECK(CPU_COUNT(&actual) == 1 && CPU_ISSET(selected, &actual));
+}
+#endif
 
 static void *thread_entry(void *user)
 {
 	thread_test *state = user;
+	CHECK(hx_os_thread_set_current_priority(
+		      HX_OS_THREAD_PRIORITY_NORMAL, NULL) == HX_OS_OK);
+	CHECK(hx_os_thread_set_current_priority(99, NULL) == HX_OS_INVALID);
+	CHECK(hx_os_thread_set_current_affinity(0, NULL) == HX_OS_INVALID);
+#if defined(__linux__)
+	{
+		cpu_set_t available, actual;
+		int i;
+		CHECK(!pthread_getaffinity_np(
+			pthread_self(), sizeof(available), &available));
+		for (i = 0; i < 64; ++i)
+			if (CPU_ISSET(i, &available)) {
+				state->affinity = UINT64_C(1) << i;
+				break;
+			}
+		if (state->affinity) {
+			CHECK(hx_os_thread_set_current_affinity(
+				      state->affinity, NULL) == HX_OS_OK);
+			CHECK(!pthread_getaffinity_np(
+				pthread_self(), sizeof(actual), &actual));
+			CHECK(CPU_COUNT(&actual) == 1 && CPU_ISSET(i, &actual));
+			test_restricted_affinity(&available, i);
+		}
+	}
+#elif defined(_WIN32)
+	{
+		DWORD_PTR process_mask, system_mask;
+		CHECK(GetProcessAffinityMask(
+			GetCurrentProcess(), &process_mask, &system_mask));
+		state->affinity =
+			(uint64_t)(process_mask & (~process_mask + 1));
+		CHECK(hx_os_thread_set_current_affinity(
+			      state->affinity, NULL) == HX_OS_OK);
+	}
+#else
+	CHECK(hx_os_thread_set_current_affinity(1, NULL) ==
+		HX_OS_NOT_SUPPORTED);
+#endif
 	state->name_status =
 		hx_os_thread_set_current_name("中文测试名称超过限制", NULL);
 #if defined(__linux__)
@@ -78,6 +141,11 @@ int main(void)
 			      NULL) == HX_OS_NOT_SUPPORTED);
 		CHECK(hx_os_thread_set_current_name("disabled", NULL) ==
 			HX_OS_NOT_SUPPORTED);
+		CHECK(hx_os_thread_set_current_priority(
+			      HX_OS_THREAD_PRIORITY_NORMAL, NULL) ==
+			HX_OS_NOT_SUPPORTED);
+		CHECK(hx_os_thread_set_current_affinity(1, NULL) ==
+			HX_OS_NOT_SUPPORTED);
 		CHECK(hx_os_semaphore_create(NULL, 0, 1, &state.ready, NULL) ==
 			HX_OS_NOT_SUPPORTED);
 		return 0;
@@ -114,6 +182,26 @@ int main(void)
 		      hx_os_deadline_after_ms(2000), NULL) == HX_OS_OK);
 	CHECK(state.name_status == HX_OS_OK ||
 		state.name_status == HX_OS_NOT_SUPPORTED);
+	CHECK(hx_os_thread_set_priority(
+		      thread, HX_OS_THREAD_PRIORITY_NORMAL, NULL) == HX_OS_OK);
+	if (state.affinity)
+		CHECK(hx_os_thread_set_affinity(thread, state.affinity, NULL) ==
+			HX_OS_OK);
+	CHECK(hx_os_thread_set_affinity(thread, 0, NULL) == HX_OS_INVALID);
+	{
+		hx_os_error scheduling;
+		status = hx_os_thread_set_priority(thread,
+			HX_OS_THREAD_PRIORITY_TIME_CRITICAL, &scheduling);
+		CHECK(status == HX_OS_OK || status == HX_OS_ACCESS_DENIED ||
+			status == HX_OS_NOT_SUPPORTED);
+		if (status == HX_OS_OK)
+			CHECK(hx_os_thread_set_priority(thread,
+				      HX_OS_THREAD_PRIORITY_NORMAL,
+				      NULL) == HX_OS_OK);
+		else
+			CHECK(scheduling.domain != HX_OS_ERROR_NONE ||
+				status == HX_OS_NOT_SUPPORTED);
+	}
 	status = hx_os_thread_set_name(thread, "other name", NULL);
 #if defined(__APPLE__)
 	CHECK(status == HX_OS_NOT_SUPPORTED);
@@ -131,6 +219,9 @@ int main(void)
 		      &result, NULL) == HX_OS_OK &&
 		result == &state);
 	CHECK(hx_os_thread_set_name(thread, "closed", NULL) == HX_OS_CLOSED);
+	CHECK(hx_os_thread_set_priority(thread, HX_OS_THREAD_PRIORITY_NORMAL,
+		      NULL) == HX_OS_CLOSED);
+	CHECK(hx_os_thread_set_affinity(thread, 1, NULL) == HX_OS_CLOSED);
 	CHECK(hx_os_thread_destroy(&thread, NULL) == HX_OS_OK);
 	CHECK(hx_os_semaphore_post(state.release, 2, NULL) == HX_OS_LIMIT);
 	CHECK(hx_os_semaphore_wait_until(

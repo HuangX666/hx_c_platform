@@ -915,3 +915,86 @@ See [capture_process.c](../examples/capture_process.c) for an executable example
 with an explicit retry/discard policy, and the public process header for all
 ownership/error contracts. Native macOS, Windows 7 and embedded targets remain
 pending validation.
+
+## Scheduling requests and delayed tasks (batch 19)
+
+THREAD_EX adds explicit thread/current-thread priority and affinity requests.
+Windows maps idle/normal/time-critical to native relative thread priorities;
+the process priority class still matters. Linux requests SCHED_IDLE/OTHER with
+priority zero, or SCHED_RR at its native maximum. Apple requests the native
+scheduler's low/middle/high ranges (SCHED_OTHER for idle/normal, RR for high).
+Permission/native failures are preserved. These requests promise neither a
+fixed CPU frequency nor hard real-time response. Raising priority on an idle
+worker in tests is followed by restoring normal before it is released.
+Changing priority back can itself require privileges on older systems.
+Callers exclude concurrent join/destruction/scheduling changes.
+
+Affinity mask zero is INVALID. Linux bits identify CPUs 0..63; the adapter reads
+back the actual set because the kernel can intersect a request with cpuset/
+online restrictions. A mismatch reports NOT_SUPPORTED and attempts to restore
+the old set; restore errno is in error.cause_code. A failed operation can have
+temporarily or permanently changed affinity. Successful readback cannot stop
+later hotplug/cpuset changes. Windows bits select the thread's current processor
+group, limited to native pointer width; upper bits on x86 return NOT_SUPPORTED.
+macOS returns NOT_SUPPORTED for strict binding. No affinity hints masquerade as
+a strict binding guarantee. C++ Thread exposes setPriority/setAffinity.
+
+DELAYED_TASKS defaults ON, requires THREAD_POOL and has a capability bit.
+It is independent of LOOP/TIMER/NETWORK. Absolute monotonic due times indicate
+when a task becomes eligible, not when it must start or finish. NOW uses the
+ordinary ready queue; INFINITE is INVALID. C++ submitAfter takes milliseconds,
+with nonpositive delays becoming NOW; submitAt accepts a library deadline.
+Cancelable variants preserve the existing cancellation token, typed result,
+exception and bounded preparation contracts.
+
+The sorted future list shares queued+submitting capacity with the ready FIFO.
+No timer manager thread, second queue budget or task dependency graph is added.
+Existing workers wait on the pool condition until the earliest due time or a
+notification. Equal due times are promoted in insertion order, behind already
+ready work. Multiple workers may start/finish them in a different order.
+Insertion and queued cancellation scan at most the bounded future-list length.
+Promotion wakes other workers. Native scheduler clock/condition errors retire
+affected future tasks with a failing work_status and their normal cleanup.
+
+Queued cancellation moves a future task to the ready list, without waiting for
+its due time. Cleanup still runs exactly once on a worker outside the pool lock.
+DRAIN honors future due times; CANCEL_PENDING promotes cancelled future tasks
+for retirement. Timeout retains the pool/tasks and a retry may escalate from
+drain to cancel-pending. Running tasks remain cooperatively cancellable.
+
+A future task's metadata shares its task allocation and adds one private mutex.
+Cancellation takes that mutex before consulting the pool; the worker clears
+that pool pointer outside the pool lock before executing/cleaning the task.
+Joining all workers therefore removes every delayed task's access to the pool.
+Retained tasks and cancellation sources remain safe after pool destruction.
+The internal close path marks cancellation under the pool mutex without taking
+the per-task lock, avoiding lock-order inversion. Allocation and prepare
+callbacks remain outside the pool mutex, including close/preparation races.
+
+With this module enabled, ordinary tasks add one nullable private pointer and
+branches; they add no allocation count, lock acquisition, indirect dispatch,
+or clock/system call when there are no future tasks. Disabled builds remove
+the extra task/pool fields and delayed logic. Measured size/alignment with it
+enabled: task 88/8, pool 104/8 and delay metadata 32/8 on Windows/Linux x64;
+56/8, 64/8 and 24/8 on Windows x86. Existing public structures are unchanged.
+A future task additionally pays for its mutex allocation and, while pending,
+native timed waits/clock reads. See VALIDATION for before/after measurements;
+these do not stand in for hx_c_log integration or its performance acceptance.
+
+```c
+hx_os_task *task = NULL;
+hx_os_status status = hx_os_thread_pool_submit_delayed(pool,
+	hx_os_deadline_after_ms(100), work, user, cleanup, &task, &error);
+/* On acceptance, wait/cancel/release through the ordinary task API. */
+```
+
+```cpp
+auto task = pool.submitAfter(std::chrono::milliseconds(100),
+	[](int value) { return value * 2; }, 21);
+int answer = task.get(); // Consumer explicitly chooses to wait.
+```
+
+See [delayed_task.c](../examples/delayed_task.c) for a C example and the existing
+pool ownership contracts for shutdown. Native references:
+[Linux affinity](https://man7.org/linux/man-pages/man3/pthread_setaffinity_np.3.html),
+[Windows affinity](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setthreadaffinitymask).

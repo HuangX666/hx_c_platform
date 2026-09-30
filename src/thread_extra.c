@@ -6,6 +6,50 @@ struct hx_os_semaphore {
 	uint32_t count;
 	uint32_t maximum;
 };
+static hx_os_status hx_os_thread_schedule(hx_os_thread *thread, int priority,
+	int level, uint64_t mask, hx_os_error *error)
+{
+#if HX_OS_ENABLE_THREAD_EX
+	if ((priority &&
+		    (level < HX_OS_THREAD_PRIORITY_IDLE ||
+			    level > HX_OS_THREAD_PRIORITY_TIME_CRITICAL)) ||
+		(!priority && !mask))
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (thread && hx_os_atomic_load(&thread->joined, HX_OS_ACQUIRE))
+		return hx_os_i_error(error, HX_OS_CLOSED, 0, 0);
+	return priority ? hx_os_i_thread_priority(thread, level, error)
+			: hx_os_i_thread_affinity(thread, mask, error);
+#else
+	(void)thread;
+	(void)priority;
+	(void)level;
+	(void)mask;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
+}
+hx_os_status hx_os_thread_set_priority(
+	hx_os_thread *thread, int level, hx_os_error *error)
+{
+	if (!thread)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	return hx_os_thread_schedule(thread, 1, level, 0, error);
+}
+hx_os_status hx_os_thread_set_current_priority(int level, hx_os_error *error)
+{
+	return hx_os_thread_schedule(NULL, 1, level, 0, error);
+}
+hx_os_status hx_os_thread_set_affinity(
+	hx_os_thread *thread, uint64_t mask, hx_os_error *error)
+{
+	if (!thread)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	return hx_os_thread_schedule(thread, 0, 0, mask, error);
+}
+hx_os_status hx_os_thread_set_current_affinity(
+	uint64_t mask, hx_os_error *error)
+{
+	return hx_os_thread_schedule(NULL, 0, 0, mask, error);
+}
 
 static hx_os_status hx_os_thread_name(
 	hx_os_thread *thread, const char *name, hx_os_error *error)

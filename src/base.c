@@ -580,6 +580,9 @@ uint64_t hx_os_capabilities(void)
 #endif
 #if HX_OS_ENABLE_THREAD_POOL
 	result |= HX_OS_CAP_THREAD_POOL;
+#if HX_OS_ENABLE_DELAYED_TASKS
+	result |= HX_OS_CAP_DELAYED_TASKS;
+#endif
 #endif
 #if HX_OS_ENABLE_MEMORY_POOLS
 	result |= HX_OS_CAP_MEMORY_POOLS;

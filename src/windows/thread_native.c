@@ -116,6 +116,30 @@ hx_os_status hx_os_i_thread_start(
 }
 
 #if HX_OS_ENABLE_THREAD_EX
+hx_os_status hx_os_i_thread_priority(
+	hx_os_thread *thread, int level, hx_os_error *error)
+{
+	int native = level == HX_OS_THREAD_PRIORITY_IDLE ? THREAD_PRIORITY_IDLE
+		: level == HX_OS_THREAD_PRIORITY_TIME_CRITICAL
+		? THREAD_PRIORITY_TIME_CRITICAL
+		: THREAD_PRIORITY_NORMAL;
+	if (!SetThreadPriority(
+		    thread ? thread->native.handle : GetCurrentThread(),
+		    native))
+		return hx_os_i_win32(error, GetLastError());
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+}
+hx_os_status hx_os_i_thread_affinity(
+	hx_os_thread *thread, uint64_t mask, hx_os_error *error)
+{
+	if ((uint64_t)(DWORD_PTR)mask != mask)
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+	if (!SetThreadAffinityMask(
+		    thread ? thread->native.handle : GetCurrentThread(),
+		    (DWORD_PTR)mask))
+		return hx_os_i_win32(error, GetLastError());
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+}
 hx_os_status hx_os_i_thread_name(
 	hx_os_thread *thread, const char *name, hx_os_error *error)
 {

@@ -548,14 +548,58 @@ public:
 	Task<typename detail::ReturnType<false, Function, Arguments...>::type>
 	submit(Function &&function, Arguments &&...arguments) const
 	{
-		return submitImpl<false>(std::forward<Function>(function),
+		return submitImpl<false>(false, 0,
+			std::forward<Function>(function),
 			std::forward<Arguments>(arguments)...);
 	}
 	template <typename Function, typename... Arguments>
 	Task<typename detail::ReturnType<true, Function, Arguments...>::type>
 	submitCancelable(Function &&function, Arguments &&...arguments) const
 	{
-		return submitImpl<true>(std::forward<Function>(function),
+		return submitImpl<true>(false, 0,
+			std::forward<Function>(function),
+			std::forward<Arguments>(arguments)...);
+	}
+	template <typename Function, typename... Arguments>
+	Task<typename detail::ReturnType<false, Function, Arguments...>::type>
+	submitAt(hx_os_deadline due, Function &&function,
+		Arguments &&...arguments) const
+	{
+		return submitImpl<false>(true, due,
+			std::forward<Function>(function),
+			std::forward<Arguments>(arguments)...);
+	}
+	template <typename Function, typename... Arguments>
+	Task<typename detail::ReturnType<false, Function, Arguments...>::type>
+	submitAfter(std::chrono::milliseconds duration, Function &&function,
+		Arguments &&...arguments) const
+	{
+		return submitAt(duration.count() <= 0
+				? HX_OS_DEADLINE_NOW
+				: hx_os_deadline_after_ms(static_cast<uint64_t>(
+					  duration.count())),
+			std::forward<Function>(function),
+			std::forward<Arguments>(arguments)...);
+	}
+	template <typename Function, typename... Arguments>
+	Task<typename detail::ReturnType<true, Function, Arguments...>::type>
+	submitCancelableAt(hx_os_deadline due, Function &&function,
+		Arguments &&...arguments) const
+	{
+		return submitImpl<true>(true, due,
+			std::forward<Function>(function),
+			std::forward<Arguments>(arguments)...);
+	}
+	template <typename Function, typename... Arguments>
+	Task<typename detail::ReturnType<true, Function, Arguments...>::type>
+	submitCancelableAfter(std::chrono::milliseconds duration,
+		Function &&function, Arguments &&...arguments) const
+	{
+		return submitCancelableAt(duration.count() <= 0
+				? HX_OS_DEADLINE_NOW
+				: hx_os_deadline_after_ms(static_cast<uint64_t>(
+					  duration.count())),
+			std::forward<Function>(function),
 			std::forward<Arguments>(arguments)...);
 	}
 	hx_os_status closeUntil(hx_os_deadline deadline,
@@ -580,7 +624,8 @@ private:
 	template <bool WithToken, typename Function, typename... Arguments>
 	Task<typename detail::ReturnType<WithToken, Function,
 		Arguments...>::type>
-	submitImpl(Function &&function, Arguments &&...arguments) const
+	submitImpl(bool delayed, hx_os_deadline due, Function &&function,
+		Arguments &&...arguments) const
 	{
 		typedef detail::Factory<WithToken, Function, Arguments...>
 			Factory;
@@ -595,9 +640,13 @@ private:
 			std::forward<Arguments>(arguments)...);
 		hx_os_task *task = NULL;
 		hx_os_error error;
-		hx_os_status status = hx_os_thread_pool_submit_prepared(
-			*m_owner_, Factory::prepare, &factory, Work::execute,
-			Work::cleanup, &task, &error);
+		hx_os_status status = delayed
+			? hx_os_thread_pool_submit_delayed_prepared(*m_owner_,
+				  due, Factory::prepare, &factory,
+				  Work::execute, Work::cleanup, &task, &error)
+			: hx_os_thread_pool_submit_prepared(*m_owner_,
+				  Factory::prepare, &factory, Work::execute,
+				  Work::cleanup, &task, &error);
 		if (status != HX_OS_OK) {
 			if (factory.m_state_)
 				factory.m_state_->release();

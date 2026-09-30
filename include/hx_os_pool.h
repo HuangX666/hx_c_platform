@@ -48,6 +48,24 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_submit_prepared(
 	hx_os_thread_pool *pool, hx_os_task_prepare_fn prepare, void *factory,
 	hx_os_task_fn function, hx_os_task_cleanup cleanup, hx_os_task **out,
 	hx_os_error *error);
+/* Absolute monotonic eligibility time, not a completion deadline. NOW is
+ * ordinary immediate submission; INFINITE is INVALID. Future tasks share
+ * queue capacity with ready tasks and use the existing workers/condition.
+ * Equal due times retain insertion order. Ready FIFO work already queued
+ * runs first; no start-time guarantee. Queued cancellation wakes workers
+ * and cleanup runs once without waiting for due. DRAIN honors due times;
+ * CANCEL_PENDING retires queued future tasks immediately. Timeout retains
+ * pool/tasks. Scheduler clock/wait failures become task work_status.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_submit_delayed(
+	hx_os_thread_pool *pool, hx_os_deadline due, hx_os_task_fn function,
+	void *user, hx_os_task_cleanup cleanup, hx_os_task **out,
+	hx_os_error *error);
+/* Same admission-before-prepare and rejection ownership as prepared submit. */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_submit_delayed_prepared(
+	hx_os_thread_pool *pool, hx_os_deadline due,
+	hx_os_task_prepare_fn prepare, void *factory, hx_os_task_fn function,
+	hx_os_task_cleanup cleanup, hx_os_task **out, hx_os_error *error);
 /* Borrowed context. NULL is the immutable default allocator. */
 HX_OS_API hx_os_context *HX_OS_CALL hx_os_thread_pool_context(
 	const hx_os_thread_pool *pool);
