@@ -6,67 +6,6 @@ struct hx_os_address_list {
 	hx_os_address addresses[256];
 };
 
-int hx_os_i_socket_last_error(void)
-{
-#if defined(_WIN32)
-	return WSAGetLastError();
-#else
-	return errno;
-#endif
-}
-
-hx_os_status hx_os_i_socket_error(hx_os_error *error, int code)
-{
-#if defined(_WIN32)
-	hx_os_status status = HX_OS_IO_ERROR;
-	switch (code) {
-	case 0:
-		status = HX_OS_OK;
-		break;
-	case WSAEWOULDBLOCK:
-	case WSAEINPROGRESS:
-	case WSAEALREADY:
-		status = HX_OS_WOULD_BLOCK;
-		break;
-	case WSAETIMEDOUT:
-		status = HX_OS_TIMEOUT;
-		break;
-	case WSAEACCES:
-		status = HX_OS_ACCESS_DENIED;
-		break;
-	case WSAEINVAL:
-		status = HX_OS_INVALID;
-		break;
-	case WSA_NOT_ENOUGH_MEMORY:
-		status = HX_OS_NO_MEMORY;
-		break;
-	case WSAEMSGSIZE:
-		status = HX_OS_LIMIT;
-		break;
-	default:
-		break;
-	}
-	return hx_os_i_error(error, status, HX_OS_ERROR_WINSOCK, code);
-#else
-	if (code == EINPROGRESS || code == EALREADY)
-		return hx_os_i_error(
-			error, HX_OS_WOULD_BLOCK, HX_OS_ERROR_ERRNO, code);
-	if (code == EMSGSIZE)
-		return hx_os_i_error(
-			error, HX_OS_LIMIT, HX_OS_ERROR_ERRNO, code);
-	return hx_os_i_errno(error, code);
-#endif
-}
-
-void hx_os_i_socket_close(hx_os_i_socket socket)
-{
-#if defined(_WIN32)
-	(void)closesocket(socket);
-#else
-	(void)close(socket);
-#endif
-}
-
 hx_os_status hx_os_network_create(
 	hx_os_context *context, hx_os_network **out, hx_os_error *error)
 {
@@ -282,35 +221,17 @@ hx_os_status hx_os_i_socket_wrap(hx_os_network *network, hx_os_i_socket native,
 	int family, int protocol, hx_os_socket **out, hx_os_error *error)
 {
 	hx_os_socket *socket;
-	int code = 0;
-#if defined(_WIN32)
-	u_long nonblocking = 1;
-	if (ioctlsocket(native, FIONBIO, &nonblocking))
-		code = WSAGetLastError();
-	if (!code &&
-		!SetHandleInformation((HANDLE)native, HANDLE_FLAG_INHERIT, 0)) {
-		DWORD native_code = GetLastError();
+	size_t allocation = sizeof(*socket);
+	hx_os_status status = hx_os_i_socket_configure(native, 1, error);
+	if (status != HX_OS_OK) {
 		hx_os_i_socket_close(native);
-		return hx_os_i_win32(error, native_code);
+		return status;
 	}
-#else
-	if (fcntl(native, F_SETFL, O_NONBLOCK) ||
-		fcntl(native, F_SETFD, FD_CLOEXEC))
-		code = errno;
-#if defined(SO_NOSIGPIPE)
-	if (!code) {
-		int enabled = 1;
-		if (setsockopt(native, SOL_SOCKET, SO_NOSIGPIPE, &enabled,
-			    sizeof(enabled)))
-			code = errno;
-	}
+#if HX_OS_ENABLE_LOCAL_SOCKETS
+	if (family == HX_OS_LOCAL)
+		allocation += sizeof(hx_os_i_local_state);
 #endif
-#endif
-	if (code) {
-		hx_os_i_socket_close(native);
-		return hx_os_i_socket_error(error, code);
-	}
-	socket = hx_os_i_zero(network->context, sizeof(*socket));
+	socket = hx_os_i_zero(network->context, allocation);
 	if (!socket) {
 		hx_os_i_socket_close(native);
 		return hx_os_i_error(error, HX_OS_NO_MEMORY, 0, 0);
@@ -319,6 +240,10 @@ hx_os_status hx_os_i_socket_wrap(hx_os_network *network, hx_os_i_socket native,
 	socket->network = network;
 	socket->family = family;
 	socket->protocol = protocol;
+#if HX_OS_ENABLE_LOCAL_SOCKETS
+	if (family == HX_OS_LOCAL)
+		socket->local = (hx_os_i_local_state *)(socket + 1);
+#endif
 	(void)hx_os_atomic_fetch_add(&network->objects, 1, HX_OS_RELAXED);
 	*out = socket;
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
@@ -329,6 +254,8 @@ hx_os_status hx_os_socket_create(hx_os_network *network, int family,
 {
 	hx_os_i_socket native;
 	int type;
+	if (family == HX_OS_LOCAL && protocol == HX_OS_LOCAL_STREAM)
+		return hx_os_local_socket_create(network, out, error);
 	if (!network || !out ||
 		(family != HX_OS_IPV4 && family != HX_OS_IPV6) ||
 		(protocol != HX_OS_TCP && protocol != HX_OS_UDP))
@@ -367,7 +294,7 @@ hx_os_status hx_os_socket_bind(
 hx_os_status hx_os_socket_listen(
 	hx_os_socket *socket, int backlog, hx_os_error *error)
 {
-	if (!socket || socket->protocol != HX_OS_TCP || backlog < 1)
+	if (!socket || !hx_os_i_socket_stream(socket) || backlog < 1)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 	return hx_os_i_socket_error(error,
 		listen(socket->native, backlog) ? hx_os_i_socket_last_error()
@@ -394,16 +321,18 @@ hx_os_status hx_os_socket_accept(hx_os_socket *listener, hx_os_socket **out,
 	struct sockaddr_storage address;
 	hx_os_i_socklen length = sizeof(address);
 	hx_os_i_socket native;
-	if (!listener || !out || listener->protocol != HX_OS_TCP)
+	if (!listener || !out || !hx_os_i_socket_stream(listener))
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 	*out = NULL;
+	if (listener->family == HX_OS_LOCAL && peer)
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 	native = accept(listener->native, (struct sockaddr *)&address, &length);
 	if (native == HX_OS_I_BAD_SOCKET)
 		return hx_os_i_socket_error(error, hx_os_i_socket_last_error());
 	if (peer)
 		(void)hx_os_i_address_public((struct sockaddr *)&address, peer);
 	return hx_os_i_socket_wrap(listener->network, native, listener->family,
-		HX_OS_TCP, out, error);
+		listener->protocol, out, error);
 }
 
 hx_os_status hx_os_socket_connect(
@@ -433,48 +362,9 @@ hx_os_status hx_os_i_socket_connected(hx_os_socket *socket, hx_os_error *error)
 hx_os_status hx_os_socket_wait_until(hx_os_socket *socket, int events,
 	hx_os_deadline deadline, hx_os_error *error)
 {
-	if (!socket || !events || (events & ~3))
+	if (!socket)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
-	for (;;) {
-		int result;
-		uint32_t milliseconds = hx_os_i_wait_ms(deadline);
-#if defined(_WIN32)
-		fd_set read_set;
-		fd_set write_set;
-		fd_set errors;
-		struct timeval duration;
-		FD_ZERO(&read_set);
-		FD_ZERO(&write_set);
-		FD_ZERO(&errors);
-		if (events & HX_OS_WAIT_READ)
-			FD_SET(socket->native, &read_set);
-		if (events & HX_OS_WAIT_WRITE)
-			FD_SET(socket->native, &write_set);
-		FD_SET(socket->native, &errors);
-		duration.tv_sec = (long)(milliseconds / 1000);
-		duration.tv_usec = (long)(milliseconds % 1000) * 1000;
-		result = select(0, &read_set, &write_set, &errors,
-			milliseconds == UINT32_MAX ? NULL : &duration);
-#else
-		struct pollfd descriptor;
-		descriptor.fd = socket->native;
-		descriptor.events =
-			(short)(((events & HX_OS_WAIT_READ) ? POLLIN : 0) |
-				((events & HX_OS_WAIT_WRITE) ? POLLOUT : 0));
-		descriptor.revents = 0;
-		result = poll(&descriptor, 1,
-			milliseconds == UINT32_MAX ? -1 : (int)milliseconds);
-		if (result < 0 && errno == EINTR)
-			continue;
-#endif
-		if (result > 0)
-			return hx_os_i_error(error, HX_OS_OK, 0, 0);
-		if (result < 0)
-			return hx_os_i_socket_error(
-				error, hx_os_i_socket_last_error());
-		if (hx_os_deadline_expired(deadline))
-			return hx_os_i_error(error, HX_OS_TIMEOUT, 0, 0);
-	}
+	return hx_os_i_socket_wait(socket->native, events, deadline, error);
 }
 
 hx_os_status hx_os_socket_connect_until(hx_os_socket *socket,
@@ -498,7 +388,7 @@ hx_os_status hx_os_socket_send_some(hx_os_socket *socket, const void *data,
 	if (!socket || !completed || (!data && bytes))
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 	*completed = 0;
-	if (!bytes && socket->protocol == HX_OS_TCP)
+	if (!bytes && hx_os_i_socket_stream(socket))
 		return hx_os_i_error(error, HX_OS_OK, 0, 0);
 	if (socket->protocol == HX_OS_UDP && bytes > INT_MAX)
 		return hx_os_i_error(error, HX_OS_LIMIT, 0, 0);
@@ -536,12 +426,38 @@ hx_os_status hx_os_socket_receive_some(hx_os_socket *socket, void *data,
 	return hx_os_i_error(error, count ? HX_OS_OK : HX_OS_EOF, 0, 0);
 }
 
+hx_os_status hx_os_socket_receive_until(hx_os_socket *socket, void *data,
+	size_t bytes, hx_os_deadline deadline, size_t *completed,
+	hx_os_error *error)
+{
+	if (!socket || !hx_os_i_socket_stream(socket) || !completed ||
+		(!data && bytes))
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	*completed = 0;
+	for (;;) {
+		hx_os_status status = hx_os_socket_receive_some(
+			socket, data, bytes, completed, error);
+		if (status != HX_OS_WOULD_BLOCK)
+			return status;
+		status = hx_os_socket_wait_until(
+			socket, HX_OS_WAIT_READ, deadline, error);
+		if (status != HX_OS_OK)
+			return status;
+		if (hx_os_deadline_expired(deadline)) {
+			status = hx_os_socket_receive_some(
+				socket, data, bytes, completed, error);
+			return status == HX_OS_WOULD_BLOCK
+				? hx_os_i_error(error, HX_OS_TIMEOUT, 0, 0)
+				: status;
+		}
+	}
+}
 hx_os_status hx_os_socket_send_until(hx_os_socket *socket, const void *data,
 	size_t bytes, hx_os_deadline deadline, size_t *completed,
 	hx_os_error *error)
 {
 	const unsigned char *input = data;
-	if (!socket || socket->protocol != HX_OS_TCP || !completed ||
+	if (!socket || !hx_os_i_socket_stream(socket) || !completed ||
 		(!data && bytes))
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 	*completed = 0;

@@ -10,7 +10,7 @@
 [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md)
 [![macOS validation pending][macos-badge]](docs/VALIDATION.md)
 [![Windows MSVC][windows-badge]](docs/VALIDATION.md)
-[![Windows 48/48 and Linux 50/50 local suites passed][tests-badge]](docs/VALIDATION.md)
+[![Windows 51/51 and Linux 53/53 local suites passed][tests-badge]](docs/VALIDATION.md)
 [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md)
 
 Query system information directly through C or `hx::SystemInfo`;
@@ -23,8 +23,8 @@ Query system information directly through C or `hx::SystemInfo`;
 Badge evidence is recorded through **2026-09-30**. CI is configured; no remote
 CI pass is claimed for this project. The **C++ facade only** is header-only;
 the C core is a compiled static/shared library. C++11 has been checked;
-a C++14/17/20 matrix has not been verified. Counts describe **48 Windows /
-50 Linux CTest entries**, not individual assertions. The extra Linux entries
+a C++14/17/20 matrix has not been verified. Counts describe **51 Windows /
+53 Linux CTest entries**, not individual assertions. The extra Linux entries
 exercise native random-provider failures.
 Linux evidence is from WSL: GCC library tests and a Clang C++11 facade test.
 Windows evidence covers local MSVC x86/x64 builds. macOS and embedded SDK/board
@@ -57,6 +57,7 @@ has been performed.
 | hx_os_net.h | IPv4/IPv6, TCP/UDP, blocking DNS and deadline waits |
 | hx_os_loop.h | Completion callbacks over IOCP, epoll or kqueue |
 | hx_os_process.h | Child processes and bounded simultaneous output capture |
+| hx_os_local.h | Pathname local sockets and independent duplex file endpoints |
 | hx_os_system.h | UTF-8 arguments, host/process identity, usable CPU features |
 | hx_os_bits.h / hx_os_posix.h | Integer helpers and explicit clock conversion |
 | hx_config.h | Immutable configuration documents and optional parser backends |
@@ -157,6 +158,8 @@ Conversion never changes the process locale or assumes an ANSI codepage.
 | HX_OS_ENABLE_SYSTEM_UTILS | ON | Native UTF-8 arguments and CPU/OS identity |
 | HX_OS_ENABLE_PROCESS | ON | Child control; capture also needs PIPE + LOOP |
 | HX_OS_ENABLE_DELAYED_TASKS | ON | Timed eligibility within THREAD_POOL capacity |
+| HX_OS_ENABLE_LOCAL_SOCKETS | ON | Native pathname streams; requires NETWORK |
+| HX_OS_ENABLE_DUPLEX_PIPE | ON | Duplex file endpoints; independent of NETWORK |
 | HX_OS_ENABLE_CJSON/LIBYAML/MINIXML/INIH/TOMLC | OFF | Native parser adapters |
 | HX_OS_BUILD_TESTS | ON | Contract tests and isolated public headers |
 | HX_OS_BUILD_EXAMPLES | ON | C examples; C++ task example when CXX is enabled |
@@ -310,5 +313,5 @@ by this new library or a migration.
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%2048%2F48%20Linux%2050%2F50-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%2051%2F51%20Linux%2053%2F53-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey

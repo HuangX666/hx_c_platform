@@ -273,6 +273,18 @@ hx_os_status hx_os_thread_pool_destroy(
 #endif
 
 #if !HX_OS_ENABLE_NETWORK
+hx_os_status hx_os_socket_receive_until(hx_os_socket *socket, void *data,
+	size_t bytes, hx_os_deadline deadline, size_t *completed,
+	hx_os_error *error)
+{
+	(void)socket;
+	(void)data;
+	(void)bytes;
+	(void)deadline;
+	if (completed)
+		*completed = 0;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
 
 hx_os_status hx_os_network_create(
 	hx_os_context *context, hx_os_network **out, hx_os_error *error)

@@ -191,6 +191,8 @@ HX_OS_API const char *HX_OS_CALL hx_os_cpu_name(void);
 #define HX_OS_CAP_SYSTEM_UTILS (UINT64_C(1) << 32)
 #define HX_OS_CAP_PROCESS (UINT64_C(1) << 33)
 #define HX_OS_CAP_DELAYED_TASKS (UINT64_C(1) << 34)
+#define HX_OS_CAP_LOCAL_SOCKETS (UINT64_C(1) << 35)
+#define HX_OS_CAP_DUPLEX_PIPE (UINT64_C(1) << 36)
 /* required includes NUL. These queries do not need initialization. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_version_string(
 	char *buffer, size_t capacity, size_t *required);

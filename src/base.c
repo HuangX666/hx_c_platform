@@ -554,6 +554,12 @@ uint64_t hx_os_capabilities(void)
 #if HX_OS_ENABLE_PROCESS
 	result |= HX_OS_CAP_PROCESS;
 #endif
+#if HX_OS_ENABLE_LOCAL_SOCKETS && HX_OS_ENABLE_NETWORK
+	result |= HX_OS_CAP_LOCAL_SOCKETS;
+#endif
+#if HX_OS_ENABLE_DUPLEX_PIPE
+	result |= HX_OS_CAP_DUPLEX_PIPE;
+#endif
 #if HX_OS_ENABLE_LOOP_FD && HX_OS_ENABLE_LOOP && !defined(_WIN32)
 	result |= HX_OS_CAP_LOOP_FD;
 #endif

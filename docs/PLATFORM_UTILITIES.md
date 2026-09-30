@@ -998,3 +998,102 @@ See [delayed_task.c](../examples/delayed_task.c) for a C example and the existin
 pool ownership contracts for shutdown. Native references:
 [Linux affinity](https://man7.org/linux/man-pages/man3/pthread_setaffinity_np.3.html),
 [Windows affinity](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setthreadaffinitymask).
+
+## Local sockets and duplex file endpoints (batch 20)
+
+LOCAL_SOCKETS defaults ON and requires NETWORK. A pathname local stream uses
+HX_OS_LOCAL / HX_OS_LOCAL_STREAM; both the dedicated factory and ordinary
+socket_create accept that combination. Local address storage is separate from
+the existing IP address/operation ABI. Paths are strict UTF-8 with a terminating
+NUL inside 108 bytes; macOS further enforces its shorter native sun_path.
+Abstract addresses, descriptor passing, peer credentials and datagrams are
+outside this interface. Native returned names must fit and validate as UTF-8;
+empty output denotes an unnamed peer. No truncation is hidden.
+
+local_listen combines create/bind/listen. It does not unlink an existing path,
+and socket close does not remove the pathname. The caller owns its directory
+and removes its own socket name after use. Failure after successful bind can
+leave the newly created name. Windows uses the native AF_UNIX provider with
+Win32 UTF-8 pathname semantics, available on supported Windows 10+ systems.
+Win7 continues supporting the rest of the library; this factory returns
+NOT_SUPPORTED there. The capability bit describes compiled adaptation; provider
+availability is determined by the native operation.
+
+local_connect combines creation and deadline-aware connection. TIMEOUT retains
+the socket; finish_connect resumes using its copied path. Repeated attempts
+must use the same pathname; terminal failure requires closing the socket.
+In particular, Linux AF_UNIX queue-full EAGAIN means no connection has started,
+so the library retries the connection with bounded requested sleeps rather than
+reporting writability as connection success. In-progress completion checks both
+SO_ERROR and getpeername. Other convenience-factory failures close the new
+socket and preserve the original error.
+
+Existing send/receive/wait/shutdown/close functions work on local streams.
+The new socket_receive_until combines a nonblocking stream read and readiness
+wait, returning some bytes, EOF, error or TIMEOUT (no private buffering).
+Accepted/connected local sockets can use existing loop READ/WRITE operations,
+including cancellation and native retirement. Loop CONNECT/ACCEPT reject local
+sockets explicitly: the old operation/completion IP address cannot hold their
+pathnames. Accept_until and connect_until/finish_connect provide direct entries.
+Do not mix direct I/O with pending loop operations. Socket/network ownership,
+thread exclusion and loop-owner rules remain the same.
+
+DUPLEX_PIPE defaults ON independently of NETWORK, PIPE and LOOP.
+pipe_pair_socket returns two owning hx_os_file endpoints; each reads and writes.
+POSIX uses socketpair(AF_UNIX, SOCK_STREAM). Windows uses a private IPv4 TCP
+loopback pair, not AF_UNIX. Creation defaults to a 5-second monotonic deadline;
+the _until entry makes the policy explicit. POSIX performs one local socketpair
+operation; deadlines do not cancel synchronous native calls or imply a hard
+return-time guarantee. Failure returns two NULL endpoints.
+
+The Windows handshake uses nonblocking connection/accept with deadline waits,
+exclusive local binds, a bounded 64-attempt accept loop and verification of
+the expected client's loopback address/port. Both published endpoints are then
+blocking and noninheritable. Each owns one balanced Winsock reference, so they
+work without a library network instance. Winsock recv/send/closesocket handle
+these endpoints; they are never passed to ReadFile/WriteFile/CloseHandle.
+The extension storage is allocated only for socket-backed file objects.
+They cannot serve as Windows child standard handles; process spawn rejects
+that combination. POSIX socket file descriptors can serve as standard streams.
+
+File short-read/short-write/EOF contracts apply. One reader and one writer may
+operate on an endpoint concurrently; same-direction calls and close require
+exclusion. shutdown(SHUT_WRITE) sends EOF while preserving the read direction.
+Seek, size, sync, truncation and mappings are unsupported. There is no durable
+flush, message-boundary or peer-credential guarantee. Windows loopback adds
+ports, TCP buffering and potential firewall/provider failure modes. This
+synchronous pair does not replace the existing dedicated asynchronous pipes.
+POSIX pipe/socket writes share the existing thread-local SIGPIPE suppression
+implementation, without installing a process signal handler.
+
+C++ DuplexPipe::pair returns two move-only File owners. LocalSocket references
+a host-owned socket pointer; connect/finishConnect/acceptUntil and explicit
+close preserve reachability on timeout or pending I/O. It also supplies
+readUntil/writeUntil, pathname strings and shutdown.
+
+Socket setup/error/readiness code is shared by network and standalone duplex
+adapters. Core socket creation keeps its native call count and allocation
+count; enabling local support adds a nullable private pointer, and only local
+sockets append their 112-byte path/state storage to the same allocation.
+Windows ordinary file I/O/close add a socket-kind branch when DUPLEX_PIPE is
+enabled; regular files add no allocation/native call. POSIX reuses the existing
+pipe-write branch when PIPE is already enabled. New Windows duplex creation
+uses two wrapper allocations, two WSAStartup references, a temporary listener
+and two connected sockets. Native resource cleanup balances those references.
+
+```c
+hx_os_file *first = NULL, *second = NULL;
+hx_os_status status = hx_os_pipe_pair_socket(NULL, &first, &second, &error);
+/* Use file read/write; shutdown preserves the opposite direction. */
+```
+
+```cpp
+auto channel = hx::DuplexPipe::pair();
+channel.first.writeAll("hello", 5);
+hx::DuplexPipe::shutdown(channel.first);
+```
+
+See [duplex_message.c](../examples/duplex_message.c).
+[Microsoft AF_UNIX description](https://devblogs.microsoft.com/commandline/af_unix-comes-to-windows/)
+documents the UTF-8 pathname/provider boundary. macOS, Win7 and embedded native
+runs remain pending.

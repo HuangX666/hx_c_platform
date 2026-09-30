@@ -10,6 +10,7 @@ int main(int argc, char **argv)
 	const char *const *values = (const char *const *)argv;
 	hx_os_status status;
 	int result, i;
+	size_t invalid;
 	if (hx_os_capabilities() & HX_OS_CAP_SYSTEM_UTILS) {
 		status = hx_os_process_arguments(NULL, &arguments, NULL);
 		if (status != HX_OS_OK) {
@@ -25,8 +26,8 @@ int main(int argc, char **argv)
 		 * Windows narrow CRT argv cannot promise Unicode fidelity.
 		 */
 		for (i = 0; i < argc; ++i)
-			if (hx_os_text_validate_utf8(
-				    argv[i], strlen(argv[i]), NULL) != HX_OS_OK)
+			if (hx_os_text_validate_utf8(argv[i], strlen(argv[i]),
+				    &invalid) != HX_OS_OK)
 				return 1;
 	}
 	result = hx_example_main(argc, values);

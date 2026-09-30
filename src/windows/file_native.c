@@ -1,4 +1,4 @@
-#include "file_private.h"
+#include "duplex_private.h"
 
 #include <windows.h>
 
@@ -170,6 +170,10 @@ hx_os_status hx_os_file_read_some(hx_os_file *file, void *data, size_t bytes,
 	*completed = 0;
 	if (!bytes)
 		return hx_os_i_error(error, HX_OS_OK, 0, 0);
+#if HX_OS_ENABLE_DUPLEX_PIPE
+	if (file->pipe == HX_OS_I_FILE_SOCKET)
+		return hx_os_i_duplex_read(file, data, bytes, completed, error);
+#endif
 	if (!ReadFile(file->handle, data, requested, &count, NULL)) {
 		DWORD code = GetLastError();
 		if (file->pipe && code == ERROR_BROKEN_PIPE)
@@ -192,6 +196,11 @@ hx_os_status hx_os_file_write_some(hx_os_file *file, const void *data,
 	*completed = 0;
 	if (!bytes)
 		return hx_os_i_error(error, HX_OS_OK, 0, 0);
+#if HX_OS_ENABLE_DUPLEX_PIPE
+	if (file->pipe == HX_OS_I_FILE_SOCKET)
+		return hx_os_i_duplex_write(
+			file, data, bytes, completed, error);
+#endif
 	memset(&position, 0, sizeof(position));
 	position.Offset = UINT32_MAX;
 	position.OffsetHigh = UINT32_MAX;
@@ -229,6 +238,10 @@ hx_os_status hx_os_file_close(hx_os_file **file, hx_os_error *error)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 	if (!*file)
 		return hx_os_i_error(error, HX_OS_OK, 0, 0);
+#if HX_OS_ENABLE_DUPLEX_PIPE
+	if ((*file)->pipe == HX_OS_I_FILE_SOCKET)
+		return hx_os_i_duplex_close(file, error);
+#endif
 	if ((*file)->positioned && !CloseHandle((*file)->positioned))
 		code = GetLastError();
 	if (!CloseHandle((*file)->handle) && !code)

@@ -774,3 +774,79 @@ int answer = task.get();
 
 C 示例见 [delayed_task.c](../examples/delayed_task.c)；关闭与持有规则沿用
 现有线程池契约。macOS、Win7、ARM/musl、处理器组及真实板卡仍待目标验证。
+
+## 本地套接字与双向文件端点（第 20 批）
+
+LOCAL_SOCKETS 默认开启，依赖 NETWORK。本地路径流使用 HX_OS_LOCAL /
+HX_OS_LOCAL_STREAM，专用工厂和普通 socket_create 都支持这一组合。
+路径地址使用独立类型，不扩展既有 IP 地址及 operation ABI。路径为严格
+UTF-8，108 字节内必须有 NUL；macOS 继续检查更短的原生 sun_path 上限。
+本接口不含抽象名字、传递描述符、对端凭据及数据报。查询返回的原生名字
+也必须放得下且为合法 UTF-8，不静默截断；空输出表示未命名对端。
+
+local_listen 合并创建／绑定／监听，不删除已有路径；close 不移除文件系统
+名字，调用者拥有目录并在使用后删除自己的套接字名字。绑定成功后监听
+失败，可能遗留新创建的名字。Windows 使用原生 AF_UNIX 提供程序及 Win32
+UTF-8 路径语义，适用于支持该能力的 Windows 10+。Win7 的其他基础能力仍
+保留，本工厂在不支持时返回 NOT_SUPPORTED。能力位表示适配已编译，实际
+提供程序是否可用仍由原生操作判断。
+
+local_connect 合并创建及带截止时间的连接；TIMEOUT 保留套接字，
+finish_connect 使用已复制的路径继续。重试必须保持同一路径，终止失败后
+需要关闭。Linux AF_UNIX 队列满的 EAGAIN 表示连接还没开始，库会在单调
+截止时间内重新发起连接，不会把可写误报为已连通；真正进行中的连接同时
+检查 SO_ERROR 与 getpeername。便利工厂其他失败会关闭新对象并保留原错误。
+
+本地流复用 send／receive／wait／shutdown／close。新增 socket_receive_until
+合并一次流读取和就绪等待，返回实际字节、EOF、错误或 TIMEOUT，没有暗中缓冲。
+已经接受／连接的本地流支持现有 loop READ／WRITE 以及取消退役。
+loop CONNECT／ACCEPT 明确拒绝本地套接字，因为旧 IP operation／completion
+放不下路径；相应操作用直接 accept_until 和 connect_until／finish_connect。
+不能混用直接 I/O 与未完成 loop 请求，线程互斥、loop 所有者、network 持有
+规则沿用既有契约。
+
+DUPLEX_PIPE 默认开启，独立于 NETWORK、PIPE、LOOP。pipe_pair_socket 返回
+两个各自可读写的 hx_os_file。POSIX 使用 socketpair(AF_UNIX, SOCK_STREAM)，
+Windows 使用私有 IPv4 TCP loopback 回退。默认创建截止时间为单调 5 秒，
+_until 入口允许调用者指定；POSIX 执行一次本地 socketpair 操作，截止时间
+不会取消同步原生调用，也不承诺硬返回时间。失败时两端均为 NULL。
+
+Windows 握手使用非阻塞连接／接受和截止时间等待、排他的本地绑定、
+最多 64 次接受尝试，并核对本进程客户端的回环地址／端口。交付后两端为
+阻塞、不可继承对象，各持有一份平衡的 Winsock 引用，因此不需要 network
+实例。读写／关闭分别使用 recv／send／closesocket，不把套接字交给文件
+句柄 API。只有这种文件对象分配附加存储；Windows 进程启动明确拒绝把它
+用作子进程标准句柄，POSIX 的描述符可作为标准流。
+
+遵守文件短读、短写、EOF 契约；同一端允许一个读取者和一个写入者并行，
+同方向操作及关闭需互斥。shutdown(SHUT_WRITE) 发出 EOF 而保留读取方向。
+定位、查询大小、sync、截断及映射不支持，也没有持久化、消息边界或凭据
+保证。Windows 回退具有端口、TCP 缓冲、防火墙／提供程序失败差异。
+同步双向配对不替代已有专用异步管道。POSIX 管道与套接字文件写入共用
+线程局部 SIGPIPE 处理，不安装进程级信号处理器。
+
+C++ DuplexPipe::pair 返回两个可移动 File 所有者；LocalSocket 引用宿主持有
+的指针，提供 connect／finishConnect／acceptUntil、显式 close、
+readUntil／writeUntil、路径字符串及 shutdown。超时或 I/O 未退役时仍能
+找到原对象。
+
+网络和独立双向端点共用套接字设置、错误、就绪等待代码；普通套接字创建
+不增加原生调用数和分配次数。开启本地模块会增加一个私有可空指针；
+只有本地套接字在同一次分配尾部附加 112 字节路径／状态。Windows 普通文件
+读写／关闭增加类型判断分支，不增加分配或原生调用。POSIX 在 PIPE 已开启
+时复用原有管道写分支。Windows 双向工厂有两次包装对象分配、两份 WSAStartup
+引用、临时监听套接字和两个连通端点，关闭平衡各自引用。
+
+```c
+hx_os_file *first = NULL, *second = NULL;
+hx_os_status status = hx_os_pipe_pair_socket(NULL, &first, &second, &error);
+```
+
+```cpp
+auto channel = hx::DuplexPipe::pair();
+channel.first.writeAll("hello", 5);
+hx::DuplexPipe::shutdown(channel.first);
+```
+
+可执行示例见 [duplex_message.c](../examples/duplex_message.c)。
+macOS、Win7、嵌入式原生环境仍待验证。

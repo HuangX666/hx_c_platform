@@ -562,3 +562,33 @@ Windows 10000500/9567700、Linux 11984708/12118367；之后将无未来任务分
 无回退。没有引入汇编或普通任务额外锁／分配。原始数据保留在忽略的构建
 目录 batch19-pool*-perf.json 中。macOS、Win7、处理器组、CPU 热插拔、
 ARM/musl、真实板卡仍待验证；这不是尚未执行的 hx_c_log 接入性能验收。
+
+## OBS 补齐第 20 批（2026-09-30）
+
+Windows 全量 CTest 51/51、WSL Linux 53/53；ASan/UBSan、TSan 各 8/8，
+覆盖本地套接字、双向端点、普通管道、网络、loop 并发、进程、C++ 和示例。
+两端 AF_UNIX 测试均实际运行，没有跳过；公共头 C99/C++11 独立编译通过。
+两个新模块关闭时各 4/4；NETWORK／PIPE／SYSTEM_UTILS 关闭而独立双向
+端点开启时，各 7/7，Windows 同时关闭 LOOP，包含裁剪后的命令行参数入口。
+DUPLEX_PIPE／PIPE 关闭而本地套接字开启时，Windows 4/4（LOOP 关），
+Linux 6/6（LOOP 开）；Windows x86 相关 4/4 通过。
+
+覆盖 UTF-8／补充平面路径、长度限制、未命名对端、已有路径保留、NOW 接受／
+读取超时、连接继续、双向数据、短读循环、IOCP／epoll 读写和取消退役、
+loop CONNECT／ACCEPT 明确拒绝、父 network BUSY、文件半关闭、EOF、
+关闭写方向后写入失败、分配失败清理和独立网络初始化。
+Linux 真实填满监听队列直到 EAGAIN，接受一个连接后重试保留对象成功。
+Windows 进程重定向在启动前拒绝套接字文件端点。
+
+初次路径查询发现 UTF-8 验证函数要求非 NULL 的错误偏移输出；本地查询和
+共享的裁剪命令行参数入口现补传该指针，保留既有验证契约。
+
+布局：所有实测目标的 local_address 108/1、私有 local_state 112/4；
+启用本地支持时，x64 socket 由 56/8 变为 64/8，Windows x86 由 40/8
+变为 48/8；仅本地套接字在同一次分配尾部追加状态。
+Windows duplex_file 为 x64 32/8、x86 20/4；POSIX 复用不变的 12/4 file。
+既有公共布局及 operation/request 大小不变，未引入汇编或第三方依赖。
+
+原生 macOS、Win7 回退／提供程序缺失、嵌入式／musl、防火墙拒绝、
+错误对端连接洪泛、原生关闭失败注入仍待验证；没有声称 Windows／WSL
+互通或 TCP 回退具有同等性能。

@@ -6,6 +6,7 @@
 #include "watch_private.h"
 #include "process_private.h"
 #include "thread_pool_private.h"
+#include "duplex_private.h"
 #include <stdio.h>
 
 #define HX_OS_LAYOUT(type)                                                     \
@@ -48,5 +49,10 @@ int main(void)
 	HX_OS_LAYOUT(hx_os_task);
 	HX_OS_LAYOUT(hx_os_thread_pool);
 	HX_OS_LAYOUT(hx_os_delayed_task);
+	HX_OS_LAYOUT(hx_os_local_address);
+	HX_OS_LAYOUT(hx_os_i_local_state);
+#if defined(_WIN32)
+	HX_OS_LAYOUT(hx_os_i_duplex_file);
+#endif
 	return 0;
 }

@@ -23,6 +23,7 @@
 #include "hx_os_loop_fd.h"
 #include "hx_os_system.h"
 #include "hx_os_process.h"
+#include "hx_os_local.h"
 #include "hx_os_bits.h"
 #include "hx_os_posix.h"
 #include "hx_string.h"

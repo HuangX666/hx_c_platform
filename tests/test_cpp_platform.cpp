@@ -1,6 +1,7 @@
 #include <hx/SystemInfo.hpp>
 #include <hx/System.hpp>
 #include <hx/Process.hpp>
+#include <hx/Local.hpp>
 #include <hx/Library.hpp>
 #include <hx/Files.hpp>
 #include <hx/Environment.hpp>
@@ -33,6 +34,66 @@
 		}                                                              \
 	} while (0)
 
+static void test_cpp_local()
+{
+	if (hx_os_capabilities() & HX_OS_CAP_DUPLEX_PIPE) {
+		auto pair = hx::DuplexPipe::pair();
+		char buffer[8];
+		pair.first.writeAll("pair", 4);
+		size_t total = 0;
+		while (total < 4)
+			total += pair.second.readSome(buffer + total, 4 - total)
+					 .bytes;
+		CHECK(!std::memcmp(buffer, "pair", 4));
+		hx::DuplexPipe::shutdown(pair.first);
+		CHECK(pair.second.readSome(buffer, sizeof(buffer)).eof);
+	}
+	if (!(hx_os_capabilities() & HX_OS_CAP_LOCAL_SOCKETS))
+		return;
+	hx_os_network *network = NULL;
+	hx_os_socket *listener_owner = NULL, *client_owner = NULL,
+		     *server_owner = NULL;
+	hx::LocalSocket listener(listener_owner), client(client_owner),
+		server(server_owner);
+	char path[108], data[8];
+#if defined(_WIN32)
+	const char *prefix = "";
+#else
+	const char *prefix = "/tmp/";
+#endif
+	std::snprintf(path, sizeof(path), "%shx-cpp-local-%llx.sock", prefix,
+		static_cast<unsigned long long>(hx_os_monotonic_ns()));
+	CHECK(hx_os_network_create(NULL, &network, NULL) == HX_OS_OK);
+	try {
+		listener.listen(network, path);
+	} catch (const hx::StatusError &error) {
+		CHECK(error.status() == HX_OS_NOT_SUPPORTED);
+		CHECK(hx_os_network_destroy(&network, NULL) == HX_OS_OK);
+		return;
+	}
+	hx_os_status status = client.connect(network, path, HX_OS_DEADLINE_NOW);
+	CHECK(status == HX_OS_OK || status == HX_OS_TIMEOUT);
+	CHECK(client.finishConnect(hx_os_deadline_after_ms(2000)) == HX_OS_OK);
+	CHECK(listener.acceptUntil(server, hx_os_deadline_after_ms(2000)) ==
+		HX_OS_OK);
+	client.writeUntil("C++", 3, hx_os_deadline_after_ms(2000));
+	size_t total = 0;
+	while (total < 3)
+		total += server.readUntil(data + total, 3 - total,
+				       hx_os_deadline_after_ms(2000))
+				 .bytes;
+	CHECK(!std::memcmp(data, "C++", 3));
+	CHECK(!client.address(true).empty());
+	client.shutdown();
+	CHECK(server.readUntil(
+			    data, sizeof(data), hx_os_deadline_after_ms(2000))
+			.eof);
+	CHECK(server.close() == HX_OS_OK);
+	CHECK(client.close() == HX_OS_OK);
+	CHECK(listener.close() == HX_OS_OK);
+	CHECK(hx_os_network_destroy(&network, NULL) == HX_OS_OK);
+	CHECK(hx_os_file_remove(path, NULL) == HX_OS_OK);
+}
 static void TestSystemInfo()
 {
 	if (!(hx_os_capabilities() & HX_OS_CAP_SYSINFO)) {
@@ -147,6 +208,7 @@ int main(int argc, char **argv)
 		CHECK(std::string(error.what()) == "I/O error");
 	}
 	TestSystemInfo();
+	test_cpp_local();
 	test_cpp_pipe();
 #if !defined(_WIN32)
 	if (hx_os_capabilities() & HX_OS_CAP_LOOP_FD) {

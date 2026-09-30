@@ -33,7 +33,7 @@ embedded target runs remain separately identified target validation.
 | 17 | Directory watch and external descriptor integration | Windows 42/42; Linux 44/44; ASan/TSan 7/7; native Apple pending |
 | 18 | Processes, capture and system helpers | Windows 46/46; Linux 48/48; ASan/TSan 7/7; x86 batch passed |
 | 19 | Priority, affinity and delayed tasks | Windows 48/48; Linux 50/50; ASan/TSan 7/7; x86 batch passed |
-| 20 | Local sockets and duplex pipes | Pending |
+| 20 | Local sockets and duplex pipes | Windows 51/51; Linux 53/53; ASan/TSan 8/8; x86 batch passed |
 | 21 | Registry, power and obfuscation | Pending |
 | 22 | Dates, translation table and bit streams | Pending |
 | 23 | Signals, mutable settings and interval profiler | Pending |

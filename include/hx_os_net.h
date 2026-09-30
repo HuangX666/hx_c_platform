@@ -11,8 +11,8 @@ typedef struct hx_os_network hx_os_network;
 typedef struct hx_os_socket hx_os_socket;
 typedef struct hx_os_address_list hx_os_address_list;
 
-enum { HX_OS_IPV4 = 4, HX_OS_IPV6 = 6 };
-enum { HX_OS_TCP = 1, HX_OS_UDP = 2 };
+enum { HX_OS_LOCAL = 1, HX_OS_IPV4 = 4, HX_OS_IPV6 = 6 };
+enum { HX_OS_TCP = 1, HX_OS_UDP = 2, HX_OS_LOCAL_STREAM = 3 };
 enum { HX_OS_WAIT_READ = 1, HX_OS_WAIT_WRITE = 2 };
 enum { HX_OS_SHUT_READ = 1, HX_OS_SHUT_WRITE = 2, HX_OS_SHUT_BOTH = 3 };
 
@@ -99,6 +99,12 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_send_some(hx_os_socket *socket,
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_receive_some(
 	hx_os_socket *socket, void *data, size_t bytes, size_t *completed,
 	hx_os_error *error);
+/* Stream read + readiness wait; returns some bytes, EOF, error or timeout.
+ * Timeout keeps the socket usable and completed=0. No hidden buffer.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_receive_until(
+	hx_os_socket *socket, void *data, size_t bytes, hx_os_deadline deadline,
+	size_t *completed, hx_os_error *error);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_send_until(hx_os_socket *socket,
 	const void *data, size_t bytes, hx_os_deadline deadline,
 	size_t *completed, hx_os_error *error);

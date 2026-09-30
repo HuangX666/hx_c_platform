@@ -6,6 +6,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <pthread.h>
+#include <signal.h>
 #if defined(__linux__)
 #include <sys/syscall.h>
 #endif
@@ -15,6 +17,46 @@ struct hx_os_directory {
 	struct dirent *pending;
 };
 int hx_os_i_file_flags_valid(uint32_t flags);
+
+#if HX_OS_ENABLE_PIPE || HX_OS_ENABLE_DUPLEX_PIPE
+hx_os_status hx_os_i_pipe_write(int descriptor, const void *data, size_t bytes,
+	size_t *completed, hx_os_error *error)
+{
+	sigset_t mask, saved, pending;
+	ssize_t count;
+	int code, restore, existed;
+	*completed = 0;
+	sigemptyset(&mask);
+	sigaddset(&mask, SIGPIPE);
+	code = pthread_sigmask(SIG_BLOCK, &mask, &saved);
+	if (code)
+		return hx_os_i_errno(error, code);
+	if (sigpending(&pending)) {
+		code = errno;
+		(void)pthread_sigmask(SIG_SETMASK, &saved, NULL);
+		return hx_os_i_errno(error, code);
+	}
+	existed = sigismember(&pending, SIGPIPE);
+	do {
+		count = write(descriptor, data, bytes);
+	} while (count < 0 && errno == EINTR);
+	code = count < 0 ? errno : 0;
+	if (code == EPIPE && !existed && !sigpending(&pending) &&
+		sigismember(&pending, SIGPIPE)) {
+		int signal_number;
+		/* Only consume a newly pending signal while it remains blocked.
+		 */
+		(void)sigwait(&mask, &signal_number);
+	}
+	restore = pthread_sigmask(SIG_SETMASK, &saved, NULL);
+	if (count >= 0)
+		*completed = (size_t)count;
+	if (code == EPIPE)
+		return hx_os_i_error(
+			error, HX_OS_CLOSED, HX_OS_ERROR_ERRNO, code);
+	return hx_os_i_errno(error, code ? code : restore);
+}
+#endif
 
 hx_os_status hx_os_file_open(hx_os_context *context, const char *path,
 	uint32_t flags, hx_os_file **out, hx_os_error *error)
@@ -95,7 +137,7 @@ hx_os_status hx_os_file_write_some(hx_os_file *file, const void *data,
 		return hx_os_i_error(error, HX_OS_OK, 0, 0);
 	if (bytes > INT_MAX)
 		bytes = INT_MAX;
-#if HX_OS_ENABLE_PIPE
+#if HX_OS_ENABLE_PIPE || HX_OS_ENABLE_DUPLEX_PIPE
 	if (file->pipe)
 		return hx_os_i_pipe_write(
 			file->descriptor, data, bytes, completed, error);

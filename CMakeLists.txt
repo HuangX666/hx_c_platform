@@ -41,6 +41,8 @@ option(HX_OS_ENABLE_WATCH "Build bounded native directory monitoring" ON)
 option(HX_OS_ENABLE_LOOP_FD "Build POSIX descriptor readiness integration" ON)
 option(HX_OS_ENABLE_SYSTEM_UTILS "Build process and CPU identity queries" ON)
 option(HX_OS_ENABLE_PROCESS "Build explicit child process control" ON)
+option(HX_OS_ENABLE_LOCAL_SOCKETS "Build pathname local stream sockets" ON)
+option(HX_OS_ENABLE_DUPLEX_PIPE "Build synchronous duplex socket pairs" ON)
 set(HX_OS_ICONV_SOURCE_DIR "" CACHE PATH "Unmodified GNU libiconv source")
 set(HX_OS_SANITIZER "" CACHE STRING "address,undefined or thread")
 
@@ -175,7 +177,7 @@ add_library(hx_c_platform
 	src/timer.c src/util.c src/vm.c src/file_extra.c
 	src/watch.c src/loop_fd.c
 	src/system.c src/cpu_features.c src/time_posix.c
-	src/process.c src/process_capture.c
+	src/process.c src/process_capture.c src/local.c src/duplex_pipe.c
 	${hx_parser_sources} ${hx_parser_objects}
 	${hx_platform_sources})
 if(HX_OS_ENABLE_PROCESS)
@@ -302,6 +304,17 @@ endif()
 if(HX_OS_ENABLE_NETWORK)
 	target_sources(hx_c_platform PRIVATE src/net.c)
 endif()
+if(HX_OS_ENABLE_NETWORK OR HX_OS_ENABLE_DUPLEX_PIPE)
+	target_sources(hx_c_platform PRIVATE src/socket_native.c)
+endif()
+if(HX_OS_ENABLE_DUPLEX_PIPE)
+	if(WIN32)
+		target_sources(hx_c_platform PRIVATE
+			src/windows/duplex_native.c)
+	else()
+		target_sources(hx_c_platform PRIVATE src/posix/duplex_native.c)
+	endif()
+endif()
 if(HX_OS_ENABLE_LOOP)
 	target_sources(hx_c_platform PRIVATE src/loop.c)
 endif()
@@ -332,7 +345,7 @@ if(BUILD_SHARED_LIBS)
 	target_compile_definitions(hx_c_platform PUBLIC HX_OS_SHARED)
 endif()
 if(WIN32)
-	if(HX_OS_ENABLE_NETWORK)
+	if(HX_OS_ENABLE_NETWORK OR HX_OS_ENABLE_DUPLEX_PIPE)
 		target_link_libraries(hx_c_platform PRIVATE ws2_32)
 	endif()
 	target_compile_definitions(hx_c_platform PRIVATE
@@ -430,7 +443,7 @@ if(WIN32)
 	if(HX_OS_ENABLE_SYSTEM_UTILS AND NOT HX_OS_ENABLE_PATHS)
 		string(APPEND HX_OS_PC_LIBS_PRIVATE " -lshell32")
 	endif()
-	if(HX_OS_ENABLE_NETWORK)
+	if(HX_OS_ENABLE_NETWORK OR HX_OS_ENABLE_DUPLEX_PIPE)
 		string(APPEND HX_OS_PC_LIBS_PRIVATE " -lws2_32")
 	endif()
 	if(HX_OS_ENABLE_SYSINFO)

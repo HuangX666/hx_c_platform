@@ -196,6 +196,9 @@ static hx_os_status hx_os_loop_validate(hx_os_loop *loop,
 	if (!op->socket || op->socket->network != loop->network ||
 		(op->socket->loop && op->socket->loop != loop))
 		return HX_OS_INVALID;
+	if (op->socket->family == HX_OS_LOCAL &&
+		(kind == HX_OS_OP_CONNECT || kind == HX_OS_OP_ACCEPT))
+		return HX_OS_NOT_SUPPORTED;
 	*directions = kind == HX_OS_OP_CONNECT ? 3
 		: kind == HX_OS_OP_READ || kind == HX_OS_OP_RECEIVE_FROM ||
 			kind == HX_OS_OP_ACCEPT
@@ -206,7 +209,7 @@ static hx_os_status hx_os_loop_validate(hx_os_loop *loop,
 		return HX_OS_BUSY;
 	if ((kind == HX_OS_OP_ACCEPT || kind == HX_OS_OP_CONNECT ||
 		    kind == HX_OS_OP_WRITE || kind == HX_OS_OP_READ) &&
-		op->socket->protocol != HX_OS_TCP)
+		!hx_os_i_socket_stream(op->socket))
 		return HX_OS_INVALID;
 	if ((kind == HX_OS_OP_SEND_TO || kind == HX_OS_OP_RECEIVE_FROM) &&
 		op->socket->protocol != HX_OS_UDP)

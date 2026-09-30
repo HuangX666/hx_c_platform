@@ -647,3 +647,38 @@ No assembly or extra ordinary-task locks/allocations were introduced.
 Raw results remain ignored build artifacts (batch19-pool*-perf.json).
 Native macOS, Win7, processor groups, CPU hotplug, ARM/musl and embedded boards
 remain pending. This is unrelated to the unperformed hx_c_log migration.
+
+## OBS completion batch 20 (2026-09-30)
+
+Windows full CTest passed 51/51; WSL Linux 53/53. ASan/UBSan and TSan each
+passed 8/8 (local, duplex, pipe, net, loop_concurrency, process, cpp_platform,
+duplex_message_example). Both native AF_UNIX tests ran; they were not skipped.
+Public C99/C++11 headers passed. Both new modules off passed 4/4 per host.
+Standalone duplex with NETWORK/PIPE/SYSTEM_UTILS off passed 7/7 per host
+(Windows LOOP also off), including the trimmed CLI argument path.
+Local sockets with DUPLEX_PIPE/PIPE off passed Windows 4/4 (LOOP off) and
+Linux 6/6 (LOOP on). Windows x86 related tests passed 4/4.
+
+Tests verify UTF-8/supplementary-plane socket names, path bounds, unnamed peers,
+existing-path preservation, accept/read NOW timeouts, connect continuation,
+bidirectional stream data, short-read loops, IOCP/epoll read/write and cancel
+retirement, loop CONNECT/ACCEPT refusal, parent network BUSY, file half-close,
+EOF, write-after-shutdown, allocation failure cleanup and independent native
+network initialization. Linux fills a real listen backlog until EAGAIN, then
+accepts one connection and successfully retries the retained connecting object.
+Windows process redirection rejects socket-backed file endpoints before spawn.
+
+The first local address query tests found that validation requires a non-NULL
+error-offset pointer. The local query and the shared trimmed CLI argument
+adapter now supply it; the existing validation contract was preserved.
+
+Layouts: local_address 108/1 and private local_state 112/4 on all measured
+targets. With local support enabled, socket grows from 56/8 to 64/8 on x64,
+40/8 to 48/8 on Windows x86. The same allocation appends state only for local
+sockets. Windows duplex_file is 32/8 on x64 and 20/4 on x86; POSIX uses the
+unchanged 12/4 file object. Public pre-existing layouts and operation/request
+sizes did not change. No assembly or new third-party dependency was added.
+
+Native macOS, Win7 fallback/provider absence, embedded/musl, firewall rejection,
+wrong-peer accept flooding and native close-failure injection remain pending.
+No Windows/WSL interop or TCP performance equivalence is claimed.

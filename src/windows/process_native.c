@@ -1,4 +1,5 @@
 #include "process_private.h"
+#include "duplex_private.h"
 #include <wchar.h>
 
 /* CRT/CommandLineToArgvW quoting, including empty and trailing backslashes. */
@@ -167,6 +168,11 @@ hx_os_status hx_os_i_process_spawn(hx_os_context *context, const char *path,
 		offset += count;
 	}
 	for (i = 0; i < 3; ++i) {
+		if (streams[i] && streams[i]->pipe == HX_OS_I_FILE_SOCKET) {
+			status =
+				hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+			goto done;
+		}
 		HANDLE source = streams[i] ? streams[i]->handle
 					   : GetStdHandle(identifiers[i]);
 		if (!source || source == INVALID_HANDLE_VALUE) {

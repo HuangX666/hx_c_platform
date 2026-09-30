@@ -33,7 +33,7 @@ set_tests_properties(library PROPERTIES TIMEOUT 20)
 
 set(hx_test_suites data options lifecycle config containers sysinfo file_utils
 	env paths thread_extra pipe io_options file_info config_serialize timer
-	error_text util vm file_extra watch loop_fd system delayed)
+	error_text util vm file_extra watch loop_fd system delayed local duplex)
 if(HX_OS_ENABLE_THREAD_POOL)
 	list(APPEND hx_test_suites pool)
 endif()
@@ -54,6 +54,7 @@ endforeach()
 if(WIN32)
 	target_link_libraries(hx_os_test_file_extra PRIVATE shell32)
 endif()
+set_tests_properties(local PROPERTIES SKIP_RETURN_CODE 77)
 add_executable(hx_os_process_fixture process_fixture.c)
 add_executable(hx_os_test_process test_process.c)
 foreach(process_target IN ITEMS hx_os_process_fixture hx_os_test_process)
