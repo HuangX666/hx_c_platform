@@ -30,9 +30,12 @@ hx_os_status hx_os_object_pool_create(hx_os_context *context,
 {
 	hx_os_object_pool *pool;
 	hx_os_status status;
-	if (!out || !object_bytes || !hx_os_i_alignment_valid(alignment) ||
-		maximum_objects > INT64_MAX)
+	if (!out || !object_bytes || !hx_os_i_alignment_valid(alignment))
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+#if SIZE_MAX > INT64_MAX
+	if (maximum_objects > INT64_MAX)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+#endif
 	*out = NULL;
 	pool = hx_os_i_zero(context, sizeof(*pool));
 	if (!pool)

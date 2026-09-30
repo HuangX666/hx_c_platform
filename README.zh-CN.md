@@ -25,9 +25,10 @@
 C++11 已验证，尚未验证 C++14/17/20 矩阵。
 测试数字表示**Windows 74 项／Linux 76 项 CTest 入口**，不是断言数量；
 Linux 额外两项验证原生随机源故障。
-Linux 证据来自 WSL：GCC 库测试，以及 Clang 的 C++11 封装测试；
+Linux 证据来自 WSL：GCC 与 Clang 全量库及 C++11 测试；
 Windows 证据来自本地 MSVC x86/x64 构建。
-macOS、嵌入式 SDK／板卡仍待验证，自有代码分发许可证也尚未确定。
+ARMv7/AArch64 glibc 已交叉编译，QEMU 部分运行结果与真实板卡分开记录。
+macOS、Win7、板卡和 musl 仍待验证，自有代码分发许可证也尚未确定。
 具体配置与目标限制见[验证记录](docs/VALIDATION.zh-CN.md)。
 
 独立的 C99 跨平台基础库，提供纯 C ABI。应用和业务库调用同一套接口，
@@ -38,6 +39,53 @@ macOS、嵌入式 SDK／板卡仍待验证，自有代码分发许可证也尚�
 基础库不依赖 hx_c_log、Qt、C++ 或 OBS 运行库。借鉴 OBS 的统一接口、
 共用实现、平台源码选择和警告配置方式，保持独立构建、测试和安装。
 当前没有执行 hx_c_log 接入。
+
+## 从要完成的事情开始
+
+常用操作提供直接的 C 入口，库内部处理原生路径、编码、缓冲增长和资源组合。
+只有需要调整上限或行为时才传 options。仅开启模块不会启动后台线程。
+24 批实现均已落地；各批记录见[进度表](docs/OBS_COMPLETION.zh-CN.md)，
+平台实测范围见[验证记录](docs/VALIDATION.zh-CN.md)。
+
+~~~c
+#include <hx_os.h>
+#include <stdio.h>
+
+int main(void)
+{
+	hx_string text = HX_STRING_INIT;
+	hx_os_error error;
+	hx_os_status status =
+		hx_os_file_read_text("配置.json", &text, &error);
+	if (status == HX_OS_OK)
+		puts(hx_string_c_str(&text));
+	hx_string_destroy(&text);
+	return status == HX_OS_OK ? 0 : 1;
+}
+~~~
+
+这一个读取入口负责打开、读取、校验 UTF-8、去除开头的 UTF-8 BOM 和关闭。
+默认上限 16 MiB，失败保持输出字符串不变。不需要先初始化全局运行环境，
+也不需要修改全局分配器。
+
+| 想做的事情 | 直接入口／可运行示例 |
+| --- | --- |
+| 读取或保存文本、原子发布 | hx_os_file_read_text/save_atomic；[text_file.c](examples/text_file.c) |
+| 读取环境变量或用户目录 | hx_os_env_get_string / hx_os_path_config_home_string；[special_paths.c](examples/special_paths.c) |
+| 解析只读配置、修改并保存设置 | hx_os_config_parse / hx_settings_load_json/save_json；[settings.c](examples/settings.c) |
+| 启动程序并同时收集两路输出 | hx_os_process_capture_run；[capture_process.c](examples/capture_process.c) |
+| 监听目录 | hx_os_watch_create；[watch_directory.c](examples/watch_directory.c) |
+| 周期执行 | hx_os_timer_create；[periodic_timer.c](examples/periodic_timer.c) |
+| 提交普通／延迟任务 | C 线程池与 hx::ThreadPool；[thread_pool.cpp](examples/thread_pool.cpp)、[delayed_task.c](examples/delayed_task.c) |
+| 通过管道传输数据 | [pipe_transfer.c](examples/pipe_transfer.c)、[duplex_message.c](examples/duplex_message.c) |
+| 查询内存／CPU、加载插件 | [system_info.c](examples/system_info.c)、[load_plugin.c](examples/load_plugin.c) |
+| 映射文件、生成随机 UUID | [mapped_file.c](examples/mapped_file.c)、[random_uuid.c](examples/random_uuid.c) |
+| 发送通知、统计区间耗时 | [signal_notifications.c](examples/signal_notifications.c)、[profile_intervals.c](examples/profile_intervals.c) |
+| 在线程间发布共享数据 | [atomic_publication.c](examples/atomic_publication.c)、[原子契约](docs/ATOMICS.zh-CN.md) |
+
+进程、线程、监听和未完成 I/O 保留显式等待／关闭，超时保留句柄及缓冲供重试。
+同步资源使用 C++ RAII；析构不会偷偷无限 join 或强杀。每个消费者可使用自己的
+不可变分配器 context，不会改动其它消费者的设置。
 
 ## 已实现模块
 
@@ -58,6 +106,10 @@ macOS、嵌入式 SDK／板卡仍待验证，自有代码分发许可证也尚�
 | hx_os_system.h | UTF-8 参数、主机／进程标识与可用 CPU 能力 |
 | hx_os_bits.h / hx_os_posix.h | 整数微工具和显式时钟转换 |
 | hx_config.h | 只读配置文档与可选第三方解析后端 |
+| hx_settings.h | 可变用户值／默认值及不可变快照 |
+| hx_os_signal.h / hx_os_profiler.h | 同步通知与区间计时树 |
+| hx_os_calendar.h / hx_os_text_lookup.h / hx_os_bitstream.h | 日期、翻译表、有界位流 |
+| hx_os_registry.h / hx_os_power.h | 显式可选平台请求 |
 | hx_container.h | 有界 C 序列、有序／哈希 map 和 set |
 | hx/ThreadPool.hpp | 可选 C++11 任务、返回值、异常和取消令牌 |
 
@@ -83,7 +135,7 @@ hx_string 深拷贝预设见[容器契约](docs/CONTAINERS.zh-CN.md)。
 日志格式、过滤、日志器绑定、轮转保留、日志异步队列、崩溃策略、
 LocalDumps 配置和系统日志目标继续属于消费者。
 线程局部存储 TLS 与网络加密 TLS 是不同功能；本库没有引入网络 TLS 库。
-动态库加载、按页分配、更多系统信息及原生调用栈取证留待后续需求。
+动态库加载、按页分配与系统信息查询已实现；原生调用栈取证不在本轮范围。
 
 ## 构建
 
@@ -153,6 +205,11 @@ EUC-KR 和 Windows 1252/932/936/949/950。
 | HX_OS_ENABLE_DELAYED_TASKS | ON | 在线程池共享容量内按时安排任务 |
 | HX_OS_ENABLE_LOCAL_SOCKETS | ON | 原生路径流，依赖 NETWORK |
 | HX_OS_ENABLE_DUPLEX_PIPE | ON | 双向文件端点，独立于 NETWORK |
+| HX_OS_ENABLE_REGISTRY | ON | UTF-8 Windows 注册表操作 |
+| HX_OS_ENABLE_SLEEP_INHIBIT / PERFORMANCE_REQUEST | ON | 对象作用域原生请求；Linux 明确不支持 |
+| HX_OS_ENABLE_OBFUSCATION | ON | 可逆字符串编码，不是密码学保护 |
+| HX_OS_ENABLE_CALENDAR / TEXT_LOOKUP / BITSTREAM | ON | 独立日期、翻译和位流工具 |
+| HX_OS_ENABLE_SIGNALS / SETTINGS / PROFILER | ON | 分别裁剪的有界通用设施 |
 | HX_OS_ENABLE_CJSON/LIBYAML/MINIXML/INIH/TOMLC | OFF | 第三方解析适配 |
 | HX_OS_BUILD_TESTS | ON | 契约测试和公共头独立编译 |
 | HX_OS_BUILD_EXAMPLES | ON | C 示例；已启用 CXX 时包含 C++ 任务示例 |
@@ -225,9 +282,10 @@ target_link_libraries(my_app PRIVATE hx_c_platform::hx_c_platform)
 python tools/verify_install.py build --config Release
 ~~~
 
-脚本安装到 build/installed，再构建并运行五个独立消费者，
-覆盖 C99、C++11、配置解析、C 容器及 C++ 任务。
-这是原生主机验证，不会自动模拟交叉编译目标。
+脚本安装到 build/installed，运行八个 C99/C++11 消费者，再用纯 C CMake
+工程运行六个消费者，覆盖配置、容器、C++ 任务、设置、profiler 和原子。
+共享库还可运行 `python tools/verify_abi.py build --config Release`，使用
+基线旧头文件及测试链接安装后的新库。这些是原生主机验证，不自动模拟交叉目标。
 
 ## 平台和结构
 
@@ -252,7 +310,7 @@ macOS 已有适配源码，尚未在 Apple 主机编译和运行。
 实际板卡、SDK 及最低版本仍待验证和锁定。
 
 ~~~sh
-cmake -S . -B build-board \
+cmake -C cmake/minimal.cmake -S . -B build-board \
   -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/embedded-linux.cmake \
   -DHX_OS_TARGET_PROCESSOR=aarch64 \
   -DHX_OS_CROSS_PREFIX=/sdk/bin/aarch64-linux-gnu- \
@@ -261,6 +319,11 @@ cmake -S . -B build-board \
 ~~~
 
 必须替换为实际 SDK，不能由示例推断 libc 或浮点 ABI。
+minimal 配置关闭可选模块，保留错误/context、时钟、文件、UTF-8 字符串与转换、
+线程/同步/TLS 和原子。把需要的 `-DHX_OS_ENABLE_...=ON` 写在 `-C` 后面。
+关闭测试/示例后只需 C 编译器。普通桌面默认开启全部新增模块，原有第三方适配
+仍按需启用。未指定版本时，macOS 默认 Intel 10.13、ARM64 11.0，通用二进制
+使用 11.0；仅可选 Apple 性能请求使用 Objective-C/Foundation，原生验证待补。
 编译检查要求可链接的 64 位原子操作和单调条件变量，必要时链接 libatomic。
 若平台缺少有限时间的原生线程 join，会明确报告能力缺失，
 不会通过释放运行中的线程来伪装完成。

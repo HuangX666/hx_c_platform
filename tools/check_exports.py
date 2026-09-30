@@ -14,18 +14,29 @@ def main():
     root = Path(__file__).resolve().parents[1]
     expected = set()
     for header in (root / "include").glob("*.h"):
+        source = header.read_text(encoding="utf-8")
         expected.update(re.findall(
-            r"HX_OS_CALL\s+(hx_(?:os_|string_)\w+)\s*\(",
-            header.read_text(encoding="utf-8"),
+            r"HX_OS_CALL\s+(hx_(?:os_|string_|settings_)\w+)\s*\(",
+            source,
         ))
+        for name in re.findall(
+            r"^HX_OS_DECLARE_PATH\((\w+)\);", source, re.MULTILINE
+        ):
+            expected.update((f"hx_os_path_{name}",
+                             f"hx_os_path_{name}_string"))
     command = [arguments.tool]
-    if "dumpbin" in Path(arguments.tool).name.lower():
+    windows = "dumpbin" in Path(arguments.tool).name.lower()
+    if windows:
         command.extend(["/nologo", "/exports"])
     else:
         command.extend(["-D", "--defined-only"])
     command.append(str(arguments.library.resolve()))
     output = subprocess.check_output(command).decode("utf-8", errors="replace")
-    actual = set(re.findall(r"(?<![a-zA-Z])_?(hx_(?:os_|string_)\w+)", output))
+    if windows:
+        pattern = r"^\s*\d+\s+[\dA-Fa-f]+\s+[\dA-Fa-f]+\s+_?(hx_\w+)"
+    else:
+        pattern = r"^\s*[\dA-Fa-f]+\s+[A-Za-z]\s+_?(hx_\w+)"
+    actual = set(re.findall(pattern, output, re.MULTILINE))
     missing = expected - actual
     extra = actual - expected
     if missing or extra:
@@ -38,4 +49,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -55,8 +55,15 @@ def main():
         [arguments.ctest, "-C", arguments.config, "--output-on-failure"],
         cwd=consumer, env=environment,
     )
+    pure_c = build / "installed-consumer-c"
+    command[command.index("-B") + 1] = str(pure_c)
+    command.append("-DHX_CONSUMER_CPP=OFF")
+    run(command)
+    run([arguments.cmake, "--build", str(pure_c),
+         "--config", arguments.config])
+    run([arguments.ctest, "-C", arguments.config, "--output-on-failure"],
+        cwd=pure_c, env=environment)
 
 
 if __name__ == "__main__":
     main()
-

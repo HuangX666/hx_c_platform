@@ -67,10 +67,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - run: >-
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-          -DHX_OS_ENABLE_NETWORK=OFF -DHX_OS_ENABLE_LOOP=OFF
-          -DHX_OS_ENABLE_MEMORY_POOLS=OFF -DHX_OS_ENABLE_THREAD_POOL=OFF
-          -DHX_OS_ENABLE_CONFIG=OFF -DHX_OS_ENABLE_CONTAINERS=OFF
+          cmake -C cmake/minimal.cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release -DHX_OS_BUILD_TESTS=ON
+          -DBUILD_SHARED_LIBS=ON
       - run: cmake --build build --parallel 4
       - run: ctest --test-dir build --output-on-failure
 
@@ -109,9 +108,11 @@ jobs:
           - processor: aarch64
             triplet: aarch64-linux-gnu
             emulator: qemu-aarch64
+            exclude: '^process$'
           - processor: armv7
             triplet: arm-linux-gnueabihf
             emulator: qemu-arm
+            exclude: '^process$|^sysinfo$'
     steps:
       - uses: actions/checkout@v6
       - name: Install cross compiler and emulator
@@ -129,4 +130,11 @@ jobs:
           -DCMAKE_CROSSCOMPILING_EMULATOR="${{ matrix.emulator
           }};-L;/usr/${{ matrix.triplet }}"
       - run: cmake --build build --parallel 4
-      - run: ctest --test-dir build --output-on-failure
+      # QEMU syscall translation does not preserve spawn-error reporting
+      # or 32-bit sysinfo memory totals. Native board tests must include both.
+      - name: Run QEMU-compatible contracts (not board acceptance)
+        env:
+          QEMU_LD_PREFIX: /usr/${{ matrix.triplet }}
+        run: >-
+          ctest --test-dir build --output-on-failure
+          -E '${{ matrix.exclude }}'

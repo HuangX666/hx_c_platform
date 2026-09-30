@@ -2,10 +2,14 @@
 
 [简体中文](VALIDATION.zh-CN.md) · [README](../README.md)
 
-This records development validation through 2026-09-29. A design, implemented
+This records development validation through 2026-09-30. A design, implemented
 adapter, successful compile and successful target run are different states.
 Local tests do not certify every operating-system release, filesystem, CPU,
 libc or network provider.
+
+The latest consolidated results appear under **Final delivery matrix** below.
+Earlier checkpoints are historical; their smaller suite counts and pending
+states are not the final coverage claims.
 
 ## OBS completion batch 1 (2026-09-30)
 
@@ -247,7 +251,7 @@ acceptance tasks, not claims hidden inside "cross-platform supported".
 | WSL Linux x86_64/glibc | Implemented | Passed | Passed in WSL |
 | Native Linux device/server | Shared POSIX + epoll implementation | SDK dependent | Pending target |
 | macOS Intel/Apple Silicon | POSIX + kqueue/Mach implementation | Pending Apple host | Pending |
-| ARMv7-A/AArch64 embedded glibc | Shared Linux code + SDK toolchain | Pending SDK/CI | Pending board |
+| ARMv7-A/AArch64 embedded glibc | Shared Linux code + SDK toolchain | GCC 15.2 cross build passed | Partial QEMU; native board pending |
 | Embedded musl | Shared Linux code, feature detection | Pending SDK/CI | Pending board |
 | Embedded uClibc-ng | Shared Linux code, capabilities require review | Pending SDK | Pending board |
 | Android | Reuse Linux/POSIX/epoll concepts | Not adapted | Not run |
@@ -258,8 +262,9 @@ acceptance tasks, not claims hidden inside "cross-platform supported".
 Android needs explicit bionic API-level and application permission/storage
 decisions. iOS needs deployment/sandbox/background execution and lifecycle
 checks; no fork is assumed. BSD needs native thread identifiers and finite
-join semantics, not a Linux fallback. macOS currently uses no Objective-C;
-its clock_gettime SDK/deployment requirement must be verified. Embedded
+join semantics, not a Linux fallback. Only the optional Apple performance
+activity adapter uses Objective-C/Foundation behind the C interface. Intel
+10.13 and ARM64 11.0 deployment targets still require native validation. Embedded
 acceptance must lock CPU/float ABI, endianness, libc version/configuration,
 kernel floor, time_t width and atomic support.
 
@@ -854,3 +859,104 @@ Fences were compiled/exercised, not certified by TSan. No assembly speedup
 or target ARM memory-order validation is claimed. See [contracts](ATOMICS.md).
 All 24 implementation batches are now present; final package/ABI matrix
 verification follows separately.
+
+## Final delivery matrix (2026-09-30)
+
+All 24 approved implementation batches are present. Batch 23 has separate
+signal, settings and profiler commits. No remote push, hx_c_log migration,
+coroutine implementation, new third-party dependency or vendor edit occurred.
+
+| Configuration | Final evidence |
+| --- | --- |
+| Windows MSVC x64 static Debug, external parsers enabled | 74/74 CTest |
+| Windows MSVC x64 shared Release | 74/74 CTest |
+| Windows MSVC v142 x86 static Debug | 74/74 CTest |
+| WSL GCC 15.2 static Debug / shared Release | 76/76 each |
+| WSL Clang 21.1.8 static Release | 76/76 |
+| WSL ASan + UBSan / TSan, external parsers | 76/76 each |
+| CMake 3.16.8, NMake, MSVC v142 x64 Release | 74/74 |
+| All optional modules OFF, shared, Windows / WSL | 45/45 each; 576 exports each |
+| Installed Windows / Linux, static / shared | 8/8 mixed C99/C++11 and 6/6 C-only consumers per configuration |
+| Baseline 7cf52fc headers/tests with current DLL / so | 10/10 each |
+| Full shared ABI, Windows / Linux | 576 public functions match headers, including paths and settings |
+| C-only minimal Windows core | Compiled without enabling CXX |
+| ARMv7 hard-float / AArch64 glibc, GCC 15.2 | Cross compilation including isolated C99/C++11 headers passed |
+| ARMv7, QEMU 10.2.1 user mode | 72 passed, 2 skipped, 2 failed out of 76 |
+| AArch64, QEMU 10.2.1 user mode | 73 passed, 2 skipped, 1 failed across the full 76 entries |
+
+The full ARMv7 run and the split AArch64 run retain failures rather than
+claiming native board acceptance. QEMU's two random fault-injection cases
+return the pre-existing skip code 77. A native-API diagnostic probe reproduced
+both remaining differences outside the library: 32-bit sysinfo returned
+3696713728 bytes with unit 1 while host procfs and native x64 reported
+20876582912 total bytes; available bytes were about 20 GB. Both emulated
+architectures returned success for posix_spawn of a nonexistent file, followed
+by child status 127. Native x64 returned ENOENT as expected. The library
+preserved those native results. Do not clamp memory metrics or fabricate
+spawn errors to hide the emulator behavior. CI explicitly excludes that
+process test and ARMv7 sysinfo in its QEMU-only job; board acceptance must
+include them. Other process-capture examples and C++ process tests passed
+under binfmt with QEMU_LD_PREFIX.
+
+Windows shared validation found and fixed the generated-obfuscation test's
+DLL search directory. CMake 3.16/NMake validation found supplementary-plane
+command-line text becoming question marks; its generator now reads an actual
+UTF-8 input file. ARMv7 compilation found a size_t versus INT64_MAX check that
+was always false; the check now exists only at applicable widths. Optional
+C++ discovery moved to the tests/examples' common parent, preserving a C-only
+core. Package validation explicitly builds a separate LANGUAGES C consumer.
+
+The 22 pre-existing public struct/union declarations were compared with the
+baseline and are unchanged (ignoring comments/whitespace); original operation
+and error layouts remain intact. The updated symbol checker includes the
+14 macro-declared path functions and hx_settings exports. Full and minimal
+shared libraries have the same public symbol set. All tested public headers
+compile independently and twice in C99/C++11. First-party UTF-8/no-BOM/LF,
+changed source rules, documentation links and actionlint pass. Generated
+outputs/dependency caches remain ignored; vendor files match the Git baseline.
+
+### Cost and performance observations
+
+| Path | Cost retained or added |
+| --- | --- |
+| Existing atomics | Direct calls, constant-order dispatch; no allocator/callback; MSVC may be stronger |
+| Ordinary pool tasks | No added ordinary-task allocation/lock count; delayed tasks share capacity and worker threads |
+| Async pipe/timer/process composition | Bounded request/stream storage and native I/O; no hidden unlimited queue or automatic kill |
+| Signals | Bounded callback snapshot per emit; callbacks outside lock; explicit in-flight retirement |
+| Settings | Copied root/key storage plus retained immutable children; allocation and observer calls outside publication lock |
+| Profiler | Warm paths allocate no context storage; entry/leave still uses mutex sections, TLS and monotonic clock reads |
+
+The final Release pool comparison repeats batch 19's fixed workload against
+the saved static batch-18 binary: 16384 no-op tasks, one worker, chunks of
+128, five alternating processes per version, five retained samples after
+each warmup. Windows baseline/current median was 9506100/9505400 ns
+(-0.01% elapsed); ranges 8128300..11529500 / 7505200..11280200.
+Linux was 12574817/12832931 ns (+2.05% elapsed); ranges
+11615759..14325685 / 11078454..17594985. The overlapping/noisy observations
+do not prove a speedup or universal nonregression. Raw measurements are
+final-pool-perf.json in the corresponding ignored build directories.
+The hx_c_log five-times-baseline and single-producer nonregression gates
+remain future migration acceptance, not evidence from this pool benchmark.
+
+### Reproduce and outstanding target work
+
+Use the existing per-batch logs plus final-build.log/final-test.log,
+final-install.log and final-abi.log in the named build directories. Run
+tools/verify_install.py before tools/verify_abi.py for a shared configuration.
+The latter reads old headers/test sources through Git into its own ignored
+build directory; it does not check out or modify baseline/vendor sources.
+tools/check_exports.py accepts nm on Linux or --tool dumpbin on Windows.
+The CMake 3.16 run uses ctest from inside the build directory.
+
+cmake/minimal.cmake is a 3.16-compatible initial-cache example, not a new
+runtime configuration layer. Override selected switches after -C and use the
+actual SDK toolchain/sysroot. Native Apple Intel 10.13 / ARM64 11.0, Win7/8.1,
+musl/uClibc-ng and physical embedded boards remain unverified. Apple source
+and target-local Objective-C warnings are implemented but uncompiled here.
+Cross-build warnings allowed by the existing GCC maybe-uninitialized policy
+remain diagnostics, not a clean-warning claim. No remote CI was executed.
+First-party distribution licensing is still undecided.
+
+Failed batch-3 fixture directories under ignored build outputs remain:
+automatic approval review rejected their requested recursive cleanup with
+"blocked by policy". No alternative deletion bypass was attempted.

@@ -32,10 +32,15 @@ macOS Intel 10.13／ARM64 11.0、Windows 7 SP1 和嵌入式目标实测单独标
 | 18 | 进程、输出捕获与系统工具 | Windows 46/46；Linux 48/48；ASan/TSan 7/7；x86 本批通过 |
 | 19 | 优先级、亲和性、延迟任务 | Windows 48/48；Linux 50/50；ASan/TSan 7/7；x86 本批通过 |
 | 20 | 本地套接字与双向管道 | Windows 51/51；Linux 53/53；ASan/TSan 8/8；x86 本批通过 |
-| 21 | 注册表、电源与混淆 | Windows 57/57; Linux 59/59; ASan 8/8; x86 5/5; Apple pending |
-| 22 | 日期、翻译表、位流 | Windows 63/63; Linux 65/65; ASan 8/8; TSan 6/6; x86 7/7 |
+| 21 | 注册表、电源与混淆 | Windows 57/57；Linux 59/59；ASan 8/8；x86 5/5；Apple 待验证 |
+| 22 | 日期、翻译表、位流 | Windows 63/63；Linux 65/65；ASan 8/8；TSan 6/6；x86 7/7 |
 | 23 | 信号、可变设置、区间 profiler | 已实现：Windows 72/72，Linux 74/74；profiler ASan/TSan 4/4；目标实测待补 |
 | 24 | 原子与内存序 | Windows 74/74；Linux 76/76；ASan/TSan 10/10；x86 5/5 |
 
 基线保留既有空白格式，包括第三方许可证的原始内容。
 构建产物、依赖缓存与安装输出不纳入 Git。
+
+全部实现批次已完成。Windows／WSL 静态与共享安装消费、576 符号导出、
+旧头文件配新共享库的 ABI 验证通过。完整检查器、Clang、x86、CMake 3.16、
+QEMU 部分运行和目标限制见[最终矩阵](VALIDATION.zh-CN.md)。
+这不代表 macOS／Win7／真实板卡验收完成，也不代表 hx_c_log 性能已达标。

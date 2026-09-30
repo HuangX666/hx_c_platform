@@ -2,9 +2,12 @@
 
 [English](VALIDATION.md) · [README](../README.zh-CN.md)
 
-本文记录截至 2026-09-29 的开发验证。设计覆盖、已有适配源码、编译成功、
+本文记录截至 2026-09-30 的开发验证。设计覆盖、已有适配源码、编译成功、
 目标运行成功是不同状态。本机测试不能证明所有系统版本、文件系统、
 CPU、libc 或网络提供方均已通过。
+
+最新汇总见文末“最终交付矩阵”。前面的检查点保留历史测试数和当时的待验证
+状态，不代表最终覆盖范围。
 
 ## OBS 补齐第 1 批（2026-09-30）
 
@@ -223,7 +226,7 @@ CI 已编写并检查语法，本工作区没有在 GitHub 上执行它。
 | WSL Linux x86_64/glibc | 已实现 | 通过 | WSL 内通过 |
 | 原生 Linux 设备／服务器 | 共享 POSIX + epoll 实现 | 取决于 SDK | 待目标环境 |
 | macOS Intel／Apple Silicon | POSIX + kqueue/Mach 实现 | 待 Apple 主机 | 待验证 |
-| ARMv7-A/AArch64 嵌入式 glibc | 共享 Linux 代码及 SDK 工具链 | 待 SDK／CI | 待板卡 |
+| ARMv7-A/AArch64 嵌入式 glibc | 共享 Linux 代码及 SDK 工具链 | GCC 15.2 交叉编译通过 | QEMU 部分运行；板卡待验证 |
 | 嵌入式 musl | 共享 Linux 代码及能力检测 | 待 SDK／CI | 待板卡 |
 | 嵌入式 uClibc-ng | 共享 Linux 代码，需核实能力配置 | 待 SDK | 待板卡 |
 | Android | 可复用 Linux/POSIX/epoll 思路 | 未适配 | 未运行 |
@@ -234,7 +237,8 @@ CI 已编写并检查语法，本工作区没有在 GitHub 上执行它。
 Android 需明确 bionic API level、应用权限和存储边界。
 iOS 需检查部署版本、沙箱、后台执行和生命周期，不假设 fork。
 BSD 需要自己的线程标识与有限 join 语义，不能默认走 Linux。
-macOS 当前没有 Objective-C，仍需核实 clock_gettime 的 SDK／部署要求。
+仅 Apple 可选性能活动适配在 C 接口后使用 Objective-C/Foundation。
+Intel 10.13、ARM64 11.0 的部署目标仍需原生验证。
 嵌入式验收需要锁定 CPU／浮点 ABI、字节序、libc 版本及配置、
 内核下限、time_t 宽度和原子支持。
 
@@ -724,3 +728,84 @@ GCC TSan 报告不能建模独立栅栏；仅 atomic.c 在 GCC TSan 下将这条
 非致命警告，不修改实际实现。TSan 发布测试不依赖栅栏。栅栏已编译并执行，
 不能记为 TSan 证明；也未声称汇编提速或 ARM 内存序已经目标验证。详见
 [原子契约](ATOMICS.zh-CN.md)。24 批实现已落地，最终安装/ABI 矩阵另行记录。
+
+## 最终交付矩阵（2026-09-30）
+
+24 批已批准实现均已落地，第 23 批按信号、设置、profiler 分成独立提交。
+没有推送远程、迁移 hx_c_log、实现协程、增加第三方依赖或修改第三方源码。
+
+| 配置 | 最终证据 |
+| --- | --- |
+| Windows MSVC x64 静态 Debug，启用第三方解析器 | CTest 74/74 |
+| Windows MSVC x64 共享 Release | CTest 74/74 |
+| Windows MSVC v142 x86 静态 Debug | CTest 74/74 |
+| WSL GCC 15.2 静态 Debug／共享 Release | 各 76/76 |
+| WSL Clang 21.1.8 静态 Release | 76/76 |
+| WSL ASan + UBSan／TSan，启用第三方解析器 | 各 76/76 |
+| CMake 3.16.8、NMake、MSVC v142 x64 Release | 74/74 |
+| 所有可选模块关闭，Windows／WSL 共享库 | 各 45/45；各 576 个导出 |
+| Windows／Linux 静态／共享安装后消费 | 每种配置混合 C99/C++11 8/8，纯 C 工程 6/6 |
+| 基线 7cf52fc 旧头文件及测试链接新 DLL／so | 各 10/10 |
+| Windows／Linux 完整共享库 ABI | 576 个公共函数与头文件匹配，包含路径和设置 |
+| Windows 纯 C 最小核心 | 编译通过，没有启用 CXX |
+| ARMv7 硬浮点／AArch64 glibc，GCC 15.2 | 交叉编译及独立 C99/C++11 公共头通过 |
+| ARMv7，QEMU 10.2.1 用户模式 | 76 项中通过 72、跳过 2、失败 2 |
+| AArch64，QEMU 10.2.1 用户模式 | 分组运行完整 76 项，通过 73、跳过 2、失败 1 |
+
+保留 ARMv7 全量和 AArch64 分组运行失败记录，没有写成板卡通过。两个随机源
+故障注入测试使用原有跳过码 77。独立原生 API 探针复现剩余差异：32 位
+sysinfo 返回 totalram=3696713728、unit=1，而主机 procfs／原生 x64 总内存为
+20876582912 字节，可用约 20 GB。两种模拟架构的 posix_spawn 对不存在程序
+返回成功，随后子进程退出码为 127；原生 x64 返回预期 ENOENT。本库如实保留
+原生结果，没有夹小指标或伪造错误。CI 的 QEMU 专用任务明确排除 process，
+ARMv7 另排除 sysinfo；真实板卡验收必须包含。设置 QEMU_LD_PREFIX 后，经
+binfmt 执行的其它进程捕获示例及 C++ 进程测试通过。
+
+共享库检查修复了生成混淆测试的 DLL 搜索目录。CMake 3.16/NMake 将命令行中
+补充平面字符变成问号，改由生成器读取真实 UTF-8 文件。ARMv7 发现 size_t
+与 INT64_MAX 的恒假比较，现仅在适用位宽编译该检查。可选 C++ 检测移至测试/
+示例的共同父目录；核心仍可只用 C。安装验证另建 LANGUAGES C 消费工程。
+
+与基线相比，22 个既有公开 struct/union 声明在去除注释/空白后保持不变，
+原 operation 和 error 布局未改。导出检查补入宏声明的 14 个路径函数及
+hx_settings 符号；完整和最小共享库保留相同公共符号集合。公共头在 C99/
+C++11 下独立并重复包含编译。自有文件 UTF-8 无 BOM/LF、变更源码规范、文档
+链接和 actionlint 检查通过。生成物/依赖缓存未提交，第三方文件与 Git 基线一致。
+
+### 成本与性能观察
+
+| 路径 | 保留或新增成本 |
+| --- | --- |
+| 既有原子 | 直接调用、常量内存序分支；无分配和用户回调；MSVC 可能更强 |
+| 普通线程池任务 | 未增加普通任务分配/锁次数；延迟任务共享容量及既有线程 |
+| 异步管道/定时器/进程组合 | 有界请求/流存储及原生 I/O；没有隐藏无界队列或自动强杀 |
+| 信号 | 每次 emit 的有界回调快照；锁外回调；显式等待在途执行退役 |
+| 设置 | 复制根/键存储，保留不可变子节点；分配及观察回调在发布锁外 |
+| profiler | 预热路径不再分配 context 存储；进入/离开仍有互斥区、TLS、单调时钟 |
+
+最终 Release 对照复用第 19 批固定负载及保存的第 18 批静态二进制：16384 个
+空任务、一个工作线程、每块 128 个；两版本交替各运行五个进程，每进程预热后
+保留五个样本。Windows 基线/当前中位数 9506100/9505400 ns（耗时 -0.01%），
+范围分别 8128300..11529500／7505200..11280200；Linux 中位数
+12574817/12832931 ns（耗时 +2.05%），范围
+11615759..14325685／11078454..17594985。波动和重叠不能证明普遍提速或绝对
+不回退。原始 final-pool-perf.json 保留在对应忽略的构建目录。
+hx_c_log 五倍基线及单生产者不回退仍是未来接入验收，不能用这个线程池基准替代。
+
+### 复现与目标环境待办
+
+逐批日志以及最终 final-build.log/final-test.log、final-install.log、
+final-abi.log 位于对应构建目录。共享库先运行 tools/verify_install.py，再
+运行 tools/verify_abi.py；后者通过 Git 读取旧头文件/测试到自己忽略的构建
+目录，不 checkout 或修改基线/第三方源码。导出检查在 Linux 使用 nm，在
+Windows 指定 --tool dumpbin。CMake 3.16 从构建目录内运行 ctest。
+
+cmake/minimal.cmake 是兼容 3.16 的初始缓存示例，不增加运行时配置层。
+所需开关写在 -C 后覆盖，交叉编译使用实际 SDK/系统根。原生 Apple Intel
+10.13／ARM64 11.0、Win7/8.1、musl/uClibc-ng、物理板卡仍未验证。Apple 源码
+和目标私有 Objective-C 警告设置已写入，本机没有 Apple 编译证据。既有 GCC
+规则允许的 maybe-uninitialized 交叉编译警告仍保留，不能声称警告全清。
+远程 CI 未执行，自有代码分发许可证尚待确定。
+
+第 3 批失败夹具留在忽略的构建输出中：自动审批以“blocked by policy”拒绝了
+此前请求的递归清理，未改用其它删除方式绕过。

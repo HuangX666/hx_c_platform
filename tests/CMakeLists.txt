@@ -68,14 +68,18 @@ endif()
 set_tests_properties(local PROPERTIES SKIP_RETURN_CODE 77)
 find_package(Python3 QUIET COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
+	file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/obfuscated-input.txt"
+		"generated 中文😀")
 	add_custom_command(
 		OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/obfuscated_fixture.h"
 		COMMAND "${Python3_EXECUTABLE}"
 			"${PROJECT_SOURCE_DIR}/tools/obfuscate_string.py"
-			--name hx_generated --text "generated 中文😀"
+			--name hx_generated --input
+			"${CMAKE_CURRENT_BINARY_DIR}/obfuscated-input.txt"
 			--output
 			"${CMAKE_CURRENT_BINARY_DIR}/obfuscated_fixture.h"
 		DEPENDS "${PROJECT_SOURCE_DIR}/tools/obfuscate_string.py"
+			"${CMAKE_CURRENT_BINARY_DIR}/obfuscated-input.txt"
 		VERBATIM)
 	add_executable(hx_os_test_obfuscate_generated test_obfuscate_generated.c
 		"${CMAKE_CURRENT_BINARY_DIR}/obfuscated_fixture.h")
@@ -84,7 +88,8 @@ if(Python3_Interpreter_FOUND)
 	target_link_libraries(hx_os_test_obfuscate_generated PRIVATE
 		hx_c_platform)
 	set_target_properties(hx_os_test_obfuscate_generated PROPERTIES
-		C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
+		C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 	hx_apply_warnings(hx_os_test_obfuscate_generated)
 	add_test(NAME obfuscate_generated
 		COMMAND hx_os_test_obfuscate_generated)
@@ -122,10 +127,7 @@ set_target_properties(hx_os_header_c PROPERTIES
 	C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
 hx_apply_warnings(hx_os_header_c)
 
-include(CheckLanguage)
-check_language(CXX)
-if(CMAKE_CXX_COMPILER)
-	enable_language(CXX)
+if(CMAKE_CXX_COMPILER_LOADED)
 	add_executable(hx_os_test_cpp_extensions test_cpp_extensions.cpp)
 	target_link_libraries(hx_os_test_cpp_extensions PRIVATE
 		hx_c_platform::cpp)

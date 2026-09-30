@@ -26,9 +26,11 @@ the C core is a compiled static/shared library. C++11 has been checked;
 a C++14/17/20 matrix has not been verified. Counts describe **74 Windows /
 76 Linux CTest entries**, not individual assertions. The extra Linux entries
 exercise native random-provider failures.
-Linux evidence is from WSL: GCC library tests and a Clang C++11 facade test.
-Windows evidence covers local MSVC x86/x64 builds. macOS and embedded SDK/board
-runs remain pending, as does the first-party distribution license. See the
+Linux evidence is from WSL: full GCC and Clang library/C++11 suites.
+Windows evidence covers local MSVC x86/x64 builds. ARMv7/AArch64 glibc cross
+builds and partial QEMU runs are recorded separately from native boards.
+macOS, Win7, board and musl runs remain pending, as does the first-party
+distribution license. See the
 [validation record](docs/VALIDATION.md) for configuration and target limits.
 
 An independent C99 foundation library with a C ABI. Applications and business
@@ -41,6 +43,55 @@ There is no dependency on hx_c_log, Qt, C++, or the OBS runtime. OBS informs the
 interface/shared-implementation/platform-selection pattern and warning profile.
 The project builds, tests and installs independently. No hx_c_log integration
 has been performed.
+
+## Start with a task
+
+Common operations have direct C entry points. Defaults handle native paths,
+encoding, buffer growth and resource composition inside the library. Options
+are needed only to change a bound or behavior; enabling a module alone starts
+no background thread. All 24 implementation batches are present; see the
+[batch record](docs/OBS_COMPLETION.md) and [evidence](docs/VALIDATION.md).
+
+~~~c
+#include <hx_os.h>
+#include <stdio.h>
+
+int main(void)
+{
+	hx_string text = HX_STRING_INIT;
+	hx_os_error error;
+	hx_os_status status =
+		hx_os_file_read_text("settings.json", &text, &error);
+	if (status == HX_OS_OK)
+		puts(hx_string_c_str(&text));
+	hx_string_destroy(&text);
+	return status == HX_OS_OK ? 0 : 1;
+}
+~~~
+
+This opens, reads, validates UTF-8, removes an initial UTF-8 BOM and closes
+the file. The default limit is 16 MiB; failure preserves the output string.
+There is no mandatory global initialization or allocator reconfiguration.
+
+| Task | Entry point / runnable example |
+| --- | --- |
+| Read/save UTF-8 text and atomically publish | hx_os_file_read_text/save_atomic; [text_file.c](examples/text_file.c) |
+| Get an environment value or user directory | hx_os_env_get_string / hx_os_path_config_home_string; [special_paths.c](examples/special_paths.c) |
+| Parse immutable config; update and save settings | hx_os_config_parse / hx_settings_load_json/save_json; [settings.c](examples/settings.c) |
+| Start a process and capture both output streams | hx_os_process_capture_run; [capture_process.c](examples/capture_process.c) |
+| Watch a directory | hx_os_watch_create; [watch_directory.c](examples/watch_directory.c) |
+| Run periodic work | hx_os_timer_create; [periodic_timer.c](examples/periodic_timer.c) |
+| Submit immediate/delayed work | C pool and hx::ThreadPool; [thread_pool.cpp](examples/thread_pool.cpp), [delayed_task.c](examples/delayed_task.c) |
+| Exchange pipe data | [pipe_transfer.c](examples/pipe_transfer.c), [duplex_message.c](examples/duplex_message.c) |
+| Query memory/CPU or load a plugin | [system_info.c](examples/system_info.c), [load_plugin.c](examples/load_plugin.c) |
+| Map a file or request random UUIDs | [mapped_file.c](examples/mapped_file.c), [random_uuid.c](examples/random_uuid.c) |
+| Send notifications / collect interval timings | [signal_notifications.c](examples/signal_notifications.c), [profile_intervals.c](examples/profile_intervals.c) |
+| Publish shared data safely | [atomic_publication.c](examples/atomic_publication.c), [atomic contracts](docs/ATOMICS.md) |
+
+Processes, threads, watches and pending I/O keep explicit close/wait operations.
+A timeout retains the handle and buffers for retry. Synchronous resource
+wrappers use RAII; a C++ destructor never hides an infinite join or force-kill.
+Each consumer can own an immutable allocator context without changing others.
 
 ## Included modules
 
@@ -61,6 +112,10 @@ has been performed.
 | hx_os_system.h | UTF-8 arguments, host/process identity, usable CPU features |
 | hx_os_bits.h / hx_os_posix.h | Integer helpers and explicit clock conversion |
 | hx_config.h | Immutable configuration documents and optional parser backends |
+| hx_settings.h | Mutable user/default values and immutable snapshots |
+| hx_os_signal.h / hx_os_profiler.h | Synchronous callbacks and interval trees |
+| hx_os_calendar.h / hx_os_text_lookup.h / hx_os_bitstream.h | Dates, translations, bounded bit cursors |
+| hx_os_registry.h / hx_os_power.h | Explicit optional platform requests |
 | hx_container.h | Bounded C sequences, ordered/hash maps and sets |
 | hx/ThreadPool.hpp | Optional C++11 tasks, return values, exceptions and stop tokens |
 
@@ -88,8 +143,8 @@ the pool and explicitly closes/destroys it. Coroutines remain deferred.
 Formatting/filtering, logger binding, rotation retention, asynchronous logging
 queues, crash policy, LocalDumps configuration and system-log destinations
 belong to consumers. Network encryption TLS is not thread-local storage TLS;
-no TLS encryption library is bundled. Dynamic loading, page allocation,
-additional system information and native stack capture remain future work.
+no TLS encryption library is bundled. Native stack capture remains outside
+this scope. Dynamic loading, page allocation and system queries are included.
 
 ## Build
 
@@ -160,6 +215,11 @@ Conversion never changes the process locale or assumes an ANSI codepage.
 | HX_OS_ENABLE_DELAYED_TASKS | ON | Timed eligibility within THREAD_POOL capacity |
 | HX_OS_ENABLE_LOCAL_SOCKETS | ON | Native pathname streams; requires NETWORK |
 | HX_OS_ENABLE_DUPLEX_PIPE | ON | Duplex file endpoints; independent of NETWORK |
+| HX_OS_ENABLE_REGISTRY | ON | UTF-8 Windows registry operations |
+| HX_OS_ENABLE_SLEEP_INHIBIT / PERFORMANCE_REQUEST | ON | Scoped native requests; Linux reports not supported |
+| HX_OS_ENABLE_OBFUSCATION | ON | Reversible encoded strings, not cryptography |
+| HX_OS_ENABLE_CALENDAR / TEXT_LOOKUP / BITSTREAM | ON | Independent date, translation and bit tools |
+| HX_OS_ENABLE_SIGNALS / SETTINGS / PROFILER | ON | Independent bounded higher-level utilities |
 | HX_OS_ENABLE_CJSON/LIBYAML/MINIXML/INIH/TOMLC | OFF | Native parser adapters |
 | HX_OS_BUILD_TESTS | ON | Contract tests and isolated public headers |
 | HX_OS_BUILD_EXAMPLES | ON | C examples; C++ task example when CXX is enabled |
@@ -236,9 +296,12 @@ the application or on its runtime search path.
 python tools/verify_install.py build --config Release
 ~~~
 
-This installs into build/installed, builds five separate consumers covering
-C99, C++11, configuration, containers and C++ tasks, and runs them. The script
-is a native-host check, not a cross-target emulator.
+This installs into build/installed, runs eight C99/C++11 consumers, then six
+consumers from a separate C-only CMake project. Coverage includes config,
+containers, C++ tasks, settings, profiling and atomics. For a shared build,
+`python tools/verify_abi.py build --config Release` additionally compiles the
+baseline headers and tests against the installed new library. The scripts
+are native-host checks, not cross-target emulators.
 
 ## Platforms and architecture
 
@@ -264,7 +327,7 @@ Embedded Linux ARMv7-A/AArch64 with glibc, musl or uClibc-ng is a target;
 board/SDK validation and exact minimum versions are still pending.
 
 ~~~sh
-cmake -S . -B build-board \
+cmake -C cmake/minimal.cmake -S . -B build-board \
   -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/embedded-linux.cmake \
   -DHX_OS_TARGET_PROCESSOR=aarch64 \
   -DHX_OS_CROSS_PREFIX=/sdk/bin/aarch64-linux-gnu- \
@@ -273,6 +336,14 @@ cmake -S . -B build-board \
 ~~~
 
 Use the actual SDK; do not infer libc or float ABI from this example.
+The minimal profile disables optional modules and keeps errors/context,
+clocks, files, UTF-8 strings/conversion, threads/synchronization/TLS and
+atomics. Put desired `-DHX_OS_ENABLE_...=ON` overrides after `-C`. Core builds
+with tests/examples off require no C++ compiler. Default desktop builds
+enable all new modules; existing third-party adapters remain opt-in.
+macOS defaults to Intel 10.13 or ARM64 11.0 when no deployment version is
+specified; universal builds use 11.0. Only the optional Apple performance
+request adapter uses Objective-C/Foundation. Apple native validation is pending.
 Compiler checks require linkable 64-bit atomics and monotonic conditions.
 libatomic is linked when necessary. A missing finite native thread join is
 reported as a missing capability, never emulated by freeing a running thread.

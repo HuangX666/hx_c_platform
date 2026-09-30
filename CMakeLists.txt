@@ -57,6 +57,25 @@ option(HX_OS_ENABLE_PROFILER "Build bounded interval profiling trees" ON)
 set(HX_OS_ICONV_SOURCE_DIR "" CACHE PATH "Unmodified GNU libiconv source")
 set(HX_OS_SANITIZER "" CACHE STRING "address,undefined or thread")
 
+# Enable C++ only for optional validation/examples, at their common parent.
+if(HX_OS_BUILD_TESTS OR HX_OS_BUILD_EXAMPLES)
+	include(CheckLanguage)
+	check_language(CXX)
+	if(CMAKE_CXX_COMPILER)
+		enable_language(CXX)
+	endif()
+endif()
+if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+	if("arm64" IN_LIST CMAKE_OSX_ARCHITECTURES OR
+		CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
+		set(hx_apple_minimum "11.0")
+	else()
+		set(hx_apple_minimum "10.13")
+	endif()
+	set(CMAKE_OSX_DEPLOYMENT_TARGET "${hx_apple_minimum}" CACHE STRING
+		"Minimum macOS deployment version" FORCE)
+endif()
+
 find_package(Threads REQUIRED)
 set(HX_OS_PLATFORM_NAME "${CMAKE_SYSTEM_NAME}")
 set(hx_platform_sources)
@@ -243,6 +262,13 @@ if(HX_OS_ENABLE_SLEEP_INHIBIT OR HX_OS_ENABLE_PERFORMANCE_REQUEST)
 			set_source_files_properties(src/apple/power_activity.m
 				PROPERTIES COMPILE_OPTIONS
 				"-fno-objc-arc;-fobjc-exceptions")
+			target_compile_options(hx_c_platform PRIVATE
+				"$<$<COMPILE_LANGUAGE:OBJC>:-Wall;-Wextra>")
+			if(NOT DEFINED CMAKE_COMPILE_WARNING_AS_ERROR OR
+				CMAKE_COMPILE_WARNING_AS_ERROR)
+				target_compile_options(hx_c_platform PRIVATE
+					"$<$<COMPILE_LANGUAGE:OBJC>:-Werror>")
+			endif()
 			set_target_properties(hx_c_platform PROPERTIES
 				OBJC_STANDARD 99 OBJC_STANDARD_REQUIRED YES
 				OBJC_EXTENSIONS NO)
