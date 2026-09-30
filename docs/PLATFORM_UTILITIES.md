@@ -495,3 +495,43 @@ Text::parseDouble/formatDouble provide owned C++ results. C++ serialization uses
 a default-context temporary and returns std::string; the C output API remains
 available for context-specific allocation. examples/config_save.c serializes
 an exact large integer or saves directly when given a filename.
+
+## Periodic timers
+
+TIMER is default-on and depends on LOOP, independently of NETWORK.
+hx_os_timer_create(loop, interval_ns, callback, user, &timer, &error) starts
+a periodic schedule one positive interval after creation. The creator must
+drive the loop. Intervals use monotonic nanoseconds, without a resolution or
+hard real-time guarantee. Scheduling stays on the original time axis; missed
+periods, including time spent in a callback, coalesce into one tick per poll.
+The legacy one-shot operation and its public structure are unchanged.
+
+Callbacks run outside locks on the poller. The error pointer is borrowed until
+return: OK means a tick, a terminal clock/range error means the timer stops.
+Stop is a thread-safe request; no extra cancellation tick is delivered.
+wait_until includes the final callback and optional cleanup returning.
+An unfinished owner-thread wait is DEADLOCK. close_until is owner-only and
+pumps cancellation; TIMEOUT retains the same object for retry. Once retired,
+close consumes the object even when reporting its terminal error. Native clock
+failure after a tick may require a separate terminal error notification.
+
+The cleanup factory transfers responsibility only on acceptance. It runs once
+outside locks, before retirement is visible. A callback/cleanup cannot close
+itself synchronously (DEADLOCK); it may request stop. Keep borrowed user state
+alive through retirement. Other threads must finish using the timer before
+its owner closes it. Loop close cancels timers, but loop destruction remains
+BUSY until their objects are explicitly closed.
+
+Each active timer holds one existing loop request slot. It adds one small
+object at creation, with no allocation, thread creation or queue growth per
+tick. Due polling reads the monotonic clock and invokes a direct C callback;
+the normal request path adds a private timer pointer and a branch. Timer size/
+alignment is 40/8 on Windows x86, 64/8 on Windows/Linux x64. Existing public
+layouts are unchanged. This resource inventory is not a runtime speed claim.
+
+C++ hx::PeriodicTimer::every(owner, loop, milliseconds, lambda) is a host-owned
+facade with explicit closeUntil; destruction never waits or hides the owner's
+C pointer. Exceptions stop the timer, then rethrowCallbackError retrieves them
+after retirement. Lambda captures are released in cleanup even if the facade
+still exists. Native terminal errors are preserved by wait/close. See the
+standalone C example examples/periodic_timer.c.

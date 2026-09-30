@@ -5,6 +5,7 @@
 #include <hx/Paths.hpp>
 #include <hx/Thread.hpp>
 #include <hx/Io.hpp>
+#include <hx/Timer.hpp>
 #include <hx/SocketOptions.hpp>
 #include <hx/Text.hpp>
 #include <hx/Config.hpp>
@@ -99,6 +100,31 @@ int main(int argc, char **argv)
 	CHECK(argc == 2);
 	TestSystemInfo();
 	test_cpp_pipe();
+	if (hx_os_capabilities() & HX_OS_CAP_TIMER) {
+		hx_os_loop *loopOwner = NULL;
+		hx_os_timer *timerOwner = NULL;
+		auto loop = hx::IoLoop::create(loopOwner);
+		auto token = std::make_shared<int>(0);
+		std::weak_ptr<int> observer = token;
+		auto timer = hx::PeriodicTimer::every(timerOwner, loop,
+			std::chrono::milliseconds(1), [token]() {
+				++*token;
+				throw hx::StatusError(HX_OS_CANCELLED);
+			});
+		token.reset();
+		CHECK(!observer.expired());
+		CHECK(loop.runUntil(hx_os_deadline_after_ms(2000)) == HX_OS_OK);
+		CHECK(observer.expired());
+		try {
+			timer.rethrowCallbackError();
+			CHECK(false);
+		} catch (const hx::StatusError &error) {
+			CHECK(error.status() == HX_OS_CANCELLED);
+		}
+		CHECK(timer.closeUntil(HX_OS_DEADLINE_NOW) == HX_OS_OK);
+		CHECK(!timerOwner);
+		CHECK(loop.closeUntil(HX_OS_DEADLINE_NOW) == HX_OS_OK);
+	}
 	if (hx_os_capabilities() & HX_OS_CAP_TEXT_NUMBER) {
 		CHECK(hx::Text::parseDouble("1.5") == 1.5);
 		CHECK(hx::Text::formatDouble(1.5) == "1.5");

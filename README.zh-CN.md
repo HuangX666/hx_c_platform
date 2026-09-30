@@ -10,7 +10,7 @@
 [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md)
 [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md)
 [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md)
-[![本地 30/30 组测试通过][tests-badge]](docs/VALIDATION.zh-CN.md)
+[![本地 32/32 组测试通过][tests-badge]](docs/VALIDATION.zh-CN.md)
 [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md)
 
 系统信息可通过 C 接口或 `hx::SystemInfo` 直接查询；
@@ -137,6 +137,7 @@ EUC-KR 和 Windows 1252/932/936/949/950。
 | HX_OS_ENABLE_BOM | ON | Unicode BOM 检测与生成纯函数 |
 | HX_OS_ENABLE_TEXT_NUMBER | ON | locale 无关的 double 解析与格式化 |
 | HX_OS_ENABLE_CONFIG_SERIALIZE | ON | JSON/INI/properties 写入，依赖 CONFIG |
+| HX_OS_ENABLE_TIMER | ON | 单调周期定时器，依赖 LOOP |
 | HX_OS_ENABLE_CJSON/LIBYAML/MINIXML/INIH/TOMLC | OFF | 第三方解析适配 |
 | HX_OS_BUILD_TESTS | ON | 契约测试和公共头独立编译 |
 | HX_OS_BUILD_EXAMPLES | ON | C 示例；已启用 CXX 时包含 C++ 任务示例 |
@@ -281,5 +282,5 @@ C++ 封装按项目的 C++ 类名和方法名规范命名。
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-30%2F30%20suites%20local-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-32%2F32%20suites%20local-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey

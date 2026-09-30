@@ -394,3 +394,35 @@ C++ ConfigDocument 持有不可变引用，支持复制/移动、类型化 point
 C++ 结果。C++ 序列化用默认 context 临时缓冲区并返回 std::string；需要指定
 context 时使用 C 输出入口。examples/config_save.c 演示精确保留大整数的序列化，
 传入文件名时直接完成保存。
+
+## 周期定时器
+
+TIMER 默认开启，依赖 LOOP，可在 NETWORK 关闭时使用。
+hx_os_timer_create(loop, interval_ns, callback, user, &timer, &error)
+在创建后一个正数间隔开始触发，由创建线程驱动 loop。间隔单位为单调纳秒，
+不保证纳秒精度或硬实时截止时间。后续沿原定时间轴调度，错过的周期以及回调
+消耗的时间合并处理，每次 poll 最多为该定时器触发一次。原有一次性请求及
+公共 operation 布局保持不变。
+
+回调在 poll 线程锁外执行，error 指针仅借用到回调返回；OK 表示一次触发，
+终止性的时钟／范围错误表示停止。stop 可跨线程请求，不额外发送取消回调。
+wait_until 包含最终回调和可选 cleanup 返回；创建线程等待未完成对象返回
+DEADLOCK。close_until 仅创建线程调用，驱动取消，TIMEOUT 保留对象供重试。
+完成退役后即使报告终止错误也消费对象。触发后的时钟失败可能另行通知终止错误。
+
+带 cleanup 的创建入口仅在接受成功后接管清理职责，在锁外执行一次，清理返回后
+才发布完成。回调／cleanup 内同步关闭自身返回 DEADLOCK，可改为请求 stop。
+user 借用数据保持到退役；其他线程结束使用后才能销毁对象。loop 关闭会取消
+定时器，但仍须逐个关闭定时器对象，否则 loop_destroy 返回 BUSY。
+
+每个活动定时器占用一个现有 loop 请求名额，仅创建时增加一个小对象；每次
+触发无分配、无建线程、无队列增长。到期路径读取单调时钟并直接调用 C 回调，
+常规请求路径增加私有 timer 指针及分支。对象大小／对齐实测为 Windows x86
+40/8、Windows/Linux x64 64/8；原有公共布局不变。这是资源成本记录，
+不能代替运行性能测试。
+
+C++ hx::PeriodicTimer::every(owner, loop, milliseconds, lambda) 保留宿主
+C 指针和显式 closeUntil；析构不等待、不隐藏资源。lambda 异常请求停止，
+退役后通过 rethrowCallbackError 取回；即使封装对象仍存在，捕获数据也在
+cleanup 中释放。wait/close 保留原生终止错误。直接 C 用法见
+examples/periodic_timer.c。

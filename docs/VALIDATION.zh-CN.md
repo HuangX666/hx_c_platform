@@ -409,3 +409,16 @@ CONFIG=ON 而 CONFIG_SERIALIZE/TEXT_NUMBER=OFF 两平台各 3/3，原配置 doub
 getter 保持可用。CONFIG=OFF/TEXT_NUMBER=ON 各 3/3。Windows 的序列化开启、
 FILE_UTILS 关闭组合 4/4，包含保存明确拒绝。C99/C++11 独立头及源码规则检查
 通过；没有扩展既有公共结构体。macOS、Win7、嵌入式运行仍待补。
+
+## OBS 补齐第 11 批（2026-09-30）
+
+Windows／WSL 全量 CTest 32/32；ASan/UBSan、TSan 各 6/6，覆盖 timer、pipe、
+loop_concurrency、cpp_platform 及两个异步示例。验证固定请求预算、分配失败、
+触发时无分配、慢回调合并、跨线程 stop/wait、清理一次、自身关闭拒绝、loop
+销毁顺序、原有一次性行为，以及 C++ 异常与捕获数据退役。公共头 C99/C++11
+独立编译通过。
+
+TIMER=OFF/LOOP=OFF 两端各 4/4；另测 Windows LOOP=ON/TIMER=OFF 3/3，
+Linux NETWORK=OFF/LOOP=ON/TIMER=ON 4/4。布局探针在 Windows x86/x64、
+Linux x64 运行，timer 大小／对齐分别为 40/8、64/8、64/8。
+macOS、Win7、嵌入式运行仍待目标验证，不承诺硬截止时间。

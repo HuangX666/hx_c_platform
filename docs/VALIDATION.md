@@ -459,3 +459,17 @@ the existing config double getter. CONFIG=OFF/TEXT_NUMBER=ON passed 3/3 per host
 Windows CONFIG_SERIALIZE=ON/FILE_UTILS=OFF passed 4/4, including explicit save
 rejection. Isolated C99/C++11 headers and source rules passed. Existing public
 layouts were not expanded. macOS, Win7 and embedded runtime remain pending.
+
+## OBS completion batch 11 (2026-09-30)
+
+Windows/WSL full CTest passed 32/32. ASan/UBSan and TSan each passed 6/6
+(timer, pipe, loop_concurrency, cpp_platform and the two async examples).
+Coverage includes persistent request limits, allocator failure/no per-tick
+allocation, slow callback coalescing, worker-thread stop/wait, cleanup once,
+self-close rejection, loop destruction ordering, legacy one-shot behavior and
+C++ exception/capture retirement. Public headers compiled as C99/C++11.
+
+TIMER=OFF/LOOP=OFF passed 4/4 per host. Additional Windows LOOP=ON/TIMER=OFF
+passed 3/3; Linux NETWORK=OFF/LOOP=ON/TIMER=ON passed 4/4. Layout probes ran
+on Windows x86/x64 and Linux x64 (timer 40/8, 64/8, 64/8 bytes respectively).
+macOS, Win7 and embedded runtime remain pending; no hard deadline is claimed.

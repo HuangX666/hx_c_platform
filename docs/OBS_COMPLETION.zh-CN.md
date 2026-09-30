@@ -22,7 +22,7 @@ macOS Intel 10.13／ARM64 11.0、Windows 7 SP1 和嵌入式目标实测单独标
 | 8 | 套接字选项与定位文件 I/O | Windows/Linux 26/26；ASan 6/6；TSan 4/4；目标实测待补 |
 | 9 | 扩展 stat、目录类型、BOM | Windows/Linux 28/28；ASan 5/5；目标实测待补 |
 | 10 | 配置序列化与浮点转换 | Windows/Linux 30/30；ASan 4/4；TSan 4/4；目标实测待补 |
-| 11 | 周期定时器 | 待实现 |
+| 11 | 周期定时器 | Windows/Linux 32/32；ASan 6/6；TSan 6/6；目标实测待补 |
 | 12 | 线程池工作线程身份查询 | 待实现 |
 | 13 | GAI 与 Mach 错误文本 | 待实现 |
 | 14 | 随机、UUID、CRC32、安全清零 | 待实现 |

@@ -508,6 +508,8 @@ static size_t hx_os_loop_pump(hx_os_loop *loop, hx_os_deadline *next)
 				&request->dns_finished, HX_OS_ACQUIRE);
 		else if (kind == HX_OS_OP_POST)
 			request->ready = 1;
+		else if (request->timer)
+			completed += hx_os_i_timer_step(request);
 		else if (kind == HX_OS_OP_TIMER)
 			request->ready = request->stop_status ||
 				hx_os_deadline_expired(deadline);
@@ -521,6 +523,7 @@ static size_t hx_os_loop_pump(hx_os_loop *loop, hx_os_deadline *next)
 			++completed;
 		}
 		else {
+			deadline = request->operation.deadline;
 			if (!request->stop_status && deadline < *next)
 				*next = deadline;
 			cursor = &request->next;
@@ -640,7 +643,8 @@ hx_os_status hx_os_loop_destroy(hx_os_loop **loop, hx_os_error *error)
 		return hx_os_i_error(error, HX_OS_OK, 0, 0);
 	value = *loop;
 	if (!hx_os_loop_owner(value) || value->running || !value->closed ||
-		value->sockets || value->pipes || hx_os_loop_pending(value))
+		value->sockets || value->pipes || value->timers ||
+		hx_os_loop_pending(value))
 		return hx_os_i_error(error, HX_OS_BUSY, 0, 0);
 	network = value->network;
 	hx_os_i_loop_native_destroy(value);

@@ -4,6 +4,7 @@
 #include "net_private.h"
 #include "hx_os_loop.h"
 #include "pipe_private.h"
+#include "timer_private.h"
 
 #if defined(_WIN32)
 #include <mswsock.h>
@@ -26,6 +27,7 @@ struct hx_os_request {
 	char *owned_host;
 	hx_os_socket *accepted;
 	hx_os_pipe *pipe;
+	hx_os_timer *timer;
 	hx_os_address_list *addresses;
 	size_t budget;
 	int directions;
@@ -56,6 +58,7 @@ struct hx_os_loop {
 	hx_os_request *active;
 	hx_os_socket *sockets;
 	hx_os_pipe *pipes;
+	hx_os_timer *timers;
 	hx_os_thread_pool *dns_pool;
 	hx_os_atomic wake_pending;
 	size_t pending;

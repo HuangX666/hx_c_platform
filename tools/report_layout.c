@@ -27,5 +27,6 @@ int main(void)
 	HX_OS_LAYOUT(hx_os_loop);
 	HX_OS_LAYOUT(hx_os_request);
 	HX_OS_LAYOUT(hx_os_pipe);
+	HX_OS_LAYOUT(hx_os_timer);
 	return 0;
 }
