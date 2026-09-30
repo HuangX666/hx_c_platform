@@ -41,6 +41,9 @@ typedef struct hx_os_cfg_parser {
 	hx_os_config_error *error;
 	void *vendor_blocks;
 } hx_os_cfg_parser;
+/* Requires validated options and an empty parser. Publishes no public tree. */
+int hx_os_cfg_document_create(hx_os_cfg_parser *parser, hx_os_context *context,
+	const hx_os_config_options *options);
 int hx_os_cfg_options(hx_os_cfg_parser *parser,
 	const hx_os_config_options *input, hx_os_config_options *options);
 

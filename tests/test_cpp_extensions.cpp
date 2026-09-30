@@ -6,6 +6,7 @@
 #include <hx/TextLookup.hpp>
 #include <hx/Bitstream.hpp>
 #include <hx/Signal.hpp>
+#include <hx/Settings.hpp>
 #include <cstdio>
 #include <cstdlib>
 #include <utility>
@@ -32,6 +33,34 @@ static void hx_registry_cleanup()
 int main()
 {
 	const auto capabilities = hx_os_capabilities();
+	if (capabilities & HX_OS_CAP_SETTINGS) {
+		hx_settings *owner = NULL;
+		hx::Settings settings(owner);
+		settings.create();
+		settings.setDefaultValue("port", hx::SettingValue::integer(80));
+		CHECK(settings.integer("port") == 80);
+		settings.setInt("port", 8080).setString("label", "配置😀");
+		settings.setValue("items",
+			hx::SettingValue::array({hx::SettingValue::boolean(
+							 true),
+				hx::SettingValue::real(0.5),
+				hx::SettingValue::object({{"n",
+					hx::SettingValue::integer(7)}})}));
+		auto snapshot = settings.snapshot();
+		settings.setInt("port", 9090);
+		CHECK(snapshot.member("port").asInt() == 8080);
+		CHECK(snapshot.member("items").at(2).member("n").asInt() == 7);
+		CHECK(settings.string("label") == "配置😀");
+		std::string key("a\0b", 3), data("x\0y", 3);
+		settings.setString(key, data);
+		CHECK(settings.string(key) == data);
+		if ((capabilities & HX_OS_CAP_CONFIG) &&
+			(capabilities & HX_OS_CAP_CONFIG_SERIALIZE))
+			CHECK(!settings.json().empty());
+		CHECK(settings.closeUntil(HX_OS_DEADLINE_NOW) == HX_OS_OK &&
+			!owner);
+		CHECK(snapshot.member("label").asString() == "配置😀");
+	}
 	if (capabilities & HX_OS_CAP_SIGNALS) {
 		hx_os_signal_handler *owner = NULL;
 		hx::SignalHandler signal(owner);

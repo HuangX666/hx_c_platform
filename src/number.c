@@ -219,10 +219,12 @@ hx_os_status hx_os_text_parse_double(
 #endif
 }
 
-hx_os_status hx_os_text_format_double(
+hx_os_status hx_os_i_format_double(
 	double value, char *buffer, size_t capacity, size_t *required)
 {
-#if HX_OS_ENABLE_TEXT_NUMBER && HX_OS_HAVE_LOCAL_PRINTF
+#if HX_OS_HAVE_LOCAL_PRINTF &&                                                 \
+	(HX_OS_ENABLE_TEXT_NUMBER ||                                           \
+		(HX_OS_ENABLE_SETTINGS && HX_OS_ENABLE_CONFIG))
 	char text[128];
 	int length;
 #if FLT_RADIX == 2 && DBL_MANT_DIG == 53
@@ -267,6 +269,19 @@ hx_os_status hx_os_text_format_double(
 	if (length < 0 || (size_t)length >= sizeof(text))
 		return HX_OS_RANGE;
 	return hx_os_i_text_copy(text, buffer, capacity, required, NULL);
+#else
+	(void)value;
+	(void)buffer;
+	(void)capacity;
+	(void)required;
+	return HX_OS_NOT_SUPPORTED;
+#endif
+}
+hx_os_status hx_os_text_format_double(
+	double value, char *buffer, size_t capacity, size_t *required)
+{
+#if HX_OS_ENABLE_TEXT_NUMBER
+	return hx_os_i_format_double(value, buffer, capacity, required);
 #else
 	(void)value;
 	(void)buffer;

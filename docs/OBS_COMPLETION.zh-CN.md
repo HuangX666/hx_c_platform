@@ -34,7 +34,7 @@ macOS Intel 10.13／ARM64 11.0、Windows 7 SP1 和嵌入式目标实测单独标
 | 20 | 本地套接字与双向管道 | Windows 51/51；Linux 53/53；ASan/TSan 8/8；x86 本批通过 |
 | 21 | 注册表、电源与混淆 | Windows 57/57; Linux 59/59; ASan 8/8; x86 5/5; Apple pending |
 | 22 | 日期、翻译表、位流 | Windows 63/63; Linux 65/65; ASan 8/8; TSan 6/6; x86 7/7 |
-| 23 | 信号、可变设置、区间 profiler | Signals: Windows 66/66, Linux 68/68, ASan/TSan 5/5; settings/profiler pending |
+| 23 | 信号、可变设置、区间 profiler | Signals/settings done: Windows 70/70, Linux 72/72, ASan/TSan 8/8; profiler pending |
 | 24 | 原子与内存序 | 待实现 |
 
 基线保留既有空白格式，包括第三方许可证的原始内容。

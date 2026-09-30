@@ -769,3 +769,44 @@ are 32/8 (x64) and 20/4 (Windows x86); private slots 168/8 and 160/8; handlers
 cost 8 bytes per selected connection plus allocator overhead. No performance
 speedup is claimed. Native Apple, Win7 and embedded/musl runs remain pending.
 The settings and profiler portions of batch 23 are still pending at this commit.
+
+
+## OBS completion batch 23b: settings (2026-09-30)
+
+Windows full CTest passed 70/70; WSL Linux 72/72. Related ASan/UBSan and TSan
+passed 8/8 each (data, config, config_serialize, settings,
+settings_concurrency, settings_config, cpp_extensions, settings_example).
+Feature-off tests passed 4/4 per host; Windows x86 related tests 5/5.
+Windows SETTINGS on with CONFIG_SERIALIZE/TEXT_NUMBER/SIGNALS off passed
+8/8, including double export through the shared private formatter. Linux
+SETTINGS on with CONFIG/TEXT_NUMBER/SIGNALS/CONTAINERS off passed 8/8.
+German locale probes passed on Windows and with the existing private Linux
+locale. Core code does not change the process locale. Public C99/C++11 headers,
+source rules and whitespace checks passed; vendor files remain unchanged.
+
+Tests cover every value category, NUL and supplementary-plane keys/strings,
+duplicate keys, 64-level construction, finite-number rejection, default-only
+fallback and strict type errors. Snapshots remain unchanged and survive owner
+close; a deep copy into the default allocator stays valid after the source's
+custom context is destroyed. Creation, replacement and copy allocation failures
+roll back. Import and serialization inject failure at 32 allocation positions
+each, preserving old settings/output and freeing temporary trees. Allocation
+re-enters a getter outside locks; destruction-time deallocation re-enters and
+receives CLOSED safely. Observers re-enter reads/writes, hit their nesting bound,
+see immutable event values and detect self-close without stopping the object.
+A blocked observer proves timeout retention and retry; four writers publish
+600 updates without losing distinct keys while holding snapshots concurrently.
+
+JSON/INI/properties roundtrips, immutable source documents, explicit-only save,
+default preservation, pointer rejection, unsupported root/integer conversion,
+Unicode paths, corrupt-file rollback and native file-not-found detail were
+verified. C++ wrappers and the direct C example ran. Initial compilation found
+a test fixture missing directory_create's parents argument; the fixture now
+uses explicit nonrecursive creation. No existing directory is reused.
+
+Size/alignment on Windows/Linux x64: options 80/8, change event 48/8, value
+56/8, entry 24/8, owner 144/8. Windows x86: 44/4, 32/8, 40/8, 12/4, 80/8.
+These are new types; existing public layouts did not change. Updates copy a
+packed root/key block and retain unchanged child nodes; no performance speedup
+is claimed. Native Apple, Win7, ARM/musl and board runs remain pending.
+Profiler (23c) and atomic completion (24) remain pending at this commit.

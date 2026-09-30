@@ -12,6 +12,7 @@
 #include "hx_os_bitstream.h"
 #include "hx_os_text_lookup.h"
 #include "signal_private.h"
+#include "settings_private.h"
 #include <stdio.h>
 
 #define HX_OS_LAYOUT(type)                                                     \
@@ -65,6 +66,11 @@ int main(void)
 	HX_OS_LAYOUT(hx_os_signal_options);
 	HX_OS_LAYOUT(hx_os_signal_slot);
 	HX_OS_LAYOUT(hx_os_signal_handler);
+	HX_OS_LAYOUT(hx_settings_options);
+	HX_OS_LAYOUT(hx_settings_change);
+	HX_OS_LAYOUT(hx_settings_value);
+	HX_OS_LAYOUT(hx_settings_entry);
+	HX_OS_LAYOUT(hx_settings);
 #if defined(_WIN32)
 	HX_OS_LAYOUT(hx_os_i_duplex_file);
 #endif

@@ -1269,3 +1269,88 @@ so timeout never discards the remaining resource. Closure allocation uses the
 C++ runtime; core dispatch uses the supplied context. SIGNALS is an independent
 default-on switch, including calldata operations; pure initializers still work
 when disabled, while operational functions return NOT_SUPPORTED.
+
+
+## Mutable settings and retained snapshots (batch 23b)
+
+`hx_settings_create` makes an independent mutable object. Use typed setters,
+`set_default_*`, and typed getters directly; `examples/settings.c` shows the
+common path. Explicit and default values are separate. Only an absent literal
+key falls back; null, wrong types, invalid data and permission errors never do.
+There is no numeric-string coercion or recursive default merge. Root keys are
+literal byte keys, so a dot does not imply a path. The view APIs support empty
+and NUL-containing UTF-8 keys and values. The standard C-string conveniences
+borrow their arguments for the call. Setters copy into the object's context.
+
+Values include null, bool, signed 64-bit integer, finite double, UTF-8 string,
+array, object and borrowed user pointer. Array/object factories deep-copy inputs;
+source values can be released afterward. Immutable values have reference
+ownership and can outlive the mutable owner. String getters copy into the
+output's context; array/object access returns retained snapshots. Copying a
+settings object deep-copies both layers into the chosen context and copies no
+observer/cleanup. The allocator and its code/data must outlive every retained
+value, including snapshots surviving settings close. Retaining a user pointer
+value never extends the pointed-to object's lifetime.
+
+Concurrent reads and writes use immutable roots with brief mutex protection
+for acquisition/publication. Allocation, deallocation and observers run outside
+that mutex. A writer prepares new storage, checks the revision, and retries at
+most max_retries attempts (default 8); exhaustion returns BUSY with no lost
+update. Failures before publication leave both layers unchanged. A snapshot
+stays unchanged through subsequent writes. Effective snapshots combine missing
+default keys at the top level and can fail LIMIT if the combined tree exceeds
+its budget. Caller-retained snapshots consume caller-controlled memory.
+
+Options default to 4096 nodes, 4 MiB retained allocation cost per root, depth 32,
+64 active operations, 8 update attempts and observer depth 16. Hard maxima are
+65536 nodes, 16 MiB retained tree storage, depth 64, 65535 active operations and
+64 update attempts/observer frames. Immutable factories use those tree maxima.
+Temporary pair arrays are separately bounded by entry counts; import measures
+the complete destination before allocating children. Old roots and transient
+replacement roots may coexist. This is a per-tree budget, not a global process
+quota. Storage is allocated on demand; no background thread or queue starts.
+
+Optional create-time observers run synchronously after commit, outside locks.
+They receive a borrowed fixed-layout event with key, layer, revision and exact
+before/after values; whole-load replacement carries root values. Concurrent
+notifications may arrive out of revision order. Reentrant reads are supported,
+and nested mutation has its own bound. Observers/cleanup must return normally,
+without exceptions, longjmp, thread exit or fiber switching. Notification is
+not a recoverable failure channel and cannot roll back an observed commit.
+The C++ facade accepts this explicit C observer contract through options.
+
+`close_until` rejects new operations and waits for accepted operations and
+observers, then runs optional cleanup once. NOW/INFINITE are supported. Timeout
+preserves the object for retry; a self-close returns DEADLOCK without starting
+closure. The owner excludes other entrants and simultaneous final closes.
+Slow synchronous cleanup may exceed a deadline. No host thread is terminated
+or detached. Retained immutable snapshots remain valid after close and can keep
+the context BUSY. Join/quiesce all callers before unloading the platform or
+allocator plugin. Scalar reads allocate nothing, use two brief mutex sections
+and retain/release both roots. Queries on a retained value require no mutex.
+Updates copy one packed root/key block and retain unchanged children; explicit
+incoming composite values are copied into this context. Shutdown notifications
+are emitted only when the final active operation retires during close.
+
+Configuration integration keeps hx_config immutable. Import/load require an
+object root and support JSON-compatible kinds; XML/datetime and integer range
+failures are explicit. Load constructs the complete explicit replacement before
+publication, leaves defaults intact and preserves old state on failure. It is a
+whole-object replacement, not a merge. JSON/INI/properties serialization reuses
+the existing serializer and representability rules. Default save writes only
+explicit values. User pointers fail serialization, including NULL pointers with
+the pointer tag; use a null value for JSON null. `to_config` can export an
+explicit/default/effective snapshot; `to_json`, `load_json` and `save_json` are
+conveniences. Save uses existing atomic file publication and its durability
+limits. Config options still bound text, memory, depth and work; rich load
+errors preserve source/position and native failures. Locale-independent double
+formatting and private document construction are shared with existing config
+code; TEXT_NUMBER can be disabled while settings conversion still works.
+
+SETTINGS is independent of CONFIG, CONFIG_SERIALIZE, FILE_UTILS, SIGNALS and
+CONTAINERS. Optional integration entries return NOT_SUPPORTED when prerequisites
+are absent. The C++11 facade offers chained setters and owning std::string
+results; SettingValue provides copyable/movable RAII snapshots and array/object
+initializer lists. Mutable Settings references a host-owned handle with explicit
+closeUntil, preserving unfinished work on timeout. No C++ dependency reaches
+the C core. Public pre-existing layouts and functions remain unchanged.

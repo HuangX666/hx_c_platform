@@ -51,6 +51,8 @@ option(HX_OS_ENABLE_CALENDAR "Build locale-independent calendar helpers" ON)
 option(HX_OS_ENABLE_TEXT_LOOKUP "Build bounded translation tables" ON)
 option(HX_OS_ENABLE_BITSTREAM "Build bounded bit stream cursors" ON)
 option(HX_OS_ENABLE_SIGNALS "Build synchronous signals and parameter packs" ON)
+option(HX_OS_ENABLE_SETTINGS
+	"Build mutable settings and immutable snapshots" ON)
 set(HX_OS_ICONV_SOURCE_DIR "" CACHE PATH "Unmodified GNU libiconv source")
 set(HX_OS_SANITIZER "" CACHE STRING "address,undefined or thread")
 
@@ -189,8 +191,15 @@ add_library(hx_c_platform
 	src/registry.c src/power.c src/obfuscate.c
 	src/calendar.c src/text_lookup.c src/bitstream.c
 	src/calldata.c src/signal.c
+	src/settings.c
 	${hx_parser_sources} ${hx_parser_objects}
 	${hx_platform_sources})
+if(HX_OS_ENABLE_SETTINGS)
+	target_sources(hx_c_platform PRIVATE src/settings_value.c
+		src/settings_config.c)
+else()
+	target_sources(hx_c_platform PRIVATE src/settings_disabled.c)
+endif()
 if(HX_OS_ENABLE_CALENDAR)
 	if(WIN32)
 		target_sources(hx_c_platform PRIVATE

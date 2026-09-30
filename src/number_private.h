@@ -3,6 +3,8 @@
 #include "internal.h"
 
 int hx_os_i_number_digit(unsigned char character);
+hx_os_status hx_os_i_format_double(
+	double value, char *buffer, size_t capacity, size_t *required);
 int hx_os_i_number_valid(
 	const char *text, size_t bytes, int extended, int *real);
 hx_os_status hx_os_i_number_integer(

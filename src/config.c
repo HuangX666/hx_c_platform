@@ -366,6 +366,31 @@ static int hx_os_cfg_input(hx_os_cfg_parser *parser, int backend)
 	return 1;
 }
 
+int hx_os_cfg_document_create(hx_os_cfg_parser *parser, hx_os_context *context,
+	const hx_os_config_options *options)
+{
+	hx_os_config_document *doc;
+	size_t cost = hx_os_i_allocation_cost(sizeof(*doc), 0);
+	if (cost > options->max_memory_bytes) {
+		(void)hx_os_cfg_fail(parser, HX_OS_LIMIT, SIZE_MAX,
+			"Configuration memory limit exceeded");
+		return 0;
+	}
+	doc = hx_os_i_zero(context, sizeof(*doc));
+	if (!doc) {
+		(void)hx_os_cfg_fail(parser, HX_OS_NO_MEMORY, SIZE_MAX,
+			"Configuration allocation failed");
+		return 0;
+	}
+	doc->context = context;
+	doc->options = *options;
+	doc->options.source_name = NULL;
+	doc->memory = cost;
+	doc->references.value = 1;
+	parser->document = doc;
+	return 1;
+}
+
 hx_os_status hx_os_config_parse(hx_os_context *context, int format,
 	const void *input, size_t bytes, const hx_os_config_options *options,
 	hx_os_config_document **out, hx_os_config_error *error)
@@ -373,7 +398,7 @@ hx_os_status hx_os_config_parse(hx_os_context *context, int format,
 	hx_os_cfg_parser parser;
 	hx_os_config_options settings;
 	hx_os_config_document *doc;
-	size_t bad = 0, cost;
+	size_t bad = 0;
 	memset(&parser, 0, sizeof(parser));
 	parser.text = input ? (const char *)input : "";
 	parser.length = bytes;
@@ -401,20 +426,9 @@ hx_os_status hx_os_config_parse(hx_os_context *context, int format,
 			"Configuration input is not UTF-8");
 	if (!hx_os_cfg_input(&parser, settings.backend))
 		return parser.status;
-	cost = hx_os_i_allocation_cost(sizeof(*doc), 0);
-	if (cost > settings.max_memory_bytes)
-		return hx_os_cfg_fail(&parser, HX_OS_LIMIT, SIZE_MAX,
-			"Configuration memory limit exceeded");
-	doc = hx_os_i_zero(context, sizeof(*doc));
-	if (!doc)
-		return hx_os_cfg_fail(&parser, HX_OS_NO_MEMORY, SIZE_MAX,
-			"Configuration allocation failed");
-	doc->context = context;
-	doc->options = settings;
-	doc->options.source_name = NULL;
-	doc->memory = cost;
-	doc->references.value = 1;
-	parser.document = doc;
+	if (!hx_os_cfg_document_create(&parser, context, &settings))
+		return parser.status;
+	doc = parser.document;
 	if (bytes >= 3 && !memcmp(input, "\xef\xbb\xbf", 3))
 		parser.position = 3;
 	if (!hx_os_cfg_work(&parser, bytes) ||

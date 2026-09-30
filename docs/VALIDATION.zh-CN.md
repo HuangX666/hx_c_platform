@@ -658,3 +658,35 @@ Windows/Linux x64 和 Windows x86 的 calldata 均为 776/8；信号 options
 分别 32/8、20/4，私有槽 168/8、160/8，handler 88/8、56/8。x64 默认槽存储
 43008 字节，匹配连接快照每项 8 字节，另计分配器开销。不据此宣称性能提升。
 Apple、Win7 和嵌入式/musl 仍待原生验证；本次提交尚未完成第 23 批设置和 profiler。
+
+
+## OBS 补齐第 23b 批：设置（2026-09-30）
+
+Windows 全量 70/70，WSL Linux 72/72；ASan/UBSan、TSan 相关各 8/8，
+覆盖 data、config、config_serialize、settings、settings_concurrency、
+settings_config、cpp_extensions 和 settings_example。双端关闭模块各 4/4，
+Windows x86 相关 5/5。Windows 开启 SETTINGS、关闭 CONFIG_SERIALIZE/
+TEXT_NUMBER/SIGNALS 时 8/8，包含复用内部浮点格式化的文档导出；Linux 开启
+SETTINGS、关闭 CONFIG/TEXT_NUMBER/SIGNALS/CONTAINERS 时 8/8。Windows 与
+既有私有 Linux locale 的德语探针通过，库不修改进程 locale。公共头 C99/
+C++11、源码规范和空白检查通过，第三方文件未改。
+
+覆盖全部值类型、NUL/补充平面字符键值、重复键、64 层构造、非有限数拒绝、
+仅缺失回退及严格类型错误。快照保持旧值且能活过 owner；深复制至默认分配器
+的对象在源自定义 context 销毁后仍有效。创建、替换、copy 的分配失败回滚；
+导入和序列化分别注入 32 个分配失败位置，保留旧设置/输出并释放临时树。
+分配时重入读取证实锁外执行；销毁期间的释放回调重入安全返回 CLOSED。
+观察者重入读写、触发嵌套上限、读取稳定事件值，自身关闭返回死锁且对象
+继续可用。阻塞观察者验证超时持有/重试；四个写入线程完成 600 次更新并并发
+持有快照，各自的键未丢失。
+
+验证 JSON/INI/properties 往返、源文档不可变、默认仅保存显式层、默认值保留、
+用户指针拒绝、不可表示根/整数、Unicode 路径、损坏文件回滚和文件缺失原生
+错误。C++ 封装和 C 示例已运行。初次编译发现测试目录创建漏传 parents 参数，
+已使用显式非递归创建，不复用已有目录。
+
+Windows/Linux x64 大小/对齐：options 80/8、change 48/8、value 56/8、entry
+24/8、owner 144/8；Windows x86 分别 44/4、32/8、40/8、12/4、80/8。均为新
+类型，旧公开布局未改。更新复制紧凑根/键块、保留未改子节点，不据此声称
+运行性能提升。Apple、Win7、ARM/musl、板卡仍待原生验证；23c profiler 和第
+24 批原子完善尚未完成。
