@@ -36,7 +36,7 @@ embedded target runs remain separately identified target validation.
 | 20 | Local sockets and duplex pipes | Windows 51/51; Linux 53/53; ASan/TSan 8/8; x86 batch passed |
 | 21 | Registry, power and obfuscation | Windows 57/57; Linux 59/59; ASan 8/8; x86 5/5; Apple pending |
 | 22 | Dates, translation table and bit streams | Windows 63/63; Linux 65/65; ASan 8/8; TSan 6/6; x86 7/7 |
-| 23 | Signals, mutable settings and interval profiler | Signals/settings done: Windows 70/70, Linux 72/72, ASan/TSan 8/8; profiler pending |
+| 23 | Signals, mutable settings and interval profiler | Complete: Windows 72/72, Linux 74/74; profiler ASan/TSan 4/4; native targets pending |
 | 24 | Atomics and memory ordering | Pending |
 
 The baseline preserves pre-existing whitespace, including vendor licenses.

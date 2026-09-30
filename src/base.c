@@ -587,6 +587,9 @@ uint64_t hx_os_capabilities(void)
 #if HX_OS_ENABLE_SETTINGS
 	result |= HX_OS_CAP_SETTINGS;
 #endif
+#if HX_OS_ENABLE_PROFILER
+	result |= HX_OS_CAP_PROFILER;
+#endif
 #if HX_OS_ENABLE_LOOP_FD && HX_OS_ENABLE_LOOP && !defined(_WIN32)
 	result |= HX_OS_CAP_LOOP_FD;
 #endif

@@ -10,7 +10,7 @@
 [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md)
 [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md)
 [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md)
-[![本地 Windows 70/70、Linux 72/72 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md)
+[![本地 Windows 72/72、Linux 74/74 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md)
 [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md)
 
 系统信息可通过 C 接口或 `hx::SystemInfo` 直接查询；
@@ -23,7 +23,7 @@
 徽章依据截至 **2026-09-30** 的记录：CI 已配置，本项目尚未声明远程 CI 通过。
 **只有 C++ 封装是 header-only**，C 核心需要编译为静态库／共享库。
 C++11 已验证，尚未验证 C++14/17/20 矩阵。
-测试数字表示**Windows 70 项／Linux 72 项 CTest 入口**，不是断言数量；
+测试数字表示**Windows 72 项／Linux 74 项 CTest 入口**，不是断言数量；
 Linux 额外两项验证原生随机源故障。
 Linux 证据来自 WSL：GCC 库测试，以及 Clang 的 C++11 封装测试；
 Windows 证据来自本地 MSVC x86/x64 构建。
@@ -297,5 +297,5 @@ C++ 封装按项目的 C++ 类名和方法名规范命名。
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%2070%2F70%20Linux%2072%2F72-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%2072%2F72%20Linux%2074%2F74-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey

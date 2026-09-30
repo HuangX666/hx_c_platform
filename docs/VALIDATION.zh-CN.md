@@ -690,3 +690,20 @@ Windows/Linux x64 大小/对齐：options 80/8、change 48/8、value 56/8、entr
 类型，旧公开布局未改。更新复制紧凑根/键块、保留未改子节点，不据此声称
 运行性能提升。Apple、Win7、ARM/musl、板卡仍待原生验证；23c profiler 和第
 24 批原子完善尚未完成。
+
+## OBS 补齐第 23c 批：profiler（2026-09-30）
+
+Windows 全量 72/72，WSL Linux 74/74；ASan/UBSan 与 TSan 各 4/4，覆盖
+profiler、lifecycle、C++ 便利层和 C 示例。Windows x86 同四项通过。
+公共头 C99/C++11 独立编译通过。两平台 PROFILER=OFF 各 3/3；Linux 在关闭
+config、signals、containers 后，profiler 相关 4/4 仍通过。
+
+覆盖 201 次路径聚合、四线程并发、包含/独占耗时关系、原生 TLS 退出中止、
+主动清理、中文和名称转义、输出/记录/深度上限、原子保存、分配失败与重入、
+当前区间关闭死锁、外线程空闲 TLS 导致关闭超时及重试。预热路径重复 1000 次
+未发生 context 分配；不能推导原生运行时零活动或性能提升。
+
+Windows/Linux x64 实测 size/alignment：选项 56/8、对象 656/8、记录 96/8、
+帧 24/8、线程头 16/8；Windows x86 对应 32/4、336/4、80/8、24/8、8/4。
+名称和有界帧数组另外占用内存。热路径仍有互斥区、时钟读取、TLS 查询。
+Apple、Win7、ARM/musl 和板卡尚待验证。接下来完成第 24 批。

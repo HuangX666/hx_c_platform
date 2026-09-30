@@ -3,7 +3,7 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 	pipe_transfer positioned_read file_info config_save periodic_timer
 	random_uuid mapped_file file_attributes watch_directory capture_process
 	delayed_task duplex_message obfuscated_string localized_time
-	signal_notifications settings)
+	signal_notifications settings profile_intervals)
 	add_executable(hx_os_${example} ${example}.c)
 	target_link_libraries(hx_os_${example} PRIVATE hx_c_platform)
 	set_target_properties(hx_os_${example} PROPERTIES
@@ -124,6 +124,10 @@ endif()
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_SETTINGS)
 	add_test(NAME settings_example COMMAND hx_os_settings)
 	set_tests_properties(settings_example PROPERTIES TIMEOUT 20)
+endif()
+if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_PROFILER)
+	add_test(NAME profile_intervals_example COMMAND hx_os_profile_intervals)
+	set_tests_properties(profile_intervals_example PROPERTIES TIMEOUT 20)
 endif()
 if(CMAKE_CXX_COMPILER_LOADED)
 	add_executable(hx_os_cpp_thread_pool thread_pool.cpp)

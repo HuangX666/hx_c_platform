@@ -810,3 +810,24 @@ These are new types; existing public layouts did not change. Updates copy a
 packed root/key block and retain unchanged child nodes; no performance speedup
 is claimed. Native Apple, Win7, ARM/musl and board runs remain pending.
 Profiler (23c) and atomic completion (24) remain pending at this commit.
+
+## OBS completion batch 23c: profiler (2026-09-30)
+
+Windows full CTest passed 72/72; WSL Linux 74/74. ASan/UBSan and TSan each
+passed 4/4 related suites (profiler, lifecycle, C++ extensions, C example).
+Windows x86 passed the same four suites. Independent public C99/C++11 headers
+compiled. PROFILER=OFF passed 3/3 on both hosts; the Linux profiler also passed
+4/4 with config, signals and containers disabled.
+
+Tests cover 201 merged completed paths, four concurrent recording threads,
+inclusive/exclusive consistency, native TLS exit aborts, explicit thread
+restart, UTF-8/escaped names, output/record/depth limits, atomic save, allocator
+failure/reentry, caller-scope deadlock, foreign idle TLS close timeout and
+retry. A warmed path repeated 1000 times made zero context allocations;
+this does not measure all native runtime activity or claim a speedup.
+
+Measured size/alignment on Windows and Linux x64: options 56/8, owner 656/8,
+record 96/8, frame 24/8, thread cache header 16/8. Windows x86: 32/4, 336/4,
+80/8, 24/8, 8/4 respectively. Names and bounded frame arrays are additional.
+Hot entries/leaves retain mutex sections, clock reads and TLS lookups.
+Apple, Win7, ARM/musl and board runs remain pending. Batch 24 is next.

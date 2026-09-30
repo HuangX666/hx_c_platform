@@ -7,6 +7,7 @@
 #include <hx/Bitstream.hpp>
 #include <hx/Signal.hpp>
 #include <hx/Settings.hpp>
+#include <hx/Profiler.hpp>
 #include <cstdio>
 #include <cstdlib>
 #include <utility>
@@ -33,6 +34,22 @@ static void hx_registry_cleanup()
 int main()
 {
 	const auto capabilities = hx_os_capabilities();
+	if (capabilities & HX_OS_CAP_PROFILER) {
+		hx_os_profiler *owner = NULL;
+		hx::Profiler profiler(owner);
+		profiler.create();
+		{
+			hx::ProfileScope root(
+				profiler.native(), "cpp_root", true);
+			hx::ProfileScope child(profiler.native(), "cpp_child");
+			CHECK(child.finish() == HX_OS_OK);
+		}
+		CHECK(profiler.dump().find("\"cpp_child\"") !=
+			std::string::npos);
+		profiler.restartThread();
+		CHECK(profiler.closeUntil(HX_OS_DEADLINE_NOW) == HX_OS_OK &&
+			!owner);
+	}
 	if (capabilities & HX_OS_CAP_SETTINGS) {
 		hx_settings *owner = NULL;
 		hx::Settings settings(owner);

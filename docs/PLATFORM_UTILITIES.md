@@ -1354,3 +1354,42 @@ results; SettingValue provides copyable/movable RAII snapshots and array/object
 initializer lists. Mutable Settings references a host-owned handle with explicit
 closeUntil, preserving unfinished work on timeout. No C++ dependency reaches
 the C core. Public pre-existing layouts and functions remain unchanged.
+
+## Bounded interval profiler (batch 23c)
+
+`hx_os_profiler_create`, `start_root`, `reach`, `leave` and `dump_string`
+provide explicit interval trees without background workers or native stack
+capture. See `examples/profile_intervals.c`; C++11 offers `hx::Profiler`
+and the lexical `hx::ProfileScope` guard. Successful entries must be balanced
+on the same thread/fiber. Names are copied strict UTF-8. Identical paths merge
+across threads; inclusive/exclusive nanoseconds are monotonic wall durations,
+so overlapping threads can sum to more than elapsed process wall time.
+
+Defaults limit records to 1024, participating thread/fiber caches to 64,
+nesting to 32, names to 127 bytes, output to 4 MiB including NUL, and active
+API calls to 64. A warmed thread/path uses no new context allocations.
+Entering/leaving still uses short mutex sections, TLS access and clock reads;
+this is bounded instrumentation, not a claim of zero runtime overhead.
+
+Completed child durations subtract from the parent's exclusive duration.
+Thread exit or `restart_thread` aborts open scopes and releases that thread's
+cache without deleting completed statistics. Aborts do not invent durations.
+Counters saturate at UINT64_MAX with flag 1; clock errors set flag 2.
+A failed leave retains its frame for retry. Dump captures a consistent
+bounded snapshot, formats outside the lock and preserves caller output on
+failure. TSV names are JSON-quoted; sizes include NUL. Record-growth races
+retry eight times before BUSY. Save uses the existing atomic file publisher.
+
+Stop rejects new scopes while leave/restart/dump remain available. Close
+detaches the caller's idle cache and waits for active calls and foreign TLS
+caches. An open caller scope returns DEADLOCK without stopping. Timeout
+retains the handle. Native TLS retirement can return BUSY after the profiler
+callback finishes; retry completes key destruction. Long-lived host threads
+must call `restart_thread` or exit before plugin unload. Exclude new entrants
+and parallel final closes, and let host API calls return before unloading.
+Detected allocator reentry returns DEADLOCK; do not unwind through C calls.
+C++ scope guards must not be mixed with manual stack changes and must not
+outlive their host-owned profiler. Explicit close owns shutdown policy.
+
+PROFILER can be disabled independently. FILE_UTILS is needed only for save;
+all other profiler operations work without settings, config or signals.

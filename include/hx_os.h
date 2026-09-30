@@ -32,6 +32,7 @@
 #include "hx_os_bitstream.h"
 #include "hx_os_signal.h"
 #include "hx_settings.h"
+#include "hx_os_profiler.h"
 #include "hx_os_bits.h"
 #include "hx_os_posix.h"
 #include "hx_string.h"

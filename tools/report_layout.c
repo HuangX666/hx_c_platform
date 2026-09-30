@@ -13,6 +13,7 @@
 #include "hx_os_text_lookup.h"
 #include "signal_private.h"
 #include "settings_private.h"
+#include "profiler_private.h"
 #include <stdio.h>
 
 #define HX_OS_LAYOUT(type)                                                     \
@@ -71,6 +72,11 @@ int main(void)
 	HX_OS_LAYOUT(hx_settings_value);
 	HX_OS_LAYOUT(hx_settings_entry);
 	HX_OS_LAYOUT(hx_settings);
+	HX_OS_LAYOUT(hx_os_profiler_options);
+	HX_OS_LAYOUT(hx_os_profiler);
+	HX_OS_LAYOUT(hx_os_profile_record);
+	HX_OS_LAYOUT(hx_os_profile_frame);
+	HX_OS_LAYOUT(hx_os_profile_thread);
 #if defined(_WIN32)
 	HX_OS_LAYOUT(hx_os_i_duplex_file);
 #endif
