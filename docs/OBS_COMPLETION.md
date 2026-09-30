@@ -20,7 +20,7 @@ embedded target runs remain separately identified target validation.
 | 4 | Environment variables | Windows/Linux 18/18; ASan 4/4; native targets pending |
 | 5 | Special paths | Windows/Linux 20/20; ASan 6/6; native targets pending |
 | 6 | Thread names, stack options, semaphore | Windows/Linux 22/22; ASan 5/5; native targets pending |
-| 7 | Synchronous and asynchronous pipes | Pending |
+| 7 | Synchronous and asynchronous pipes | Windows/Linux 24/24; ASan 7/7; TSan 5/5; native targets pending |
 | 8 | Socket options and positioned file I/O | Pending |
 | 9 | Extended stat, directory kinds, BOM | Pending |
 | 10 | Configuration serialization and floating point | Pending |

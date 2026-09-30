@@ -46,15 +46,14 @@ void hx_os_i_loop_wake(hx_os_loop *loop)
 	} while (result < 0 && errno == EINTR);
 }
 
-hx_os_status hx_os_i_loop_refresh(hx_os_socket *socket, hx_os_error *error)
+hx_os_status hx_os_i_loop_watch(hx_os_loop *loop, int descriptor,
+	hx_os_i_poll_source *source, int wanted, hx_os_error *error)
 {
-	hx_os_loop *loop = socket->loop;
 	struct epoll_event event;
-	int wanted = (int)hx_os_atomic_load(&socket->pending, HX_OS_ACQUIRE);
-	if (wanted == socket->watched)
+	if (wanted == source->watched)
 		return HX_OS_OK;
 	if (!wanted) {
-		if (epoll_ctl(loop->port, EPOLL_CTL_DEL, socket->native, NULL))
+		if (epoll_ctl(loop->port, EPOLL_CTL_DEL, descriptor, NULL))
 			return hx_os_i_errno(error, errno);
 	}
 	else {
@@ -64,14 +63,20 @@ hx_os_status hx_os_i_loop_refresh(hx_os_socket *socket, hx_os_error *error)
 			event.events |= EPOLLIN;
 		if (wanted & HX_OS_WAIT_WRITE)
 			event.events |= EPOLLOUT;
-		event.data.ptr = socket;
+		event.data.ptr = source;
 		if (epoll_ctl(loop->port,
-			    socket->watched ? EPOLL_CTL_MOD : EPOLL_CTL_ADD,
-			    socket->native, &event))
+			    source->watched ? EPOLL_CTL_MOD : EPOLL_CTL_ADD,
+			    descriptor, &event))
 			return hx_os_i_errno(error, errno);
 	}
-	socket->watched = wanted;
+	source->watched = wanted;
 	return HX_OS_OK;
+}
+
+hx_os_status hx_os_i_loop_refresh(hx_os_socket *socket, hx_os_error *error)
+{
+	return hx_os_i_loop_watch(socket->loop, socket->native, &socket->source,
+		(int)hx_os_atomic_load(&socket->pending, HX_OS_ACQUIRE), error);
 }
 
 hx_os_status hx_os_i_loop_wait(
@@ -85,8 +90,8 @@ hx_os_status hx_os_i_loop_wait(
 	if (count < 0)
 		return errno == EINTR ? HX_OS_OK : hx_os_i_errno(error, errno);
 	for (i = 0; i < count; ++i) {
-		hx_os_socket *socket = events[i].data.ptr;
-		if (!socket) {
+		hx_os_i_poll_source *source = events[i].data.ptr;
+		if (!source) {
 			uint64_t value;
 			ssize_t result;
 			do {
@@ -96,11 +101,11 @@ hx_os_status hx_os_i_loop_wait(
 		}
 		else {
 			if (events[i].events & (EPOLLIN | EPOLLRDHUP))
-				socket->ready |= HX_OS_WAIT_READ;
+				source->ready |= HX_OS_WAIT_READ;
 			if (events[i].events & EPOLLOUT)
-				socket->ready |= HX_OS_WAIT_WRITE;
+				source->ready |= HX_OS_WAIT_WRITE;
 			if (events[i].events & (EPOLLERR | EPOLLHUP))
-				socket->ready |= 3;
+				source->ready |= 3;
 		}
 	}
 	return count ? HX_OS_OK : HX_OS_TIMEOUT;

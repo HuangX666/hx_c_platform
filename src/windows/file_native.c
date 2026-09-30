@@ -1,11 +1,7 @@
-#include "internal.h"
+#include "file_private.h"
 
 #include <windows.h>
 
-struct hx_os_file {
-	HANDLE handle;
-	int append;
-};
 struct hx_os_directory {
 	HANDLE handle;
 	WIN32_FIND_DATAW entry;
@@ -174,8 +170,13 @@ hx_os_status hx_os_file_read_some(hx_os_file *file, void *data, size_t bytes,
 	*completed = 0;
 	if (!bytes)
 		return hx_os_i_error(error, HX_OS_OK, 0, 0);
-	if (!ReadFile(file->handle, data, requested, &count, NULL))
-		return hx_os_i_win32(error, GetLastError());
+	if (!ReadFile(file->handle, data, requested, &count, NULL)) {
+		DWORD code = GetLastError();
+		if (file->pipe && code == ERROR_BROKEN_PIPE)
+			return hx_os_i_error(
+				error, HX_OS_EOF, HX_OS_ERROR_WIN32, code);
+		return hx_os_i_win32(error, code);
+	}
 	*completed = count;
 	return hx_os_i_error(error, count ? HX_OS_OK : HX_OS_EOF, 0, 0);
 }
@@ -199,8 +200,14 @@ hx_os_status hx_os_file_write_some(hx_os_file *file, const void *data,
 	 * End-of-file offsets preserve append while GENERIC_WRITE permits sync.
 	 */
 	if (!WriteFile(file->handle, data, requested, &count,
-		    file->append ? &position : NULL))
-		return hx_os_i_win32(error, GetLastError());
+		    file->append ? &position : NULL)) {
+		DWORD code = GetLastError();
+		if (file->pipe &&
+			(code == ERROR_BROKEN_PIPE || code == ERROR_NO_DATA))
+			return hx_os_i_error(
+				error, HX_OS_CLOSED, HX_OS_ERROR_WIN32, code);
+		return hx_os_i_win32(error, code);
+	}
 	*completed = count;
 	return hx_os_i_error(error, count ? HX_OS_OK : HX_OS_IO_ERROR, 0, 0);
 }
@@ -209,6 +216,8 @@ hx_os_status hx_os_file_sync(hx_os_file *file, hx_os_error *error)
 {
 	if (!file)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (file->pipe)
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 	return hx_os_i_win32(
 		error, FlushFileBuffers(file->handle) ? 0 : GetLastError());
 }
@@ -232,6 +241,8 @@ hx_os_status hx_os_file_size(
 	LARGE_INTEGER value;
 	if (!file || !size)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (file->pipe)
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 	if (!GetFileSizeEx(file->handle, &value))
 		return hx_os_i_win32(error, GetLastError());
 	*size = (uint64_t)value.QuadPart;
@@ -248,6 +259,8 @@ hx_os_status hx_os_file_seek(hx_os_file *file, int64_t offset, int origin,
 				   : FILE_END;
 	if (!file || !position || origin < 0 || origin > 2)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (file->pipe)
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 	distance.QuadPart = offset;
 	if (!SetFilePointerEx(file->handle, distance, &result, method))
 		return hx_os_i_win32(error, GetLastError());
@@ -261,6 +274,8 @@ hx_os_status hx_os_file_truncate(
 	FILE_END_OF_FILE_INFO info;
 	if (!file)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (file->pipe)
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 	if (size > INT64_MAX)
 		return hx_os_i_error(error, HX_OS_RANGE, 0, 0);
 	info.EndOfFile.QuadPart = (LONGLONG)size;

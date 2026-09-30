@@ -9,6 +9,7 @@
 #cmakedefine01 HX_OS_ENABLE_ENV
 #cmakedefine01 HX_OS_ENABLE_PATHS
 #cmakedefine01 HX_OS_ENABLE_THREAD_EX
+#cmakedefine01 HX_OS_ENABLE_PIPE
 #cmakedefine01 HX_OS_HAVE_PTHREAD_TRYJOIN
 #cmakedefine01 HX_OS_HAVE_TIMED_JOIN
 #cmakedefine01 HX_OS_HAVE_ICONV

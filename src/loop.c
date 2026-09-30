@@ -26,13 +26,14 @@ void hx_os_operation_init(hx_os_operation *operation, int kind)
 	operation->deadline = HX_OS_DEADLINE_INFINITE;
 }
 
-hx_os_status hx_os_loop_create(hx_os_network *network,
-	const hx_os_loop_options *input, hx_os_loop **out, hx_os_error *error)
+static hx_os_status hx_os_loop_create_internal(hx_os_context *context,
+	hx_os_network *network, const hx_os_loop_options *input,
+	hx_os_loop **out, hx_os_error *error)
 {
 	hx_os_loop_options options;
 	hx_os_loop *loop;
 	hx_os_status status;
-	if (!network || !out)
+	if (!out)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 	*out = NULL;
 	hx_os_loop_options_init(&options);
@@ -46,11 +47,11 @@ hx_os_status hx_os_loop_create(hx_os_network *network,
 		options.dns_threads > 64 ||
 		(options.dns_threads && !options.dns_queue_capacity))
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
-	loop = hx_os_i_zero(network->context, sizeof(*loop));
+	loop = hx_os_i_zero(context, sizeof(*loop));
 	if (!loop)
 		return hx_os_i_error(error, HX_OS_NO_MEMORY, 0, 0);
 	loop->network = network;
-	loop->context = network->context;
+	loop->context = context;
 	loop->options = options;
 	loop->owner = hx_os_thread_id();
 	status = hx_os_mutex_create(loop->context, 0, &loop->mutex, error);
@@ -61,9 +62,34 @@ hx_os_status hx_os_loop_create(hx_os_network *network,
 		hx_os_memory_free(loop);
 		return status;
 	}
-	(void)hx_os_atomic_fetch_add(&network->objects, 1, HX_OS_RELAXED);
+	if (network)
+		(void)hx_os_atomic_fetch_add(
+			&network->objects, 1, HX_OS_RELAXED);
 	*out = loop;
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+}
+
+hx_os_status hx_os_loop_create(hx_os_network *network,
+	const hx_os_loop_options *options, hx_os_loop **out, hx_os_error *error)
+{
+#if HX_OS_ENABLE_NETWORK
+	if (!network)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	return hx_os_loop_create_internal(
+		network->context, network, options, out, error);
+#else
+	(void)network;
+	(void)options;
+	if (out)
+		*out = NULL;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
+}
+
+hx_os_status hx_os_loop_create_local(hx_os_context *context,
+	const hx_os_loop_options *options, hx_os_loop **out, hx_os_error *error)
+{
+	return hx_os_loop_create_internal(context, NULL, options, out, error);
 }
 
 void hx_os_request_retain(hx_os_request *request)
@@ -150,6 +176,8 @@ static hx_os_status hx_os_loop_validate(hx_os_loop *loop,
 		return HX_OS_INVALID;
 	if (kind != HX_OS_OP_POST && !hx_os_loop_owner(loop))
 		return HX_OS_BUSY;
+	if (!loop->network && kind >= HX_OS_OP_CONNECT)
+		return HX_OS_NOT_SUPPORTED;
 	if (kind == HX_OS_OP_RESOLVE) {
 		size_t length = 0;
 		if (!op->host || !op->host[0] ||
@@ -201,9 +229,9 @@ static hx_os_status hx_os_loop_validate(hx_os_loop *loop,
 	return HX_OS_OK;
 }
 
-hx_os_status hx_os_loop_submit(hx_os_loop *loop, const hx_os_operation *op,
-	hx_os_completion_fn completion, void *user, hx_os_request **out,
-	hx_os_error *error)
+hx_os_status hx_os_i_loop_submit(hx_os_loop *loop, const hx_os_operation *op,
+	hx_os_pipe *pipe, hx_os_completion_fn completion, void *user,
+	hx_os_request **out, hx_os_error *error)
 {
 	hx_os_request *request = NULL;
 	hx_os_status status;
@@ -213,7 +241,21 @@ hx_os_status hx_os_loop_submit(hx_os_loop *loop, const hx_os_operation *op,
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 	hx_os_error_clear(error);
 	*out = NULL;
-	status = hx_os_loop_validate(loop, op, &budget, &directions);
+	if (pipe) {
+		budget = op->bytes;
+		directions = op->kind == HX_OS_I_OP_PIPE_READ
+			? HX_OS_WAIT_READ
+			: HX_OS_WAIT_WRITE;
+		status = !hx_os_loop_owner(loop) ? HX_OS_BUSY
+			: pipe->closing		 ? HX_OS_CLOSED
+			: (pipe->loop && pipe->loop != loop) ||
+				pipe->direction != directions
+			? HX_OS_INVALID
+			: pipe->request ? HX_OS_BUSY
+					: HX_OS_OK;
+	}
+	else
+		status = hx_os_loop_validate(loop, op, &budget, &directions);
 	if (status != HX_OS_OK)
 		return hx_os_i_error(error, status, 0, 0);
 	(void)hx_os_mutex_lock(loop->mutex, NULL);
@@ -237,6 +279,7 @@ hx_os_status hx_os_loop_submit(hx_os_loop *loop, const hx_os_operation *op,
 	}
 	hx_os_atomic_store(&request->references, 1, HX_OS_RELAXED);
 	request->operation = *op;
+	request->pipe = pipe;
 	request->loop = loop;
 	request->budget = budget;
 	request->directions = directions;
@@ -248,7 +291,8 @@ hx_os_status hx_os_loop_submit(hx_os_loop *loop, const hx_os_operation *op,
 			loop->context, 1, 0, &request->finished, error);
 	if (status != HX_OS_OK)
 		goto rejected;
-	if ((op->kind == HX_OS_OP_WRITE || op->kind == HX_OS_OP_SEND_TO) &&
+	if ((op->kind == HX_OS_OP_WRITE || op->kind == HX_OS_OP_SEND_TO ||
+		    op->kind == HX_OS_I_OP_PIPE_WRITE) &&
 		op->send_mode == HX_OS_SEND_COPY && op->bytes) {
 		request->owned_data =
 			hx_os_i_alloc(loop->context, op->bytes, 0);
@@ -271,7 +315,18 @@ hx_os_status hx_os_loop_submit(hx_os_loop *loop, const hx_os_operation *op,
 		if (status != HX_OS_OK)
 			goto rejected;
 	}
-	if (directions) {
+	if (pipe) {
+		if (!pipe->loop) {
+			status = hx_os_i_pipe_attach(loop, pipe, error);
+			if (status != HX_OS_OK)
+				goto rejected;
+			pipe->loop = loop;
+			pipe->next = loop->pipes;
+			loop->pipes = pipe;
+		}
+		pipe->request = request;
+	}
+	else if (directions) {
 		if (!op->socket->loop) {
 			status = hx_os_i_loop_attach(loop, op->socket, error);
 			if (status != HX_OS_OK)
@@ -307,6 +362,14 @@ rejected:
 	if (error && error->status == status)
 		return status;
 	return hx_os_i_error(error, status, 0, 0);
+}
+
+hx_os_status hx_os_loop_submit(hx_os_loop *loop, const hx_os_operation *op,
+	hx_os_completion_fn completion, void *user, hx_os_request **out,
+	hx_os_error *error)
+{
+	return hx_os_i_loop_submit(
+		loop, op, NULL, completion, user, out, error);
 }
 
 void hx_os_request_cancel(hx_os_request *request)
@@ -389,7 +452,12 @@ static void hx_os_loop_finish(hx_os_loop *loop, hx_os_request *request)
 		hx_os_address_list_destroy(request->addresses);
 		request->addresses = NULL;
 	}
-	if (request->directions) {
+	if (request->pipe) {
+		request->pipe->request = NULL;
+		(void)hx_os_i_pipe_refresh(request->pipe, NULL);
+		request->pipe = NULL;
+	}
+	else if (request->directions) {
 		(void)hx_os_atomic_fetch_add(
 			&request->operation.socket->pending,
 			-request->directions, HX_OS_RELEASE);
@@ -443,6 +511,8 @@ static size_t hx_os_loop_pump(hx_os_loop *loop, hx_os_deadline *next)
 		else if (kind == HX_OS_OP_TIMER)
 			request->ready = request->stop_status ||
 				hx_os_deadline_expired(deadline);
+		else if (request->pipe)
+			hx_os_i_pipe_step(request);
 		else
 			hx_os_i_loop_step(request);
 		if (request->ready) {
@@ -570,13 +640,15 @@ hx_os_status hx_os_loop_destroy(hx_os_loop **loop, hx_os_error *error)
 		return hx_os_i_error(error, HX_OS_OK, 0, 0);
 	value = *loop;
 	if (!hx_os_loop_owner(value) || value->running || !value->closed ||
-		value->sockets || hx_os_loop_pending(value))
+		value->sockets || value->pipes || hx_os_loop_pending(value))
 		return hx_os_i_error(error, HX_OS_BUSY, 0, 0);
 	network = value->network;
 	hx_os_i_loop_native_destroy(value);
 	hx_os_mutex_destroy(value->mutex);
 	hx_os_memory_free(value);
 	*loop = NULL;
-	(void)hx_os_atomic_fetch_add(&network->objects, -1, HX_OS_RELEASE);
+	if (network)
+		(void)hx_os_atomic_fetch_add(
+			&network->objects, -1, HX_OS_RELEASE);
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }

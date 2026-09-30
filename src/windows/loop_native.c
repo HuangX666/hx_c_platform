@@ -42,6 +42,7 @@ hx_os_status hx_os_i_loop_refresh(hx_os_socket *socket, hx_os_error *error)
 	return HX_OS_OK;
 }
 
+#if HX_OS_ENABLE_NETWORK
 static int hx_os_loop_connect(hx_os_request *request)
 {
 	hx_os_socket *socket = request->operation.socket;
@@ -244,6 +245,14 @@ void hx_os_i_loop_step(hx_os_request *request)
 	if (!request->started)
 		hx_os_loop_start_native(request);
 }
+#else
+void hx_os_i_loop_step(hx_os_request *request)
+{
+	(void)hx_os_i_error(
+		&request->completion.error, HX_OS_NOT_SUPPORTED, 0, 0);
+	request->ready = 1;
+}
+#endif
 
 hx_os_status hx_os_i_loop_wait(
 	hx_os_loop *loop, hx_os_deadline deadline, hx_os_error *error)

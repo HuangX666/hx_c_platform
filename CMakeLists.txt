@@ -12,8 +12,7 @@ option(HX_OS_BUILD_TESTS "Build contract tests" ON)
 option(HX_OS_BUILD_EXAMPLES "Build standalone C examples" ON)
 option(HX_OS_BUILD_BENCHMARKS "Build development microbenchmarks" OFF)
 option(HX_OS_ENABLE_NETWORK "Build native networking" ON)
-option(HX_OS_ENABLE_LOOP "Build asynchronous event loop"
-	${HX_OS_ENABLE_NETWORK})
+option(HX_OS_ENABLE_LOOP "Build asynchronous event loop" ON)
 option(HX_OS_ENABLE_THREAD_POOL "Build bounded task pools" ON)
 option(HX_OS_ENABLE_MEMORY_POOLS "Build memory pools and arena" ON)
 option(HX_OS_ENABLE_ICONV "Build legacy text encoding adapter" OFF)
@@ -25,12 +24,9 @@ option(HX_OS_ENABLE_FILE_UTILS "Build file and path conveniences" ON)
 option(HX_OS_ENABLE_ENV "Build UTF-8 environment access" ON)
 option(HX_OS_ENABLE_PATHS "Build special path queries" ON)
 option(HX_OS_ENABLE_THREAD_EX "Build thread options, names and semaphore" ON)
+option(HX_OS_ENABLE_PIPE "Build synchronous and asynchronous pipes" ON)
 set(HX_OS_ICONV_SOURCE_DIR "" CACHE PATH "Unmodified GNU libiconv source")
 set(HX_OS_SANITIZER "" CACHE STRING "address,undefined or thread")
-
-if(HX_OS_ENABLE_LOOP AND NOT HX_OS_ENABLE_NETWORK)
-	message(FATAL_ERROR "HX_OS_ENABLE_LOOP requires HX_OS_ENABLE_NETWORK")
-endif()
 
 find_package(Threads REQUIRED)
 set(HX_OS_PLATFORM_NAME "${CMAKE_SYSTEM_NAME}")
@@ -149,7 +145,7 @@ add_library(hx_c_platform
 	src/config.c src/config_values.c
 	src/containers.c
 	src/sysinfo.c src/library.c src/path.c src/env.c src/paths.c
-	src/thread_extra.c
+	src/thread_extra.c src/pipe.c
 	${hx_parser_sources} ${hx_parser_objects}
 	${hx_platform_sources})
 if(HX_OS_ENABLE_SYSINFO)
@@ -159,6 +155,13 @@ if(HX_OS_ENABLE_SYSINFO)
 		target_link_libraries(hx_c_platform PRIVATE psapi)
 	else()
 		target_sources(hx_c_platform PRIVATE src/posix/sysinfo_native.c)
+	endif()
+endif()
+if(HX_OS_ENABLE_PIPE)
+	if(WIN32)
+		target_sources(hx_c_platform PRIVATE src/windows/pipe_native.c)
+	else()
+		target_sources(hx_c_platform PRIVATE src/posix/pipe_native.c)
 	endif()
 endif()
 if(HX_OS_ENABLE_LIBRARY OR HX_OS_ENABLE_PATHS)

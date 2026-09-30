@@ -1,5 +1,6 @@
 foreach(example IN ITEMS hello async_timer configuration containers system_info
-	load_plugin text_file environment special_paths thread_options)
+	load_plugin text_file environment special_paths thread_options
+	pipe_transfer)
 	add_executable(hx_os_${example} ${example}.c)
 	target_link_libraries(hx_os_${example} PRIVATE hx_c_platform)
 	set_target_properties(hx_os_${example} PROPERTIES
@@ -32,6 +33,10 @@ endif()
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_THREAD_EX)
 	add_test(NAME thread_options_example COMMAND hx_os_thread_options)
 	set_tests_properties(thread_options_example PROPERTIES TIMEOUT 20)
+endif()
+if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_PIPE AND HX_OS_ENABLE_LOOP)
+	add_test(NAME pipe_transfer_example COMMAND hx_os_pipe_transfer)
+	set_tests_properties(pipe_transfer_example PROPERTIES TIMEOUT 20)
 endif()
 if(CMAKE_CXX_COMPILER_LOADED)
 	add_executable(hx_os_cpp_thread_pool thread_pool.cpp)

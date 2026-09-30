@@ -1,4 +1,4 @@
-#include "internal.h"
+#include "file_private.h"
 
 #include <dirent.h>
 #include <fcntl.h>
@@ -10,9 +10,6 @@
 #include <sys/syscall.h>
 #endif
 
-struct hx_os_file {
-	int descriptor;
-};
 struct hx_os_directory {
 	DIR *native;
 	struct dirent *pending;
@@ -97,6 +94,11 @@ hx_os_status hx_os_file_write_some(hx_os_file *file, const void *data,
 		return hx_os_i_error(error, HX_OS_OK, 0, 0);
 	if (bytes > INT_MAX)
 		bytes = INT_MAX;
+#if HX_OS_ENABLE_PIPE
+	if (file->pipe)
+		return hx_os_i_pipe_write(
+			file->descriptor, data, bytes, completed, error);
+#endif
 	do {
 		count = write(file->descriptor, data, bytes);
 	} while (count < 0 && errno == EINTR);
@@ -111,6 +113,8 @@ hx_os_status hx_os_file_sync(hx_os_file *file, hx_os_error *error)
 	int result;
 	if (!file)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (file->pipe)
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 	do {
 		result = fsync(file->descriptor);
 	} while (result && errno == EINTR);
@@ -136,6 +140,8 @@ hx_os_status hx_os_file_size(
 	struct stat info;
 	if (!file || !size)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (file->pipe)
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 	if (fstat(file->descriptor, &info))
 		return hx_os_i_errno(error, errno);
 	if (info.st_size < 0)
@@ -151,6 +157,8 @@ hx_os_status hx_os_file_seek(hx_os_file *file, int64_t offset, int origin,
 	int native_origin;
 	if (!file || !position || origin < 0 || origin > 2)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (file->pipe)
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 	if ((int64_t)(off_t)offset != offset)
 		return hx_os_i_error(error, HX_OS_RANGE, 0, 0);
 	native_origin = origin == 0 ? SEEK_SET
@@ -169,6 +177,8 @@ hx_os_status hx_os_file_truncate(
 	int result;
 	if (!file)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (file->pipe)
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 	if (size > INT64_MAX || (off_t)size < 0 ||
 		(uint64_t)(off_t)size != size)
 		return hx_os_i_error(error, HX_OS_RANGE, 0, 0);

@@ -42,24 +42,29 @@ void hx_os_i_loop_wake(hx_os_loop *loop)
 	} while (result < 0 && errno == EINTR);
 }
 
-hx_os_status hx_os_i_loop_refresh(hx_os_socket *socket, hx_os_error *error)
+hx_os_status hx_os_i_loop_watch(hx_os_loop *loop, int descriptor,
+	hx_os_i_poll_source *source, int wanted, hx_os_error *error)
 {
-	hx_os_loop *loop = socket->loop;
-	int wanted = (int)hx_os_atomic_load(&socket->pending, HX_OS_ACQUIRE);
 	int direction;
 	for (direction = 1; direction <= 2; direction *= 2) {
 		struct kevent event;
-		if (!((wanted ^ socket->watched) & direction))
+		if (!((wanted ^ source->watched) & direction))
 			continue;
-		EV_SET(&event, (uintptr_t)socket->native,
+		EV_SET(&event, (uintptr_t)descriptor,
 			direction == 1 ? EVFILT_READ : EVFILT_WRITE,
 			(wanted & direction) ? EV_ADD : EV_DELETE, 0, 0,
-			socket);
+			source);
 		if (kevent(loop->port, &event, 1, NULL, 0, NULL))
 			return hx_os_i_errno(error, errno);
-		socket->watched ^= direction;
+		source->watched ^= direction;
 	}
 	return HX_OS_OK;
+}
+
+hx_os_status hx_os_i_loop_refresh(hx_os_socket *socket, hx_os_error *error)
+{
+	return hx_os_i_loop_watch(socket->loop, socket->native, &socket->source,
+		(int)hx_os_atomic_load(&socket->pending, HX_OS_ACQUIRE), error);
 }
 
 hx_os_status hx_os_i_loop_wait(
@@ -77,15 +82,15 @@ hx_os_status hx_os_i_loop_wait(
 	if (count < 0)
 		return errno == EINTR ? HX_OS_OK : hx_os_i_errno(error, errno);
 	for (i = 0; i < count; ++i) {
-		hx_os_socket *socket = events[i].udata;
-		if (!socket)
+		hx_os_i_poll_source *source = events[i].udata;
+		if (!source)
 			continue;
 		if (events[i].filter == EVFILT_READ)
-			socket->ready |= HX_OS_WAIT_READ;
+			source->ready |= HX_OS_WAIT_READ;
 		if (events[i].filter == EVFILT_WRITE)
-			socket->ready |= HX_OS_WAIT_WRITE;
+			source->ready |= HX_OS_WAIT_WRITE;
 		if (events[i].flags & EV_ERROR)
-			socket->ready |= 3;
+			source->ready |= 3;
 	}
 	return count ? HX_OS_OK : HX_OS_TIMEOUT;
 }

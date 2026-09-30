@@ -10,6 +10,7 @@ hx_os_status hx_os_i_loop_attach(
 
 void hx_os_i_loop_step(hx_os_request *request)
 {
+#if HX_OS_ENABLE_NETWORK
 	hx_os_operation *op = &request->operation;
 	hx_os_socket *socket = op->socket;
 	hx_os_status status;
@@ -19,9 +20,9 @@ void hx_os_i_loop_step(hx_os_request *request)
 		request->ready = 1;
 		return;
 	}
-	if (was_started && !(socket->ready & request->directions))
+	if (was_started && !(socket->source.ready & request->directions))
 		return;
-	socket->ready &= ~request->directions;
+	socket->source.ready &= ~request->directions;
 	request->started = 1;
 	switch (op->kind) {
 	case HX_OS_OP_CONNECT:
@@ -70,4 +71,9 @@ void hx_os_i_loop_step(hx_os_request *request)
 			return;
 	}
 	request->ready = 1;
+#else
+	(void)hx_os_i_error(
+		&request->completion.error, HX_OS_NOT_SUPPORTED, 0, 0);
+	request->ready = 1;
+#endif
 }

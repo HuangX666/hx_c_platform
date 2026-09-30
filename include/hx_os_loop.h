@@ -68,6 +68,12 @@ HX_OS_API void HX_OS_CALL hx_os_operation_init(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_loop_create(hx_os_network *network,
 	const hx_os_loop_options *options, hx_os_loop **out,
 	hx_os_error *error);
+/* Context-only loop for posts, timers and local I/O. No network/DNS startup.
+ * Network operations require the original network-backed factory.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_loop_create_local(
+	hx_os_context *context, const hx_os_loop_options *options,
+	hx_os_loop **out, hx_os_error *error);
 /*
  * Accepted operations call completion once on the polling thread, never
  * inline in submit. Rejection transfers nothing and calls no callback.

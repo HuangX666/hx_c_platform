@@ -10,7 +10,7 @@
 [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md)
 [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md)
 [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md)
-[![本地 22/22 组测试通过][tests-badge]](docs/VALIDATION.zh-CN.md)
+[![本地 24/24 组测试通过][tests-badge]](docs/VALIDATION.zh-CN.md)
 [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md)
 
 系统信息可通过 C 接口或 `hx::SystemInfo` 直接查询；
@@ -118,7 +118,7 @@ EUC-KR 和 Windows 1252/932/936/949/950。
 |---|---|---|
 | BUILD_SHARED_LIBS | OFF | 构建共享库 |
 | HX_OS_ENABLE_NETWORK | ON | 原生套接字和网络生命周期 |
-| HX_OS_ENABLE_LOOP | NETWORK | 异步 I/O、定时器、投递及 DNS 接入 |
+| HX_OS_ENABLE_LOOP | ON | 异步 I/O、定时器、投递及可选 DNS 接入 |
 | HX_OS_ENABLE_THREAD_POOL | ON | 有界线程池；异步 DNS 需要它 |
 | HX_OS_ENABLE_MEMORY_POOLS | ON | 内存池、对象池、arena |
 | HX_OS_ENABLE_ICONV | OFF | 传统编码后端 |
@@ -130,6 +130,7 @@ EUC-KR 和 Windows 1252/932/936/949/950。
 | HX_OS_ENABLE_ENV | ON | UTF-8 环境变量读写 |
 | HX_OS_ENABLE_PATHS | ON | UTF-8 用户、共享、临时与模块路径 |
 | HX_OS_ENABLE_THREAD_EX | ON | 栈选项、线程命名与有界信号量 |
+| HX_OS_ENABLE_PIPE | ON | 阻塞管道；LOOP 开启时提供异步端点 |
 | HX_OS_ENABLE_CJSON/LIBYAML/MINIXML/INIH/TOMLC | OFF | 第三方解析适配 |
 | HX_OS_BUILD_TESTS | ON | 契约测试和公共头独立编译 |
 | HX_OS_BUILD_EXAMPLES | ON | C 示例；已启用 CXX 时包含 C++ 任务示例 |
@@ -138,7 +139,8 @@ EUC-KR 和 Windows 1252/932/936/949/950。
 
 关闭模块后，CMake 排除其实现源码并保留 ABI 入口；资源创建返回
 NOT_SUPPORTED，能力位同步关闭。关闭线程池后不能使用异步 DNS，
-其他事件循环能力仍可用。LOOP=ON 与 NETWORK=OFF 的组合会在配置时报错。
+其他事件循环能力仍可用。关闭 NETWORK 时可以创建本地 loop 使用投递、定时器
+和管道，无需进行网络初始化。
 
 ## 字符串与编码
 
@@ -273,5 +275,5 @@ C++ 封装按项目的 C++ 类名和方法名规范命名。
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-22%2F22%20suites%20local-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-24%2F24%20suites%20local-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey

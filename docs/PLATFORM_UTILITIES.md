@@ -285,3 +285,68 @@ and destroys on success, retains ownership on timeout, and never waits or
 terminates from its destructor. Callback data remains borrowed until join.
 `examples/thread_options.c` shows stack selection and an explicit close policy;
 small embedded stacks must account for callbacks, TLS and sanitizer overhead.
+
+## Pipes and local I/O loops
+
+`hx_os_pipe_pair_anonymous` creates two synchronous file endpoints. Use the
+normal file read/write/close calls. Both platforms use blocking byte streams;
+no waiter thread is created. Disk-only operations report NOT_SUPPORTED. A zero
+byte operation succeeds; after all writers close, buffered bytes are consumed
+before EOF. Broken writes report CLOSED with the native code. Destruction must
+not race a synchronous call. Linux uses pipe2 with CLOEXEC; macOS sets CLOEXEC
+with fcntl, so the host must serialize concurrent fork/exec during creation.
+
+For deadlines and cancellation use `hx_os_pipe_pair_async` and
+`hx_os_pipe_read_async` / `hx_os_pipe_write_async`. Writes copy by default and
+complete all bytes; extended submit can borrow. Reads complete with available
+bytes or EOF. The new pipe operation has a capacity-aware initializer and does
+not change hx_os_operation. Bytes are raw, without automatic text decoding.
+`hx_os_pipe_pair_child` creates an async parent and a synchronous child endpoint
+in either direction, initially non-inheritable; process spawning later chooses
+what to duplicate into the child.
+
+`hx_os_loop_create_local(NULL, NULL, &loop, &error)` needs no network object or
+network initialization. It accepts posts, timers and local I/O; network/DNS
+operations report NOT_SUPPORTED. The original network factory remains valid.
+LOOP and NETWORK are independently selectable. PIPE without LOOP still supports
+synchronous endpoints; ASYNC_PIPE capability requires both PIPE and LOOP.
+
+One request per pipe endpoint is accepted, on the loop creator thread. Pipe
+requests share the loop's max_requests and max_pending_bytes, including borrowed
+buffer sizes. Rejection retains nothing and invokes no callback. Completion is
+exactly once on the poller, never inline. Request waiting includes callback
+return; it does not drive the loop. POSIX uses nonblocking descriptors and the
+same epoll/kqueue registrations as sockets. Windows uses private, one-instance,
+byte-mode named pipes with overlapped parent endpoints and IOCP; anonymous
+CreatePipe handles remain synchronous. No hard deadline is promised.
+
+close_until marks the endpoint closing, requests cancellation and drives native
+retirement. Timeout retains the pointer, native state and buffers for retry.
+Other loop callbacks can run during close; waiting for unfinished work in a
+callback or reentering an active close returns DEADLOCK. Close attached pipes
+before destroying their loop. Final native close consumes the endpoint even
+on a native close error; never retry that consumed pointer. Closing the loop
+cancels requests but does not implicitly free attached endpoints.
+
+POSIX pipe writes temporarily block SIGPIPE only in the calling thread, preserve
+previously pending SIGPIPE, consume a newly generated broken-write signal and
+restore the original mask. No process-level handler is installed. The host
+must not concurrently consume this thread's pending SIGPIPE through another
+signal-waiting mechanism. Cancellation can report native partial byte progress;
+it does not promise that a failed/cancelled write delivered zero bytes.
+
+C++11 `hx::Pipes::anonymous()` returns a pair of RAII File objects. `IoLoop` and
+`AsyncPipe` preserve explicit C owner variables for retryable close. `IoRequest`
+owns a reference; dropping it neither cancels the request nor destroys borrowed
+read/capture data. Lambda callbacks are copied into retained C++ state. Exceptions
+are caught at the C boundary and can be rethrown with rethrowCallbackError after
+completion. Those callback/capture allocations use the C++ allocator and lie
+outside the C buffer budget; the accepted request count still bounds their
+number. C entry points do not add those allocations.
+
+`examples/pipe_transfer.c` performs a complete transfer with a local loop and
+explicit shutdown. Existing regular-file I/O adds a pipe-kind branch, without
+new allocations or locks. Socket poll records now share a two-int readiness
+record; no extra socket allocation/syscall is introduced. Async pipes reuse
+request allocation/queue locking; default writes add their owned copy. POSIX
+writes additionally perform thread signal-mask/pending-signal operations.

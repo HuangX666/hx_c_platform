@@ -329,3 +329,32 @@ thread_extra、cpp_platform、thread_options_example）。两平台 THREAD_EX=OF
 实际栈预留、UTF-8 名称截断、跨线程命名、信号量溢出不部分修改、截止时间超时
 和后续重试等待退出。默认创建路径不增加锁或分配。Win7 命名回退和 Apple 行为
 仍需目标环境运行验证。
+
+## OBS 补齐第 7 批（2026-09-30）
+
+Windows／WSL 全量各 24/24；相关 ASan/UBSan 7/7、TSan 5/5。包含管道、事件循环
+并发、C++ 回调和 C 传输示例，ASan 另覆盖文件与网络回归。验证复制/借用写入、
+EOF/断开、保留已有待决 SIGPIPE、分配失败回收、共用容量、跨线程取消与完成竞争、
+零操作截止时间、回调重入及关闭重试。两个平台运行同一份 C 传输示例。
+
+两平台 NETWORK=OFF：LOOP=ON/PIPE=ON 各 4/4，LOOP=ON/PIPE=OFF 各 3/3，
+LOOP=OFF/PIPE=ON 各 3/3，均编译 C99/C++11 独立公共头。Windows 最小配置的一次
+增量链接对 pipe_native 报 LNK1236，保持源码不变重新链接该目标后通过，其后 3/3
+测试通过；该次链接失败的根因尚未确定。
+
+启用 HX_OS_BUILD_BENCHMARKS 后构建并运行 hx_os_layout_report，实测大小/对齐
+（字节）如下：
+
+| 对象 | MSVC x86 | MSVC x64 | Linux x64 |
+| --- | --- | --- | --- |
+| hx_os_operation（既有公共类型不变） | 72/8 | 88/8 | 88/8 |
+| hx_os_pipe_operation（新增） | 40/8 | 48/8 | 48/8 |
+| hx_os_thread_options（新增） | 12/4 | 16/8 | 16/8 |
+| hx_os_socket（内部） | 40/8 | 56/8 | 56/8 |
+| hx_os_file（内部） | 12/4 | 16/8 | 8/4 |
+| hx_os_loop（内部） | 112/8 | 176/8 | 176/8 |
+| hx_os_request（内部） | 696/8 | 768/8 | 288/8 |
+| hx_os_pipe（内部） | 36/4 | 56/8 | 56/8 |
+
+x86 仅为布局探针编译及运行，不能代表本批全量 x86 运行通过。macOS、Win7 原机、
+ARMv7/AArch64 与 musl 仍待目标验证。布局及分配/系统调用审查不代替吞吐性能证据。

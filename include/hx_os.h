@@ -14,6 +14,7 @@
 #include "hx_os_text.h"
 #include "hx_os_net.h"
 #include "hx_os_loop.h"
+#include "hx_os_pipe.h"
 #include "hx_string.h"
 #include "hx_config.h"
 #include "hx_container.h"

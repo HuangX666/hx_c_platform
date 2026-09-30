@@ -10,7 +10,7 @@
 [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md)
 [![macOS validation pending][macos-badge]](docs/VALIDATION.md)
 [![Windows MSVC][windows-badge]](docs/VALIDATION.md)
-[![22 of 22 local test suites passed][tests-badge]](docs/VALIDATION.md)
+[![24 of 24 local test suites passed][tests-badge]](docs/VALIDATION.md)
 [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md)
 
 Query system information directly through C or `hx::SystemInfo`;
@@ -125,7 +125,7 @@ Conversion never changes the process locale or assumes an ANSI codepage.
 |---|---|---|
 | BUILD_SHARED_LIBS | OFF | Shared instead of static library |
 | HX_OS_ENABLE_NETWORK | ON | Native sockets and network lifecycle |
-| HX_OS_ENABLE_LOOP | NETWORK | Async I/O, timers, posting, DNS integration |
+| HX_OS_ENABLE_LOOP | ON | Async I/O, timers, posting, optional DNS integration |
 | HX_OS_ENABLE_THREAD_POOL | ON | Bounded task pool; needed for async DNS |
 | HX_OS_ENABLE_MEMORY_POOLS | ON | Pools and arena |
 | HX_OS_ENABLE_ICONV | OFF | Legacy encoding backend |
@@ -137,6 +137,7 @@ Conversion never changes the process locale or assumes an ANSI codepage.
 | HX_OS_ENABLE_ENV | ON | UTF-8 environment access |
 | HX_OS_ENABLE_PATHS | ON | UTF-8 user, shared, temporary and module paths |
 | HX_OS_ENABLE_THREAD_EX | ON | Stack options, names and bounded semaphores |
+| HX_OS_ENABLE_PIPE | ON | Blocking pipes; async endpoints when LOOP is on |
 | HX_OS_ENABLE_CJSON/LIBYAML/MINIXML/INIH/TOMLC | OFF | Native parser adapters |
 | HX_OS_BUILD_TESTS | ON | Contract tests and isolated public headers |
 | HX_OS_BUILD_EXAMPLES | ON | C examples; C++ task example when CXX is enabled |
@@ -146,7 +147,8 @@ Conversion never changes the process locale or assumes an ANSI codepage.
 Disabling a module excludes its implementation sources while retaining ABI
 entry points. Resource creation returns NOT_SUPPORTED and capability bits
 are cleared. Async DNS is unavailable without the thread pool; other loop
-operations remain usable. LOOP=ON with NETWORK=OFF is a configuration error.
+operations remain usable. With NETWORK=OFF, create a local loop for posts,
+timers and pipes. No network initialization is required.
 
 ## Strings and encoding
 
@@ -289,5 +291,5 @@ by this new library or a migration.
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-22%2F22%20suites%20local-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-24%2F24%20suites%20local-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey

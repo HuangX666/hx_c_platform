@@ -363,3 +363,37 @@ actual Linux stack reservation, UTF-8 name truncation, cross-thread naming,
 semaphore overflow without partial updates, deadline timeout and subsequent
 successful retry/join. No additional lock/allocation enters default creation.
 Native Windows 7 naming fallback and Apple behavior still need target runs.
+
+## OBS completion batch 7 (2026-09-30)
+
+Windows/WSL full CTest passed 24/24; ASan/UBSan 7/7 and TSan 5/5.
+The relevant sets cover pipes, loop concurrency, C++ callbacks and the C transfer
+example; ASan also covers file and socket regressions. Tests include copied and
+borrowed writes, EOF/broken peer, preserved pending SIGPIPE, allocation rollback,
+shared admission limits, cross-thread cancellation versus completion, zero
+operation deadlines, callback reentry and close/retry without buffer retirement
+violations. The same C example executes on both platforms.
+
+With NETWORK=OFF on both hosts: LOOP=ON/PIPE=ON passed 4/4; LOOP=ON/PIPE=OFF
+passed 3/3; LOOP=OFF/PIPE=ON passed 3/3. All build isolated C99/C++11 public
+headers. One Windows minimal incremental link reported LNK1236 for pipe_native;
+relinking that target unchanged passed, followed by its 3/3 tests. The root cause
+of that transient linker failure is not established.
+
+Measured size/alignment (bytes), using the optional `hx_os_layout_report` target
+with HX_OS_BUILD_BENCHMARKS=ON:
+
+| Object | MSVC x86 | MSVC x64 | Linux x64 |
+| --- | --- | --- | --- |
+| hx_os_operation (unchanged public type) | 72/8 | 88/8 | 88/8 |
+| hx_os_pipe_operation (new) | 40/8 | 48/8 | 48/8 |
+| hx_os_thread_options (new) | 12/4 | 16/8 | 16/8 |
+| hx_os_socket (private) | 40/8 | 56/8 | 56/8 |
+| hx_os_file (private) | 12/4 | 16/8 | 8/4 |
+| hx_os_loop (private) | 112/8 | 176/8 | 176/8 |
+| hx_os_request (private) | 696/8 | 768/8 | 288/8 |
+| hx_os_pipe (private) | 36/4 | 56/8 | 56/8 |
+
+The x86 result is a compiled/executed layout probe, not a full new x86 test run.
+macOS, native Win7, ARMv7/AArch64 and musl execution remain pending. Layout
+measurements and bounded syscall/allocation review are not throughput evidence.

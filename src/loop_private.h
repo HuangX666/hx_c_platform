@@ -3,6 +3,7 @@
 
 #include "net_private.h"
 #include "hx_os_loop.h"
+#include "pipe_private.h"
 
 #if defined(_WIN32)
 #include <mswsock.h>
@@ -24,6 +25,7 @@ struct hx_os_request {
 	void *owned_data;
 	char *owned_host;
 	hx_os_socket *accepted;
+	hx_os_pipe *pipe;
 	hx_os_address_list *addresses;
 	size_t budget;
 	int directions;
@@ -53,6 +55,7 @@ struct hx_os_loop {
 	hx_os_request *inbox_last;
 	hx_os_request *active;
 	hx_os_socket *sockets;
+	hx_os_pipe *pipes;
 	hx_os_thread_pool *dns_pool;
 	hx_os_atomic wake_pending;
 	size_t pending;
@@ -80,5 +83,13 @@ hx_os_status hx_os_i_loop_attach(
 	hx_os_loop *loop, hx_os_socket *socket, hx_os_error *error);
 hx_os_status hx_os_i_loop_refresh(hx_os_socket *socket, hx_os_error *error);
 void hx_os_i_loop_step(hx_os_request *request);
+hx_os_status hx_os_i_loop_submit(hx_os_loop *loop,
+	const hx_os_operation *operation, hx_os_pipe *pipe,
+	hx_os_completion_fn completion, void *user, hx_os_request **out,
+	hx_os_error *error);
+#if !defined(_WIN32)
+hx_os_status hx_os_i_loop_watch(hx_os_loop *loop, int descriptor,
+	hx_os_i_poll_source *source, int wanted, hx_os_error *error);
+#endif
 
 #endif

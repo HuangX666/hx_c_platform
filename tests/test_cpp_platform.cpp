@@ -4,9 +4,11 @@
 #include <hx/Environment.hpp>
 #include <hx/Paths.hpp>
 #include <hx/Thread.hpp>
+#include <hx/Io.hpp>
 #include <hx/ThreadPool.hpp>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 #define CHECK(value)                                                           \
 	do {                                                                   \
@@ -45,10 +47,55 @@ static void *thread_sample(void *user)
 	return user;
 }
 
+static void test_cpp_pipe()
+{
+	if (hx_os_capabilities() & HX_OS_CAP_PIPE) {
+		auto pipes = hx::Pipes::anonymous();
+		pipes.second.writeAll("x", 1);
+		pipes.second.close();
+		char data[4];
+		CHECK(pipes.first.readSome(data, sizeof(data)).bytes == 1);
+		CHECK(pipes.first.readSome(data, sizeof(data)).eof);
+	}
+	if (!(hx_os_capabilities() & HX_OS_CAP_ASYNC_PIPE))
+		return;
+	hx_os_loop *loopOwner = NULL;
+	hx_os_pipe *readOwner = NULL, *writeOwner = NULL;
+	auto loop = hx::IoLoop::create(loopOwner);
+	hx::AsyncPipe::createPair(readOwner, writeOwner);
+	hx::AsyncPipe reader(readOwner), writer(writeOwner);
+	char data[8];
+	int reads = 0;
+	auto read = reader.read(loop, data, sizeof(data),
+		[&](const hx_os_completion &completion) {
+			CHECK(completion.error.status == HX_OS_OK &&
+				completion.bytes == 4);
+			++reads;
+		});
+	auto write = writer.write(loop, std::string("text"),
+		[](const hx_os_completion &completion) {
+			CHECK(completion.error.status == HX_OS_OK);
+			throw hx::StatusError(HX_OS_CANCELLED);
+		});
+	CHECK(loop.runUntil(hx_os_deadline_after_ms(2000)) == HX_OS_OK);
+	CHECK(reads == 1 && !std::memcmp(data, "text", 4));
+	read.rethrowCallbackError();
+	try {
+		write.rethrowCallbackError();
+		CHECK(false);
+	} catch (const hx::StatusError &error) {
+		CHECK(error.status() == HX_OS_CANCELLED);
+	}
+	CHECK(reader.closeUntil(HX_OS_DEADLINE_NOW) == HX_OS_OK);
+	CHECK(writer.closeUntil(HX_OS_DEADLINE_NOW) == HX_OS_OK);
+	CHECK(loop.closeUntil(HX_OS_DEADLINE_NOW) == HX_OS_OK);
+}
+
 int main(int argc, char **argv)
 {
 	CHECK(argc == 2);
 	TestSystemInfo();
+	test_cpp_pipe();
 	{
 		hx_os_thread *owner = NULL;
 		auto thread = hx::Thread::create(owner, thread_sample);

@@ -464,6 +464,16 @@ hx_os_status hx_os_socket_close(hx_os_socket **socket, hx_os_error *error)
 
 #if !HX_OS_ENABLE_LOOP
 
+hx_os_status hx_os_loop_create_local(hx_os_context *context,
+	const hx_os_loop_options *options, hx_os_loop **out, hx_os_error *error)
+{
+	(void)context;
+	(void)options;
+	if (out)
+		*out = NULL;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
 void hx_os_loop_options_init(hx_os_loop_options *options)
 {
 	memset(options, 0, sizeof(*options));

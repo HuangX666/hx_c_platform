@@ -39,7 +39,8 @@ typedef struct hx_os_file_info {
  * Paths are borrowed, NUL-terminated UTF-8. Native names not representable
  * as Unicode are rejected. No normalization or process-locale changes.
  * POSIX creation uses 0600 (files), 0700 (directories), subject to umask.
- * Open supports regular files. Pipes and devices need separate adapters.
+ * Open supports regular files. Anonymous pipe factories produce file
+ * endpoints for synchronous I/O; opening arbitrary devices is unsupported.
  * File position operations require caller serialization. I/O can block.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_open(hx_os_context *context,

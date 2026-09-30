@@ -3,6 +3,7 @@
 
 #include "internal.h"
 #include "hx_os_net.h"
+#include "poll_private.h"
 
 #if defined(_WIN32)
 #include <winsock2.h>
@@ -36,8 +37,7 @@ struct hx_os_socket {
 	hx_os_atomic pending;
 	void *loop;
 	struct hx_os_socket *loop_next;
-	int ready;
-	int watched;
+	hx_os_i_poll_source source;
 };
 
 hx_os_status hx_os_i_socket_error(hx_os_error *error, int code);

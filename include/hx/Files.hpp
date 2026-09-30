@@ -28,6 +28,13 @@ private:
 
 class File {
 public:
+	/* Explicitly transfer a C handle; no allocation and no native call. */
+	static File adopt(hx_os_file *&owner) noexcept
+	{
+		File value(owner, 0);
+		owner = NULL;
+		return value;
+	}
 	struct ReadResult {
 		size_t bytes;
 		bool eof;
@@ -106,6 +113,10 @@ public:
 	}
 
 private:
+	File(hx_os_file *file, int) noexcept
+	    : m_file_(file)
+	{
+	}
 	hx_os_file *m_file_;
 };
 
