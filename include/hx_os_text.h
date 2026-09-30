@@ -48,6 +48,18 @@ typedef struct hx_os_text_result {
  */
 HX_OS_API const char *HX_OS_CALL hx_os_encoding_name(hx_os_encoding value);
 HX_OS_API int HX_OS_CALL hx_os_encoding_supported(hx_os_encoding value);
+/*
+ * Detect the longest complete BOM in this complete prefix buffer (not a
+ * streaming decoder). Recognizes UTF-8/16LE/16BE/32LE/32BE. No BOM returns
+ * NOT_FOUND, prefix_bytes=0, and leaves encoding unchanged. BOM presence
+ * does not validate the remaining text. UTF-32 is checked before UTF-16.
+ * bom_bytes writes at most 4 bytes, no terminator. Other encodings return
+ * NOT_SUPPORTED; output bytes remain unchanged on failure.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_text_bom_detect(const void *data,
+	size_t bytes, hx_os_encoding *encoding, size_t *prefix_bytes);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_text_bom_bytes(
+	hx_os_encoding encoding, unsigned char out[4], size_t *bytes);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_validate_utf8(
 	const void *input, size_t bytes, size_t *error_offset);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_converter_create(

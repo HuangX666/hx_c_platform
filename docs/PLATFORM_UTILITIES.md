@@ -399,3 +399,49 @@ only its positioned syscall. This is a cost inventory, not a throughput claim.
 The Windows pipe adapter also now supplies retained non-NULL byte-count storage
 to ReadFile/WriteFile, required by the documented Windows 7 contract; final
 async progress still comes from IOCP completion. Win7 native execution is pending.
+
+## File information, directory kinds and BOM
+
+FILE_INFO (default ON) adds hx_os_path_stat_extended and
+hx_os_directory_next_info. Initialize the extended output with
+HX_OS_FILE_INFO_EXTENDED_INIT or the capacity-aware initializer. Existing file
+information layouts and directory-next signatures remain unchanged. Query
+failure preserves the extended output; success writes only the known structure.
+Follow mode is explicit and names remain UTF-8. The native projection is shared
+with the old stat path, avoiding duplicate filesystem logic.
+
+Timestamps are signed Unix seconds with nanoseconds in [0, 1e9). Metadata change
+time uses POSIX ctime or Windows FILE_BASIC_INFO.ChangeTime, not Windows creation
+time. Resolution, update deferral and access-time suppression follow the
+filesystem. Windows queries both metadata records through one open file handle;
+concurrent mutation can still change fields between native calls. read_only is
+the Windows attribute or absence of the POSIX owner-write mode bit. POSIX reports
+known owner-read/write mode bits; Windows marks both unknown instead of guessing
+ACL permissions. These summaries are not an authorization check, nor a statement
+about read-only mounts. Windows ignores its read-only attribute on directories.
+
+Directory info classifies the entry itself, without following links. Windows
+reparse points report LINK; POSIX uses d_type when known and otherwise fstatat
+relative to the open directory. Concurrently removed entries may produce a
+native lookup failure. OUTPUT_FULL and native lookup failure retain the pending
+entry/kind output; retry with capacity or use legacy next to skip a stale entry.
+Invalid UTF-8 entries retain the existing skip-and-error behavior. Enumeration
+order and snapshot consistency are not promised. The legacy call adds no type
+lookup syscall. C++ Files::info and Directory::next(name, kind) provide direct
+owned results. examples/file_info.c queries metadata in one function call.
+
+BOM is an independent default-on pure utility. hx_os_text_bom_detect recognizes
+the longest complete UTF-8/16LE/16BE/32LE/32BE marker, checking UTF-32 before the
+shared UTF-16 prefix. No marker returns NOT_FOUND and prefix_bytes=0 while keeping
+encoding unchanged. This is not streaming encoding detection: a two-byte FF FE
+buffer is a complete UTF-16LE marker; obtain four bytes when identifying a
+possible UTF-32 stream. Detection does not validate or convert the payload.
+hx_os_text_bom_bytes generates at most four bytes without a terminator; encodings
+without a supported BOM report NOT_SUPPORTED. C++ Text::detectBom exposes found,
+bytes and encoding; encoding is valid only when found is true. The byte generator
+returns an owned byte vector. The core codec still adds/removes no BOM implicitly.
+
+The C BOM functions allocate nothing and take no locks. Stat and directory info
+create no background activity; native metadata queries may block. POSIX known
+directory types add no stat; unknown types require one fstatat. Windows extended
+stat adds one FileBasicInfo query, but shares the existing handle and projection.

@@ -171,12 +171,27 @@ public:
 	}
 	bool next(std::string &out)
 	{
+		return nextImpl(out, NULL);
+	}
+	bool next(std::string &out, unsigned &kind)
+	{
+		return nextImpl(out, &kind);
+	}
+
+private:
+	hx_os_directory *m_directory_;
+	bool nextImpl(std::string &out, unsigned *kind)
+	{
 		std::string value(256, '\0');
 		hx_os_error error;
 		size_t required;
 		for (;;) {
-			hx_os_status status = hx_os_directory_next(m_directory_,
-				&value[0], value.size(), &required, &error);
+			hx_os_status status = kind
+				? hx_os_directory_next_info(m_directory_,
+					  &value[0], value.size(), &required,
+					  kind, &error)
+				: hx_os_directory_next(m_directory_, &value[0],
+					  value.size(), &required, &error);
 			if (status == HX_OS_EOF)
 				return false;
 			if (status == HX_OS_OUTPUT_FULL) {
@@ -189,13 +204,20 @@ public:
 			return true;
 		}
 	}
-
-private:
-	hx_os_directory *m_directory_;
 };
 
 class Files {
 public:
+	static hx_os_file_info_extended info(
+		const char *path, bool follow = true)
+	{
+		hx_os_file_info_extended value = HX_OS_FILE_INFO_EXTENDED_INIT;
+		hx_os_error error;
+		detail::CheckStatus(
+			hx_os_path_stat_extended(path, follow, &value, &error),
+			error);
+		return value;
+	}
 	static std::string readText(const char *path)
 	{
 		hx_string text = HX_STRING_INIT;

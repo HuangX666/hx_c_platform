@@ -419,3 +419,20 @@ The pipe byte-count pointer correction follows Microsoft's documented Win7
 [ReadFile](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-readfile)
 and [WriteFile](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-writefile)
 contracts. Win7/macOS/embedded runtime evidence still remains pending.
+
+## OBS completion batch 9 (2026-09-30)
+
+Windows/WSL full CTest passed 28/28; ASan/UBSan passed 5/5 (data, file_utils,
+file_info, cpp_platform and file_info_example). FILE_INFO=OFF/BOM=OFF passed
+3/3 on each host. All new public headers compiled independently as C99/C++11.
+Tests cover capacity canaries, metadata failure preservation, native read-only
+attributes, POSIX owner mode projection and symlink follow modes, directory
+capacity retries/types and all five Unicode BOMs including overlapping UTF-32LE
+prefixes. POSIX permission tests use a unique /tmp directory on the native
+filesystem, avoiding assumptions about Windows-mounted permission emulation.
+Windows ACL permissions are deliberately marked unknown, not inferred.
+
+The extended info layout probe measured 72/8 bytes (size/alignment) on Windows
+x86/x64 and Linux x64. Existing public layouts remain unchanged. Native macOS,
+Win7 and embedded runs, Windows symlink privileges and a filesystem that forces
+DT_UNKNOWN directory fallback remain separate target validation.

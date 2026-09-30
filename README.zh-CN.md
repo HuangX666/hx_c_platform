@@ -10,7 +10,7 @@
 [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md)
 [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md)
 [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md)
-[![本地 26/26 组测试通过][tests-badge]](docs/VALIDATION.zh-CN.md)
+[![本地 28/28 组测试通过][tests-badge]](docs/VALIDATION.zh-CN.md)
 [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md)
 
 系统信息可通过 C 接口或 `hx::SystemInfo` 直接查询；
@@ -133,6 +133,8 @@ EUC-KR 和 Windows 1252/932/936/949/950。
 | HX_OS_ENABLE_PIPE | ON | 阻塞管道；LOOP 开启时提供异步端点 |
 | HX_OS_ENABLE_NET_OPTIONS | ON | 常用/原生套接字选项，依赖 NETWORK |
 | HX_OS_ENABLE_POSITIONED_IO | ON | 不改变文件位置的定位读写 |
+| HX_OS_ENABLE_FILE_INFO | ON | 扩展时间戳、属性与目录项类型 |
+| HX_OS_ENABLE_BOM | ON | Unicode BOM 检测与生成纯函数 |
 | HX_OS_ENABLE_CJSON/LIBYAML/MINIXML/INIH/TOMLC | OFF | 第三方解析适配 |
 | HX_OS_BUILD_TESTS | ON | 契约测试和公共头独立编译 |
 | HX_OS_BUILD_EXAMPLES | ON | C 示例；已启用 CXX 时包含 C++ 任务示例 |
@@ -277,5 +279,5 @@ C++ 封装按项目的 C++ 类名和方法名规范命名。
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-26%2F26%20suites%20local-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-28%2F28%20suites%20local-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey

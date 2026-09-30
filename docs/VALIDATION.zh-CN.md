@@ -376,3 +376,17 @@ Windows TCP_NODELAY 实测返回 1 字节；测试改为清零存储并检查原
 [ReadFile](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-readfile)
 与 [WriteFile](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-writefile)
 契约。Win7/macOS/嵌入式运行证据仍待补。
+
+## OBS 补齐第 9 批（2026-09-30）
+
+Windows／WSL 全量各 28/28；ASan/UBSan 5/5（data、file_utils、file_info、
+cpp_platform、file_info_example）。两平台 FILE_INFO=OFF/BOM=OFF 各 3/3。
+新公共头通过 C99/C++11 独立编译。覆盖初始化容量哨兵、失败输出保留、Windows
+只读属性、POSIX owner 模式摘要与链接跟随、目录容量重试/类型、五种 Unicode
+BOM 及 UTF-32LE 重叠前缀。POSIX 权限测试使用原生文件系统的独立 /tmp 目录，
+不把 Windows 挂载盘的权限模拟行为当成普通 POSIX 文件系统。Windows ACL 权限
+明确标为未知。
+
+扩展信息布局在 Windows x86/x64 和 Linux x64 均实测 72/8 字节（大小/对齐）。
+既有公共布局不变。macOS、Win7、嵌入式、Windows 链接权限和需要 DT_UNKNOWN
+回退的目标文件系统仍需分别验证。

@@ -288,13 +288,22 @@ hx_os_status hx_os_file_truncate(
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
 
-hx_os_status hx_os_path_stat(const char *path, int follow_links,
-	hx_os_file_info *info, hx_os_error *error)
+static void hx_os_file_time_parts(
+	uint64_t ticks, int64_t *seconds, uint32_t *nanoseconds)
+{
+	*seconds = (int64_t)(ticks / 10000000) - INT64_C(11644473600);
+	*nanoseconds = (uint32_t)(ticks % 10000000) * 100;
+}
+
+static hx_os_status hx_os_path_stat_native(const char *path, int follow_links,
+	hx_os_file_info *info, hx_os_file_info_extended *extended,
+	hx_os_error *error)
 {
 	hx_os_error local;
 	wchar_t *wide;
 	HANDLE handle;
 	BY_HANDLE_FILE_INFORMATION native;
+	FILE_BASIC_INFO basic;
 	ULARGE_INTEGER ticks;
 	DWORD code;
 	if (!info)
@@ -315,6 +324,10 @@ hx_os_status hx_os_path_stat(const char *path, int follow_links,
 	if (code)
 		return hx_os_i_win32(error, code);
 	code = GetFileInformationByHandle(handle, &native) ? 0 : GetLastError();
+	if (!code && extended &&
+		!GetFileInformationByHandleEx(
+			handle, FileBasicInfo, &basic, sizeof(basic)))
+		code = GetLastError();
 	(void)CloseHandle(handle);
 	if (code)
 		return hx_os_i_win32(error, code);
@@ -329,12 +342,37 @@ hx_os_status hx_os_path_stat(const char *path, int follow_links,
 		: HX_OS_FILE_REGULAR;
 	ticks.LowPart = native.ftLastWriteTime.dwLowDateTime;
 	ticks.HighPart = native.ftLastWriteTime.dwHighDateTime;
-	info->modified_seconds =
-		(int64_t)(ticks.QuadPart / 10000000) - INT64_C(11644473600);
-	info->modified_nanoseconds =
-		(uint32_t)(ticks.QuadPart % 10000000) * 100;
+	hx_os_file_time_parts(ticks.QuadPart, &info->modified_seconds,
+		&info->modified_nanoseconds);
+	if (extended) {
+		hx_os_file_time_parts((uint64_t)basic.LastAccessTime.QuadPart,
+			&extended->accessed_seconds,
+			&extended->accessed_nanoseconds);
+		hx_os_file_time_parts((uint64_t)basic.ChangeTime.QuadPart,
+			&extended->changed_seconds,
+			&extended->changed_nanoseconds);
+		extended->read_only =
+			!!(basic.FileAttributes & FILE_ATTRIBUTE_READONLY);
+		extended->owner_permissions = 0;
+		extended->known_permissions = 0;
+	}
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
+
+hx_os_status hx_os_path_stat(const char *path, int follow_links,
+	hx_os_file_info *info, hx_os_error *error)
+{
+	return hx_os_path_stat_native(path, follow_links, info, NULL, error);
+}
+
+#if HX_OS_ENABLE_FILE_INFO
+hx_os_status hx_os_i_path_stat_extended(const char *path, int follow_links,
+	hx_os_file_info_extended *info, hx_os_error *error)
+{
+	return hx_os_path_stat_native(
+		path, follow_links, &info->basic, info, error);
+}
+#endif
 
 static hx_os_status hx_os_path_operation(
 	const char *path, int operation, hx_os_error *error)
@@ -451,8 +489,9 @@ hx_os_status hx_os_directory_open(hx_os_context *context, const char *path,
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
 
-hx_os_status hx_os_directory_next(hx_os_directory *directory, char *name,
-	size_t capacity, size_t *required, hx_os_error *error)
+static hx_os_status hx_os_directory_next_native(hx_os_directory *directory,
+	char *name, size_t capacity, size_t *required, unsigned *kind,
+	hx_os_error *error)
 {
 	int bytes;
 	DWORD code;
@@ -491,9 +530,35 @@ hx_os_status hx_os_directory_next(hx_os_directory *directory, char *name,
 	if (!WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
 		    directory->entry.cFileName, -1, name, bytes, NULL, NULL))
 		return hx_os_i_win32(error, GetLastError());
+	if (kind) {
+		DWORD attributes = directory->entry.dwFileAttributes;
+		*kind = attributes & FILE_ATTRIBUTE_REPARSE_POINT
+			? HX_OS_FILE_LINK
+			: attributes & FILE_ATTRIBUTE_DIRECTORY
+			? HX_OS_FILE_DIRECTORY
+			: HX_OS_FILE_REGULAR;
+	}
 	directory->pending = 0;
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
+
+hx_os_status hx_os_directory_next(hx_os_directory *directory, char *name,
+	size_t capacity, size_t *required, hx_os_error *error)
+{
+	return hx_os_directory_next_native(
+		directory, name, capacity, required, NULL, error);
+}
+
+#if HX_OS_ENABLE_FILE_INFO
+hx_os_status hx_os_directory_next_info(hx_os_directory *directory, char *name,
+	size_t capacity, size_t *required, unsigned *kind, hx_os_error *error)
+{
+	if (!kind)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	return hx_os_directory_next_native(
+		directory, name, capacity, required, kind, error);
+}
+#endif
 
 void hx_os_directory_close(hx_os_directory *directory)
 {

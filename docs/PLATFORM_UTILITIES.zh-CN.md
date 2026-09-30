@@ -323,3 +323,37 @@ POSIX 使用 pread/pwrite 并重试 EINTR。Windows 首次定位操作通过 ReO
 `examples/positioned_read.c` 无需 seek 即读取偏移 4 起的四个字节。同时修正了
 Windows 管道 ReadFile/WriteFile 的参数，提供 Win7 文档要求的非空、随请求保留
 的字节数存储；异步最终进度仍取自 IOCP 完成结果。Win7 实机执行仍待验证。
+
+## 文件属性、目录项类型与 BOM
+
+FILE_INFO 默认开启，提供 hx_os_path_stat_extended 和 hx_os_directory_next_info。
+扩展输出使用 HX_OS_FILE_INFO_EXTENDED_INIT 或带容量的初始化函数。既有文件
+信息结构及目录 next 签名保持不变；扩展查询失败保留输出，成功仅写已知结构大小。
+跟随链接的选择显式传入，名称继续使用 UTF-8；原生属性投影与旧 stat 共用。
+
+时间为有符号 Unix 秒加 [0, 1e9) 范围的纳秒。元数据变更时间使用 POSIX ctime 或
+Windows FILE_BASIC_INFO.ChangeTime，不拿创建时间替代。精度、延迟更新和访问
+时间关闭策略由文件系统决定。Windows 两次元数据查询持有同一个文件句柄，仍不
+保证并发修改期间所有字段来自同一时刻。read_only 取 Windows 属性或 POSIX
+owner-write 模式位缺失。POSIX 标记 owner-read/write 模式摘要有效；Windows
+两者均标为未知，不推测 ACL。摘要不能充当访问鉴权，也不表示挂载只读；Windows
+的只读属性不对目录实施写保护。
+
+目录类型针对条目本身，不跟随链接。Windows 重解析点报告 LINK；POSIX 优先
+使用 d_type，未知时通过已打开目录执行相对 fstatat。并发删除可能造成原生查询
+失败；容量不足及原生属性查询失败保留待返回条目和 kind 输出，可重试或调用旧
+next 跳过过期条目。无效 UTF-8 沿用既有跳过并报错行为。不承诺枚举顺序和快照
+一致性。旧 next 不新增类型查询系统调用。C++ Files::info、Directory::next(name,
+kind) 直接返回结果；examples/file_info.c 展示一次调用查询属性。
+
+BOM 为独立默认开启的纯工具。hx_os_text_bom_detect 识别完整前缀中的 UTF-8、
+UTF-16LE/BE、UTF-32LE/BE 标记，优先检查 UTF-32。无标记报 NOT_FOUND，前缀长度
+为零，编码输出保持原值。它不做流式编码猜测：仅有 FF FE 两字节时是完整 UTF-16LE
+标记；识别可能的 UTF-32 流应先取得四字节。检测不验证或转换正文。
+hx_os_text_bom_bytes 最多生成四字节、不加终止符，无受支持 BOM 的编码报不支持。
+C++ Text::detectBom 返回 found/bytes/encoding，encoding 仅在 found 时有效；生成
+入口返回拥有内存的字节 vector。原有编解码器仍不隐式增删 BOM。
+
+C BOM 函数不分配、不加锁；属性查询不建立后台任务，但原生查询可能阻塞。POSIX
+已知目录类型不调用 stat，未知时增加一次 fstatat。Windows 扩展 stat 在共用句柄
+及基础投影的基础上增加一次 FileBasicInfo 查询。

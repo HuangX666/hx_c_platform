@@ -6,6 +6,7 @@
 #include <hx/Thread.hpp>
 #include <hx/Io.hpp>
 #include <hx/SocketOptions.hpp>
+#include <hx/Text.hpp>
 #include <hx/ThreadPool.hpp>
 #include <cstdio>
 #include <cstdlib>
@@ -97,6 +98,14 @@ int main(int argc, char **argv)
 	CHECK(argc == 2);
 	TestSystemInfo();
 	test_cpp_pipe();
+	if (hx_os_capabilities() & HX_OS_CAP_BOM) {
+		const auto bytes = hx::Text::bomBytes(HX_OS_UTF32LE);
+		const auto bom =
+			hx::Text::detectBom(bytes.data(), bytes.size());
+		CHECK(bom.found && bom.bytes == 4 &&
+			bom.encoding == HX_OS_UTF32LE);
+		CHECK(!hx::Text::detectBom("text", 4).found);
+	}
 	if (hx_os_capabilities() & HX_OS_CAP_NET_OPTIONS) {
 		hx_os_network *network = NULL;
 		hx_os_socket *socket = NULL;
@@ -168,7 +177,17 @@ int main(int argc, char **argv)
 		{
 			hx::Directory directory(root);
 			std::string name;
-			CHECK(directory.next(name) && name == "text.txt");
+			if (hx_os_capabilities() & HX_OS_CAP_FILE_INFO) {
+				unsigned kind;
+				CHECK(directory.next(name, kind) &&
+					name == "text.txt");
+				CHECK(kind == HX_OS_FILE_REGULAR);
+				CHECK(hx::Files::info(path.c_str())
+						.basic.size == 5);
+			}
+			else
+				CHECK(directory.next(name) &&
+					name == "text.txt");
 			CHECK(!directory.next(name));
 		}
 		hx::Files::removeTree(root);

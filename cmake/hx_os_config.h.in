@@ -12,6 +12,8 @@
 #cmakedefine01 HX_OS_ENABLE_PIPE
 #cmakedefine01 HX_OS_ENABLE_NET_OPTIONS
 #cmakedefine01 HX_OS_ENABLE_POSITIONED_IO
+#cmakedefine01 HX_OS_ENABLE_FILE_INFO
+#cmakedefine01 HX_OS_ENABLE_BOM
 #cmakedefine01 HX_OS_HAVE_PTHREAD_TRYJOIN
 #cmakedefine01 HX_OS_HAVE_TIMED_JOIN
 #cmakedefine01 HX_OS_HAVE_ICONV

@@ -189,8 +189,9 @@ hx_os_status hx_os_file_truncate(
 	return hx_os_i_errno(error, result ? errno : 0);
 }
 
-hx_os_status hx_os_path_stat(const char *path, int follow_links,
-	hx_os_file_info *info, hx_os_error *error)
+static hx_os_status hx_os_path_stat_native(const char *path, int follow_links,
+	hx_os_file_info *info, hx_os_file_info_extended *extended,
+	hx_os_error *error)
 {
 	struct stat native;
 	int result;
@@ -216,8 +217,48 @@ hx_os_status hx_os_path_stat(const char *path, int follow_links,
 	info->modified_seconds = native.st_mtim.tv_sec;
 	info->modified_nanoseconds = (uint32_t)native.st_mtim.tv_nsec;
 #endif
+	if (extended) {
+#if defined(__APPLE__)
+		extended->accessed_seconds = native.st_atimespec.tv_sec;
+		extended->accessed_nanoseconds =
+			(uint32_t)native.st_atimespec.tv_nsec;
+		extended->changed_seconds = native.st_ctimespec.tv_sec;
+		extended->changed_nanoseconds =
+			(uint32_t)native.st_ctimespec.tv_nsec;
+#else
+		extended->accessed_seconds = native.st_atim.tv_sec;
+		extended->accessed_nanoseconds =
+			(uint32_t)native.st_atim.tv_nsec;
+		extended->changed_seconds = native.st_ctim.tv_sec;
+		extended->changed_nanoseconds =
+			(uint32_t)native.st_ctim.tv_nsec;
+#endif
+		extended->read_only = !(native.st_mode & S_IWUSR);
+		extended->known_permissions = HX_OS_PERMISSION_OWNER_READ |
+			HX_OS_PERMISSION_OWNER_WRITE;
+		extended->owner_permissions =
+			(native.st_mode & S_IRUSR ? HX_OS_PERMISSION_OWNER_READ
+						  : 0) |
+			(native.st_mode & S_IWUSR ? HX_OS_PERMISSION_OWNER_WRITE
+						  : 0);
+	}
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
+
+hx_os_status hx_os_path_stat(const char *path, int follow_links,
+	hx_os_file_info *info, hx_os_error *error)
+{
+	return hx_os_path_stat_native(path, follow_links, info, NULL, error);
+}
+
+#if HX_OS_ENABLE_FILE_INFO
+hx_os_status hx_os_i_path_stat_extended(const char *path, int follow_links,
+	hx_os_file_info_extended *info, hx_os_error *error)
+{
+	return hx_os_path_stat_native(
+		path, follow_links, &info->basic, info, error);
+}
+#endif
 
 hx_os_status hx_os_file_remove(const char *path, hx_os_error *error)
 {
@@ -294,8 +335,9 @@ hx_os_status hx_os_directory_open(hx_os_context *context, const char *path,
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
 
-hx_os_status hx_os_directory_next(hx_os_directory *directory, char *name,
-	size_t capacity, size_t *required, hx_os_error *error)
+static hx_os_status hx_os_directory_next_native(hx_os_directory *directory,
+	char *name, size_t capacity, size_t *required, unsigned *kind,
+	hx_os_error *error)
 {
 	const char *text;
 	size_t bytes;
@@ -323,10 +365,58 @@ hx_os_status hx_os_directory_next(hx_os_directory *directory, char *name,
 	*required = bytes + 1;
 	if (capacity < *required)
 		return hx_os_i_error(error, HX_OS_OUTPUT_FULL, 0, 0);
+	if (kind) {
+		struct stat info;
+#if defined(DT_UNKNOWN)
+		switch (directory->pending->d_type) {
+		case DT_REG:
+			*kind = HX_OS_FILE_REGULAR;
+			break;
+		case DT_DIR:
+			*kind = HX_OS_FILE_DIRECTORY;
+			break;
+		case DT_LNK:
+			*kind = HX_OS_FILE_LINK;
+			break;
+		case DT_UNKNOWN:
+#endif
+			if (fstatat(dirfd(directory->native), text, &info,
+				    AT_SYMLINK_NOFOLLOW))
+				return hx_os_i_errno(error, errno);
+			*kind = S_ISREG(info.st_mode)	? HX_OS_FILE_REGULAR
+				: S_ISDIR(info.st_mode) ? HX_OS_FILE_DIRECTORY
+				: S_ISLNK(info.st_mode) ? HX_OS_FILE_LINK
+							: HX_OS_FILE_OTHER;
+#if defined(DT_UNKNOWN)
+			break;
+		default:
+			*kind = HX_OS_FILE_OTHER;
+			break;
+		}
+#endif
+	}
 	memcpy(name, text, *required);
 	directory->pending = NULL;
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
+
+hx_os_status hx_os_directory_next(hx_os_directory *directory, char *name,
+	size_t capacity, size_t *required, hx_os_error *error)
+{
+	return hx_os_directory_next_native(
+		directory, name, capacity, required, NULL, error);
+}
+
+#if HX_OS_ENABLE_FILE_INFO
+hx_os_status hx_os_directory_next_info(hx_os_directory *directory, char *name,
+	size_t capacity, size_t *required, unsigned *kind, hx_os_error *error)
+{
+	if (!kind)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	return hx_os_directory_next_native(
+		directory, name, capacity, required, kind, error);
+}
+#endif
 
 void hx_os_directory_close(hx_os_directory *directory)
 {

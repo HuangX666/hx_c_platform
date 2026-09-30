@@ -20,6 +20,7 @@ int main(void)
 	HX_OS_LAYOUT(hx_os_operation);
 	HX_OS_LAYOUT(hx_os_pipe_operation);
 	HX_OS_LAYOUT(hx_os_thread_options);
+	HX_OS_LAYOUT(hx_os_file_info_extended);
 	HX_OS_LAYOUT(hx_os_thread);
 	HX_OS_LAYOUT(hx_os_socket);
 	HX_OS_LAYOUT(hx_os_file);

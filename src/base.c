@@ -470,6 +470,12 @@ uint64_t hx_os_capabilities(void)
 #if HX_OS_ENABLE_POSITIONED_IO
 	result |= HX_OS_CAP_POSITIONED_IO;
 #endif
+#if HX_OS_ENABLE_FILE_INFO
+	result |= HX_OS_CAP_FILE_INFO;
+#endif
+#if HX_OS_ENABLE_BOM
+	result |= HX_OS_CAP_BOM;
+#endif
 #if HX_OS_ENABLE_PIPE
 	result |= HX_OS_CAP_PIPE;
 #if HX_OS_ENABLE_LOOP

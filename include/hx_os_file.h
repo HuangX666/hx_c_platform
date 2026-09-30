@@ -35,6 +35,38 @@ typedef struct hx_os_file_info {
 	uint32_t kind;
 } hx_os_file_info;
 
+enum { HX_OS_PERMISSION_OWNER_READ = 1u, HX_OS_PERMISSION_OWNER_WRITE = 2u };
+typedef struct hx_os_file_info_extended {
+	uint32_t size;
+	uint32_t version;
+	hx_os_file_info basic;
+	int64_t accessed_seconds;
+	int64_t changed_seconds;
+	uint32_t accessed_nanoseconds;
+	uint32_t changed_nanoseconds;
+	uint32_t read_only;
+	uint32_t owner_permissions;
+	uint32_t known_permissions;
+} hx_os_file_info_extended;
+#define HX_OS_FILE_INFO_EXTENDED_INIT                                          \
+	{                                                                      \
+		sizeof(hx_os_file_info_extended), 1, {0, 0, 0, 0}, 0, 0, 0, 0, \
+			0, 0, 0                                                \
+	}
+
+/*
+ * Times use Unix seconds plus nanoseconds. changed is metadata change,
+ * not birth time. Accuracy/update policy follows the filesystem.
+ * read_only is the Windows attribute or absence of POSIX owner-write mode.
+ * known_permissions marks valid POSIX mode-summary bits (zero on Windows).
+ * Neither mode summaries nor read_only are ACL/access-permission checks.
+ * Initialize capacity before querying; failure preserves the output.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_file_info_extended_init(
+	hx_os_file_info_extended *info, size_t capacity);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_path_stat_extended(const char *path,
+	int follow_links, hx_os_file_info_extended *info, hx_os_error *error);
+
 /*
  * Paths are borrowed, NUL-terminated UTF-8. Native names not representable
  * as Unicode are rejected. No normalization or process-locale changes.
@@ -101,6 +133,13 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_open(hx_os_context *context,
 HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_next(
 	hx_os_directory *directory, char *name, size_t capacity,
 	size_t *required, hx_os_error *error);
+/* Like next, with the entry kind without following links. OUTPUT_FULL keeps
+ * the pending entry and kind output unchanged. Native lookup failures also
+ * retain the entry; legacy next may be used to skip such an entry.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_next_info(
+	hx_os_directory *directory, char *name, size_t capacity,
+	size_t *required, unsigned *kind, hx_os_error *error);
 HX_OS_API void HX_OS_CALL hx_os_directory_close(hx_os_directory *directory);
 
 /*
