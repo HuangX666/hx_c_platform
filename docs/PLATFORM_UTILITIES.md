@@ -1151,3 +1151,52 @@ CMake switches, default ON. Capabilities describe compiled adapters; native
 policy and version restrictions still apply. Windows adds advapi32 only when
 registry or the existing random fallback needs it. Apple propagates framework
 and Objective-C runtime link requirements for static consumers.
+
+
+## Calendar, translation table and bit streams (batch 22)
+
+`hx_os_wall_time_format_utc_string(milliseconds, NULL, &text, &error)` returns
+an ISO-like UTC timestamp directly in an owning UTF-8 string. The buffer entry
+supports two-pass capacity queries without partial output. Unix milliseconds
+are floored to seconds, including negative values. The shared Gregorian
+implementation covers years 0001..9999, independent of native time_t limits.
+The strict UTF-8 pattern is bounded to 65536 bytes and accepts %CCYY, %MM, %DD,
+%hh, %mm, %ss and %% only. Invalid patterns/encoding and out-of-range dates
+leave output unchanged. NULL chooses %CCYY-%MM-%DDT%hh:%mm:%ssZ. No leap-second
+representation, locale change or allocation occurs in the buffer formatter.
+The string entry allocates bounded temporary/output storage with its context.
+
+`hx_os_wall_time_local_offset_minutes` returns the current native offset east
+of UTC plus DST 0/1/-1 (unknown). It uses the host runtime's timezone rules;
+the host must serialize external TZ/timezone changes. It does not look up
+historical named timezones. Fractional-minute offsets return NOT_SUPPORTED.
+
+Create an independent translation catalog with `hx_os_text_lookup_create`,
+add copied UTF-8 pairs using `add`, and call `get_string` for an owned result.
+An absent key returns the supplied original text. Empty translations remain
+empty. Keys are exact case-sensitive bytes without Unicode normalization.
+Default limits are 4096 entries and 1 MiB of key/value bytes including NULs;
+options can set other finite bounds. Storage grows on demand. Sorted entries
+use binary-search lookup and O(n) insertion; metadata is additional to text
+limits. Transactional replacement can temporarily retain old+new text (at
+most twice the text limit); array growth temporarily retains both arrays.
+Read-only queries can run concurrently; exclude mutation/destruction. There
+is no catalog lock, locale singleton or background service. Buffer reads and
+bit operations allocate nothing. String output uses its own allocator.
+`examples/localized_time.c` combines the two convenient C interfaces.
+
+Bit reader/writer values live on the stack and borrow caller buffers. Count
+units are explicit: init accepts bytes; read_bits/write_bits accept 0..64 bits.
+Bit order is MSB-first within both byte and value, on every architecture.
+Read past the end reports EOF; write past capacity reports OUTPUT_FULL; values
+that do not fit report RANGE. Failure preserves cursor and buffer/output.
+Only written bits change; writer alignment zero-pads to a byte boundary and
+reader alignment skips those bits. Zero-bit operations are valid with zero
+value. No shift by 64 or unchecked bytes-to-bits multiplication occurs.
+No allocation, lock, indirect call, system call or assembly is used.
+
+CALENDAR, TEXT_LOOKUP and BITSTREAM are independent default-on switches.
+Disabled operations return NOT_SUPPORTED with absent capability bits.
+The C++11 conveniences are `hx::Calendar::utc`, `hx::TextLookup::get` and
+`hx::BitReader`/`hx::BitWriter`; they reuse the C implementations. Bit cursors
+remain borrowed views, while TextLookup provides movable synchronous RAII.

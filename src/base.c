@@ -572,6 +572,15 @@ uint64_t hx_os_capabilities(void)
 #if HX_OS_ENABLE_OBFUSCATION
 	result |= HX_OS_CAP_OBFUSCATION;
 #endif
+#if HX_OS_ENABLE_CALENDAR
+	result |= HX_OS_CAP_CALENDAR;
+#endif
+#if HX_OS_ENABLE_TEXT_LOOKUP
+	result |= HX_OS_CAP_TEXT_LOOKUP;
+#endif
+#if HX_OS_ENABLE_BITSTREAM
+	result |= HX_OS_CAP_BITSTREAM;
+#endif
 #if HX_OS_ENABLE_LOOP_FD && HX_OS_ENABLE_LOOP && !defined(_WIN32)
 	result |= HX_OS_CAP_LOOP_FD;
 #endif

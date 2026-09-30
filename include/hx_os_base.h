@@ -197,6 +197,9 @@ HX_OS_API const char *HX_OS_CALL hx_os_cpu_name(void);
 #define HX_OS_CAP_SLEEP_INHIBIT (UINT64_C(1) << 38)
 #define HX_OS_CAP_PERFORMANCE_REQUEST (UINT64_C(1) << 39)
 #define HX_OS_CAP_OBFUSCATION (UINT64_C(1) << 40)
+#define HX_OS_CAP_CALENDAR (UINT64_C(1) << 41)
+#define HX_OS_CAP_TEXT_LOOKUP (UINT64_C(1) << 42)
+#define HX_OS_CAP_BITSTREAM (UINT64_C(1) << 43)
 /* required includes NUL. These queries do not need initialization. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_version_string(
 	char *buffer, size_t capacity, size_t *required);

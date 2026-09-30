@@ -714,3 +714,29 @@ no background thread, global allocator, hot-path hook or assembly was added.
 The formatting configuration now also accepts the isolated Objective-C file;
 C/C++ formatting rules otherwise remain the same. Third-party sources were
 unchanged. Source checks and diff whitespace checks passed.
+
+
+## OBS completion batch 22 (2026-09-30)
+
+Windows full CTest 63/63; WSL Linux 65/65. Related ASan/UBSan 8/8 and TSan
+6/6 passed. All three features off passed 4/4 on each host; Windows x86
+related suites passed 7/7. Public C99/C++11 isolated headers, source rules
+and diff checks passed. No vendor sources changed.
+
+Calendar tests walk every day from 1900 through 2101, include 0001/9999 bounds,
+negative milliseconds, leap centuries, invalid tokens, capacity canaries and
+spec/output aliasing. Separate child environments test UTC and east-of-UTC
+signs. German locale probes passed with Windows German_Germany.1252 and the
+existing private Linux de_DE.UTF-8 locale. Only test processes set locale/TZ.
+Translation tests exercise copied output, empty translation, missing fallback,
+capacity limits, allocation failure in entry/array/output, preserved old values,
+context ownership and four simultaneous read-only threads. Bit tests check
+known bytes plus all 0..64 widths at offsets 0..7, failure preservation,
+64-bit values, zero width, overflow, padding and EOF. C++ wrappers and the
+combined C example ran.
+
+Reader/writer layouts are 24/8 on Windows/Linux x64 and 12/4 on Windows x86;
+lookup options are 24/8 and 16/4. Existing public layouts remain unchanged.
+No existing hot path gained locks or allocations. Native Apple timezone rules,
+Win7, ARM/musl and embedded board runs remain pending; Linux locale tests do
+not count as Apple validation.

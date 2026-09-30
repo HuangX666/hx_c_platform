@@ -47,6 +47,9 @@ option(HX_OS_ENABLE_REGISTRY "Build Windows registry access" ON)
 option(HX_OS_ENABLE_SLEEP_INHIBIT "Build native idle-sleep requests" ON)
 option(HX_OS_ENABLE_PERFORMANCE_REQUEST "Build native execution activities" ON)
 option(HX_OS_ENABLE_OBFUSCATION "Build reversible string obfuscation" ON)
+option(HX_OS_ENABLE_CALENDAR "Build locale-independent calendar helpers" ON)
+option(HX_OS_ENABLE_TEXT_LOOKUP "Build bounded translation tables" ON)
+option(HX_OS_ENABLE_BITSTREAM "Build bounded bit stream cursors" ON)
 set(HX_OS_ICONV_SOURCE_DIR "" CACHE PATH "Unmodified GNU libiconv source")
 set(HX_OS_SANITIZER "" CACHE STRING "address,undefined or thread")
 
@@ -183,8 +186,18 @@ add_library(hx_c_platform
 	src/system.c src/cpu_features.c src/time_posix.c
 	src/process.c src/process_capture.c src/local.c src/duplex_pipe.c
 	src/registry.c src/power.c src/obfuscate.c
+	src/calendar.c src/text_lookup.c src/bitstream.c
 	${hx_parser_sources} ${hx_parser_objects}
 	${hx_platform_sources})
+if(HX_OS_ENABLE_CALENDAR)
+	if(WIN32)
+		target_sources(hx_c_platform PRIVATE
+			src/windows/calendar_native.c)
+	else()
+		target_sources(hx_c_platform PRIVATE
+			src/posix/calendar_native.c)
+	endif()
+endif()
 if(HX_OS_ENABLE_PROCESS)
 	if(WIN32)
 		target_sources(hx_c_platform PRIVATE

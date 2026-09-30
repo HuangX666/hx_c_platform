@@ -9,6 +9,8 @@
 #include "duplex_private.h"
 #include "power_private.h"
 #include "hx_os_obfuscate.h"
+#include "hx_os_bitstream.h"
+#include "hx_os_text_lookup.h"
 #include <stdio.h>
 
 #define HX_OS_LAYOUT(type)                                                     \
@@ -55,6 +57,9 @@ int main(void)
 	HX_OS_LAYOUT(hx_os_i_local_state);
 	HX_OS_LAYOUT(hx_os_i_power);
 	HX_OS_LAYOUT(hx_os_obfuscated);
+	HX_OS_LAYOUT(hx_os_bit_reader);
+	HX_OS_LAYOUT(hx_os_bit_writer);
+	HX_OS_LAYOUT(hx_os_text_lookup_options);
 #if defined(_WIN32)
 	HX_OS_LAYOUT(hx_os_i_duplex_file);
 #endif

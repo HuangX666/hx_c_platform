@@ -892,3 +892,38 @@ C++11 可用 `constexpr auto text = hx::obfuscate<0x5a>("example")`。
 OBFUSCATION。能力位表示编入适配，仍需处理运行系统和策略限制。Windows 在
 注册表或原有随机数回退需要时链接 advapi32；Apple 静态消费正确传递 framework
 及 Objective-C runtime 链接依赖。
+
+
+## 日期、翻译表和位流（第 22 批）
+
+`hx_os_wall_time_format_utc_string(milliseconds, NULL, &text, &error)`
+直接输出拥有存储的 UTF-8 UTC 时间；缓冲入口提供两段式容量查询，容量不足
+不产生部分输出。Unix 毫秒向下取整到秒，包括负值。共用公历实现覆盖
+0001—9999 年，不受原生 time_t 年限限制。格式为严格 UTF-8，最多 65536 字节，
+支持 %CCYY、%MM、%DD、%hh、%mm、%ss、%%；NULL 使用
+%CCYY-%MM-%DDT%hh:%mm:%ssZ。非法格式、编码错误、日期越界均保留输出。
+不表示闰秒，不修改 locale。缓冲格式化零分配；字符串入口使用自身 context
+分配有界临时存储和结果。
+
+`hx_os_wall_time_local_offset_minutes` 返回当前本地相对 UTC 向东的分钟偏移，
+DST 为 0/1/-1（未知）。遵循宿主运行库时区规则，外部 TZ/时区修改须由宿主
+同步；不提供历史命名时区查询。无法用整分钟表示的偏移返回不支持。
+
+翻译表通过 `hx_os_text_lookup_create` 创建，add 复制 UTF-8 原文/译文，
+get_string 直接给出拥有存储的结果。仅缺失键回退原文，空译文保持为空。
+键区分大小写、不做 Unicode 规范化。默认最多 4096 项、键值连同 NUL 合计
+1 MiB，可通过 options 设置其他有限上限。按需增长，有序数组二分查询，插入
+为 O(n)；元数据另计。事务替换可能暂时保留新旧文本，最多两倍文本上限；
+数组增长同样暂存新旧数组。支持并发只读，修改/销毁由调用方排除并发。
+无目录锁、全局 locale 单例或后台服务；读取缓冲零分配，字符串使用输出的
+分配器。C 组合示例见 `examples/localized_time.c`。
+
+位流 reader/writer 在栈上，借用调用方缓冲区。初始化单位为字节，读写单位
+为 0—64 位，所有 CPU 均为字节内和值内 MSB 优先。读越界 EOF、写容量不足
+OUTPUT_FULL、值超出位宽 RANGE；失败不移动游标、不修改缓冲或输出。
+只替换写入范围，writer 对齐补零，reader 对齐跳过；零位操作只允许零值。
+检查字节乘八的溢出，避免移位 64 位。无分配、锁、间接调用、系统调用或汇编。
+
+CALENDAR、TEXT_LOOKUP、BITSTREAM 独立默认开启；关闭时能力位清零、操作
+返回不支持。C++11 便利层为 Calendar::utc、TextLookup::get、BitReader/
+BitWriter；复用 C 实现，位游标继续借用缓冲，翻译表提供可移动同步 RAII。

@@ -34,7 +34,7 @@ set_tests_properties(library PROPERTIES TIMEOUT 20)
 set(hx_test_suites data options lifecycle config containers sysinfo file_utils
 	env paths thread_extra pipe io_options file_info config_serialize timer
 	error_text util vm file_extra watch loop_fd system delayed local duplex
-	registry power obfuscate)
+	registry power obfuscate calendar text_lookup bitstream)
 if(HX_OS_ENABLE_THREAD_POOL)
 	list(APPEND hx_test_suites pool)
 endif()
@@ -55,6 +55,14 @@ endforeach()
 if(WIN32)
 	target_link_libraries(hx_os_test_file_extra PRIVATE shell32)
 	target_link_libraries(hx_os_test_registry PRIVATE advapi32)
+endif()
+if(HX_OS_ENABLE_CALENDAR)
+	add_test(NAME calendar_offset_utc COMMAND hx_os_test_calendar 0)
+	add_test(NAME calendar_offset_east COMMAND hx_os_test_calendar 540)
+	set_tests_properties(calendar_offset_utc PROPERTIES
+		TIMEOUT 20 ENVIRONMENT "TZ=UTC0")
+	set_tests_properties(calendar_offset_east PROPERTIES
+		TIMEOUT 20 ENVIRONMENT "TZ=JST-9")
 endif()
 set_tests_properties(local PROPERTIES SKIP_RETURN_CODE 77)
 find_package(Python3 QUIET COMPONENTS Interpreter)

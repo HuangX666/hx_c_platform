@@ -33,7 +33,7 @@ macOS Intel 10.13／ARM64 11.0、Windows 7 SP1 和嵌入式目标实测单独标
 | 19 | 优先级、亲和性、延迟任务 | Windows 48/48；Linux 50/50；ASan/TSan 7/7；x86 本批通过 |
 | 20 | 本地套接字与双向管道 | Windows 51/51；Linux 53/53；ASan/TSan 8/8；x86 本批通过 |
 | 21 | 注册表、电源与混淆 | Windows 57/57; Linux 59/59; ASan 8/8; x86 5/5; Apple pending |
-| 22 | 日期、翻译表、位流 | 待实现 |
+| 22 | 日期、翻译表、位流 | Windows 63/63; Linux 65/65; ASan 8/8; TSan 6/6; x86 7/7 |
 | 23 | 信号、可变设置、区间 profiler | 待实现 |
 | 24 | 原子与内存序 | 待实现 |
 

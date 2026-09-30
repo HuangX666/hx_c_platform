@@ -2,6 +2,9 @@
 #include <hx/Registry.hpp>
 #include <hx/Power.hpp>
 #include <hx/Obfuscate.hpp>
+#include <hx/Calendar.hpp>
+#include <hx/TextLookup.hpp>
+#include <hx/Bitstream.hpp>
 #include <cstdio>
 #include <cstdlib>
 #include <utility>
@@ -28,6 +31,27 @@ static void hx_registry_cleanup()
 int main()
 {
 	const auto capabilities = hx_os_capabilities();
+	if (capabilities & HX_OS_CAP_CALENDAR)
+		CHECK(hx::Calendar::utc(-1) == "1969-12-31T23:59:59Z");
+	if (capabilities & HX_OS_CAP_TEXT_LOOKUP) {
+		hx::TextLookup lookup;
+		lookup.add("hello", "你好😀");
+		auto moved = std::move(lookup);
+		CHECK(moved.get("hello") == "你好😀");
+		CHECK(moved.get("missing") == "missing");
+	}
+	if (capabilities & HX_OS_CAP_BITSTREAM) {
+		unsigned char data[4] = {};
+		hx::BitWriter writer(data, sizeof(data));
+		writer.write(3, 5);
+		writer.align();
+		writer.write(9, 257);
+		CHECK(writer.bytesWritten() == 3);
+		hx::BitReader reader(data, writer.bytesWritten());
+		CHECK(reader.read(3) == 5);
+		reader.align();
+		CHECK(reader.read(9) == 257 && reader.remaining() == 7);
+	}
 	if (capabilities & HX_OS_CAP_OBFUSCATION) {
 		constexpr auto text = hx::obfuscate<0x5a>("C++ 中文😀");
 		CHECK(text.decode() == "C++ 中文😀");
