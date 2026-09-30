@@ -50,6 +50,7 @@ option(HX_OS_ENABLE_OBFUSCATION "Build reversible string obfuscation" ON)
 option(HX_OS_ENABLE_CALENDAR "Build locale-independent calendar helpers" ON)
 option(HX_OS_ENABLE_TEXT_LOOKUP "Build bounded translation tables" ON)
 option(HX_OS_ENABLE_BITSTREAM "Build bounded bit stream cursors" ON)
+option(HX_OS_ENABLE_SIGNALS "Build synchronous signals and parameter packs" ON)
 set(HX_OS_ICONV_SOURCE_DIR "" CACHE PATH "Unmodified GNU libiconv source")
 set(HX_OS_SANITIZER "" CACHE STRING "address,undefined or thread")
 
@@ -187,6 +188,7 @@ add_library(hx_c_platform
 	src/process.c src/process_capture.c src/local.c src/duplex_pipe.c
 	src/registry.c src/power.c src/obfuscate.c
 	src/calendar.c src/text_lookup.c src/bitstream.c
+	src/calldata.c src/signal.c
 	${hx_parser_sources} ${hx_parser_objects}
 	${hx_platform_sources})
 if(HX_OS_ENABLE_CALENDAR)

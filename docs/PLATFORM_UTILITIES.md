@@ -1200,3 +1200,72 @@ Disabled operations return NOT_SUPPORTED with absent capability bits.
 The C++11 conveniences are `hx::Calendar::utc`, `hx::TextLookup::get` and
 `hx::BitReader`/`hx::BitWriter`; they reuse the C implementations. Bit cursors
 remain borrowed views, while TextLookup provides movable synchronous RAII.
+
+
+## Synchronous signals and stack parameters (batch 23a)
+
+Create a dispatcher with `hx_os_signal_handler_create`, connect a copied signal
+name, and call `hx_os_signal_emit` with an optional stack `hx_os_calldata` pack.
+The C example is `examples/signal_notifications.c`. No background thread or
+queue is created. Callbacks run synchronously on the emitter, outside locks,
+in registration order for that emission's snapshot. Connections added after
+acceptance wait for the next emit. Disconnected callbacks that have not started
+are skipped. Concurrent emits can invoke the same callback concurrently;
+its user state must support that use. Callback failures do not suppress later
+eligible callbacks; emit returns the first non-OK status and matching native
+error details. The callback receives an initialized, non-NULL error pointer
+borrowed for the call. A mismatched error.status is normalized to its returned
+status without inventing native details.
+
+Connection IDs include a generation. Reused capacity cannot let an old ID
+remove a new subscription. IDs belong to one handler and must not be forged.
+The handler owns subscriptions; an output ID is optional. Connect copies its
+strict UTF-8 name (1..127 bytes), borrows user state, and on acceptance adopts
+optional cleanup exactly once. Rejection calls neither callback nor cleanup.
+`disconnect` prevents future starts and may immediately execute eligible
+cleanup. `disconnect_until` additionally waits for running callbacks AND
+cleanup, using a monotonic deadline. Timeout keeps the ID/handler/user alive
+for retry. Waiting for the current callback/cleanup, including an ancestor in
+nested emission, reports DEADLOCK. General cross-thread wait cycles remain
+the host's responsibility.
+
+`stop` only prevents new connections, emits and callback starts. `close_until`
+then retires all subscriptions, waits for accepted emitters/cleanup and consumes
+the handler on success. Failure retains it. The owner excludes other entrants
+and concurrent close during this final lifetime transition; accepted emits may
+finish concurrently. Successful close does not join the host's emitting
+threads: all API calls must have returned before unloading the platform DLL.
+Before unloading a consumer plugin, retire its callbacks/cleanup first.
+User code must return normally, without longjmp, thread exit or fiber switches.
+Synchronous cleanup can exceed a deadline; no hard callback cancellation is
+promised. The library never terminates the process or detaches a host thread.
+
+Defaults are 256 connection slots, 64 simultaneous emits and nesting depth 16;
+options allow smaller embedded budgets. Hard limits are 65535 slots/emits and
+64 nesting frames. Slots are allocated at creation. A nonempty emit allocates
+only matching ID storage, bounded by 8 * max_connections bytes, outside locks.
+It sorts IDs and invokes callbacks indirectly. Connect uses one mutex pair and
+no allocation. An empty emit allocates nothing; emission scans the bounded slot
+array. Callback dispatch takes locks around selection and retirement, never
+around user code. Thread-local ancestry is a pointer to active stack frames;
+there is no TLS destructor or process-wide callback registry. Existing module
+hot paths gain no extra locks or allocations.
+
+The fixed-layout calldata pack has 16 entries and 512 bytes shared by copied
+names/strings, including terminators. Names use strict UTF-8 (1..127 bytes);
+strings support embedded NUL. Typed bool/i64/double/string/pointer getters
+separate missing keys from wrong types and preserve outputs on failure.
+Pointer values are borrowed and never released. Setting is transactional and
+reclaims replaced text without heap allocation. Copying the whole pack is safe
+because strings use offsets into its own storage; borrowed views expire on
+mutation. Emit borrows a read-only pack until return.
+
+`hx::CallData` supports chained setters; `hx::SignalHandler::connect` copies a
+C++11 std::function and releases it after retirement. CallDataView is borrowed;
+its string getter returns an owning std::string. StatusError thrown by a C++
+callback retains details; other exceptions become IO_ERROR and never cross C.
+The facade references a host-owned handle and requires explicit closeUntil,
+so timeout never discards the remaining resource. Closure allocation uses the
+C++ runtime; core dispatch uses the supplied context. SIGNALS is an independent
+default-on switch, including calldata operations; pure initializers still work
+when disabled, while operational functions return NOT_SUPPORTED.

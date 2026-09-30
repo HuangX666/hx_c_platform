@@ -30,6 +30,7 @@
 #include "hx_os_calendar.h"
 #include "hx_os_text_lookup.h"
 #include "hx_os_bitstream.h"
+#include "hx_os_signal.h"
 #include "hx_os_bits.h"
 #include "hx_os_posix.h"
 #include "hx_string.h"

@@ -636,3 +636,25 @@ Windows German_Germany.1252 和既有私有 Linux de_DE.UTF-8 locale 探针通�
 reader/writer 在 Windows/Linux x64 为 24/8，Windows x86 为 12/4；lookup
 options 分别为 24/8、16/4。既有公开布局不变，原有热路径未新增锁或分配。
 Apple 原生时区、Win7、ARM/musl 与嵌入式板卡仍待验证。
+
+
+## OBS 补齐第 23a 批：信号（2026-09-30）
+
+Windows 全量 66/66，WSL Linux 68/68；ASan/UBSan 和 TSan 相关各 5/5，
+覆盖 data、calldata、signal、cpp_extensions 和 signal_notifications_example。
+双端关闭模块各 3/3，Windows x86 相关 4/4。公共头 C99/C++11 独立编译、源码
+规范和差异检查通过。
+
+覆盖连接代次防误断开、注册顺序、回调内连接/断开、快照跳过、原生错误及
+cause 保留、C++ 异常收束、自身/祖先等待拒绝、连接/并发发出/嵌套上限、拒绝
+不调用清理，以及创建/发出中的分配失败。分配器在快照分配期间重入断开，
+验证分配回调位于内部锁外。四个发出线程同时停留在回调里，另一线程断开；
+退役后不再启动回调，清理恰好一次。分别阻塞回调和清理，验证 NOW 关闭/等待
+失败后保留资源、释放阻塞后重试成功。参数包覆盖各类型、含 NUL 文本、类型
+错误/缺失、容量耗尽、替换不累积空间、直接复制独立性和设置失败保留。
+测试不使用网络或外部服务。
+
+Windows/Linux x64 和 Windows x86 的 calldata 均为 776/8；信号 options
+分别 32/8、20/4，私有槽 168/8、160/8，handler 88/8、56/8。x64 默认槽存储
+43008 字节，匹配连接快照每项 8 字节，另计分配器开销。不据此宣称性能提升。
+Apple、Win7 和嵌入式/musl 仍待原生验证；本次提交尚未完成第 23 批设置和 profiler。

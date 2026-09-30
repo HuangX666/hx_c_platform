@@ -740,3 +740,32 @@ lookup options are 24/8 and 16/4. Existing public layouts remain unchanged.
 No existing hot path gained locks or allocations. Native Apple timezone rules,
 Win7, ARM/musl and embedded board runs remain pending; Linux locale tests do
 not count as Apple validation.
+
+
+## OBS completion batch 23a: signals (2026-09-30)
+
+Windows full CTest 66/66; WSL Linux 68/68. ASan/UBSan and TSan each passed
+5/5 (data, calldata, signal, cpp_extensions, signal_notifications_example).
+Feature-off suites passed 3/3 per host and Windows x86 related suites 4/4.
+C99/C++11 isolated headers, source rules and diff checks passed.
+
+Coverage includes generation-safe slot reuse, registration order, connect and
+disconnect from callbacks, snapshot skipping, callback native error/cause
+preservation, C++ exception containment, self/ancestor wait prevention,
+connection/emission/nesting limits, rejection without cleanup, and allocation
+failure through creation and emission. A custom allocator re-enters disconnect
+during snapshot allocation, proving that user allocation runs outside the
+handler lock. Four concurrent emitters are held in callbacks while another
+thread disconnects; after retirement no later callback starts and cleanup runs
+once. Separate barriers verify NOW close/wait failure while either callback or
+cleanup is still running, followed by successful retry. Stack parameters test
+all types, copied text including NUL, wrong/missing types, capacity exhaustion,
+replacement without arena growth, copied-pack independence and failed-set
+preservation. No network or external service is used.
+
+Measured calldata is 776/8 on Windows/Linux x64 and Windows x86. Signal options
+are 32/8 (x64) and 20/4 (Windows x86); private slots 168/8 and 160/8; handlers
+88/8 and 56/8. Default slot storage is 43008 bytes on x64; matching-ID snapshots
+cost 8 bytes per selected connection plus allocator overhead. No performance
+speedup is claimed. Native Apple, Win7 and embedded/musl runs remain pending.
+The settings and profiler portions of batch 23 are still pending at this commit.

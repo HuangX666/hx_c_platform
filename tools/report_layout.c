@@ -11,6 +11,7 @@
 #include "hx_os_obfuscate.h"
 #include "hx_os_bitstream.h"
 #include "hx_os_text_lookup.h"
+#include "signal_private.h"
 #include <stdio.h>
 
 #define HX_OS_LAYOUT(type)                                                     \
@@ -60,6 +61,10 @@ int main(void)
 	HX_OS_LAYOUT(hx_os_bit_reader);
 	HX_OS_LAYOUT(hx_os_bit_writer);
 	HX_OS_LAYOUT(hx_os_text_lookup_options);
+	HX_OS_LAYOUT(hx_os_calldata);
+	HX_OS_LAYOUT(hx_os_signal_options);
+	HX_OS_LAYOUT(hx_os_signal_slot);
+	HX_OS_LAYOUT(hx_os_signal_handler);
 #if defined(_WIN32)
 	HX_OS_LAYOUT(hx_os_i_duplex_file);
 #endif

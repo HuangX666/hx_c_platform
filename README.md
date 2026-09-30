@@ -10,7 +10,7 @@
 [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md)
 [![macOS validation pending][macos-badge]](docs/VALIDATION.md)
 [![Windows MSVC][windows-badge]](docs/VALIDATION.md)
-[![Windows 63/63 and Linux 65/65 local suites passed][tests-badge]](docs/VALIDATION.md)
+[![Windows 66/66 and Linux 68/68 local suites passed][tests-badge]](docs/VALIDATION.md)
 [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md)
 
 Query system information directly through C or `hx::SystemInfo`;
@@ -23,8 +23,8 @@ Query system information directly through C or `hx::SystemInfo`;
 Badge evidence is recorded through **2026-09-30**. CI is configured; no remote
 CI pass is claimed for this project. The **C++ facade only** is header-only;
 the C core is a compiled static/shared library. C++11 has been checked;
-a C++14/17/20 matrix has not been verified. Counts describe **63 Windows /
-65 Linux CTest entries**, not individual assertions. The extra Linux entries
+a C++14/17/20 matrix has not been verified. Counts describe **66 Windows /
+68 Linux CTest entries**, not individual assertions. The extra Linux entries
 exercise native random-provider failures.
 Linux evidence is from WSL: GCC library tests and a Clang C++11 facade test.
 Windows evidence covers local MSVC x86/x64 builds. macOS and embedded SDK/board
@@ -313,5 +313,5 @@ by this new library or a migration.
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%2063%2F63%20Linux%2065%2F65-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%2066%2F66%20Linux%2068%2F68-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
