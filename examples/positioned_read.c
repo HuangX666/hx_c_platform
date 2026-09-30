@@ -1,7 +1,8 @@
 #include <hx_os_file.h>
 #include <stdio.h>
+#include "example_arguments.h"
 
-int main(int argc, char **argv)
+static int hx_example_main(int argc, const char *const *argv)
 {
 	hx_os_file *file = NULL;
 	unsigned char bytes[4];

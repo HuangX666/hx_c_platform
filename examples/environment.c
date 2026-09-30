@@ -1,7 +1,8 @@
 #include <hx_os.h>
 #include <stdio.h>
+#include "example_arguments.h"
 
-int main(int argc, char **argv)
+static int hx_example_main(int argc, const char *const *argv)
 {
 	hx_string value = HX_STRING_INIT;
 	hx_os_status status;

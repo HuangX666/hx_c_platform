@@ -1,7 +1,8 @@
 #include <hx_os.h>
 #include <stdio.h>
+#include "example_arguments.h"
 
-int main(int argc, char **argv)
+static int hx_example_main(int argc, const char *const *argv)
 {
 	typedef uint32_t(HX_OS_CALL * hx_plugin_abi_fn)(void);
 	typedef hx_os_status(HX_OS_CALL * hx_plugin_version_fn)(

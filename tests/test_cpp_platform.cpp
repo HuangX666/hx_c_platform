@@ -1,4 +1,6 @@
 #include <hx/SystemInfo.hpp>
+#include <hx/System.hpp>
+#include <hx/Process.hpp>
 #include <hx/Library.hpp>
 #include <hx/Files.hpp>
 #include <hx/Environment.hpp>
@@ -105,7 +107,39 @@ static void test_cpp_pipe()
 
 int main(int argc, char **argv)
 {
-	CHECK(argc == 2);
+	CHECK(argc == 3);
+	if (hx_os_capabilities() & HX_OS_CAP_SYSTEM_UTILS) {
+		CHECK(!hx::System::arguments().empty());
+		CHECK(!hx::System::hostName().empty());
+		CHECK(hx::System::processId() != 0);
+		(void)hx::System::cpuFeatures();
+	}
+	if (hx_os_capabilities() & HX_OS_CAP_PROCESS) {
+		hx_os_process *owner = NULL;
+		hx::Process process(owner);
+		hx_os_process_result result;
+		process.spawn(argv[2], {"empty"});
+		CHECK(process.identifier());
+		CHECK(process.waitUntil(hx_os_deadline_after_ms(5000),
+			      result) == HX_OS_OK &&
+			!result.exit_code);
+		CHECK(process.closeUntil(HX_OS_DEADLINE_NOW) == HX_OS_OK &&
+			!owner);
+		if (hx_os_capabilities() & HX_OS_CAP_ASYNC_PIPE) {
+			hx_os_process_capture *captured = NULL;
+			hx::ProcessCapture capture(captured);
+			CHECK(capture.run(argv[2], {"delay"},
+				      HX_OS_DEADLINE_NOW) == HX_OS_TIMEOUT &&
+				captured);
+			CHECK(capture.waitUntil(hx_os_deadline_after_ms(
+				      5000)) == HX_OS_OK);
+			CHECK(capture.text() == "finished");
+			CHECK(capture.bytes().size() == 8);
+			CHECK(capture.closeUntil(hx_os_deadline_after_ms(
+				      1000)) == HX_OS_OK &&
+				!captured);
+		}
+	}
 	{
 		hx_os_error native = {HX_OS_IO_ERROR, HX_OS_ERROR_NONE, 123, 0};
 		hx::StatusError error(native);

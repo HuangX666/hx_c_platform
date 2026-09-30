@@ -4,6 +4,7 @@
 #include "vm_private.h"
 #include "hx_os_file_extra.h"
 #include "watch_private.h"
+#include "process_private.h"
 #include <stdio.h>
 
 #define HX_OS_LAYOUT(type)                                                     \
@@ -38,5 +39,10 @@ int main(void)
 	HX_OS_LAYOUT(hx_os_watch_options);
 	HX_OS_LAYOUT(hx_os_watch_event);
 	HX_OS_LAYOUT(hx_os_loop_watch);
+	HX_OS_LAYOUT(hx_os_string_list);
+	HX_OS_LAYOUT(hx_os_process);
+	HX_OS_LAYOUT(hx_os_process_options);
+	HX_OS_LAYOUT(hx_os_process_result);
+	HX_OS_LAYOUT(hx_os_process_capture_options);
 	return 0;
 }

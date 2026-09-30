@@ -38,6 +38,8 @@ option(HX_OS_ENABLE_VIRTUAL_MEMORY "Build pages and file mappings" ON)
 option(HX_OS_ENABLE_FILE_EXTRA "Build range locks, times and permissions" ON)
 option(HX_OS_ENABLE_WATCH "Build bounded native directory monitoring" ON)
 option(HX_OS_ENABLE_LOOP_FD "Build POSIX descriptor readiness integration" ON)
+option(HX_OS_ENABLE_SYSTEM_UTILS "Build process and CPU identity queries" ON)
+option(HX_OS_ENABLE_PROCESS "Build explicit child process control" ON)
 set(HX_OS_ICONV_SOURCE_DIR "" CACHE PATH "Unmodified GNU libiconv source")
 set(HX_OS_SANITIZER "" CACHE STRING "address,undefined or thread")
 
@@ -76,6 +78,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR
 	if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 		check_symbol_exists(explicit_bzero string.h
 			HX_OS_HAVE_EXPLICIT_BZERO)
+		check_symbol_exists(getauxval sys/auxv.h HX_OS_HAVE_GETAUXVAL)
 		check_symbol_exists(pthread_condattr_setclock pthread.h
 			HX_OS_HAVE_COND_CLOCK)
 		if(NOT HX_OS_HAVE_COND_CLOCK)
@@ -170,8 +173,27 @@ add_library(hx_c_platform
 	src/file_info.c src/bom.c src/number.c src/config_serialize.c
 	src/timer.c src/util.c src/vm.c src/file_extra.c
 	src/watch.c src/loop_fd.c
+	src/system.c src/cpu_features.c src/time_posix.c
+	src/process.c src/process_capture.c
 	${hx_parser_sources} ${hx_parser_objects}
 	${hx_platform_sources})
+if(HX_OS_ENABLE_PROCESS)
+	if(WIN32)
+		target_sources(hx_c_platform PRIVATE
+			src/windows/process_native.c)
+	else()
+		target_sources(hx_c_platform PRIVATE src/posix/process_native.c)
+	endif()
+endif()
+if(HX_OS_ENABLE_SYSTEM_UTILS)
+	if(WIN32)
+		target_sources(hx_c_platform PRIVATE
+			src/windows/system_native.c)
+		target_link_libraries(hx_c_platform PRIVATE shell32)
+	else()
+		target_sources(hx_c_platform PRIVATE src/posix/system_native.c)
+	endif()
+endif()
 if(HX_OS_ENABLE_WATCH)
 	if(WIN32)
 		target_sources(hx_c_platform PRIVATE src/windows/watch_native.c)
@@ -403,6 +425,9 @@ if(WIN32)
 	endif()
 	if(HX_OS_ENABLE_RANDOM)
 		string(APPEND HX_OS_PC_LIBS_PRIVATE " -ladvapi32")
+	endif()
+	if(HX_OS_ENABLE_SYSTEM_UTILS AND NOT HX_OS_ENABLE_PATHS)
+		string(APPEND HX_OS_PC_LIBS_PRIVATE " -lshell32")
 	endif()
 	if(HX_OS_ENABLE_NETWORK)
 		string(APPEND HX_OS_PC_LIBS_PRIVATE " -lws2_32")

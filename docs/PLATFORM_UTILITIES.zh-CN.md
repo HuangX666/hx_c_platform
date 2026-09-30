@@ -629,3 +629,83 @@ hx_os_status status = hx_os_loop_attach_fd(loop, fd, HX_OS_WAIT_READ,
 /* The callback can use hx_os_loop_watch_descriptor(watch), then request stop. */
 /* Drive loop; finally check hx_os_loop_detach_fd(&watch, &error). */
 ```
+
+## 进程、输出捕获与系统工具（第 18 批）
+
+PROCESS 与 SYSTEM_UTILS 默认开启，可独立关闭。Windows 的系统工具为原生
+Unicode 参数读取增加 Shell32 链接。捕获依赖 PROCESS、PIPE、LOOP，关闭
+NETWORK 仍可用。整数微工具和显式 POSIX timespec 转换不依赖这两个模块；
+Windows 的 timespec 操作返回 NOT_SUPPORTED。
+
+`hx_os_process_spawn` 接收 UTF-8 可执行文件路径、参数数组、可选完整环境
+和标准流重定向。参数不包含 argv[0]，由库根据路径补入；不执行 shell，
+不搜索 PATH。NULL 参数表示无参数；NULL 环境表示继承快照，{NULL} 表示
+空环境。环境项为非空名称=value，名称必须唯一，Windows 不区分名称大小写。
+显式环境不会自动补入 SystemRoot/PATH，调用者提供子程序需要的变量。
+输入只在启动期间借用，启动成功后由进程对象持有原生资源。
+
+参数和环境分别限制为 4 MiB、65536 项。Windows 转为 UTF-16，按 CRT /
+CommandLineToArgvW 规则转义引号和反斜杠，检查原生 32767 宽字符命令行限制，
+排序 Unicode 环境，显式选择可执行文件。自定义命令行解析器可能采用不同
+规则。标准句柄通过私有允许列表继承；缺失的 Windows 父标准流用 NUL。
+临时可继承副本存在期间，宿主需协调其他“不限制继承列表”的启动操作。
+POSIX 使用 posix_spawn、CLOEXEC 私有副本及 dup2 动作；宿主没有设置 CLOEXEC
+的描述符仍会继承，相关关闭与启动操作需宿主协调。继承的 POSIX 环境保留
+原始字节，公共环境枚举则在任何回调前严格验证 UTF-8。
+
+同一进程对象的操作需要外部互斥。NOW 尝试一次；有限及无限等待沿用单调
+截止时间，原生完成查询之间请求最多 5 ms 睡眠，不保证硬截止时间。
+超时保留对象与结果，可重试；成功结果缓存，非零退出码也属于等待成功。
+POSIX 信号退出单独报告，不伪造 128+signal 退出码；Windows 先判断完成再取
+退出码，因此真实退出码 259 不会被误判为仍运行。
+destroy 在仍运行时返回 BUSY；close_until 先等待再销毁。
+库不强杀、不分离、不创建回收线程、不修改 SIGCHLD；宿主不能自行回收同一
+子进程或将 SIGCHLD 设为忽略。
+
+`hx_os_process_capture_run` 内部启动进程并通过私有 loop 同时收集 stdout /
+stderr，子进程 stdin 为 EOF；不启动工作线程。默认每路保留 1 MiB 原始字节。
+管道、loop 和首批读请求在启动前准备好；子进程一旦启动，即使返回 TIMEOUT、
+LIMIT 或 I/O 错误，仍向调用者交付会话对象，可在原对象上继续等待或关闭。
+成功要求子进程退出且两路都达到 EOF；继承写端的后代进程可能延迟 EOF。
+
+恰好达到上限也会返回 LIMIT，即使下一次读取可能就是 EOF。调用者可提高
+上限，或显式选择丢弃后续输出并继续排空。已经接受的读请求仍提交保留的
+前缀；I/O 失败后选择丢弃，会关闭已经退役的失败流，子进程可能看到断管。
+库不静默截断。字节视图借用到下次等待／关闭；文本转换默认严格 UTF-8，
+保留 BOM，使用输出字符串自己的 context，失败保持输出不变。
+超时快照可能停在字符中间，此时转换可以失败。旧编码仍取决于已有可选编码
+后端，内置 Unicode／ISO-8859-1 转换不依赖该后端。
+
+会话占用两个请求槽、32 KiB 在途字节预算，保留缓冲按需几何增长；显式
+丢弃时每路可再分配 16 KiB 临时缓冲。上限约束保留输出，不等于整个堆内存
+上限：扩容峰值同时持有旧／新缓冲，还需请求对象、分配器元数据、启动快照
+和原生资源。每次读取复用现有请求的分配、锁、事件机制。既有文件、线程、
+线程池热路径没有增加锁、间接调用、分配或系统调用；同步管道创建补记实际
+读写方向，以便验证进程重定向权限。
+
+`hx_os_process_arguments` 返回独立持有的 UTF-8 快照，包含 argv[0]：
+Windows 从原生宽字符命令行读取，Linux 读取 /proc/self/cmdline，Apple 使用
+原生 argc/argv。Linux 缺失 procfs 时返回 NOT_SUPPORTED。C 示例共用参数
+适配入口；裁剪版本要求宿主提供 UTF-8 argv，不能保证 Windows 窄字符 CRT
+的 Unicode 保真。主机名支持缓冲和 hx_string 输出，进程 ID 使用原生标识。
+环境枚举在库内环境锁下取有界快照，锁外回调允许重入和修改；外部 CRT／原生
+环境修改仍需宿主互斥。锁内暂存采用 CRT 分配，避免调用注入分配器回调。
+
+CPU 位集覆盖能确认可用的 SSE/SSE2/SSE4.1/AVX/AVX2/NEON；AVX 同时检查 XSAVE、
+OSXSAVE 与 XCR0 的 XMM/YMM 状态。ARM 使用可用的原生辅助向量／系统能力查询，
+未知位不声称支持。WOW64／Rosetta 是系统兼容／翻译状态，不是虚拟机探测；
+无法可靠确定的 Linux 仿真状态返回 NOT_SUPPORTED 并保留输出。
+字节序交换和 udiv64 使用可移植头内联 C；除零返回 INVALID 并保留输出。
+ARM 工具链选择自身除法 ABI 辅助实现；除法基准与相同原生表达式对照，
+不声称采用汇编获得加速。
+
+POSIX 时长转换检查 time_t 范围。截止时间转换要求明确传入 CLOCK_MONOTONIC
+或 CLOCK_REALTIME，通过采样原生时钟并加上库截止时间的剩余时长完成，
+不直接转换不同时钟的纪元；无限截止时间返回 NOT_SUPPORTED。墙钟调整、
+休眠及调度仍影响原生等待，唤醒后必须重新检查条件和截止时间。
+
+C++11 的 `hx::System` 返回独立字符串／vector；`hx::Process` 和
+`hx::ProcessCapture` 引用宿主持有的 C 句柄，异常／超时后仍可找回资源；
+析构不会等待、分离或强杀。完整可执行用法见
+[capture_process.c](../examples/capture_process.c)，其中明确选择超时重试和
+达到上限后丢弃未来输出的策略。macOS、Win7、嵌入式目标仍待原生验证。

@@ -1,4 +1,5 @@
 #include "pipe_private.h"
+#include "file_private.h"
 #if HX_OS_ENABLE_LOOP
 #include "loop_private.h"
 #endif
@@ -46,6 +47,10 @@ static hx_os_status hx_os_pipe_create_pair(hx_os_context *context,
 		hx_os_memory_free(writer);
 		return status;
 	}
+	if (read_sync)
+		(*read_sync)->flags = HX_OS_FILE_READ;
+	if (write_sync)
+		(*write_sync)->flags = HX_OS_FILE_WRITE;
 	if (reader) {
 		reader->native = handles[0];
 		reader->direction = HX_OS_WAIT_READ;

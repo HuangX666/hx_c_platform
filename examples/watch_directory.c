@@ -1,5 +1,6 @@
 #include <hx_os.h>
 #include <stdio.h>
+#include "example_arguments.h"
 
 static void changed(
 	hx_os_watch *watch, const hx_os_watch_event *event, void *user)
@@ -14,7 +15,7 @@ static void changed(
 	else
 		printf("%u: %s\n", event->kind, event->path);
 }
-int main(int argc, char **argv)
+static int hx_example_main(int argc, const char *const *argv)
 {
 	hx_os_watch *watch = NULL;
 	hx_os_error error;

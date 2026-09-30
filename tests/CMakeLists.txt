@@ -33,7 +33,7 @@ set_tests_properties(library PROPERTIES TIMEOUT 20)
 
 set(hx_test_suites data options lifecycle config containers sysinfo file_utils
 	env paths thread_extra pipe io_options file_info config_serialize timer
-	error_text util vm file_extra watch loop_fd)
+	error_text util vm file_extra watch loop_fd system)
 if(HX_OS_ENABLE_THREAD_POOL)
 	list(APPEND hx_test_suites pool)
 endif()
@@ -54,6 +54,18 @@ endforeach()
 if(WIN32)
 	target_link_libraries(hx_os_test_file_extra PRIVATE shell32)
 endif()
+add_executable(hx_os_process_fixture process_fixture.c)
+add_executable(hx_os_test_process test_process.c)
+foreach(process_target IN ITEMS hx_os_process_fixture hx_os_test_process)
+	target_link_libraries(${process_target} PRIVATE hx_c_platform)
+	set_target_properties(${process_target} PROPERTIES
+		C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+	hx_apply_warnings(${process_target})
+endforeach()
+add_test(NAME process COMMAND hx_os_test_process
+	$<TARGET_FILE:hx_os_process_fixture>)
+set_tests_properties(process PROPERTIES TIMEOUT 30)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND HX_OS_ENABLE_RANDOM)
 	add_test(NAME random_fallback COMMAND hx_os_test_util fallback)
 	add_test(NAME random_failure COMMAND hx_os_test_util failure)
@@ -119,6 +131,7 @@ if(CMAKE_CXX_COMPILER)
 		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 	hx_apply_warnings(hx_os_test_cpp_platform)
 	add_test(NAME cpp_platform COMMAND hx_os_test_cpp_platform
-		$<TARGET_FILE:hx_os_test_library_module>)
+		$<TARGET_FILE:hx_os_test_library_module>
+		$<TARGET_FILE:hx_os_process_fixture>)
 	set_tests_properties(cpp_platform PROPERTIES TIMEOUT 20)
 endif()

@@ -219,7 +219,8 @@ int main(void)
 	}
 	(void)snprintf(root, sizeof(root), "hx-file-utils-%llx",
 		(unsigned long long)hx_os_monotonic_ns());
-	(void)snprintf(source, sizeof(source), "%s/文.txt", root);
+	/* v142's format checker rejects non-ASCII format text under /utf-8. */
+	(void)snprintf(source, sizeof(source), "%s/%s", root, "文.txt");
 	(void)snprintf(copy, sizeof(copy), "%s/copy.txt", root);
 	(void)snprintf(backup, sizeof(backup), "%s/backup", root);
 	(void)snprintf(sub, sizeof(sub), "%s/sub", root);

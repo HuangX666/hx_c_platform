@@ -10,7 +10,7 @@
 [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md)
 [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md)
 [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md)
-[![本地 Windows 42/42、Linux 44/44 组测试通过][tests-badge]](docs/VALIDATION.zh-CN.md)
+[![本地 Windows 46/46、Linux 48/48 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md)
 [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md)
 
 系统信息可通过 C 接口或 `hx::SystemInfo` 直接查询；
@@ -20,10 +20,11 @@
 
 [English](README.md)
 
-徽章依据截至 **2026-09-29** 的记录：CI 已配置，本项目尚未声明远程 CI 通过。
+徽章依据截至 **2026-09-30** 的记录：CI 已配置，本项目尚未声明远程 CI 通过。
 **只有 C++ 封装是 header-only**，C 核心需要编译为静态库／共享库。
 C++11 已验证，尚未验证 C++14/17/20 矩阵。
-测试数字表示**本地完整配置的 10 组 CTest 测试**，不是断言或独立用例数。
+测试数字表示**Windows 46 项／Linux 48 项 CTest 入口**，不是断言数量；
+Linux 额外两项验证原生随机源故障。
 Linux 证据来自 WSL：GCC 库测试，以及 Clang 的 C++11 封装测试；
 Windows 证据来自本地 MSVC x86/x64 构建。
 macOS、嵌入式 SDK／板卡仍待验证，自有代码分发许可证也尚未确定。
@@ -52,6 +53,9 @@ macOS、嵌入式 SDK／板卡仍待验证，自有代码分发许可证也尚�
 | hx_os_pool.h | 有界工作线程／任务、取消、可重试关闭 |
 | hx_os_net.h | IPv4/IPv6、TCP/UDP、阻塞 DNS、截止时间等待 |
 | hx_os_loop.h | 基于 IOCP、epoll、kqueue 的完成回调 |
+| hx_os_process.h | 子进程与有界的双路输出捕获 |
+| hx_os_system.h | UTF-8 参数、主机／进程标识与可用 CPU 能力 |
+| hx_os_bits.h / hx_os_posix.h | 整数微工具和显式时钟转换 |
 | hx_config.h | 只读配置文档与可选第三方解析后端 |
 | hx_container.h | 有界 C 序列、有序／哈希 map 和 set |
 | hx/ThreadPool.hpp | 可选 C++11 任务、返回值、异常和取消令牌 |
@@ -143,6 +147,8 @@ EUC-KR 和 Windows 1252/932/936/949/950。
 | HX_OS_ENABLE_FILE_EXTRA | ON | 区间锁、时间戳与权限摘要更新 |
 | HX_OS_ENABLE_WATCH | ON | 有界目录通知与显式关闭 |
 | HX_OS_ENABLE_LOOP_FD | ON | POSIX 描述符就绪通知，依赖 LOOP |
+| HX_OS_ENABLE_SYSTEM_UTILS | ON | 原生 UTF-8 参数和 CPU／系统身份查询 |
+| HX_OS_ENABLE_PROCESS | ON | 子进程控制；输出捕获还需 PIPE + LOOP |
 | HX_OS_ENABLE_CJSON/LIBYAML/MINIXML/INIH/TOMLC | OFF | 第三方解析适配 |
 | HX_OS_BUILD_TESTS | ON | 契约测试和公共头独立编译 |
 | HX_OS_BUILD_EXAMPLES | ON | C 示例；已启用 CXX 时包含 C++ 任务示例 |
@@ -287,5 +293,5 @@ C++ 封装按项目的 C++ 类名和方法名规范命名。
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%2042%2F42%20Linux%2044%2F44-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%2046%2F46%20Linux%2048%2F48-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey

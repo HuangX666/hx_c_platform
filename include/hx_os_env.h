@@ -26,6 +26,16 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_env_set(
 /* Removing a missing name succeeds. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_env_remove(
 	const char *name, hx_os_error *error);
+typedef hx_os_status(HX_OS_CALL *hx_os_env_visit_fn)(
+	const char *name, const char *value, void *user);
+/* Snapshot bounded to 4 MiB/65536 entries. Validate before calling visitors;
+ * callbacks run outside the environment lock and may modify the environment.
+ * Name/value pointers are borrowed only for that invocation. A callback's
+ * non-OK status stops iteration. Windows hidden '=X:' drive entries are
+ * omitted. External native/CRT environment mutation still needs exclusion.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_env_enumerate(hx_os_context *context,
+	hx_os_env_visit_fn function, void *user, hx_os_error *error);
 
 #ifdef __cplusplus
 }

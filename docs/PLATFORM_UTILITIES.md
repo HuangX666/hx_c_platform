@@ -792,3 +792,126 @@ hx_os_status status = hx_os_loop_attach_fd(loop, fd, HX_OS_WAIT_READ,
 /* The callback can use hx_os_loop_watch_descriptor(watch), then request stop. */
 /* Drive loop; finally check hx_os_loop_detach_fd(&watch, &error). */
 ```
+
+## Process control, capture and system helpers (batch 18)
+
+PROCESS and SYSTEM_UTILS default to ON and can be disabled independently.
+The system module adds Shell32 on Windows for native Unicode arguments.
+Capture requires PROCESS + PIPE + LOOP, and works with NETWORK disabled.
+The integer helpers and explicit POSIX timespec conversions remain available
+without either module; Windows timespec operations return NOT_SUPPORTED.
+
+`hx_os_process_spawn` takes a literal UTF-8 executable path, argument array
+excluding argv[0], optional complete environment and optional standard-stream
+redirections. The library supplies argv[0]. There is no shell or PATH search.
+NULL arguments means no arguments; NULL environment inherits a snapshot,
+whereas an array containing only NULL supplies an empty environment. Environment
+entries are nonempty-name=value with unique names; Windows compares names
+case-insensitively. No SystemRoot/PATH values are injected into an explicit
+environment. Callers must provide any variables their child requires.
+Inputs are borrowed during spawn; the process owns native resources afterwards.
+
+Arguments and environment are individually bounded to 4 MiB and 65536 entries.
+Windows converts to UTF-16, quotes according to CRT/CommandLineToArgvW rules,
+enforces the native 32767-wide-character command-line bound and sorts the
+Unicode environment. Children with a custom command parser may use different
+rules. Explicit executable selection avoids command-line executable ambiguity.
+CreateProcessW receives a private standard-handle allowlist. Missing inherited
+Windows standard streams use NUL. Temporary inheritable duplicates require host
+coordination with unrelated broad-inheritance spawns. POSIX uses posix_spawn
+with private CLOEXEC duplicates and dup2 actions. Host descriptors lacking
+CLOEXEC remain inherited; close/spawn coordination stays the host's responsibility.
+Inherited POSIX environment bytes are preserved; public environment enumeration
+instead validates UTF-8 before invoking any visitor.
+
+Process operations require exclusion on each object. NOW polls once;
+finite/infinite waits use the existing monotonic deadline, polling native
+completion with at most 5 ms requested sleeps. Scheduling can delay return.
+Timeout leaves the object and result valid for retry. Successful results are
+cached. Nonzero exit codes are successful waits; POSIX signal termination is
+reported separately without fabricating an exit code. Windows checks completion
+before reading the exit code, so a real exit code 259 is valid.
+Destroy returns BUSY while running; close_until waits and then destroys.
+The library never kills, detaches, starts a reaper thread or changes SIGCHLD.
+The host must not independently reap this child or ignore SIGCHLD.
+
+`hx_os_process_capture_run` performs spawn plus concurrent stdout/stderr
+collection on a private owner-thread loop. Child stdin is EOF. No worker thread
+is started. Default retained output is limited to 1 MiB per stream, raw bytes.
+Both pipes, the loop and initial reads are prepared before spawn. Once a child
+is accepted, even TIMEOUT, LIMIT or I/O failure returns an owned session.
+Wait and close can be retried on that session. Complete success requires both
+stream EOFs and child exit; descendants retaining write handles may delay EOF.
+
+At the exact output bound, LIMIT pauses that stream even if EOF might follow.
+The caller can raise_limit or explicitly discard future output while continuing
+to drain. A previously accepted read still commits its retained prefix.
+Discard after an I/O error closes that retired failed stream, which can expose
+a broken pipe to the child. There is no silent truncation. Borrowed byte views
+last until the next wait/close. Text conversion defaults to strict UTF-8,
+preserves BOM, uses the output string's context and is transactional.
+An incomplete character in a timeout snapshot may fail conversion. Legacy
+encodings still require the existing optional codec backend; built-in
+ISO-8859-1/Unicode conversions remain independent of it.
+
+The session uses two request slots, a 32 KiB in-flight byte budget, geometrically
+grown retained buffers and optional 16 KiB discard scratch per stream. Limits
+bound retained output, not all heap/native memory: buffer growth temporarily
+holds old+new storage; request objects, allocator metadata, spawn snapshots and
+native resources add overhead. Each read currently uses the existing request
+allocation/mutex/event machinery. No new locks, indirect calls, allocations or
+system calls were added to existing file/thread/pool hot paths. Synchronous
+pipe creation now records its actual read/write direction for spawn validation.
+
+`hx_os_process_arguments` owns a UTF-8 snapshot (including argv[0]): native
+Unicode command line on Windows, /proc/self/cmdline on Linux, native argc/argv
+on Apple. Missing Linux procfs returns NOT_SUPPORTED. The shared C example
+argument adapter uses this API; trimmed builds require host-provided UTF-8 argv
+and cannot promise Windows narrow-CRT Unicode fidelity.
+Hostname has buffer and hx_string forms; process ID is native. Environment
+enumeration takes a bounded snapshot under the library environment lock, then
+calls visitors outside that lock, permitting reentry and mutation. External
+native/CRT environment changes still require host exclusion. Snapshot staging
+uses CRT allocation while locked to avoid injected allocator callbacks there.
+
+CPU flags describe detected usable SSE/SSE2/SSE4.1/AVX/AVX2/NEON. AVX checks
+XSAVE, OSXSAVE and XCR0 XMM/YMM state. ARM uses native auxiliary-vector/OS
+capability queries where available; unknown bits are omitted. WOW64 and Rosetta
+are OS compatibility/translation reports, not virtual-machine detection.
+Unknown Linux emulation returns NOT_SUPPORTED and preserves output.
+Byte swaps and udiv64 are portable inline C; division by zero preserves outputs
+and returns INVALID. Supported ARM compilers select their normal division ABI
+helper. The division benchmark compares identical native division expressions;
+it does not claim an assembly speedup.
+
+POSIX duration conversion checks time_t range. Deadline conversion requires an
+explicit CLOCK_MONOTONIC or CLOCK_REALTIME and samples that clock plus remaining
+library duration. Infinite deadlines return NOT_SUPPORTED. It never casts one
+clock's epoch to another; callers must recheck predicates/deadlines after wake
+because wall-clock changes/suspend and scheduling can affect native waits.
+
+C++11 `hx::System` returns owned strings/vectors. `hx::Process` and
+`hx::ProcessCapture` reference host-owned C handles, retaining reachability on
+exceptions/timeouts; their destructors do not wait, detach or kill.
+
+```c
+hx_os_process_capture *capture = NULL;
+const char *arguments[] = {"--version", NULL};
+hx_os_status status = hx_os_process_capture_run(NULL, executable, arguments,
+	NULL, hx_os_deadline_after_ms(2000), &capture, &error);
+if (status == HX_OS_OK) {
+	hx_string output = HX_STRING_INIT;
+	status = hx_os_process_capture_text(capture, HX_OS_PROCESS_STDOUT,
+		&output, &error);
+	/* Use output, then destroy it. */
+	hx_string_destroy(&output);
+}
+/* Non-NULL capture remains owned on timeout/limit/error. Continue waiting,
+ * raise limits or explicitly discard as needed, then check close_until.
+ */
+```
+
+See [capture_process.c](../examples/capture_process.c) for an executable example
+with an explicit retry/discard policy, and the public process header for all
+ownership/error contracts. Native macOS, Windows 7 and embedded targets remain
+pending validation.

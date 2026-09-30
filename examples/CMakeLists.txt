@@ -1,7 +1,7 @@
 foreach(example IN ITEMS hello async_timer configuration containers system_info
 	load_plugin text_file environment special_paths thread_options
 	pipe_transfer positioned_read file_info config_save periodic_timer
-	random_uuid mapped_file file_attributes watch_directory)
+	random_uuid mapped_file file_attributes watch_directory capture_process)
 	add_executable(hx_os_${example} ${example}.c)
 	target_link_libraries(hx_os_${example} PRIVATE hx_c_platform)
 	set_target_properties(hx_os_${example} PROPERTIES
@@ -20,6 +20,14 @@ if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_FILE_UTILS)
 	add_test(NAME text_file_example COMMAND hx_os_text_file
 		"${CMAKE_CURRENT_BINARY_DIR}/text-fixture.txt")
 	set_tests_properties(text_file_example PROPERTIES TIMEOUT 20)
+	if(HX_OS_ENABLE_SYSTEM_UTILS)
+		set(hx_unicode_fixture
+			"${CMAKE_CURRENT_BINARY_DIR}/配置-😀.txt")
+		file(WRITE "${hx_unicode_fixture}" "Unicode filename\n")
+		add_test(NAME text_file_unicode_name
+			COMMAND hx_os_text_file "${hx_unicode_fixture}")
+		set_tests_properties(text_file_unicode_name PROPERTIES TIMEOUT 20)
+	endif()
 endif()
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_ENV)
 	add_test(NAME environment_example COMMAND hx_os_environment
@@ -81,6 +89,12 @@ endif()
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_WATCH)
 	add_test(NAME watch_directory_example COMMAND hx_os_watch_directory)
 	set_tests_properties(watch_directory_example PROPERTIES TIMEOUT 20)
+endif()
+if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_PROCESS AND HX_OS_ENABLE_PIPE
+		AND HX_OS_ENABLE_LOOP)
+	add_test(NAME process_capture_example COMMAND hx_os_capture_process
+		$<TARGET_FILE:hx_os_process_fixture> empty)
+	set_tests_properties(process_capture_example PROPERTIES TIMEOUT 20)
 endif()
 if(CMAKE_CXX_COMPILER_LOADED)
 	add_executable(hx_os_cpp_thread_pool thread_pool.cpp)

@@ -497,3 +497,35 @@ cleanup 重入和 loop 销毁顺序。
 0；statfs 确认为 tmpfs 与 9p。适配现对 9p 保守拒绝，Linux 测试改用唯一
 /tmp 目录，并测试了拒绝行为，没有用延长超时掩盖问题。原生内核缓冲饱和、
 取消注册失败重试、缺少 procfs、Apple 原生编译运行、Win7、嵌入式硬件待验证。
+
+## OBS 补齐第 18 批（2026-09-30）
+
+Windows MSVC x64 全量 CTest 46/46，WSL Linux 48/48 通过。
+ASan/UBSan、TSan 各 7/7，覆盖环境、管道、系统、进程、C++ 便利层、中文命令行
+文件名及捕获示例；公共头 C99/C++11 独立编译通过。
+SYSTEM_UTILS／PROCESS 关闭时两端各 5/5；Windows 开启这两项而关闭
+LOOP／NETWORK／ENV／PATHS 时 5/5；Linux 关闭 NETWORK／ENV／PATHS 后本地
+捕获等 7/7。Windows x86/v142 构建完成，相关四项运行通过，包含既有文件
+工具测试及中文命令行示例。
+
+受控测试子程序覆盖空参数、空格、引号、反斜杠、中文、补充平面字符，
+完整／空环境、stdin EOF、两路各 320 KiB 输出、超时保留与重试、提高上限、
+显式丢弃、二进制与严格文本转换、重复等待、非零退出码以及 Windows 真实
+退出码 259。注入分配器第 1 至 64 次调用失败，验证 context 无未释放分配，
+可正常清理。环境快照回调重入修改环境，证明回调位于锁外。
+CPU 检查验证 AVX2 必须同时有可用 AVX；Linux 仿真未知仍明确报告。
+
+x86 v142 在 /utf-8 下拒绝了既有 snprintf 的非 ASCII 格式文本；改为 ASCII
+格式并通过 %s 传入同一中文文件名，保持测试语义并通过，未关闭警告。
+Windows 最小配置的一次增量链接报告 COFF 对象无效；重建该库目标后通过。
+
+新增对象大小／对齐：Windows x86 的 string_list 8/4、process 24/8、
+process_options 20/4、result 8/4、capture_options 16/4；Windows x64 依次
+16/8、32/8、32/8、8/4、24/8；Linux x64 依次 16/8、24/8、32/8、8/4、24/8。
+既有公共结构以及 loop/request 布局不变。
+
+Release 百万次除法单轮示例数据：MSVC x64 helper/native 为
+2509100/1998700 ns；WSL Clang x64 为 2604750/2521124 ns。辅助接口检查除零，
+原始表达式不检查；单轮数据不构成加速或嵌入式性能结论，本批没有加入汇编。
+原生 macOS、Win7 控制台继承、ARM/musl、缺少 procfs／系统调用故障注入和
+真实嵌入式板卡仍待验证。

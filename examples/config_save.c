@@ -1,8 +1,9 @@
 #include <hx_os.h>
 #include <stdio.h>
+#include "example_arguments.h"
 #include <string.h>
 
-int main(int argc, char **argv)
+static int hx_example_main(int argc, const char *const *argv)
 {
 	const char *source = "{\"name\":\"示例\",\"count\":9007199254740993}";
 	hx_os_config_document *document = NULL;

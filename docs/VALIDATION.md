@@ -566,3 +566,41 @@ of accepting silent coverage; Linux tests use unique /tmp fixtures, and the
 rejection is itself tested. No timeout increase was used to hide this behavior.
 Native kernel-buffer saturation, unregister-failure retry, missing procfs,
 Apple compilation/runtime, Win7 and embedded hardware remain target validation.
+
+## OBS completion batch 18 (2026-09-30)
+
+Windows MSVC x64 full CTest passed 46/46; WSL Linux passed 48/48.
+ASan/UBSan and TSan each passed 7/7 (environment, pipe, system, process,
+C++ platform, Unicode filename CLI and capture example). Public headers
+compiled independently in C99/C++11. SYSTEM_UTILS/PROCESS off passed 5/5
+on each host. Windows enabled process/system with LOOP/NETWORK/ENV/PATHS
+disabled passed 5/5; Linux local capture with NETWORK/ENV/PATHS disabled
+passed 7/7. Windows x86/v142 built and passed the four related tests,
+including the existing file utility test and Unicode CLI example.
+
+Controlled project-built children verify empty/space/quote/backslash/Chinese/
+supplementary-plane arguments, complete environment and empty environment,
+stdin EOF, simultaneous 320 KiB per output, timeout/resource retention/retry,
+limit raise and explicit discard, raw binary/strict text conversion, repeated
+wait, nonzero exit and actual Windows exit code 259. Injected allocator failure
+at 64 call positions verifies zero outstanding context allocations and successful
+cleanup. Snapshot enumeration reenters environment mutation outside the lock.
+CPU checks verify AVX2 implies usable AVX. Linux emulation remains unknown.
+
+The x86 v142 format checker rejected an existing non-ASCII snprintf format
+despite /utf-8. Keeping the format ASCII and passing the same Chinese filename
+as a %s argument preserves the test and passed; warnings were not disabled.
+An incremental minimal Windows library reported an invalid COFF object;
+rebuilding that library target resolved it and the configuration passed.
+
+New size/alignment probes: Windows x86 string_list 8/4, process 24/8,
+process_options 20/4, result 8/4, capture_options 16/4. Windows x64:
+16/8, 32/8, 32/8, 8/4, 24/8. Linux x64: 16/8, 24/8, 32/8, 8/4, 24/8.
+Existing public objects and loop/request sizes are unchanged.
+
+Release division microbenchmark, one million divisions, single illustrative
+samples: MSVC x64 helper/native 2509100/1998700 ns; WSL Clang x64
+2604750/2521124 ns. The helper checks zero while the bare expression does not;
+these samples do not establish a speedup or embedded performance claim.
+No assembly was introduced. Native macOS, Win7 console inheritance, ARM/musl,
+missing-procfs/OS-failure injection and actual embedded boards remain pending.

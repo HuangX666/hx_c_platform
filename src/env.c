@@ -1,12 +1,18 @@
 #include "internal.h"
 #include "hx_os_env.h"
+#include "system_private.h"
 
-#if HX_OS_ENABLE_ENV || HX_OS_ENABLE_PATHS
+#if HX_OS_ENABLE_ENV || HX_OS_ENABLE_PATHS || HX_OS_ENABLE_PROCESS
 #if defined(_WIN32)
 #include <windows.h>
 static SRWLOCK hx_os_env_mutex = SRWLOCK_INIT;
 #else
 #include <pthread.h>
+#if defined(__APPLE__)
+#include <crt_externs.h>
+#else
+extern char **environ;
+#endif
 static pthread_mutex_t hx_os_env_mutex = PTHREAD_MUTEX_INITIALIZER;
 #endif
 
@@ -102,6 +108,172 @@ static hx_os_status hx_os_env_read_wide(const wchar_t *name, char *buffer,
 }
 #endif
 #endif
+
+hx_os_status hx_os_i_env_snapshot(
+	char **block, size_t *bytes, hx_os_error *error)
+{
+#if HX_OS_ENABLE_ENV || HX_OS_ENABLE_PATHS || HX_OS_ENABLE_PROCESS
+	hx_os_status status;
+	size_t total = 0;
+	char *copy = NULL;
+	*block = NULL;
+	*bytes = 0;
+#if defined(_WIN32)
+	{
+		wchar_t *wide, *cursor;
+		size_t offset = 0, count = 0;
+		DWORD code;
+		status = hx_os_env_lock(error);
+		if (status != HX_OS_OK)
+			return status;
+		wide = GetEnvironmentStringsW();
+		code = wide ? 0 : GetLastError();
+		status = hx_os_env_unlock(hx_os_i_win32(error, code), error);
+		if (status != HX_OS_OK) {
+			if (wide)
+				FreeEnvironmentStringsW(wide);
+			return status;
+		}
+		status = HX_OS_OK;
+		for (cursor = wide; *cursor; cursor += wcslen(cursor) + 1) {
+			int needed = WideCharToMultiByte(CP_UTF8,
+				WC_ERR_INVALID_CHARS, cursor, -1, NULL, 0, NULL,
+				NULL);
+			if (!needed) {
+				status = hx_os_i_error(error,
+					HX_OS_INVALID_ENCODING,
+					HX_OS_ERROR_WIN32, GetLastError());
+				break;
+			}
+			if (++count > HX_OS_I_SYSTEM_ITEMS ||
+				(size_t)needed > HX_OS_I_SYSTEM_BYTES - total) {
+				status =
+					hx_os_i_error(error, HX_OS_LIMIT, 0, 0);
+				break;
+			}
+			total += (size_t)needed;
+		}
+		if (status == HX_OS_OK) {
+			copy = malloc(total ? total : 1);
+			if (!copy)
+				status = hx_os_i_error(
+					error, HX_OS_NO_MEMORY, 0, 0);
+		}
+		for (cursor = wide; status == HX_OS_OK && *cursor;
+			cursor += wcslen(cursor) + 1) {
+			int written = WideCharToMultiByte(CP_UTF8,
+				WC_ERR_INVALID_CHARS, cursor, -1, copy + offset,
+				(int)(total - offset), NULL, NULL);
+			if (!written)
+				status = hx_os_i_error(error,
+					HX_OS_INVALID_ENCODING,
+					HX_OS_ERROR_WIN32, GetLastError());
+			else
+				offset += (size_t)written;
+		}
+		FreeEnvironmentStringsW(wide);
+	}
+#else
+	status = hx_os_env_lock(error);
+	if (status == HX_OS_OK) {
+#if defined(__APPLE__)
+		char **values = *_NSGetEnviron();
+#else
+		char **values = environ;
+#endif
+		size_t i, count = 0, offset = 0;
+		for (; values && values[count]; ++count) {
+			size_t length = strlen(values[count]) + 1;
+			if (count == HX_OS_I_SYSTEM_ITEMS ||
+				length > HX_OS_I_SYSTEM_BYTES - total) {
+				status =
+					hx_os_i_error(error, HX_OS_LIMIT, 0, 0);
+				break;
+			}
+			total += length;
+		}
+		if (status == HX_OS_OK) {
+			/* No injected allocator callback while holding the
+			 * lock. */
+			copy = malloc(total ? total : 1);
+			if (!copy)
+				status = hx_os_i_error(
+					error, HX_OS_NO_MEMORY, 0, 0);
+			else
+				for (i = 0; i < count; ++i) {
+					size_t length = strlen(values[i]) + 1;
+					memcpy(copy + offset, values[i],
+						length);
+					offset += length;
+				}
+		}
+		status = hx_os_env_unlock(status, error);
+	}
+#endif
+	if (status != HX_OS_OK) {
+		free(copy);
+		return status;
+	}
+	*block = copy;
+	*bytes = total;
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+#else
+	(void)block;
+	(void)bytes;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
+}
+
+hx_os_status hx_os_env_enumerate(hx_os_context *context,
+	hx_os_env_visit_fn function, void *user, hx_os_error *error)
+{
+#if HX_OS_ENABLE_ENV
+	char *block = NULL;
+	size_t bytes = 0, i;
+	hx_os_string_list *snapshot = NULL;
+	hx_os_status status;
+	if (!function)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	status = hx_os_i_env_snapshot(&block, &bytes, error);
+	if (status == HX_OS_OK)
+		status = hx_os_i_strings_from_block(
+			context, block, bytes, 1, &snapshot, error);
+	free(block);
+	if (status != HX_OS_OK)
+		return status;
+	for (i = 0; i < snapshot->count; ++i) {
+		const char *entry = snapshot->items[i];
+#if defined(_WIN32)
+		if (entry[0] == '=')
+			continue;
+#endif
+		if (!entry[0] || !strchr(entry, '=') || entry[0] == '=') {
+			hx_os_string_list_destroy(&snapshot);
+			return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+		}
+	}
+	for (i = 0; i < snapshot->count; ++i) {
+		char *entry = (char *)snapshot->items[i];
+		char *separator;
+#if defined(_WIN32)
+		if (entry[0] == '=')
+			continue;
+#endif
+		separator = strchr(entry, '=');
+		*separator = '\0';
+		status = function(entry, separator + 1, user);
+		if (status != HX_OS_OK)
+			break;
+	}
+	hx_os_string_list_destroy(&snapshot);
+	return hx_os_i_error(error, status, 0, 0);
+#else
+	(void)context;
+	(void)function;
+	(void)user;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
+}
 
 hx_os_status hx_os_i_env_get(const char *name, char *buffer, size_t capacity,
 	size_t *required, hx_os_error *error)
