@@ -47,6 +47,8 @@ uint32_t hx_os_i_wait_ms(hx_os_deadline deadline);
 int hx_os_i_add_size(size_t a, size_t b, size_t *out);
 int hx_os_i_alignment_valid(size_t alignment);
 hx_os_status hx_os_i_path_validate(const char *path, hx_os_error *error);
+hx_os_status hx_os_i_text_copy(const char *text, char *buffer, size_t capacity,
+	size_t *required, hx_os_error *error);
 hx_os_status hx_os_i_utf_decode(hx_os_encoding encoding,
 	const unsigned char *input, size_t bytes, uint32_t *point,
 	size_t *used);

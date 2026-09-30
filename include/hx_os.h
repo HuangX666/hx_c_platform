@@ -2,6 +2,7 @@
 #define HX_C_PLATFORM_H
 
 #include "hx_os_base.h"
+#include "hx_os_sysinfo.h"
 #include "hx_os_atomic.h"
 #include "hx_os_file.h"
 #include "hx_os_thread.h"

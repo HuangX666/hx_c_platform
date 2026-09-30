@@ -7,7 +7,7 @@ hx_apply_warnings(hx_os_test_core)
 add_test(NAME core COMMAND hx_os_test_core)
 set_tests_properties(core PROPERTIES TIMEOUT 20)
 
-set(hx_test_suites data options lifecycle config containers)
+set(hx_test_suites data options lifecycle config containers sysinfo)
 if(HX_OS_ENABLE_THREAD_POOL)
 	list(APPEND hx_test_suites pool)
 endif()
@@ -42,6 +42,14 @@ include(CheckLanguage)
 check_language(CXX)
 if(CMAKE_CXX_COMPILER)
 	enable_language(CXX)
+	file(GLOB facade_headers "${PROJECT_SOURCE_DIR}/include/hx/*.hpp")
+	foreach(header IN LISTS facade_headers)
+		get_filename_component(name "${header}" NAME)
+		file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/${name}.cpp"
+			"#include <hx/${name}>\n#include <hx/${name}>\n")
+		list(APPEND cpp_headers
+			"${CMAKE_CURRENT_BINARY_DIR}/${name}.cpp")
+	endforeach()
 	foreach(header IN LISTS headers)
 		get_filename_component(name "${header}" NAME)
 		file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/${name}.cpp"
@@ -67,4 +75,13 @@ if(CMAKE_CXX_COMPILER)
 	hx_apply_warnings(hx_os_test_cpp_pool)
 	add_test(NAME cpp_pool COMMAND hx_os_test_cpp_pool)
 	set_tests_properties(cpp_pool PROPERTIES TIMEOUT 20)
+	add_executable(hx_os_test_cpp_platform test_cpp_platform.cpp)
+	target_link_libraries(hx_os_test_cpp_platform PRIVATE
+		hx_c_platform::cpp)
+	set_target_properties(hx_os_test_cpp_platform PROPERTIES
+		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+	hx_apply_warnings(hx_os_test_cpp_platform)
+	add_test(NAME cpp_platform COMMAND hx_os_test_cpp_platform)
+	set_tests_properties(cpp_platform PROPERTIES TIMEOUT 20)
 endif()

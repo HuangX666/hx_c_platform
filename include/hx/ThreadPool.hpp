@@ -3,6 +3,7 @@
 
 #include <hx_os_atomic.h>
 #include <hx_os_pool.h>
+#include <hx/Status.hpp>
 #include <chrono>
 #include <cstddef>
 #include <exception>
@@ -14,33 +15,6 @@
 #include <utility>
 
 namespace hx {
-
-class StatusError : public std::exception {
-public:
-	explicit StatusError(hx_os_status status) noexcept
-	    : m_error_{status, HX_OS_ERROR_NONE, 0, 0}
-	{
-	}
-	explicit StatusError(const hx_os_error &error) noexcept
-	    : m_error_(error)
-	{
-	}
-	const char *what() const noexcept override
-	{
-		return hx_os_status_name(m_error_.status);
-	}
-	hx_os_status status() const noexcept
-	{
-		return m_error_.status;
-	}
-	const hx_os_error &error() const noexcept
-	{
-		return m_error_;
-	}
-
-private:
-	hx_os_error m_error_;
-};
 
 class CancellationToken {
 public:

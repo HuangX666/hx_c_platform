@@ -1,6 +1,6 @@
-build*/
+/build*/
 *.log
 .deps/
-install*/
+/install*/
 __pycache__/
 *.pyc

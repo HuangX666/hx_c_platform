@@ -7,6 +7,15 @@ adapter, successful compile and successful target run are different states.
 Local tests do not certify every operating-system release, filesystem, CPU,
 libc or network provider.
 
+## OBS completion batch 1 (2026-09-30)
+
+Windows MSVC x64 Debug and WSL GCC 15.2 Debug passed all 12 CTest suites.
+The system-information, C++ platform and existing C++ pool suites passed
+ASan/UBSan (3/3). SYSINFO=OFF passed its C and C++ contracts on both hosts.
+Public C headers and all C++ facade headers compiled in isolation. The
+source-width check uses the repository's explicit 8-column Tab setting.
+macOS, Win7 runtime and embedded target validation remains pending.
+
 ## Object-layout checkpoint
 
 On 2026-09-29, internal layouts were compared before/after on MSVC 19.40 x64,

@@ -1,4 +1,4 @@
-foreach(example IN ITEMS hello async_timer configuration containers)
+foreach(example IN ITEMS hello async_timer configuration containers system_info)
 	add_executable(hx_os_${example} ${example}.c)
 	target_link_libraries(hx_os_${example} PRIVATE hx_c_platform)
 	set_target_properties(hx_os_${example} PROPERTIES

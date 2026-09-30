@@ -10,8 +10,13 @@
 [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md)
 [![macOS validation pending][macos-badge]](docs/VALIDATION.md)
 [![Windows MSVC][windows-badge]](docs/VALIDATION.md)
-[![10 of 10 local test suites passed][tests-badge]](docs/VALIDATION.md)
+[![12 of 12 local test suites passed][tests-badge]](docs/VALIDATION.md)
 [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md)
+
+Query system information directly through C or `hx::SystemInfo`;
+`hx::CpuUsage` owns an independent process CPU sampler. See
+[platform utilities](docs/PLATFORM_UTILITIES.md) and the
+[24-batch implementation status](docs/OBS_COMPLETION.md).
 
 [简体中文](README.zh-CN.md)
 
@@ -126,6 +131,7 @@ Conversion never changes the process locale or assumes an ANSI codepage.
 | HX_OS_ENABLE_ICONV | OFF | Legacy encoding backend |
 | HX_OS_ENABLE_CONFIG | ON | Configuration document parsers |
 | HX_OS_ENABLE_CONTAINERS | ON | Generic C containers, including private uthash |
+| HX_OS_ENABLE_SYSINFO | ON | System information and process CPU sampling |
 | HX_OS_ENABLE_CJSON/LIBYAML/MINIXML/INIH/TOMLC | OFF | Native parser adapters |
 | HX_OS_BUILD_TESTS | ON | Contract tests and isolated public headers |
 | HX_OS_BUILD_EXAMPLES | ON | C examples; C++ task example when CXX is enabled |
@@ -278,5 +284,5 @@ by this new library or a migration.
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-10%2F10%20suites%20local-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-12%2F12%20suites%20local-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey

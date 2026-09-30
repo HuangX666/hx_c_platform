@@ -448,6 +448,9 @@ hx_os_status hx_os_i_path_validate(const char *path, hx_os_error *error)
 uint64_t hx_os_capabilities(void)
 {
 	uint64_t result = HX_OS_CAP_THREADS;
+#if HX_OS_ENABLE_SYSINFO
+	result |= HX_OS_CAP_SYSINFO;
+#endif
 #if HX_OS_HAVE_TIMED_JOIN
 	result |= HX_OS_CAP_TIMED_JOIN;
 #endif
@@ -483,6 +486,34 @@ uint64_t hx_os_capabilities(void)
 const char *hx_os_platform_name(void)
 {
 	return HX_OS_PLATFORM_NAME;
+}
+
+hx_os_status hx_os_i_text_copy(const char *text, char *buffer, size_t capacity,
+	size_t *required, hx_os_error *error)
+{
+	size_t bytes = strlen(text) + 1;
+	if (!required || (!buffer && capacity))
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	*required = bytes;
+	if (capacity < bytes) {
+		if (capacity)
+			buffer[0] = 0;
+		return hx_os_i_error(error, HX_OS_OUTPUT_FULL, 0, 0);
+	}
+	memcpy(buffer, text, bytes);
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+}
+
+hx_os_status hx_os_version_string(
+	char *buffer, size_t capacity, size_t *required)
+{
+	return hx_os_i_text_copy(
+		HX_OS_BUILD_VERSION, buffer, capacity, required, NULL);
+}
+
+uint32_t hx_os_abi_version(void)
+{
+	return HX_OS_ABI_VERSION;
 }
 
 const char *hx_os_cpu_name(void)
