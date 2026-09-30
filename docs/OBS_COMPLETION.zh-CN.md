@@ -35,7 +35,7 @@ macOS Intel 10.13／ARM64 11.0、Windows 7 SP1 和嵌入式目标实测单独标
 | 21 | 注册表、电源与混淆 | Windows 57/57; Linux 59/59; ASan 8/8; x86 5/5; Apple pending |
 | 22 | 日期、翻译表、位流 | Windows 63/63; Linux 65/65; ASan 8/8; TSan 6/6; x86 7/7 |
 | 23 | 信号、可变设置、区间 profiler | 已实现：Windows 72/72，Linux 74/74；profiler ASan/TSan 4/4；目标实测待补 |
-| 24 | 原子与内存序 | 待实现 |
+| 24 | 原子与内存序 | Windows 74/74；Linux 76/76；ASan/TSan 10/10；x86 5/5 |
 
 基线保留既有空白格式，包括第三方许可证的原始内容。
 构建产物、依赖缓存与安装输出不纳入 Git。

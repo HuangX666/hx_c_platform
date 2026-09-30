@@ -446,6 +446,13 @@ if(HX_OS_HAVE_ICONV)
 endif()
 hx_apply_warnings(hx_c_platform)
 if(HX_OS_SANITIZER AND NOT MSVC)
+	if(CMAKE_C_COMPILER_ID STREQUAL "GNU" AND
+		HX_OS_SANITIZER STREQUAL "thread")
+		# GCC TSan cannot model standalone fences. Keep its warning;
+		# ordering tests use atomic pairs, not standalone fences.
+		set_property(SOURCE src/atomic.c APPEND PROPERTY
+			COMPILE_OPTIONS -Wno-error=tsan)
+	endif()
 	target_compile_options(hx_c_platform PUBLIC
 		-fsanitize=${HX_OS_SANITIZER} -fno-omit-frame-pointer)
 	target_link_options(hx_c_platform PUBLIC -fsanitize=${HX_OS_SANITIZER})

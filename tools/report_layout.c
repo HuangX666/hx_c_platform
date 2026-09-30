@@ -29,6 +29,9 @@
 int main(void)
 {
 	HX_OS_LAYOUT(hx_string);
+	HX_OS_LAYOUT(hx_os_atomic);
+	HX_OS_LAYOUT(hx_os_atomic32);
+	HX_OS_LAYOUT(hx_os_atomic_ptr);
 	HX_OS_LAYOUT(hx_os_error);
 	HX_OS_LAYOUT(hx_os_operation);
 	HX_OS_LAYOUT(hx_os_pipe_operation);

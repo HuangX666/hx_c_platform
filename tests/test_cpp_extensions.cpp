@@ -177,5 +177,14 @@ int main()
 		hx_owned_key = false;
 	}
 #endif
+	hx_os_atomic32 count = HX_OS_ATOMIC32_INIT(0);
+	static_assert(sizeof(count) == 4 && alignof(hx_os_atomic32) == 4,
+		"32-bit atomics retain 4-byte size and alignment");
+	static_assert(sizeof(hx_os_atomic) == 8 && alignof(hx_os_atomic) == 8,
+		"existing 64-bit atomic ABI");
+	CHECK(hx_os_atomic32_fetch_add(&count, 1, HX_OS_RELAXED) == 0);
+	int32_t expected = 1;
+	CHECK(hx_os_atomic32_compare_exchange(
+		&count, &expected, 2, HX_OS_ACQ_REL, HX_OS_ACQUIRE));
 	return 0;
 }

@@ -831,3 +831,26 @@ record 96/8, frame 24/8, thread cache header 16/8. Windows x86: 32/4, 336/4,
 80/8, 24/8, 8/4 respectively. Names and bounded frame arrays are additional.
 Hot entries/leaves retain mutex sections, clock reads and TLS lookups.
 Apple, Win7, ARM/musl and board runs remain pending. Batch 24 is next.
+
+## OBS completion batch 24: atomics (2026-09-30)
+
+Windows full CTest 74/74; WSL Linux 76/76. Related ASan/UBSan and TSan
+each passed 10/10 (atomic, publication example, core, lifecycle, pool,
+loop concurrency, watch, settings concurrency, profiler, C++ extensions).
+Windows x86 passed 5/5; trimmed builds passed 5/5 on each host. Public C99
+and C++11 headers compiled independently. Size/alignment is 8/8 for the old
+64-bit type, 4/4 for atomic32; pointers are 8/8 on x64 and 4/4 on x86.
+
+Tests exercise all legal orders plus conservative invalid-order fallback,
+success/failed/weak CAS expected values, signed-boundary wrapping, bitwise
+operations, 80,000 contended increments and 10,000 payload publications
+observed through failed acquire pointer CAS. Existing claim/publication
+call sites were reviewed; no stronger hidden order was required.
+
+GCC TSan emitted its documented unsupported-fence diagnostic. Only this
+diagnostic is nonfatal for atomic.c under GCC TSan; the actual implementation
+is unchanged. TSan tests do not use fences as their publication mechanism.
+Fences were compiled/exercised, not certified by TSan. No assembly speedup
+or target ARM memory-order validation is claimed. See [contracts](ATOMICS.md).
+All 24 implementation batches are now present; final package/ABI matrix
+verification follows separately.
