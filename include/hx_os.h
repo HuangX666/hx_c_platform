@@ -5,6 +5,7 @@
 #include "hx_os_sysinfo.h"
 #include "hx_os_library.h"
 #include "hx_os_env.h"
+#include "hx_os_paths.h"
 #include "hx_os_atomic.h"
 #include "hx_os_file.h"
 #include "hx_os_thread.h"

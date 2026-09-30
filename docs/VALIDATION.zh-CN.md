@@ -312,3 +312,11 @@ cpp_platform、file_utils 的 ASan/UBSan 为 4/4；两平台 ENV=OFF 检查
 通过。覆盖空值与不存在、UTF-8、输出保留、条件替换、库内并发调用，以及
 输出分配器回调重入环境读取而不死锁。提取共用 UTF-8／UTF-16 助手后，
 Windows 文件路径回归亦通过。
+
+## OBS 补齐第 5 批（2026-09-30）
+
+Windows／WSL 全量 CTest 各 20/20；ASan/UBSan 相关 6/6（paths、env、
+file_utils、C++ 封装及两个新增 C 示例）。两平台 PATHS=ON 且 ENV=OFF 各
+4/4，PATHS=OFF 各 3/3，含 C99/C++11 公共头独立编译。覆盖 XDG 相对及空值
+回退、UTF-8、根路径保留、容量协商、分配失败以及查询不创建目录。Windows
+已知目录在未初始化 COM 的测试进程中通过。macOS、Win7、嵌入式实测仍待补。

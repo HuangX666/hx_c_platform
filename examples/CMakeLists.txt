@@ -1,5 +1,5 @@
 foreach(example IN ITEMS hello async_timer configuration containers system_info
-	load_plugin text_file environment)
+	load_plugin text_file environment special_paths)
 	add_executable(hx_os_${example} ${example}.c)
 	target_link_libraries(hx_os_${example} PRIVATE hx_c_platform)
 	set_target_properties(hx_os_${example} PROPERTIES
@@ -24,6 +24,10 @@ if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_ENV)
 		HX_PLATFORM_EXAMPLE)
 	set_tests_properties(environment_example PROPERTIES TIMEOUT 20
 		ENVIRONMENT "HX_PLATFORM_EXAMPLE=UTF-8 example")
+endif()
+if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_PATHS)
+	add_test(NAME special_paths_example COMMAND hx_os_special_paths)
+	set_tests_properties(special_paths_example PROPERTIES TIMEOUT 20)
 endif()
 if(CMAKE_CXX_COMPILER_LOADED)
 	add_executable(hx_os_cpp_thread_pool thread_pool.cpp)

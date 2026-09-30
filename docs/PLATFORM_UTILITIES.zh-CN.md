@@ -177,3 +177,37 @@ hx::Environment::set("APP_MODE", "diagnostic");
 
 `examples/environment.c` 直接查询指定变量。CTest 只在测试子进程环境中
 注入专用测试值，不修改宿主设置。
+
+## 常用目录
+
+PATHS 默认开启。C 直接调用 `hx_os_path_config_home_string(&path, &error)`，
+C++ 调用 `hx::Paths::configHome()`。七个查询均有缓冲区和 `hx_string` 版本，
+无需全局初始化，不创建目录、不修改工作目录。返回绝对 UTF-8 路径，根目录以外
+不保留尾分隔符；路径不保证存在或可写。所需容量含 NUL；失败保留字符串原值，
+内存使用输出字符串自己的 context。
+
+| 查询 | Windows | Linux | macOS |
+| --- | --- | --- | --- |
+| home | 绝对 USERPROFILE，否则 Profile 已知目录 | 绝对 HOME，否则当前 UID 数据库 | 相同 POSIX 查询 |
+| config_home | RoamingAppData | 绝对 XDG_CONFIG_HOME，否则 HOME/.config | HOME/Library/Application Support |
+| data_home | LocalAppData | 绝对 XDG_DATA_HOME，否则 HOME/.local/share | HOME/Library/Application Support |
+| program_data | ProgramData | /var/lib | /Library/Application Support |
+| temp | GetTempPathW | 绝对 TMPDIR，否则 /tmp | 绝对 TMPDIR，否则 Darwin 用户临时目录，再回退 /tmp |
+| executable | GetModuleFileNameW | /proc/self/exe | _NSGetExecutablePath + realpath |
+| module | 本库所在目录 | dladdr 返回绝对名称时的目录 | 同左 |
+
+`program_data` 表示机器共享的应用数据和状态，与用户数据、只读安装资源分开。
+消费者自行添加应用子目录，并明确决定何时创建。[XDG 规范](https://specifications.freedesktop.org/basedir/latest/)
+要求忽略空值及相对路径；无效 UTF-8 仍报错。Windows 使用 SHGetKnownFolderPath、
+KF_FLAG_DONT_VERIFY 和 CoTaskMemFree，测试进程没有调用 CoInitialize。
+不引入 Objective-C 或新的第三方依赖。
+
+静态链接时 `module` 指可执行文件所在目录。POSIX 加载器若仅给出相对模块名称，
+返回 NOT_SUPPORTED，避免工作目录改变后猜错位置。Linux 可执行路径查询依赖
+procfs，并保留原生失败；已移动或删除的镜像可能返回系统记录的原名称，不保证
+路径仍存在。POSIX 原生路径临时容量上限为 1 MiB，目录服务及 UID 查询可能阻塞。
+
+PATHS 独立于 ENV、FILE_UTILS、LIBRARY 开关。内部环境读取共用锁和编码处理，
+关闭 ENV 后其公共入口仍报不支持。宿主协调原生环境或 cwd 的并发修改。没有隐藏
+线程，不影响已有热路径；显式查询会分配临时字符串及原生缓冲区。
+`examples/special_paths.c` 在 Windows/Linux 使用同一份 C 源码直接调用。

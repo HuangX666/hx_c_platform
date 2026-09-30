@@ -1,7 +1,7 @@
 #include "internal.h"
 #include "hx_os_env.h"
 
-#if HX_OS_ENABLE_ENV
+#if HX_OS_ENABLE_ENV || HX_OS_ENABLE_PATHS
 #if defined(_WIN32)
 #include <windows.h>
 static SRWLOCK hx_os_env_mutex = SRWLOCK_INIT;
@@ -103,10 +103,10 @@ static hx_os_status hx_os_env_read_wide(const wchar_t *name, char *buffer,
 #endif
 #endif
 
-hx_os_status hx_os_env_get(const char *name, char *buffer, size_t capacity,
+hx_os_status hx_os_i_env_get(const char *name, char *buffer, size_t capacity,
 	size_t *required, hx_os_error *error)
 {
-#if HX_OS_ENABLE_ENV
+#if HX_OS_ENABLE_ENV || HX_OS_ENABLE_PATHS
 	hx_os_status status = hx_os_env_name(name, error);
 	if (status != HX_OS_OK)
 		return status;
@@ -157,7 +157,7 @@ hx_os_status hx_os_env_get(const char *name, char *buffer, size_t capacity,
 #endif
 }
 
-hx_os_status hx_os_env_get_string(
+hx_os_status hx_os_i_env_get_string(
 	const char *name, hx_string *out, hx_os_error *error)
 {
 	hx_string value;
@@ -168,7 +168,7 @@ hx_os_status hx_os_env_get_string(
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 	hx_string_init(&value, out->context);
 	for (attempt = 0; attempt < 8; ++attempt) {
-		status = hx_os_env_get(
+		status = hx_os_i_env_get(
 			name, value.data, value.capacity, &required, error);
 		if (status != HX_OS_OUTPUT_FULL)
 			break;
@@ -184,6 +184,32 @@ hx_os_status hx_os_env_get_string(
 	}
 	hx_string_destroy(&value);
 	return status;
+}
+
+hx_os_status hx_os_env_get(const char *name, char *buffer, size_t capacity,
+	size_t *required, hx_os_error *error)
+{
+#if HX_OS_ENABLE_ENV
+	return hx_os_i_env_get(name, buffer, capacity, required, error);
+#else
+	(void)name;
+	(void)buffer;
+	(void)capacity;
+	(void)required;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
+}
+
+hx_os_status hx_os_env_get_string(
+	const char *name, hx_string *out, hx_os_error *error)
+{
+#if HX_OS_ENABLE_ENV
+	return hx_os_i_env_get_string(name, out, error);
+#else
+	(void)name;
+	(void)out;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
 }
 
 hx_os_status hx_os_env_set(

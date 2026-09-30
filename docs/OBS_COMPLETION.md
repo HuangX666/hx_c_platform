@@ -18,7 +18,7 @@ embedded target runs remain separately identified target validation.
 | 2 | Dynamic libraries | Windows/Linux 14/14; ASan 3/3; native targets pending |
 | 3 | File and path conveniences | Windows/Linux 16/16; ASan 4/4; target limits recorded |
 | 4 | Environment variables | Windows/Linux 18/18; ASan 4/4; native targets pending |
-| 5 | Special paths | Pending |
+| 5 | Special paths | Windows/Linux 20/20; ASan 6/6; native targets pending |
 | 6 | Thread names, stack options, semaphore | Pending |
 | 7 | Synchronous and asynchronous pipes | Pending |
 | 8 | Socket options and positioned file I/O | Pending |

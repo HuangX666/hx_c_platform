@@ -211,3 +211,43 @@ hx::Environment::set("APP_MODE", "diagnostic");
 
 `examples/environment.c` queries a named variable directly. Its CTest supplies
 a private test value in the child environment and does not edit host settings.
+
+## Special paths
+
+With PATHS enabled (default), use `hx_os_path_config_home_string(&path, &error)`
+or `hx::Paths::configHome()`. All seven named queries have buffer and owning-string
+forms. No global initialization, directory creation or cwd change is performed.
+Paths are absolute UTF-8 without trailing separators except roots. They need not
+exist or be writable. Required size includes NUL; string failure preserves its
+old value and allocator.
+
+| Query | Windows | Linux | macOS |
+| --- | --- | --- | --- |
+| home | Absolute USERPROFILE, else Profile folder | Absolute HOME, else current UID database | Same POSIX home lookup |
+| config_home | RoamingAppData | Absolute XDG_CONFIG_HOME, else HOME/.config | HOME/Library/Application Support |
+| data_home | LocalAppData | Absolute XDG_DATA_HOME, else HOME/.local/share | HOME/Library/Application Support |
+| program_data | ProgramData | /var/lib | /Library/Application Support |
+| temp | GetTempPathW | Absolute TMPDIR, else /tmp | Absolute TMPDIR, else Darwin user temp, then /tmp |
+| executable | GetModuleFileNameW | /proc/self/exe | _NSGetExecutablePath + realpath |
+| module | This library's directory | Absolute dladdr module directory | Absolute dladdr module directory |
+
+`program_data` is machine-wide application data/state, separate from user data
+and read-only installed resources. Append your application subdirectory and
+explicitly create it when needed. Empty/relative XDG values are ignored per the
+[XDG specification](https://specifications.freedesktop.org/basedir/latest/).
+Invalid UTF-8 remains an error. Windows uses SHGetKnownFolderPath with
+KF_FLAG_DONT_VERIFY and CoTaskMemFree; tests invoke it without CoInitialize.
+No Objective-C or new third-party dependency is needed.
+
+`module` means the executable directory for static linkage. POSIX loaders that
+report only a relative module name return NOT_SUPPORTED, avoiding incorrect
+resolution after cwd changes. Linux executable lookup requires procfs and
+preserves native failure. Renamed/deleted images may yield their recorded name,
+not an existing path. POSIX system path scratch is bounded to 1 MiB. Queries may
+block in native folder providers or the UID database.
+
+PATHS works independently of ENV, FILE_UTILS and LIBRARY. Private environment
+reading shares its lock/codec while public ENV symbols still report unsupported
+when disabled. The host coordinates native environment/cwd mutation. No hidden
+thread or hot-path lock is added; explicit queries allocate native/string scratch.
+`examples/special_paths.c` demonstrates the same direct C call on both hosts.

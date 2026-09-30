@@ -206,7 +206,8 @@ hx_os_status hx_os_error_message(const hx_os_error *error, char *buffer,
 		return HX_OS_INVALID;
 #if defined(_WIN32)
 	if (error->domain == HX_OS_ERROR_WIN32 ||
-		error->domain == HX_OS_ERROR_WINSOCK) {
+		error->domain == HX_OS_ERROR_WINSOCK ||
+		error->domain == HX_OS_ERROR_HRESULT) {
 		wchar_t wide[1024];
 		DWORD count = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM |
 				FORMAT_MESSAGE_IGNORE_INSERTS,
@@ -456,6 +457,9 @@ uint64_t hx_os_capabilities(void)
 #endif
 #if HX_OS_ENABLE_ENV
 	result |= HX_OS_CAP_ENV;
+#endif
+#if HX_OS_ENABLE_PATHS
+	result |= HX_OS_CAP_PATHS;
 #endif
 #if HX_OS_ENABLE_FILE_UTILS
 	result |= HX_OS_CAP_FILE_UTILS;

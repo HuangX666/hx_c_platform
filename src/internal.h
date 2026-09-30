@@ -49,6 +49,10 @@ int hx_os_i_alignment_valid(size_t alignment);
 hx_os_status hx_os_i_path_validate(const char *path, hx_os_error *error);
 hx_os_status hx_os_i_text_copy(const char *text, char *buffer, size_t capacity,
 	size_t *required, hx_os_error *error);
+hx_os_status hx_os_i_env_get(const char *name, char *buffer, size_t capacity,
+	size_t *required, hx_os_error *error);
+hx_os_status hx_os_i_env_get_string(
+	const char *name, hx_string *out, hx_os_error *error);
 hx_os_status hx_os_i_utf_decode(hx_os_encoding encoding,
 	const unsigned char *input, size_t bytes, uint32_t *point,
 	size_t *used);
@@ -57,6 +61,8 @@ hx_os_status hx_os_i_utf_encode(hx_os_encoding encoding, uint32_t point,
 
 #if defined(_WIN32)
 #include <wchar.h>
+hx_os_status hx_os_i_windows_path_text(
+	hx_string *out, wchar_t *wide, size_t length, hx_os_error *error);
 wchar_t *hx_os_i_windows_utf16(
 	hx_os_context *context, const char *text, hx_os_error *error);
 wchar_t *hx_os_i_windows_path(

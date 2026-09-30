@@ -23,6 +23,7 @@ option(HX_OS_ENABLE_SYSINFO "Build native system information" ON)
 option(HX_OS_ENABLE_LIBRARY "Build native dynamic library loading" ON)
 option(HX_OS_ENABLE_FILE_UTILS "Build file and path conveniences" ON)
 option(HX_OS_ENABLE_ENV "Build UTF-8 environment access" ON)
+option(HX_OS_ENABLE_PATHS "Build special path queries" ON)
 set(HX_OS_ICONV_SOURCE_DIR "" CACHE PATH "Unmodified GNU libiconv source")
 set(HX_OS_SANITIZER "" CACHE STRING "address,undefined or thread")
 
@@ -146,7 +147,7 @@ add_library(hx_c_platform
 	src/string.c src/file.c src/text.c src/optional.c
 	src/config.c src/config_values.c
 	src/containers.c
-	src/sysinfo.c src/library.c src/path.c src/env.c
+	src/sysinfo.c src/library.c src/path.c src/env.c src/paths.c
 	${hx_parser_sources} ${hx_parser_objects}
 	${hx_platform_sources})
 if(HX_OS_ENABLE_SYSINFO)
@@ -158,8 +159,16 @@ if(HX_OS_ENABLE_SYSINFO)
 		target_sources(hx_c_platform PRIVATE src/posix/sysinfo_native.c)
 	endif()
 endif()
-if(HX_OS_ENABLE_LIBRARY)
+if(HX_OS_ENABLE_LIBRARY OR HX_OS_ENABLE_PATHS)
 	target_link_libraries(hx_c_platform PRIVATE ${CMAKE_DL_LIBS})
+endif()
+if(HX_OS_ENABLE_PATHS)
+	if(WIN32)
+		target_sources(hx_c_platform PRIVATE src/windows/paths_native.c)
+		target_link_libraries(hx_c_platform PRIVATE shell32 ole32 uuid)
+	else()
+		target_sources(hx_c_platform PRIVATE src/posix/paths_native.c)
+	endif()
 endif()
 if(HX_OS_ENABLE_FILE_UTILS)
 	target_sources(hx_c_platform PRIVATE src/file_utils.c src/path_glob.c)
@@ -305,13 +314,16 @@ install(FILES
 	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/hx_c_platform)
 
 set(HX_OS_PC_LIBS_PRIVATE "")
-if(HX_OS_ENABLE_LIBRARY)
+if(HX_OS_ENABLE_LIBRARY OR HX_OS_ENABLE_PATHS)
 	foreach(library IN LISTS CMAKE_DL_LIBS)
 		string(APPEND HX_OS_PC_LIBS_PRIVATE " -l${library}")
 	endforeach()
 endif()
 set(HX_OS_PC_DEFINITIONS "")
 if(WIN32)
+	if(HX_OS_ENABLE_PATHS)
+		string(APPEND HX_OS_PC_LIBS_PRIVATE " -lshell32 -lole32 -luuid")
+	endif()
 	if(HX_OS_ENABLE_NETWORK)
 		string(APPEND HX_OS_PC_LIBS_PRIVATE " -lws2_32")
 	endif()

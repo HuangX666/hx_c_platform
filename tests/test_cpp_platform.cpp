@@ -2,6 +2,7 @@
 #include <hx/Library.hpp>
 #include <hx/Files.hpp>
 #include <hx/Environment.hpp>
+#include <hx/Paths.hpp>
 #include <hx/ThreadPool.hpp>
 #include <cstdio>
 #include <cstdlib>
@@ -42,6 +43,12 @@ int main(int argc, char **argv)
 {
 	CHECK(argc == 2);
 	TestSystemInfo();
+	if (hx_os_capabilities() & HX_OS_CAP_PATHS) {
+		CHECK(!hx::Paths::configHome().empty());
+		CHECK(!hx::Paths::dataHome().empty());
+		CHECK(!hx::Paths::programData().empty());
+		CHECK(!hx::Paths::executable().empty());
+	}
 	if (hx_os_capabilities() & HX_OS_CAP_ENV) {
 		const char *name = "HX_CPP_ENV_TEST_ONLY";
 		hx::Environment::set(name, "value");

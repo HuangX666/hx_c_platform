@@ -14,6 +14,22 @@ struct hx_os_directory {
 };
 int hx_os_i_file_flags_valid(uint32_t flags);
 
+hx_os_status hx_os_i_windows_path_text(
+	hx_string *out, wchar_t *wide, size_t length, hx_os_error *error)
+{
+	if (!wcsncmp(wide, L"\\\\?\\UNC\\", 8)) {
+		wide[6] = L'\\';
+		wide += 6;
+		length -= 6;
+	}
+	else if (!wcsncmp(wide, L"\\\\?\\", 4)) {
+		wide += 4;
+		length -= 4;
+	}
+	return hx_string_assign_encoded(
+		out, HX_OS_UTF16LE, wide, length * sizeof(*wide), error);
+}
+
 wchar_t *hx_os_i_windows_utf16(
 	hx_os_context *context, const char *text, hx_os_error *error)
 {

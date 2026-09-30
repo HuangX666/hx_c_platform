@@ -148,22 +148,6 @@ hx_os_status hx_os_i_file_sync_parent(const char *path, hx_os_error *error)
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
-static hx_os_status hx_os_file_path_text(
-	hx_string *out, wchar_t *wide, size_t length, hx_os_error *error)
-{
-	if (!wcsncmp(wide, L"\\\\?\\UNC\\", 8)) {
-		wide[6] = L'\\';
-		wide += 6;
-		length -= 6;
-	}
-	else if (!wcsncmp(wide, L"\\\\?\\", 4)) {
-		wide += 4;
-		length -= 4;
-	}
-	return hx_string_assign_encoded(
-		out, HX_OS_UTF16LE, wide, length * sizeof(*wide), error);
-}
-
 hx_os_status hx_os_i_path_current(hx_string *out, hx_os_error *error)
 {
 	wchar_t *wide;
@@ -177,7 +161,7 @@ hx_os_status hx_os_i_path_current(hx_string *out, hx_os_error *error)
 	status = code ? hx_os_i_win32(error, code)
 		: length >= 32768
 		? hx_os_i_error(error, HX_OS_LIMIT, 0, 0)
-		: hx_os_file_path_text(out, wide, length, error);
+		: hx_os_i_windows_path_text(out, wide, length, error);
 	hx_os_memory_free(wide);
 	return status;
 }
@@ -216,7 +200,8 @@ hx_os_status hx_os_i_path_absolute(
 	else if (length >= 32768)
 		status = hx_os_i_error(error, HX_OS_LIMIT, 0, 0);
 	else
-		status = hx_os_file_path_text(out, resolved, length, error);
+		status =
+			hx_os_i_windows_path_text(out, resolved, length, error);
 	hx_os_memory_free(resolved);
 	return status;
 }

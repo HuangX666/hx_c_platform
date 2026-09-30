@@ -342,3 +342,13 @@ on both hosts. Coverage includes empty versus missing values, UTF-8, retained
 outputs, conditional replacement, concurrent library calls and an output
 allocator that reenters environment reading without deadlock. Windows path
 regressions also passed after extracting the shared UTF-8/UTF-16 helper.
+
+## OBS completion batch 5 (2026-09-30)
+
+Windows/WSL full CTest passed 20/20; ASan/UBSan passed 6/6 (paths, env,
+file_utils, C++ wrappers and both new C examples). PATHS=ON with ENV=OFF passed
+4/4 and PATHS=OFF passed 3/3 on each host, including isolated C99/C++11 headers.
+Coverage includes XDG relative/empty fallbacks, UTF-8, root preservation,
+buffer size negotiation, allocation failure and queries without creation.
+Windows known folders work in a test process without COM initialization.
+macOS, Win7 and embedded native validation remain pending.
