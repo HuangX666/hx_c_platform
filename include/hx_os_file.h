@@ -52,6 +52,20 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_file_write_some(hx_os_file *file,
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_write_all(hx_os_file *file,
 	const void *data, size_t bytes, size_t *completed, hx_os_error *error);
 /*
+ * Positioned single-chunk I/O, at most INT_MAX bytes per call. Offset and
+ * transfer size are bytes. Short progress is OK; read with no bytes is EOF.
+ * Zero requested bytes is OK. These calls do not modify the shared position
+ * and may run concurrently with each other. Coordinate overlapping writes,
+ * truncation and close externally. Append-mode writes return NOT_SUPPORTED.
+ * Calls block until native completion; there is no cancellation/deadline.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_file_read_at(hx_os_file *file,
+	uint64_t offset, void *data, size_t bytes, size_t *completed,
+	hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_file_write_at(hx_os_file *file,
+	uint64_t offset, const void *data, size_t bytes, size_t *completed,
+	hx_os_error *error);
+/*
  * No user-space buffer is owned by this object. sync requests persistence
  * through fsync/FlushFileBuffers; it does not promise hardware durability.
  */

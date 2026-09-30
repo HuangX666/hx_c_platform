@@ -155,7 +155,7 @@ hx_os_status hx_os_file_open(hx_os_context *context, const char *path,
 		hx_os_memory_free(file);
 		return hx_os_i_win32(error, code);
 	}
-	file->append = !!(flags & HX_OS_FILE_APPEND);
+	file->flags = flags;
 	*out = file;
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
@@ -200,7 +200,7 @@ hx_os_status hx_os_file_write_some(hx_os_file *file, const void *data,
 	 * End-of-file offsets preserve append while GENERIC_WRITE permits sync.
 	 */
 	if (!WriteFile(file->handle, data, requested, &count,
-		    file->append ? &position : NULL)) {
+		    (file->flags & HX_OS_FILE_APPEND) ? &position : NULL)) {
 		DWORD code = GetLastError();
 		if (file->pipe &&
 			(code == ERROR_BROKEN_PIPE || code == ERROR_NO_DATA))
@@ -224,12 +224,15 @@ hx_os_status hx_os_file_sync(hx_os_file *file, hx_os_error *error)
 
 hx_os_status hx_os_file_close(hx_os_file **file, hx_os_error *error)
 {
-	DWORD code;
+	DWORD code = 0;
 	if (!file)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 	if (!*file)
 		return hx_os_i_error(error, HX_OS_OK, 0, 0);
-	code = CloseHandle((*file)->handle) ? 0 : GetLastError();
+	if ((*file)->positioned && !CloseHandle((*file)->positioned))
+		code = GetLastError();
+	if (!CloseHandle((*file)->handle) && !code)
+		code = GetLastError();
 	hx_os_memory_free(*file);
 	*file = NULL;
 	return hx_os_i_win32(error, code);

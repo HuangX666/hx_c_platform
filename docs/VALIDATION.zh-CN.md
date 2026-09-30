@@ -358,3 +358,21 @@ LOOP=OFF/PIPE=ON 各 3/3，均编译 C99/C++11 独立公共头。Windows 最小�
 
 x86 仅为布局探针编译及运行，不能代表本批全量 x86 运行通过。macOS、Win7 原机、
 ARMv7/AArch64 与 musl 仍待目标验证。布局及分配/系统调用审查不代替吞吐性能证据。
+
+## OBS 补齐第 8 批（2026-09-30）
+
+Windows／WSL 全量各 26/26；相关 ASan/UBSan 6/6、TSan 4/4。在 NETWORK 开启时
+NET_OPTIONS=OFF/POSITIONED_IO=OFF 各 3/3；NETWORK=OFF/POSITIONED_IO=ON 各
+4/4，Windows 同时关闭 FILE_UTILS 及其他便利模块。公共头通过 C99/C++11 独立编译。
+覆盖四线程并发定位读写与共享游标不变、首次句柄发布竞争、短读、EOF、范围校验、
+追加和只读拒绝、显式地址复用、实际选项长度、对端查询及附属 loop 后禁止设置。
+
+Windows TCP_NODELAY 实测返回 1 字节；测试改为清零存储并检查原生实际长度，
+不再假设 sizeof(int)，原始返回语义未改变。内部 file 大小/对齐实测 Windows x86
+16/4、Windows x64 24/8、Linux x64 12/4，其余已报告对象不变。这些是布局及正确性
+证据，不代表吞吐性能基准。
+
+管道字节数指针修正依据微软文档中的 Win7
+[ReadFile](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-readfile)
+与 [WriteFile](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-writefile)
+契约。Win7/macOS/嵌入式运行证据仍待补。

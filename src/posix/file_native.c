@@ -59,6 +59,7 @@ hx_os_status hx_os_file_open(hx_os_context *context, const char *path,
 			    : hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 	}
 	file->descriptor = descriptor;
+	file->flags = flags;
 	*out = file;
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }

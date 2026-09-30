@@ -25,6 +25,8 @@ option(HX_OS_ENABLE_ENV "Build UTF-8 environment access" ON)
 option(HX_OS_ENABLE_PATHS "Build special path queries" ON)
 option(HX_OS_ENABLE_THREAD_EX "Build thread options, names and semaphore" ON)
 option(HX_OS_ENABLE_PIPE "Build synchronous and asynchronous pipes" ON)
+option(HX_OS_ENABLE_NET_OPTIONS "Build socket options and peer queries" ON)
+option(HX_OS_ENABLE_POSITIONED_IO "Build position-independent file I/O" ON)
 set(HX_OS_ICONV_SOURCE_DIR "" CACHE PATH "Unmodified GNU libiconv source")
 set(HX_OS_SANITIZER "" CACHE STRING "address,undefined or thread")
 
@@ -145,7 +147,7 @@ add_library(hx_c_platform
 	src/config.c src/config_values.c
 	src/containers.c
 	src/sysinfo.c src/library.c src/path.c src/env.c src/paths.c
-	src/thread_extra.c src/pipe.c
+	src/thread_extra.c src/pipe.c src/file_at.c src/net_options.c
 	${hx_parser_sources} ${hx_parser_objects}
 	${hx_platform_sources})
 if(HX_OS_ENABLE_SYSINFO)
@@ -162,6 +164,14 @@ if(HX_OS_ENABLE_PIPE)
 		target_sources(hx_c_platform PRIVATE src/windows/pipe_native.c)
 	else()
 		target_sources(hx_c_platform PRIVATE src/posix/pipe_native.c)
+	endif()
+endif()
+if(HX_OS_ENABLE_POSITIONED_IO)
+	if(WIN32)
+		target_sources(hx_c_platform PRIVATE
+			src/windows/file_at_native.c)
+	else()
+		target_sources(hx_c_platform PRIVATE src/posix/file_at_native.c)
 	endif()
 endif()
 if(HX_OS_ENABLE_LIBRARY OR HX_OS_ENABLE_PATHS)

@@ -62,6 +62,29 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_listen(
 	hx_os_socket *socket, int backlog, hx_os_error *error);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_local_address(
 	hx_os_socket *socket, hx_os_address *address, hx_os_error *error);
+/*
+ * Native escape hatch: level/name and value layout come from this target's
+ * socket headers, not portable numeric constants. Get takes capacity in
+ * *bytes and returns native length only on success; it is not a size query.
+ * Buffer contents on native failure are unspecified. Set after loop
+ * attachment returns BUSY even when idle. Getters require owner exclusion.
+ * Inputs are borrowed during the call. Native errors are preserved.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_option_set(hx_os_socket *socket,
+	int level, int name, const void *value, size_t bytes,
+	hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_option_get(hx_os_socket *socket,
+	int level, int name, void *value, size_t *bytes, hx_os_error *error);
+/* Portable common options; nonzero enables. Reuse is never implicit on bind. */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_set_nodelay(
+	hx_os_socket *socket, int enabled, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_set_keepalive(
+	hx_os_socket *socket, int enabled, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_set_reuseaddr(
+	hx_os_socket *socket, int enabled, hx_os_error *error);
+/* Unconnected sockets report their native getpeername error; output is kept. */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_peer_address(
+	hx_os_socket *socket, hx_os_address *address, hx_os_error *error);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_accept(hx_os_socket *listener,
 	hx_os_socket **out, hx_os_address *peer, hx_os_error *error);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_connect(

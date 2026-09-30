@@ -170,6 +170,8 @@ HX_OS_API const char *HX_OS_CALL hx_os_cpu_name(void);
 #define HX_OS_CAP_THREAD_EX (UINT64_C(1) << 17)
 #define HX_OS_CAP_PIPE (UINT64_C(1) << 18)
 #define HX_OS_CAP_ASYNC_PIPE (UINT64_C(1) << 19)
+#define HX_OS_CAP_NET_OPTIONS (UINT64_C(1) << 20)
+#define HX_OS_CAP_POSITIONED_IO (UINT64_C(1) << 21)
 /* required includes NUL. These queries do not need initialization. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_version_string(
 	char *buffer, size_t capacity, size_t *required);

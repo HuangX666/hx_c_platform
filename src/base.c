@@ -464,6 +464,12 @@ uint64_t hx_os_capabilities(void)
 #if HX_OS_ENABLE_THREAD_EX
 	result |= HX_OS_CAP_THREAD_EX;
 #endif
+#if HX_OS_ENABLE_NETWORK && HX_OS_ENABLE_NET_OPTIONS
+	result |= HX_OS_CAP_NET_OPTIONS;
+#endif
+#if HX_OS_ENABLE_POSITIONED_IO
+	result |= HX_OS_CAP_POSITIONED_IO;
+#endif
 #if HX_OS_ENABLE_PIPE
 	result |= HX_OS_CAP_PIPE;
 #if HX_OS_ENABLE_LOOP

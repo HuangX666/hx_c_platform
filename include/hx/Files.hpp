@@ -86,6 +86,25 @@ public:
 			    &error) != HX_OS_OK)
 			throw IoError(error, completed);
 	}
+	ReadResult readAt(uint64_t offset, void *data, size_t bytes)
+	{
+		size_t completed = 0;
+		hx_os_error error;
+		hx_os_status status = hx_os_file_read_at(
+			m_file_, offset, data, bytes, &completed, &error);
+		if (status != HX_OS_OK && status != HX_OS_EOF)
+			throw IoError(error, completed);
+		return {completed, status == HX_OS_EOF};
+	}
+	size_t writeAt(uint64_t offset, const void *data, size_t bytes)
+	{
+		size_t completed = 0;
+		hx_os_error error;
+		if (hx_os_file_write_at(m_file_, offset, data, bytes,
+			    &completed, &error) != HX_OS_OK)
+			throw IoError(error, completed);
+		return completed;
+	}
 	void sync()
 	{
 		hx_os_error error;

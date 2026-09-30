@@ -5,6 +5,7 @@
 #include <hx/Paths.hpp>
 #include <hx/Thread.hpp>
 #include <hx/Io.hpp>
+#include <hx/SocketOptions.hpp>
 #include <hx/ThreadPool.hpp>
 #include <cstdio>
 #include <cstdlib>
@@ -96,6 +97,19 @@ int main(int argc, char **argv)
 	CHECK(argc == 2);
 	TestSystemInfo();
 	test_cpp_pipe();
+	if (hx_os_capabilities() & HX_OS_CAP_NET_OPTIONS) {
+		hx_os_network *network = NULL;
+		hx_os_socket *socket = NULL;
+		CHECK(hx_os_network_create(NULL, &network, NULL) == HX_OS_OK);
+		CHECK(hx_os_socket_create(network, HX_OS_IPV4, HX_OS_TCP,
+			      &socket, NULL) == HX_OS_OK);
+		hx::SocketOptions options(socket);
+		options.noDelay();
+		options.keepAlive();
+		options.reuseAddress(false);
+		CHECK(hx_os_socket_close(&socket, NULL) == HX_OS_OK);
+		CHECK(hx_os_network_destroy(&network, NULL) == HX_OS_OK);
+	}
 	{
 		hx_os_thread *owner = NULL;
 		auto thread = hx::Thread::create(owner, thread_sample);
@@ -143,6 +157,11 @@ int main(int argc, char **argv)
 			hx::File moved(std::move(file));
 			char bytes[8];
 			CHECK(moved.size() == 5);
+			if (hx_os_capabilities() & HX_OS_CAP_POSITIONED_IO) {
+				CHECK(moved.readAt(1, bytes, 3).bytes == 3);
+				CHECK(!std::memcmp(bytes, "ell", 3));
+				CHECK(moved.readAt(5, bytes, 1).eof);
+			}
 			CHECK(moved.readSome(bytes, sizeof(bytes)).bytes == 5);
 			CHECK(moved.readSome(bytes, sizeof(bytes)).eof);
 		}

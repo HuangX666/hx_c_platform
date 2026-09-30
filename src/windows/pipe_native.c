@@ -164,13 +164,14 @@ void hx_os_i_pipe_step(hx_os_request *request)
 	bytes = remaining > INT_MAX ? INT_MAX : (DWORD)remaining;
 	memset(&request->overlapped, 0, sizeof(request->overlapped));
 	request->native_cancelled = 0;
+	request->native_bytes = 0;
 	request->started = 1;
 	result = op->kind == HX_OS_I_OP_PIPE_READ
-		? ReadFile(request->pipe->native, op->data, bytes, NULL,
-			  &request->overlapped)
+		? ReadFile(request->pipe->native, op->data, bytes,
+			  &request->native_bytes, &request->overlapped)
 		: WriteFile(request->pipe->native,
 			  (char *)op->data + request->completion.bytes, bytes,
-			  NULL, &request->overlapped);
+			  &request->native_bytes, &request->overlapped);
 	code = result ? 0 : GetLastError();
 	if (!code || code == ERROR_IO_PENDING)
 		request->native_pending = 1;

@@ -350,3 +350,52 @@ new allocations or locks. Socket poll records now share a two-int readiness
 record; no extra socket allocation/syscall is introduced. Async pipes reuse
 request allocation/queue locking; default writes add their owned copy. POSIX
 writes additionally perform thread signal-mask/pending-signal operations.
+
+## Socket options and positioned file I/O
+
+NET_OPTIONS defaults to ON and requires NETWORK for its capability. Call
+hx_os_socket_set_nodelay, set_keepalive or set_reuseaddr directly with a boolean.
+These select the correct native levels/names internally. Address reuse stays
+opt-in: create and bind do not enable it. Native reuse semantics and keepalive
+scheduling remain platform-specific. Setters return BUSY once a socket belongs
+to a loop, even between requests. The borrowed `hx::SocketOptions` facade never
+closes a socket; it provides these setters and peerAddress().
+
+The raw option_set/get escape hatch uses target-native level/name/value layouts
+from the target SDK. Length is bytes, capped at INT_MAX; get returns the actual
+native length on success and does not implement two-phase sizing. Failure keeps
+the input length but the native buffer may have changed. In the tested Windows
+provider TCP_NODELAY returned one byte even with an int-sized buffer, so callers
+must inspect the returned length. C++ get<T> requires an exact size match and
+reports RANGE otherwise; it cannot infer arbitrary native option value types.
+Peer lookup preserves output on failure; an unconnected socket retains the
+native getpeername error. Serialize calls with socket use and exclude close.
+
+POSITIONED_IO is independent of FILE_UTILS. `hx_os_file_read_at` and write_at
+accept an absolute byte offset and return a single chunk plus exact native
+progress. Short successful I/O is distinct from EOF; zero requested bytes
+succeeds. Requests are capped at INT_MAX, offsets/ranges must fit signed 64-bit
+native positions. Callers handle additional chunks/retries. Append-mode writes
+are NOT_SUPPORTED, and wrong open-mode access reports ACCESS_DENIED. Pipes are
+not seekable. These calls may block and have no cancellation/deadline promise.
+
+POSIX uses pread/pwrite with EINTR retry. Windows lazily reopens the existing
+file object with OVERLAPPED using ReOpenFile, caches that handle with native
+interlocked publication, and uses a distinct event/OVERLAPPED for each call.
+It never seeks/restores the shared cursor and never upgrades the original open
+mode. All overlapping operations retain the file until completion; the owner
+excludes close/truncate and coordinates overlapping writes. Final file close
+releases both handles. `hx::File::readAt` distinguishes EOF and `writeAt` returns
+partial progress; IoError preserves progress on failure.
+
+Regular open/read/write add no allocation or lock for the positioned feature.
+The Windows private file object grows to 24 bytes on x64 (16 on x86), POSIX to
+12 bytes. First positioned use can open competing candidate handles; only the
+published handle remains. Each positioned Windows call has atomic cache lookup,
+one event create/close, native I/O and a completion wait when needed. POSIX adds
+only its positioned syscall. This is a cost inventory, not a throughput claim.
+
+`examples/positioned_read.c` reads four bytes at offset four without a seek.
+The Windows pipe adapter also now supplies retained non-NULL byte-count storage
+to ReadFile/WriteFile, required by the documented Windows 7 contract; final
+async progress still comes from IOCP completion. Win7 native execution is pending.

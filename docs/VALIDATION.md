@@ -397,3 +397,25 @@ with HX_OS_BUILD_BENCHMARKS=ON:
 The x86 result is a compiled/executed layout probe, not a full new x86 test run.
 macOS, native Win7, ARMv7/AArch64 and musl execution remain pending. Layout
 measurements and bounded syscall/allocation review are not throughput evidence.
+
+## OBS completion batch 8 (2026-09-30)
+
+Windows/WSL full CTest passed 26/26; related ASan/UBSan 6/6 and TSan 4/4.
+NET_OPTIONS=OFF/POSITIONED_IO=OFF passed 3/3 per host with NETWORK enabled.
+NETWORK=OFF/POSITIONED_IO=ON passed 4/4 per host; Windows also had FILE_UTILS
+and all unrelated convenience modules disabled. Independent C99/C++11 headers
+compiled. Tests cover four simultaneous positioned readers/writers and an
+unchanged shared cursor, first-use handle publication, short reads, EOF, invalid
+ranges, append/readonly rejection, explicit socket reuse, actual option lengths,
+peer addresses and post-attachment mutation rejection.
+
+Windows raw TCP_NODELAY returned one byte; the test now zero-initializes storage
+and checks the actual native length instead of assuming sizeof(int). Native raw
+results are unchanged. The private file layout probe measured x86 Windows 16/4,
+x64 Windows 24/8, x64 Linux 12/4 (size/alignment); other reported objects remain
+unchanged. These are layout/correctness results, not a throughput benchmark.
+
+The pipe byte-count pointer correction follows Microsoft's documented Win7
+[ReadFile](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-readfile)
+and [WriteFile](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-writefile)
+contracts. Win7/macOS/embedded runtime evidence still remains pending.

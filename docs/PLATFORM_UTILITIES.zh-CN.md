@@ -284,3 +284,42 @@ C++11 的 `hx::Pipes::anonymous()` 返回两个 RAII File。`IoLoop`、`AsyncPip
 只增加类型判断，不增加锁或分配；套接字 readiness 改为共用的两个 int 记录，
 不增加其分配或系统调用。异步管道复用请求分配及队列锁；默认写另有数据副本。
 POSIX 写管道额外执行线程信号掩码和待决信号查询。
+
+## 套接字选项与定位文件 I/O
+
+NET_OPTIONS 默认开启，能力位同时依赖 NETWORK。直接调用
+hx_os_socket_set_nodelay、set_keepalive、set_reuseaddr，库内部选择原生层级和
+名称。地址复用保持显式开启，create/bind 不改变默认值。原生地址复用行为和
+keepalive 时间安排仍遵守各系统契约。套接字一旦附属 loop，setter 即报 BUSY，
+即使当前无请求也不能设置。`hx::SocketOptions` 是借用外观，提供这些设置和
+peerAddress()，不关闭对象。
+
+原始 option_set/get 使用目标 SDK 的 level/name/值布局，属于平台扩展入口。
+长度以字节计，最大 INT_MAX；get 成功才更新实际长度，不提供两段式容量查询。
+失败保留输入长度，但原生缓冲区内容可能已变。本机 Windows 提供者的 TCP_NODELAY
+在 int 大小缓冲区中返回 1 字节，调用方应检查实际长度。C++ get<T> 要求原生结果
+大小与类型完全匹配，否则报 RANGE，不推测任意原生选项的类型。对端查询失败保留
+输出，未连接时保留 getpeername 原生错误。与套接字操作串行并排除并发关闭。
+
+POSITIONED_IO 独立于 FILE_UTILS。read_at/write_at 接收绝对字节偏移，返回一次
+实际传输的字节数。短读写成功、EOF 和错误分别表示；请求零字节成功。单次最多
+INT_MAX 字节，偏移及本次范围必须适配有符号 64 位原生位置。后续分块和重试由
+调用方决定。追加模式定位写报 NOT_SUPPORTED，打开模式不允许访问时报
+ACCESS_DENIED，管道不支持定位。调用可能阻塞，不提供取消或截止时间保证。
+
+POSIX 使用 pread/pwrite 并重试 EINTR。Windows 首次定位操作通过 ReOpenFile
+重新打开同一文件对象的重叠句柄，以原生 interlocked 安全发布缓存；每次调用
+使用独立事件和 OVERLAPPED。不会定位再恢复共用游标，也不会扩大原打开权限。
+对象由调用方保留到所有操作完成，关闭/截断须外部排除，重叠写入范围自行协调。
+文件最终关闭会释放两个句柄。C++ File::readAt 区分 EOF，writeAt 返回部分进度，
+失败通过 IoError 保留实际进度。
+
+普通文件打开和顺序读写不为定位功能增加分配或锁。Windows 内部文件对象 x64
+变为 24 字节、x86 为 16 字节，POSIX 为 12 字节。首次并发调用可能创建竞争的
+候选句柄，最终只保留已发布的一个。Windows 每次定位调用增加原子缓存查询、
+事件创建/关闭、原生 I/O 及必要等待；POSIX 仅定位系统调用。这是成本清单，
+不作为吞吐提升证据。
+
+`examples/positioned_read.c` 无需 seek 即读取偏移 4 起的四个字节。同时修正了
+Windows 管道 ReadFile/WriteFile 的参数，提供 Win7 文档要求的非空、随请求保留
+的字节数存储；异步最终进度仍取自 IOCP 完成结果。Win7 实机执行仍待验证。
