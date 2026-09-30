@@ -390,3 +390,22 @@ BOM 及 UTF-32LE 重叠前缀。POSIX 权限测试使用原生文件系统的独
 扩展信息布局在 Windows x86/x64 和 Linux x64 均实测 72/8 字节（大小/对齐）。
 既有公共布局不变。macOS、Win7、嵌入式、Windows 链接权限和需要 DT_UNKNOWN
 回退的目标文件系统仍需分别验证。
+
+## OBS 补齐第 10 批（2026-09-30）
+
+Windows／WSL 全量各 30/30；相关 ASan/UBSan 与 TSan 各 4/4（config、
+config_serialize、cpp_platform、config_serialize_example）。覆盖 JSON 大整数
+精确拼写、内嵌 NUL/Unicode、INI 分组、properties 往返、不兼容类型拒绝、
+深度/节点/工作量/输出/堆预算、分配失败、不可变文档并发读取及原子保存重读。
+数值助手提取后，既有已开启的第三方解析后端全部通过。
+
+double 检查包括正负零、DBL_MIN/DBL_MAX、往返、上溢、完整 token 校验和
+inf/nan 规范化。两平台均在小数逗号 locale 下通过，并检查进程 locale 和当前小数
+分隔符没有被库改变。WSL 起初未生成可用的替代 locale，使用已有 localedef 及
+系统数据在 build-obs-linux/test-locales 下生成私有 de_DE.UTF-8，仅测试命令设置
+LOCPATH；未修改系统 locale 或安装依赖。全量、ASan、TSan 均使用该私有数据验证。
+
+CONFIG=ON 而 CONFIG_SERIALIZE/TEXT_NUMBER=OFF 两平台各 3/3，原配置 double
+getter 保持可用。CONFIG=OFF/TEXT_NUMBER=ON 各 3/3。Windows 的序列化开启、
+FILE_UTILS 关闭组合 4/4，包含保存明确拒绝。C99/C++11 独立头及源码规则检查
+通过；没有扩展既有公共结构体。macOS、Win7、嵌入式运行仍待补。

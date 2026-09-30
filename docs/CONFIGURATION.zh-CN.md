@@ -4,8 +4,9 @@
 
 这是可裁剪的同步 C99 模块，通过 C ABI 返回只读文档。
 应用设置管理、自动重载、环境变量修改、变量展开、
-默认值合并、模式校验、文件包含和写回属于消费者策略。
-模块不创建后台线程或队列。
+默认值合并、模式校验、文件包含及保存时机属于消费者策略。
+可选 JSON/INI/properties 序列化及原子保存机制见
+[平台便利接口](PLATFORM_UTILITIES.zh-CN.md)。模块不创建后台线程或队列。
 
 默认后端始终是 BUILTIN，安装依赖不会自动切换解析规则。
 通过 options.backend 选择，并用 hx_os_config_backend_available 查询。

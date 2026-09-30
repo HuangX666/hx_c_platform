@@ -1,6 +1,5 @@
 #include "config_private.h"
-
-#include <locale.h>
+#include "number_private.h"
 
 typedef union hx_os_cfg_vendor_block hx_os_cfg_vendor_block;
 union hx_os_cfg_vendor_block {
@@ -145,48 +144,17 @@ char *hx_os_cfg_vendor_strdup(const char *text)
 
 double hx_os_cfg_vendor_strtod(const char *text, char **end)
 {
-#if HX_OS_HAVE_LOCAL_STRTOD
 	double result;
 	int native_error;
-#if defined(_WIN32)
-	_locale_t locale = _create_locale(LC_NUMERIC, "C");
-#else
-	locale_t locale = newlocale(LC_NUMERIC_MASK, "C", (locale_t)0);
-#endif
-	if (!locale) {
-		if (end)
-			*end = (char *)text;
-		if (hx_os_cfg_vendor_parser)
-			(void)hx_os_cfg_fail(hx_os_cfg_vendor_parser,
-				HX_OS_NO_MEMORY, SIZE_MAX,
-				"Numeric locale allocation failed");
-		errno = ENOMEM;
-		return 0;
-	}
-	errno = 0;
-#if defined(_WIN32)
-	result = _strtod_l(text, end, locale);
-#else
-	result = strtod_l(text, end, locale);
-#endif
-	native_error = errno;
-#if defined(_WIN32)
-	_free_locale(locale);
-#else
-	freelocale(locale);
-#endif
+	hx_os_status status =
+		hx_os_i_strtod_c(text, end, &result, &native_error);
+	if (status != HX_OS_OK && hx_os_cfg_vendor_parser)
+		(void)hx_os_cfg_fail(hx_os_cfg_vendor_parser, status, SIZE_MAX,
+			status == HX_OS_NO_MEMORY
+				? "Numeric locale allocation failed"
+				: "A per-call numeric locale is unavailable");
 	errno = native_error;
 	return result;
-#else
-	if (end)
-		*end = (char *)text;
-	if (hx_os_cfg_vendor_parser)
-		(void)hx_os_cfg_fail(hx_os_cfg_vendor_parser,
-			HX_OS_NOT_SUPPORTED, SIZE_MAX,
-			"A per-call numeric locale is unavailable");
-	errno = ENOSYS;
-	return 0;
-#endif
 }
 
 int hx_os_cfg_vendor_isspace(int character)

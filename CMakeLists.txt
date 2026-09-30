@@ -30,6 +30,8 @@ option(HX_OS_ENABLE_POSITIONED_IO "Build position-independent file I/O" ON)
 option(HX_OS_ENABLE_FILE_INFO
 	"Build extended file and directory information" ON)
 option(HX_OS_ENABLE_BOM "Build Unicode BOM helpers" ON)
+option(HX_OS_ENABLE_TEXT_NUMBER "Build public numeric text conversion" ON)
+option(HX_OS_ENABLE_CONFIG_SERIALIZE "Build configuration serialization" ON)
 set(HX_OS_ICONV_SOURCE_DIR "" CACHE PATH "Unmodified GNU libiconv source")
 set(HX_OS_SANITIZER "" CACHE STRING "address,undefined or thread")
 
@@ -128,15 +130,21 @@ if(HX_OS_ENABLE_ICONV)
 endif()
 
 set(HX_OS_HAVE_LOCAL_STRTOD 1)
+set(HX_OS_HAVE_LOCAL_PRINTF 1)
 if(NOT WIN32)
 	set(CMAKE_REQUIRED_DEFINITIONS -D_GNU_SOURCE)
 	check_symbol_exists(strtod_l "stdlib.h;locale.h" HX_OS_HAS_STRTOD_L)
 	check_symbol_exists(newlocale locale.h HX_OS_HAS_NEWLOCALE)
 	check_symbol_exists(freelocale locale.h HX_OS_HAS_FREELOCALE)
+	check_symbol_exists(uselocale locale.h HX_OS_HAS_USELOCALE)
 	unset(CMAKE_REQUIRED_DEFINITIONS)
 	if(NOT HX_OS_HAS_STRTOD_L OR NOT HX_OS_HAS_NEWLOCALE OR
 		NOT HX_OS_HAS_FREELOCALE)
 		set(HX_OS_HAVE_LOCAL_STRTOD 0)
+	endif()
+	if(NOT HX_OS_HAS_USELOCALE OR NOT HX_OS_HAS_NEWLOCALE OR
+		NOT HX_OS_HAS_FREELOCALE)
+		set(HX_OS_HAVE_LOCAL_PRINTF 0)
 	endif()
 endif()
 include(cmake/ConfigParsers.cmake)
@@ -151,7 +159,7 @@ add_library(hx_c_platform
 	src/containers.c
 	src/sysinfo.c src/library.c src/path.c src/env.c src/paths.c
 	src/thread_extra.c src/pipe.c src/file_at.c src/net_options.c
-	src/file_info.c src/bom.c
+	src/file_info.c src/bom.c src/number.c src/config_serialize.c
 	${hx_parser_sources} ${hx_parser_objects}
 	${hx_platform_sources})
 if(HX_OS_ENABLE_SYSINFO)

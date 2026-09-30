@@ -436,3 +436,26 @@ The extended info layout probe measured 72/8 bytes (size/alignment) on Windows
 x86/x64 and Linux x64. Existing public layouts remain unchanged. Native macOS,
 Win7 and embedded runs, Windows symlink privileges and a filesystem that forces
 DT_UNKNOWN directory fallback remain separate target validation.
+
+## OBS completion batch 10 (2026-09-30)
+
+Windows/WSL full CTest passed 30/30; related ASan/UBSan and TSan each passed 4/4
+(config, config_serialize, cpp_platform, config_serialize_example). Serialization
+checks cover exact large JSON numbers, escaped NUL/Unicode, INI grouping,
+properties round trips, incompatible-type rejection, depth/node/work/output/heap
+limits, allocation failure, concurrent immutable readers and atomic save/reload.
+All existing enabled parser backends passed after numeric-helper extraction.
+
+Double checks cover signed zero, DBL_MIN/DBL_MAX, round trips, overflow, complete
+token rejection and canonical infinities/NaNs. Both hosts passed under a comma
+numeric locale, checking that the process locale and current decimal separator
+were restored. WSL initially lacked a generated alternate locale; its existing
+localedef and OS locale sources generated a private de_DE.UTF-8 under
+build-obs-linux/test-locales. Only the test command used LOCPATH; no system locale
+or installed dependency was changed. Full/ASan/TSan runs used that private locale.
+
+CONFIG=ON with CONFIG_SERIALIZE/TEXT_NUMBER=OFF passed 3/3 per host, preserving
+the existing config double getter. CONFIG=OFF/TEXT_NUMBER=ON passed 3/3 per host.
+Windows CONFIG_SERIALIZE=ON/FILE_UTILS=OFF passed 4/4, including explicit save
+rejection. Isolated C99/C++11 headers and source rules passed. Existing public
+layouts were not expanded. macOS, Win7 and embedded runtime remain pending.

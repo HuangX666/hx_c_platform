@@ -4,8 +4,10 @@
 
 This optional, synchronous C99 module returns immutable documents through a
 C ABI. Application settings, reload watchers, environment mutation, variable
-expansion, defaults, schema validation, includes and persistence are consumer
-policies. No background thread or queue is created.
+expansion, defaults, schema validation, includes and save timing remain consumer
+policies. Optional JSON/INI/properties serialization and atomic save mechanisms
+are described in [platform utilities](PLATFORM_UTILITIES.md). No background
+thread or queue is created.
 
 The default backend is always BUILTIN. Installing dependencies never changes
 parsing implicitly. Select options.backend and check

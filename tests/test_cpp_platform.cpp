@@ -7,6 +7,7 @@
 #include <hx/Io.hpp>
 #include <hx/SocketOptions.hpp>
 #include <hx/Text.hpp>
+#include <hx/Config.hpp>
 #include <hx/ThreadPool.hpp>
 #include <cstdio>
 #include <cstdlib>
@@ -98,6 +99,27 @@ int main(int argc, char **argv)
 	CHECK(argc == 2);
 	TestSystemInfo();
 	test_cpp_pipe();
+	if (hx_os_capabilities() & HX_OS_CAP_TEXT_NUMBER) {
+		CHECK(hx::Text::parseDouble("1.5") == 1.5);
+		CHECK(hx::Text::formatDouble(1.5) == "1.5");
+	}
+	if (hx_os_capabilities() & HX_OS_CAP_CONFIG_SERIALIZE) {
+		auto original = hx::ConfigDocument::parse(
+			"{\"name\":\"value\",\"number\":9007199254740993}");
+		auto copy = original;
+		auto restored = hx::ConfigDocument::parse(copy.serialize());
+		CHECK(restored.integer("/number") == INT64_C(9007199254740993));
+		CHECK(restored.string("/name") == "value");
+		CHECK(restored.stringOr("/missing", "fallback") == "fallback");
+		try {
+			(void)restored.stringOr("/number", "fallback");
+			CHECK(false);
+		} catch (const hx::StatusError &error) {
+			CHECK(error.status() == HX_OS_TYPE_MISMATCH);
+		}
+		auto moved = std::move(restored);
+		CHECK(moved.string("/name") == "value");
+	}
 	if (hx_os_capabilities() & HX_OS_CAP_BOM) {
 		const auto bytes = hx::Text::bomBytes(HX_OS_UTF32LE);
 		const auto bom =

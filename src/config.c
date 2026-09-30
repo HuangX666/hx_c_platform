@@ -1,6 +1,5 @@
 #include "config_private.h"
-
-#include <locale.h>
+#include "number_private.h"
 #include <stdio.h>
 
 struct hx_os_cfg_block {
@@ -258,7 +257,7 @@ int hx_os_config_backend_available(int format, int backend)
 #endif
 }
 
-static int hx_os_cfg_options(hx_os_cfg_parser *parser,
+int hx_os_cfg_options(hx_os_cfg_parser *parser,
 	const hx_os_config_options *input, hx_os_config_options *options)
 {
 	hx_os_config_options_init(options);
@@ -781,67 +780,13 @@ hx_os_status hx_os_config_get_double(const hx_os_config_node *node, double *out)
 #if HX_OS_HAVE_LOCAL_STRTOD
 	hx_os_config_slice value;
 	hx_os_status status;
-	char *copy, *end;
-	size_t i, n = 0;
-	int kind, conversion_error;
-	double result;
-#if defined(_WIN32)
-	_locale_t locale;
-#else
-	locale_t locale;
-#endif
 	if (!out)
 		return HX_OS_INVALID;
 	status = hx_os_cfg_numeric(node, &value);
 	if (status != HX_OS_OK)
 		return status;
-	if (!hx_os_cfg_number(value.data, value.bytes, 1, &kind))
-		return HX_OS_TYPE_MISMATCH;
-	if (kind == HX_OS_CONFIG_INTEGER) {
-		uint64_t magnitude;
-		int negative;
-		status = hx_os_cfg_integer(value, &magnitude, &negative);
-		if (status == HX_OS_OK) {
-			*out = negative ? -(double)magnitude
-					: (double)magnitude;
-			return HX_OS_OK;
-		}
-	}
-	copy = hx_os_i_alloc(node->document->context, value.bytes + 1, 0);
-	if (!copy)
-		return HX_OS_NO_MEMORY;
-	for (i = 0; i < value.bytes; ++i)
-		if (value.data[i] != '_')
-			copy[n++] = value.data[i];
-	copy[n] = 0;
-#if defined(_WIN32)
-	locale = _create_locale(LC_NUMERIC, "C");
-#else
-	locale = newlocale(LC_NUMERIC_MASK, "C", (locale_t)0);
-#endif
-	if (!locale) {
-		hx_os_memory_free(copy);
-		return HX_OS_NO_MEMORY;
-	}
-	errno = 0;
-#if defined(_WIN32)
-	result = _strtod_l(copy, &end, locale);
-#else
-	result = strtod_l(copy, &end, locale);
-#endif
-	conversion_error = errno;
-	status = end != copy + n	     ? HX_OS_TYPE_MISMATCH
-		: conversion_error == ERANGE ? HX_OS_RANGE
-					     : HX_OS_OK;
-#if defined(_WIN32)
-	_free_locale(locale);
-#else
-	freelocale(locale);
-#endif
-	hx_os_memory_free(copy);
-	if (status == HX_OS_OK)
-		*out = result;
-	return status;
+	return hx_os_i_parse_double(
+		node->document->context, value.data, value.bytes, out, NULL);
 #else
 	if (!out)
 		return HX_OS_INVALID;

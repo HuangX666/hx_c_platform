@@ -41,6 +41,8 @@ typedef struct hx_os_cfg_parser {
 	hx_os_config_error *error;
 	void *vendor_blocks;
 } hx_os_cfg_parser;
+int hx_os_cfg_options(hx_os_cfg_parser *parser,
+	const hx_os_config_options *input, hx_os_config_options *options);
 
 enum {
 	HX_OS_CFG_JSON_STRING,

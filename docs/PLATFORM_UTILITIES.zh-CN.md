@@ -357,3 +357,40 @@ C++ Text::detectBom 返回 found/bytes/encoding，encoding 仅在 found 时有�
 C BOM 函数不分配、不加锁；属性查询不建立后台任务，但原生查询可能阻塞。POSIX
 已知目录类型不调用 stat，未知时增加一次 fstatat。Windows 扩展 stat 在共用句柄
 及基础投影的基础上增加一次 FileBasicInfo 查询。
+
+## 配置序列化与数字文本
+
+CONFIG_SERIALIZE 默认开启，依赖 CONFIG。直接调用 hx_os_config_serialize 将
+结果写入 hx_string，或用 hx_os_config_save 一次完成序列化和原子发布。保存还
+依赖 FILE_UTILS，遵守原子发布既有的持久化及部分失败边界。文档保持不可变。
+写入器统一使用内置实现，不受原文档解析后端影响；显式 writer options 的 backend
+须为 BUILTIN。YAML/XML/TOML/ENV 输出目前报 NOT_SUPPORTED。
+
+JSON 输出紧凑 UTF-8，合法 JSON 数字保留原始拼写，不经过 double 舍入。TOML
+进制整数精确转为十进制，十进制下划线和前导加号去除；非有限数字、XML 节点和
+日期节点不能悄悄改成 JSON 字符串。INI 支持根字符串键值及一层字符串 section，
+先写全局键再写 section，各组内部保持顺序，不保留注释和排版。会被 INI 解析器
+裁剪或误解的内容报 UNREPRESENTABLE。properties 支持平面字符串对象，转义
+分隔符、空格、反斜杠及控制字符，Unicode 保持 UTF-8。数字、布尔、数组、null
+和嵌套对象不能静默转成行式格式的字符串。无法表达时保留原输出。
+
+序列化先有界测量，再一次分配输出并写入。两个遍历共同计入 max_work，每次遵守
+max_nodes/max_depth，递归最多 128 帧。max_input_bytes 在写入时限制输出字节；
+max_memory_bytes 限制新输出分配及分配器元数据，不包含调用方持有的文档、旧输出
+和有界 C 栈。输出使用 hx_string 自己的 context。分配失败或任一阶段超限均保留
+旧值。并发读取使用独立输出并保留文档至调用结束；不增加锁、全局可变设置或后台
+活动。
+
+TEXT_NUMBER 可独立于 CONFIG 使用 parse_double/format_double。配置 getter、
+数值语法和第三方适配共用同一份自有助手；关闭公共数字文本模块不改变配置 getter
+行为。解析接受既有数值语法的完整 ASCII token，包括 TOML 下划线/进制及带符号
+inf/nan，不接受外围空白或内嵌 NUL；上溢/下溢报 RANGE。IEEE binary64 格式化使用
+17 位有效数字，nan/inf 规范化，并使用 C 数值 locale。不修改进程 locale；POSIX
+暂时选择调用线程 locale，随后恢复。locale 对象沿用原配置 getter 的原生 CRT
+分配方式，不计入注入分配器账目。
+
+C++ ConfigDocument 持有不可变引用，支持复制/移动、类型化 pointer 查询、仅在键
+缺失时回退的 stringOr、serialize/save。Text::parseDouble/formatDouble 提供
+C++ 结果。C++ 序列化用默认 context 临时缓冲区并返回 std::string；需要指定
+context 时使用 C 输出入口。examples/config_save.c 演示精确保留大整数的序列化，
+传入文件名时直接完成保存。

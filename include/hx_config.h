@@ -2,6 +2,7 @@
 #define HX_C_PLATFORM_CONFIGURATION_H
 
 #include "hx_os_base.h"
+#include "hx_string.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -103,6 +104,25 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_config_parse(hx_os_context *context,
 HX_OS_API hx_os_status HX_OS_CALL hx_os_config_load(hx_os_context *context,
 	int format, const char *utf8_path, const hx_os_config_options *options,
 	hx_os_config_document **out, hx_os_config_error *error);
+/*
+ * Serialize JSON, INI or properties into the output string's context.
+ * Failure preserves its old value. Options default to finite parser limits:
+ * max_input_bytes bounds output, max_memory_bytes bounds new output storage
+ * including allocator overhead, max_work bounds both passes, depth/nodes bound
+ * each traversal. Recursion is bounded to 128 frames. Existing output/document
+ * memory is outside this new-storage budget. backend must be BUILTIN.
+ * Unrepresentable values fail; no numeric-to-string coercion/flattening.
+ * INI global keys precede sections; order within groups is preserved.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_config_serialize(
+	const hx_os_config_document *document, int format, hx_string *out,
+	const hx_os_config_options *options, hx_os_error *error);
+/* Serialize then atomically publish using file_save_atomic. Needs FILE_UTILS.
+ * Same publication/durability boundaries; no automatic backup or rollback.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_config_save(
+	const hx_os_config_document *document, int format, const char *path,
+	const hx_os_config_options *options, hx_os_error *error);
 /*
  * Documents are immutable after successful parse and may be read concurrently.
  * Nodes/slices borrow the document. Retain it before sharing, and exclude

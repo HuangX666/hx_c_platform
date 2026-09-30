@@ -60,6 +60,19 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_text_bom_detect(const void *data,
 	size_t bytes, hx_os_encoding *encoding, size_t *prefix_bytes);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_bom_bytes(
 	hx_os_encoding encoding, unsigned char out[4], size_t *bytes);
+/*
+ * Locale-independent complete numeric token conversion. Parsing accepts the
+ * existing configuration numeric grammar: decimal/exponent, underscores,
+ * unsigned 0x/0o/0b integers, and signed inf/nan. No surrounding whitespace
+ * or trailing NUL is included in bytes. Failure leaves *out unchanged.
+ * Overflow/underflow is RANGE. Formatting preserves round trips for finite
+ * IEEE binary64 values, canonicalizes infinities/NaNs and includes NUL in
+ * required. No process locale changes; POSIX format restores thread locale.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_text_parse_double(
+	const char *text, size_t bytes, double *out, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_text_format_double(
+	double value, char *buffer, size_t capacity, size_t *required);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_validate_utf8(
 	const void *input, size_t bytes, size_t *error_offset);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_converter_create(

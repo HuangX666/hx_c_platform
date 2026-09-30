@@ -476,6 +476,13 @@ uint64_t hx_os_capabilities(void)
 #if HX_OS_ENABLE_BOM
 	result |= HX_OS_CAP_BOM;
 #endif
+#if HX_OS_ENABLE_TEXT_NUMBER && HX_OS_HAVE_LOCAL_STRTOD &&                     \
+	HX_OS_HAVE_LOCAL_PRINTF
+	result |= HX_OS_CAP_TEXT_NUMBER;
+#endif
+#if HX_OS_ENABLE_CONFIG && HX_OS_ENABLE_CONFIG_SERIALIZE
+	result |= HX_OS_CAP_CONFIG_SERIALIZE;
+#endif
 #if HX_OS_ENABLE_PIPE
 	result |= HX_OS_CAP_PIPE;
 #if HX_OS_ENABLE_LOOP

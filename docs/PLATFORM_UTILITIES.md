@@ -445,3 +445,53 @@ The C BOM functions allocate nothing and take no locks. Stat and directory info
 create no background activity; native metadata queries may block. POSIX known
 directory types add no stat; unknown types require one fstatat. Windows extended
 stat adds one FileBasicInfo query, but shares the existing handle and projection.
+
+## Configuration serialization and numeric text
+
+CONFIG_SERIALIZE defaults to ON and requires CONFIG. Use
+hx_os_config_serialize(document, format, &text, NULL, &error) or the one-call
+hx_os_config_save(document, format, path, NULL, &error). Save also needs
+FILE_UTILS and follows atomic publication's persistence/partial-failure contract.
+Documents remain immutable. The serializer always uses its builtin writer,
+regardless of the document's parse backend; explicit writer options must select
+BUILTIN. YAML, XML, TOML and ENV output currently report NOT_SUPPORTED.
+
+JSON emits compact UTF-8, preserving valid JSON numeric spellings without
+conversion through double. TOML integer bases are converted exactly and decimal
+underscores/leading plus are removed; non-finite numbers, XML nodes and datetime
+nodes cannot silently become JSON strings. INI supports root string values plus
+one level of sections containing strings. It emits global keys before sections,
+preserving order within those groups; comments/whitespace are not retained.
+Keys/values that the INI parser would trim or misinterpret are UNREPRESENTABLE.
+Properties supports a flat object of strings, escaping separators, spaces,
+backslashes and control characters, while retaining Unicode as UTF-8. Numbers,
+bools, arrays, null and nested structures cannot silently become line-format
+strings. Unsupported representations leave the previous output unchanged.
+
+Serialization performs a bounded measurement pass followed by one output
+allocation and a write pass. Both traversals charge max_work; each obeys
+max_nodes/max_depth (maximum 128 recursive frames). max_input_bytes is the
+serialized output limit, and max_memory_bytes bounds its allocation including
+allocator overhead. Caller-owned document/old output and the bounded C stack are
+outside that heap budget. Output uses its hx_string context. Allocator failure
+or a limit during either pass preserves the previous output. Concurrent readers
+use independent outputs and keep the document alive. No locks, global mutable
+settings or background work are introduced in serialization.
+
+TEXT_NUMBER separately exposes parse_double and format_double and can work
+without CONFIG. The config getters, numeric grammar and third-party adapters
+share the same first-party helpers; their existing behavior is retained even
+when the public text module is off. Parsing accepts a complete ASCII token in
+the existing numeric grammar (including TOML underscores/bases and signed inf/nan),
+without whitespace or embedded NUL; overflow/underflow is RANGE. Formatting uses
+17 significant digits for IEEE binary64, canonical nan/inf, and C numeric locale.
+It never changes the process locale; POSIX temporarily selects and restores the
+calling thread's locale. The locale objects use native C-runtime allocation,
+outside injected allocator accounting, as the original config getter did.
+
+C++ ConfigDocument owns an immutable reference, supports copying/moving, typed
+pointer queries, stringOr fallback only for missing keys, and serialize/save.
+Text::parseDouble/formatDouble provide owned C++ results. C++ serialization uses
+a default-context temporary and returns std::string; the C output API remains
+available for context-specific allocation. examples/config_save.c serializes
+an exact large integer or saves directly when given a filename.

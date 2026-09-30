@@ -23,7 +23,7 @@ embedded target runs remain separately identified target validation.
 | 7 | Synchronous and asynchronous pipes | Windows/Linux 24/24; ASan 7/7; TSan 5/5; native targets pending |
 | 8 | Socket options and positioned file I/O | Windows/Linux 26/26; ASan 6/6; TSan 4/4; native targets pending |
 | 9 | Extended stat, directory kinds, BOM | Windows/Linux 28/28; ASan 5/5; native targets pending |
-| 10 | Configuration serialization and floating point | Pending |
+| 10 | Configuration serialization and floating point | Windows/Linux 30/30; ASan 4/4; TSan 4/4; native targets pending |
 | 11 | Periodic timers | Pending |
 | 12 | Pool worker identity query | Pending |
 | 13 | GAI and Mach error text | Pending |

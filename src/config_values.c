@@ -1,4 +1,5 @@
 #include "config_private.h"
+#include "number_private.h"
 
 int hx_os_cfg_space(unsigned char character)
 {
@@ -42,17 +43,6 @@ hx_os_config_slice hx_os_cfg_trim(hx_os_config_slice value)
 	return value;
 }
 
-static int hx_os_cfg_digit(unsigned char c)
-{
-	if (c >= '0' && c <= '9')
-		return c - '0';
-	if (c >= 'a' && c <= 'f')
-		return c - 'a' + 10;
-	if (c >= 'A' && c <= 'F')
-		return c - 'A' + 10;
-	return -1;
-}
-
 static int hx_os_cfg_hex(const char *text, size_t length, size_t *position,
 	int digits, uint32_t *point)
 {
@@ -61,7 +51,8 @@ static int hx_os_cfg_hex(const char *text, size_t length, size_t *position,
 	if ((size_t)digits > length - *position)
 		return 0;
 	for (i = 0; i < digits; ++i) {
-		int digit = hx_os_cfg_digit((unsigned char)text[(*position)++]);
+		int digit = hx_os_i_number_digit(
+			(unsigned char)text[(*position)++]);
 		if (digit < 0)
 			return 0;
 		*point = (*point << 4) | (unsigned)digit;
@@ -216,104 +207,19 @@ int hx_os_cfg_quoted(
 		parser, HX_OS_SYNTAX, "Unterminated quoted string");
 }
 
-static int hx_os_cfg_digits(const char *text, size_t bytes, size_t *position,
-	int base, int underscores)
-{
-	size_t start = *position;
-	int last_digit = 0;
-	while (*position < bytes) {
-		int digit = hx_os_cfg_digit((unsigned char)text[*position]);
-		if (digit >= 0 && digit < base)
-			last_digit = 1;
-		else if (text[*position] == '_' && underscores && last_digit)
-			last_digit = 0;
-		else
-			break;
-		++*position;
-	}
-	return *position > start && last_digit;
-}
-
 int hx_os_cfg_number(const char *text, size_t bytes, int toml, int *kind)
 {
-	size_t i = 0, start;
-	int sign = 0;
-	*kind = HX_OS_CONFIG_INTEGER;
-	if (!bytes)
-		return 0;
-	if (text[i] == '-' || (toml && text[i] == '+')) {
-		sign = 1;
-		if (++i == bytes)
-			return 0;
-	}
-	if (toml && bytes - i == 3 &&
-		(!memcmp(text + i, "inf", 3) || !memcmp(text + i, "nan", 3))) {
-		*kind = HX_OS_CONFIG_REAL;
-		return 1;
-	}
-	if (toml && !sign && bytes - i > 2 && text[i] == '0') {
-		int base = text[i + 1] == 'x' ? 16
-			: text[i + 1] == 'o'  ? 8
-			: text[i + 1] == 'b'  ? 2
-					      : 0;
-		if (base) {
-			i += 2;
-			return hx_os_cfg_digits(text, bytes, &i, base, 1) &&
-				i == bytes;
-		}
-	}
-	start = i;
-	if (!hx_os_cfg_digits(text, bytes, &i, 10, toml))
-		return 0;
-	if (text[start] == '0' && i - start > 1)
-		return 0;
-	if (i < bytes && text[i] == '.') {
-		*kind = HX_OS_CONFIG_REAL;
-		++i;
-		if (!hx_os_cfg_digits(text, bytes, &i, 10, toml))
-			return 0;
-	}
-	if (i < bytes && (text[i] == 'e' || text[i] == 'E')) {
-		*kind = HX_OS_CONFIG_REAL;
-		++i;
-		if (i < bytes && (text[i] == '+' || text[i] == '-'))
-			++i;
-		if (!hx_os_cfg_digits(text, bytes, &i, 10, toml))
-			return 0;
-	}
-	return i == bytes;
+	int real;
+	int valid = hx_os_i_number_valid(text, bytes, toml, &real);
+	*kind = real ? HX_OS_CONFIG_REAL : HX_OS_CONFIG_INTEGER;
+	return valid;
 }
 
 hx_os_status hx_os_cfg_integer(
 	hx_os_config_slice value, uint64_t *magnitude, int *negative)
 {
-	size_t i = 0;
-	int kind, base = 10;
-	uint64_t result = 0;
-	if (!hx_os_cfg_number(value.data, value.bytes, 1, &kind) ||
-		kind != HX_OS_CONFIG_INTEGER)
-		return HX_OS_TYPE_MISMATCH;
-	*negative = value.data[0] == '-';
-	if (value.data[0] == '-' || value.data[0] == '+')
-		++i;
-	if (value.bytes - i > 2 && value.data[i] == '0') {
-		char prefix = value.data[i + 1];
-		if (prefix == 'x' || prefix == 'o' || prefix == 'b') {
-			base = prefix == 'x' ? 16 : prefix == 'o' ? 8 : 2;
-			i += 2;
-		}
-	}
-	for (; i < value.bytes; ++i) {
-		unsigned digit;
-		if (value.data[i] == '_')
-			continue;
-		digit = (unsigned)hx_os_cfg_digit((unsigned char)value.data[i]);
-		if (result > (UINT64_MAX - digit) / (unsigned)base)
-			return HX_OS_RANGE;
-		result = result * (unsigned)base + digit;
-	}
-	*magnitude = result;
-	return HX_OS_OK;
+	return hx_os_i_number_integer(
+		value.data, value.bytes, magnitude, negative);
 }
 
 int hx_os_cfg_scalar(hx_os_cfg_parser *parser, hx_os_config_slice text,

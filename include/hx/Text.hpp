@@ -4,10 +4,30 @@
 #include <hx_os_text.h>
 #include <hx/Status.hpp>
 #include <vector>
+#include <string>
 
 namespace hx {
 class Text {
 public:
+	static double parseDouble(const std::string &text)
+	{
+		double value;
+		hx_os_error error;
+		detail::CheckStatus(hx_os_text_parse_double(text.data(),
+					    text.size(), &value, &error),
+			error);
+		return value;
+	}
+	static std::string formatDouble(double value)
+	{
+		char buffer[128];
+		size_t required;
+		hx_os_status status = hx_os_text_format_double(
+			value, buffer, sizeof(buffer), &required);
+		if (status != HX_OS_OK)
+			throw StatusError(status);
+		return std::string(buffer, required - 1);
+	}
 	struct Bom {
 		size_t bytes;
 		hx_os_encoding encoding;
