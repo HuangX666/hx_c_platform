@@ -46,7 +46,7 @@ C++ 便利方法返回 Result<T>，复制保存原生错误详情。CpuUsage::cr
 
 ## 动态库
 
-`HX_OS_ENABLE_LIBRARY` 默认 ON。`hx_os_library_open`、`symbol`、`close` 提供基础 C 入口；`_ex` 版本可以接收已初始化的 `hx_string`，保存属于调用者的诊断文本。`hx::Library` 提供可移动的所有权和 `symbol<Pointer>(name)`，失败时抛出持有错误文本和原状态／错误域／代码的 `LibraryError`。
+`HX_OS_ENABLE_LIBRARY` 默认 ON。`hx_os_library_open`、`symbol`、`close` 提供基础 C 入口；`_ex` 版本可以接收已初始化的 `hx_string`，保存属于调用者的诊断文本。`hx::Library` 通过 Result 提供可移动的所有权和 `symbol<Pointer>(name)`，失败保留原状态／错误域／代码；可选的调用者持有 String 接收加载器诊断文本。
 
 ```cpp
 #include <hx/Library.hpp>
@@ -109,6 +109,8 @@ hx::Result<void> list_directory(const char *path) noexcept
 File::open 和 Directory::open 返回唯一持有核心句柄的 Result，即使 FILE_UTILS 关闭仍可使用。File::get 借用句柄，游标操作由调用者串行化。readSome/readAt 返回 Result<ReadResult>，EOF 和失败时可通过 hasValue() 读取字节进度；Files 返回 Result<String> 或 Result<Buffer>。Directory::next(true) 额外查询类型，默认 next() 不要求启用 FILE_INFO。
 
 `examples/text_file.c` 一次调用读取 UTF-8，并可原子发布到第二个路径； CTest 在两个平台运行同一份 C 源码。
+
+`File::read` 将 EOF 作为成功的 `ReadResult{bytes, eof}`，错误仍保留进度。`hx_os_directory_visit` 和 `Directory::forEach` 内部复用有界名称缓冲区，完成遍历后关闭，EOF／主动停止均成功。详见 [遍历与文本视图契约](COMMON_UTILITIES.zh-CN.md)。
 
 ## 环境变量
 
@@ -214,6 +216,8 @@ JSON 输出紧凑 UTF-8，合法 JSON 数字保留原始拼写，不经过 doubl
 TEXT_NUMBER 可独立于 CONFIG 使用 parse_double/format_double。配置 getter、数值语法和第三方适配共用同一份自有助手；关闭公共数字文本模块不改变配置 getter 行为。解析接受既有数值语法的完整 ASCII token，包括 TOML 下划线/进制及带符号 inf/nan，不接受外围空白或内嵌 NUL；上溢/下溢报 RANGE。IEEE binary64 格式化使用 17 位有效数字，nan/inf 规范化，并使用 C 数值 locale。不修改进程 locale；POSIX 暂时选择调用线程 locale，随后恢复。locale 对象沿用原配置 getter 的原生 CRT 分配方式，不计入注入分配器账目。
 
 C++ ConfigDocument 持有不可变引用，支持复制和移动。parse/load、类型化查询、serialize/save 以及仅键缺失时回退的 stringOr 返回 Result。可选 hx_os_config_error 输出保留解析位置和诊断；文本转换和序列化返回 Result<String>，可指定 context。examples/config_save.c 展示大整数精确保留。
+
+`ConfigDocument::stringView(pointer)` 返回 Result<StringView>，无需复制字节。保持不可变文档有效，该 getter 拒绝持有者临时对象；既有 string/stringOr 方法继续返回独立持有的副本。
 
 ## 周期定时器
 
@@ -447,6 +451,8 @@ stop 仅阻止新连接、发出和回调启动；close_until 随后清理订阅
 CallData setter 分别返回 Result<void>，getter 返回 Result<T>。SignalHandler::connect 在自身 context 中存储具体类型的捕获并在退役时销毁。CallDataView 借用参数包，string 返回 Result<String>。回调声明 noexcept，返回 void、状态码或 Result<void>；emit 直接返回失败并保留原生详情。便利层引用宿主 owner，要求显式 closeUntil；SIGNALS 仍独立可裁剪，关闭后操作返回 NOT_SUPPORTED。
 
 
+`CallData::edit()`／`hx_os_calldata_edit_*` 连续立即赋值，最后检查一次；后续失败保留之前成功项。`CallDataView::stringView` 不分配，借用参数包直到修改／销毁，`string` 继续复制。它们保留既有信号与命名过程发布契约。
+
 ## 可变设置与保留快照（第 23b 批）
 
 `hx_settings_create` 创建独立对象，直接使用类型化 set/get 和 set_default_*；常用路径见 `examples/settings.c`。显式值与默认值分开，只有键缺失才回退； null、类型错误、损坏数据和权限错误均不回退。不做数字字符串强制转换或递归默认值合并，点号是普通键字符。view 接口支持空键、含 NUL 的 UTF-8 键值；普通 C 字符串便利入口在调用期间借用参数，设置结果复制到对象自身 context。
@@ -464,6 +470,8 @@ close_until 拒绝新操作，等待已接受操作与观察者，再调用一�
 配置接入保持 hx_config 不可变。import/load 要求对象根，只接收 JSON 型可表示节点；XML、日期时间类型、整数越界均失败。加载先完成整个显式层的新树再发布，默认层保留，失败不改旧值；加载是整体替换。JSON/INI/properties 复用原序列化及可表示性规则，默认保存仅写显式值。用户指针（包括带指针标签的 NULL）序列化失败；JSON null 使用 null 类型。to_config 可导出任一层， to_json/load_json/save_json 提供直接入口；保存沿用原子发布和持久化边界。 config options 继续约束文本、内存、深度与工作量，完整加载错误保留来源、位置和原生原因。浮点格式化和内部文档创建复用已有代码；即使关闭公共 TEXT_NUMBER，设置转换仍能使用内部公共实现。
 
 SETTINGS 独立于 CONFIG、CONFIG_SERIALIZE、FILE_UTILS、SIGNALS 和 CONTAINERS，缺少组合依赖时返回 NOT_SUPPORTED。C++ Settings setter 分别返回 Result<void>，getter 返回 Result<T>，字符串为持有存储的 String。SettingValue 工厂返回 Result<SettingValue>，快照支持复制/移动，数组和对象接受已检查值的初始化列表。可变 Settings 引用宿主 owner，显式关闭并保留超时重试能力。C 公共布局和导出函数保持不变。
+
+设置字符串引用（`hx_settings_get_string_ref`、`SettingValue::asStringView`、`Settings::stringView`）持有不可变字节，不复制、不分配。owner 更新／关闭后仍有效，并保留原 context；C 引用须初始化、通过引用接口复制并释放。`Settings::update`／`hx_settings_update_*` 复用逐项 setter 和通知，首次失败保留此前成功项，finish 报告成功次数，不执行回滚或整体原子发布。详见 [常用调用所有权](COMMON_UTILITIES.zh-CN.md)。
 
 ## 有界区间计时树（第 23c 批）
 

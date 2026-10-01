@@ -141,6 +141,22 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_next_info(
 	hx_os_directory *directory, char *name, size_t capacity,
 	size_t *required, unsigned *kind, hx_os_error *error);
 HX_OS_API void HX_OS_CALL hx_os_directory_close(hx_os_directory *directory);
+/* Synchronous name-only traversal with one reusable buffer, no recursion.
+ * Names borrow storage only during the callback. Callback receives a cleared,
+ * non-NULL error record; OK continues, EOF stops successfully, other statuses
+ * stop with the callback error. It must return normally. Native EOF is normal.
+ * Default: 65536 entries and 4096 bytes of name buffer including NUL. No entry
+ * sorting or snapshot guarantee; callback may mutate the filesystem.
+ * ex completed counts callbacks started, including one that stops/fails.
+ */
+typedef hx_os_status(HX_OS_CALL *hx_os_directory_visit_fn)(
+	hx_string_view name, void *user, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_visit(const char *path,
+	hx_os_directory_visit_fn visit, void *user, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_visit_ex(
+	hx_os_context *context, const char *path, size_t max_entries,
+	hx_os_directory_visit_fn visit, void *user, size_t *completed,
+	hx_os_error *error);
 
 /*
  * File conveniences are synchronous. Copy/save can leave partial output on

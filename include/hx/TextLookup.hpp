@@ -87,6 +87,19 @@ public:
 			},
 			context);
 	}
+	Result<StringView> getView(const char *fallback) const & noexcept
+	{
+		if (!m_handle_)
+			return Failure(HX_OS_CLOSED);
+		hx_string_view text = {};
+		hx_os_error error = {};
+		auto status = hx_os_text_lookup_get_view(
+			m_handle_, fallback, &text, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return StringView(text);
+	}
+	Result<StringView> getView(const char *) const && = delete;
 
 private:
 	hx_os_text_lookup *m_handle_;

@@ -7,6 +7,7 @@
 #include <hx/Paths.hpp>
 #include <hx/Files.hpp>
 #include <hx/ThreadPool.hpp>
+#include <hx/Settings.hpp>
 #include "cpp_check.hpp"
 
 static void TestResults() noexcept
@@ -123,10 +124,157 @@ static void TestAllocationFailure()
 	CHECK(hx_os_context_destroy(&context, NULL) == HX_OS_OK);
 	CHECK(state.live == 0);
 }
+static void TestDirectCalls()
+{
+	FailingAllocator state = {};
+	hx_os_context_options options;
+	hx_os_context_options_init(&options);
+	options.allocator = {fail_allocate, fail_free, &state};
+	hx_os_context *context = NULL;
+	CHECK(hx_os_context_create(&options, &context, NULL) == HX_OS_OK);
+	{
+		auto text = Take(hx::String::copy(" \tAb中文😀\r\n", context));
+		const size_t before = state.attempts;
+		state.fail = before + 1;
+		text.trimAscii().lowerAscii();
+		CHECK(Equal(text, "ab中文😀"));
+		text.upperAscii();
+		CHECK(text.startsWith("AB") && text.endsWith("😀"));
+		CHECK(text.find("中文") == 2 && state.attempts == before);
+		state.fail = 0;
+		Take(text.append("!"));
+		CHECK(text.endsWith("!"));
+		text.clear().trimAscii();
+		CHECK(text.empty());
+	}
+	if (hx_os_capabilities() & (HX_OS_CAP_SIGNALS | HX_OS_CAP_PROCEDURES)) {
+		hx::CallData data;
+		Take(data.edit().setInt("number", 42)
+				.setString("label", {"a\0b", 3})
+				.finish());
+		auto view = Take(data.view().stringView("label"));
+		CHECK(view.size() == 3 && !std::memcmp(view.data(), "a\0b", 3));
+		auto failed = data.edit()
+				      .setInt("number", 43)
+				      .setString("invalid", "\xff")
+				      .setInt("skipped", 1)
+				      .finish();
+		CHECK(failed.status() == HX_OS_INVALID_ENCODING);
+		CHECK(Take(data.view().integer("number")) == 43);
+		CHECK(data.view().integer("skipped").status() ==
+			HX_OS_NOT_FOUND);
+	}
+	if (hx_os_capabilities() & HX_OS_CAP_SETTINGS) {
+		hx_settings *owner = NULL;
+		hx::Settings settings(owner);
+		Take(settings.create(context));
+		CHECK(Take(settings.update()
+				      .setInt("port", 8080)
+				      .setString("label", {"x\0y", 3})
+				      .finish()) == 2);
+		const size_t before = state.attempts;
+		state.fail = before + 1;
+		{
+			auto label = Take(settings.stringView("label"));
+			auto copy = label;
+			auto moved = std::move(label);
+			CHECK(copy.size() == 3 && moved.size() == 3);
+			CHECK(!std::memcmp(copy.data(), "x\0y", 3));
+			CHECK(state.attempts == before);
+			state.fail = 0;
+			Take(settings.setString("label", "replacement"));
+			CHECK(!std::memcmp(moved.data(), "x\0y", 3));
+			auto failed = settings.update()
+					      .setInt("port", 9090)
+					      .setString("invalid", "\xff")
+					      .setInt("skipped", 1)
+					      .finish();
+			CHECK(failed.status() == HX_OS_INVALID_ENCODING &&
+				failed.hasValue() && failed.value() == 1);
+			CHECK(Take(settings.integer("port")) == 9090);
+			CHECK(Take(settings.integerOr("absent", 80)) == 80);
+			CHECK(settings.integerOr("label", 80).status() ==
+				HX_OS_TYPE_MISMATCH);
+			CHECK(Equal(settings.stringOr("absent", "default"),
+				"default"));
+			Take(settings.closeUntil(HX_OS_DEADLINE_NOW));
+			CHECK(!std::memcmp(copy.data(), "x\0y", 3));
+			CHECK(hx_os_context_destroy(&context, NULL) ==
+				HX_OS_BUSY);
+		}
+	}
+	if ((hx_os_capabilities() & HX_OS_CAP_TEXT_LOOKUP) &&
+		(hx_os_capabilities() & HX_OS_CAP_LEXER)) {
+		auto table = Take(hx::TextLookup::create(context));
+		Take(table.add("title", "标题😀"));
+		const size_t before = state.attempts;
+		state.fail = before + 1;
+		auto view = Take(table.getView("title"));
+		CHECK(view.size() == std::strlen("标题😀"));
+		CHECK(state.attempts == before);
+		state.fail = 0;
+	}
+	if (hx_os_capabilities() & HX_OS_CAP_CONFIG) {
+		auto document =
+			Take(hx::ConfigDocument::parse("{\"label\":\"中文😀\"}",
+				HX_OS_CONFIG_JSON, NULL, context));
+		const size_t before = state.attempts;
+		state.fail = before + 1;
+		auto view = Take(document.stringView("/label"));
+		CHECK(view.size() == std::strlen("中文😀"));
+		CHECK(state.attempts == before);
+		state.fail = 0;
+	}
+	CHECK(hx_os_context_destroy(&context, NULL) == HX_OS_OK && !state.live);
+}
+static void TestDirectoryCalls()
+{
+	char root[80], path[96], bytes[4];
+	std::snprintf(root, sizeof(root), "hx-cpp-visit-%llx",
+		static_cast<unsigned long long>(hx_os_monotonic_ns()));
+	std::snprintf(path, sizeof(path), "%s/中文😀.txt", root);
+	CHECK(hx_os_directory_create(root, 0, NULL) == HX_OS_OK);
+	{
+		auto file = Take(hx::File::open(path,
+			HX_OS_FILE_WRITE | HX_OS_FILE_CREATE |
+				HX_OS_FILE_EXCLUSIVE));
+		CHECK(Take(file.writeAll("ok", 2)) == 2);
+	}
+	{
+		auto file = Take(hx::File::open(path));
+		CHECK(Take(file.read(bytes, sizeof(bytes))).bytes == 2);
+		auto end = file.read(bytes, sizeof(bytes));
+		CHECK(end && end.value().eof && !end.value().bytes);
+		CHECK(file.readSome(bytes, sizeof(bytes)).status() ==
+			HX_OS_EOF);
+	}
+	size_t names = 0;
+	CHECK(Take(hx::Directory::forEach(root,
+		      [&names](hx::StringView name) noexcept {
+			      CHECK(!name.empty());
+			      ++names;
+		      })) == 1 &&
+		names == 1);
+	CHECK(Take(hx::Directory::forEach(root,
+		      [](hx::StringView) noexcept { return false; })) == 1);
+	auto failed = hx::Directory::forEach(
+		root, [](hx::StringView) noexcept -> hx::Result<void> {
+			hx_os_error error = {
+				HX_OS_CANCELLED, HX_OS_ERROR_ERRNO, 17, 23};
+			return hx::Failure(error);
+		});
+	CHECK(failed.status() == HX_OS_CANCELLED && failed.value() == 1);
+	CHECK(failed.error().native_code == 17 &&
+		failed.error().cause_code == 23);
+	CHECK(hx_os_file_remove(path, NULL) == HX_OS_OK);
+	CHECK(hx_os_directory_remove(root, NULL) == HX_OS_OK);
+}
 int main()
 {
 	TestResults();
 	TestAllocationFailure();
+	TestDirectCalls();
+	TestDirectoryCalls();
 	uint64_t caps = hx_os_capabilities();
 	CHECK(Equal(hx::Strings::trim(" \t中文😀  "), "中文😀"));
 	CHECK(Equal(hx::Strings::lowerAscii("AB中文"), "ab中文"));

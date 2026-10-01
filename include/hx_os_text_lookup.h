@@ -47,6 +47,13 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_text_lookup_get(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_lookup_get_string(
 	const hx_os_text_lookup *lookup, const char *fallback, hx_string *out,
 	hx_os_error *error);
+/* Allocation-free view. A hit borrows the table until any mutation/destroy;
+ * a missing key borrows fallback itself. Exclude mutation during use.
+ * Failure preserves out; the caller keeps fallback alive when it is used.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_text_lookup_get_view(
+	const hx_os_text_lookup *lookup, const char *fallback,
+	hx_string_view *out, hx_os_error *error);
 /* OBS-style flat language catalog: UTF-8/BOM, key=value, # comments,
  * quoted strings with JSON escapes, or trimmed unquoted text. No sections,
  * includes, interpolation or process locale changes. Duplicate keys use last.

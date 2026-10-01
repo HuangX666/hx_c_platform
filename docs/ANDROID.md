@@ -35,7 +35,7 @@ adb devices -l
 python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --serial DEVICE_SERIAL
 ~~~
 
-Pass --adb for an absolute adb path. The runner checks ABI/API, uploads only its artifacts into a fresh /data/local/tmp/hx_c_platform-UUID directory, sets that process's LD_LIBRARY_PATH, and executes ten suites:
+Pass --adb for an absolute adb path. The runner checks ABI/API, uploads only its artifacts into a fresh /data/local/tmp/hx_c_platform-UUID directory, sets that process's LD_LIBRARY_PATH, and executes eleven suites:
 
 | Suite | Coverage |
 | --- | --- |
@@ -49,6 +49,7 @@ Pass --adb for an absolute adb path. The runner checks ABI/API, uploads only its
 | cpp_utilities | No-exception C++11 results, strings, lexing, procedures and allocation rollback |
 | cpp_pool | Typed results, cancellation, admission, preparation/close races and cleanup |
 | cpp_extensions | Settings snapshots, signal results, capture retirement, bitstreams and extensions |
+| convenience | In-place strings, retained setting strings under concurrent updates, immediate cursor failures, borrowed catalog values and bounded directory visits |
 
 hx_os_portable_baseline also records atomic, ASCII, wide conversion, named-call and precise-wait observations without fixed timing thresholds. Logs include NDK, source revision/dirty status, ABI/API, device model, fingerprint, runtime API, emulator marker and command output. Cleanup removes only explicitly uploaded files, never recursively deleting test directories. Failed fixtures remain. An adb timeout may leave the target process running; preserve/report its directory without killing it. Record load/temperature/ frequency conditions and collect repeated performance samples.
 
@@ -72,6 +73,10 @@ Reports distinguish build minimum API, runtime API, native machine and translati
 
 Module bits describe compiled families, not every platform extension. API 21 binaries remain process-disabled on newer devices; build with the higher minimum API for that feature. No JNI/Java dependency, APK, manifest permissions, asset API or UI automation is supplied. Consumers own those. Standalone validation uses c++_static; consumers retain their NDK STL policy.
 
+## Common-call verification (2026-10-01)
+
+NDK r28c / Clang 19 builds API 21 arm64-v8a and armeabi-v7a, each in full/minimal shared configurations, including standalone C99/C++11 headers and the direct-call example. Both ARM64 configurations pass all 11 selected suites plus the benchmark on Qt_Android_34 / emulator-5580 (API 34, native x86_64, ARM64 native-bridge translation). ARMv7 runtime is explicitly skipped because the emulator advertises only x86_64 and arm64-v8a. The convenience suite checks retained strings during concurrent mutation/after close, allocation-failure cleanup, immediate update semantics, Unicode directory visits and module-off behavior. No Android 5.0 runtime or physical ARM timing claim follows; API 28/static/x86_64 configurations below remain earlier evidence.
+
 ## Result migration verification (2026-10-01)
 
 API 21 arm64-v8a and armeabi-v7a full/minimal shared configurations compile. Both ARM64 configurations pass 10/10 suites on the existing API 34 x86_64 emulator through native-bridge translation. ARMv7 is absent from its ABI list and is explicitly skipped at runtime. All C++ tests disable exceptions. Finite join reports the capability limit; controlled tests explicitly choose an infinite final join. The table below preserves the earlier eight-suite baseline; other API/link configurations were not rerun for this migration.
@@ -91,7 +96,7 @@ API 21 arm64-v8a and armeabi-v7a full/minimal shared configurations compile. Bot
 | API 21 arm64-v8a, static/default modules | Passed | Android 14 translated, 8/8 |
 | API 21 arm64-v8a, shared/minimal modules | Passed | Android 14 translated, 8/8 |
 
-See [validation](VALIDATION.md) for minimal/static and host results. The existing Qt_Android_34 AVD was booted as emulator-5580: API 34, native x86_64, with libndk_translation. Each of the six executed configurations passes the eight Android suites listed above and runs the benchmark once. Minimal verifies disabled-feature behavior. These eight suites are not the entire desktop CTest collection.
+See [validation](VALIDATION.md) for minimal/static and host results. The existing Qt_Android_34 AVD was booted as emulator-5580: API 34, native x86_64, with libndk_translation. Each of the six executed configurations passes the earlier eight-suite Android subset and runs the benchmark once. Minimal verifies disabled-feature behavior. These eight suites are not the entire desktop CTest collection.
 
 ARM64 shared execution initially could not locate the library through LD_LIBRARY_PATH. Executable-relative RUNPATH fixed both shared configurations and minimal. RUNPATH is supported since API 24; see the [Android linker documentation](https://android.googlesource.com/platform/bionic/+/refs/heads/android15-tests-release/android-changes-for-ndk-developers.md). ARM64 results include translation/virtualization and are not hardware performance evidence. The AVD offers no ARMv7 ABI, so deployment explicitly skips it. Building with minimum API 21 is not an Android 5.0 runtime test. Old OS releases, ARMv7, physical ARM and application sandbox permissions still require matching environments.
 

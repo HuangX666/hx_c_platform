@@ -6,7 +6,31 @@ Entries below describe the versions tested at the time. Historical C++ exception
 
 This records development validation through 2026-10-01. A design, implemented adapter, successful compile and successful target run are different states. Local tests do not certify every operating-system release, filesystem, CPU, libc or network provider.
 
-The Result migration record below is current for this change. The earlier Final delivery matrix and batch checkpoints describe their original versions.
+The common-call refinement below records the current change. The Result migration, earlier Final delivery matrix and batch checkpoints describe their original versions.
+
+## Common-call refinement (2026-10-01)
+
+The new C entries and C++ conveniences are additive. Existing C public layouts and effective calls remain; existing C++ facade owner layouts were not reordered. In-place ASCII edits are non-allocating void/reference operations. Settings/parameter cursors apply immediately and preserve prior successes on first failure. Borrowed text avoids copies; settings text instead retains immutable value storage across update/close.
+
+| Configuration | Current evidence |
+| --- | --- |
+| Windows MSVC 19.40 x64 shared Release | Full CTest 84/84 |
+| WSL Ubuntu GCC 15.2 x86_64 shared Release | Full CTest 86/86 |
+| Windows minimal shared build | Full CTest 53/53, including disabled settings/catalog/parameter APIs |
+| Windows MSVC 19.29 x86 static Debug | Build and 7/7 affected tests |
+| ASan + UBSan, leak detection enabled | 11/11 affected tests; no reported memory/undefined-behavior errors |
+| TSan | 6/6 affected settings/C++/visitor tests; no reported races |
+| Installed shared consumers, Windows x64 and WSL | Each 11/11 C/C++ programs and 7/7 pure C programs |
+| Installed static consumers, Windows x86 and WSL | Each 11/11 C/C++ programs and 7/7 pure C programs |
+| Existing old-header consumers against current shared library | Windows/WSL each 10/10 |
+| Exact bilingual README code, Windows and WSL | Each 27 C/C++ blocks compiled; 25 runnable programs passed |
+| C99/C++11 public headers | Isolated compilation in the host/Android builds; C++ exceptions disabled |
+| Android API 21 ARM64 full/minimal shared | Both build; each 11/11 selected tests plus benchmark on API 34 emulator with ARM64 translation |
+| Android API 21 ARMv7 full/minimal shared | Both build; runtime explicitly skipped for incompatible emulator ABI |
+
+Failure-injected tests verify zero allocator calls for in-place ASCII edits and borrowed/retained string acquisition/copy, first-error preservation, skipped later setters, per-success observer notification/reentrant reads, unchanged outputs on wrong type/missing key, and complete tracked release. A retained old string is copied/released 10,000 times while another thread updates its setting 200 times; it also survives settings close and keeps the context BUSY until released. Visitors cover Unicode, a Windows name longer than 255 UTF-8 bytes, empty/exact-limit/excess-limit traversal, callback stop/native error details and failure cleanup. C++ tests distinguish successful File::read EOF from the preserved readSome EOF status.
+
+This establishes behavior and allocation paths exercised here, not a throughput/latency improvement or proof against every possible leak or schedule. No new global locks, background work, dependency or allocator switch was introduced. Settings leases still use existing atomic references/root locks; visitors reuse a bounded buffer but native adapters may allocate. macOS, Win7, musl, physical embedded/Android ARM targets and Android 5.0 runtime remain unverified for this change. Mermaid bodies are unchanged from the previously rendered eight diagrams.
 
 ## C++ Result migration (2026-10-01)
 

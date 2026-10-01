@@ -186,6 +186,27 @@ hx_os_status hx_os_text_lookup_add(hx_os_text_lookup *lookup,
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 #endif
 }
+hx_os_status hx_os_text_lookup_get_view(const hx_os_text_lookup *lookup,
+	const char *fallback, hx_string_view *out, hx_os_error *error)
+{
+#if HX_OS_ENABLE_TEXT_LOOKUP
+	const char *text;
+	hx_os_status status;
+	if (!out)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	status = hx_os_lookup_value(lookup, fallback, &text, error);
+	if (status != HX_OS_OK)
+		return status;
+	out->data = text;
+	out->size = strlen(text);
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+#else
+	(void)lookup;
+	(void)fallback;
+	(void)out;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
+}
 hx_os_status hx_os_text_lookup_get(const hx_os_text_lookup *lookup,
 	const char *fallback, char *buffer, size_t capacity, size_t *required,
 	hx_os_error *error)

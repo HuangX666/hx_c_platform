@@ -2,6 +2,7 @@
 #define HX_C_PLATFORM_CPP_FILES_HPP
 #include <hx_os_file.h>
 #include <hx/Values.hpp>
+#include <hx/Callback.hpp>
 namespace hx {
 
 class File {
@@ -66,6 +67,18 @@ public:
 		return Result<ReadResult>::withValue(
 			ReadResult{completed, status == HX_OS_EOF}, status,
 			error);
+	}
+	/* EOF is successful completion with eof=true. Other failures retain
+	 * partial bytes just as readSome does. */
+	Result<ReadResult> read(void *data, size_t bytes) noexcept
+	{
+		auto result = readSome(data, bytes);
+		if (result.status() == HX_OS_EOF && result.hasValue()) {
+			hx_os_error error = {};
+			return Result<ReadResult>::withValue(
+				result.value(), HX_OS_OK, error);
+		}
+		return result;
 	}
 	Result<size_t> writeAll(const void *data, size_t bytes) noexcept
 	{
@@ -137,6 +150,26 @@ private:
 
 class Directory {
 public:
+	/* Callback borrows each name only during its call. A bool callback
+	 * continues on true and stops normally on false;
+	 * void/status/Result<void> callbacks follow the usual explicit-error
+	 * contract. */
+	template <typename F>
+	static Result<size_t> forEach(const char *path, F &&function,
+		size_t maxEntries = 65536,
+		hx_os_context *context = NULL) noexcept
+	{
+		typedef typename std::remove_reference<F>::type Function;
+		if (detail::NullCallable(function, std::is_pointer<Function>()))
+			return Failure(HX_OS_INVALID);
+		Visitor<Function> visitor = {&function};
+		size_t completed = 0;
+		hx_os_error error = {};
+		auto status =
+			hx_os_directory_visit_ex(context, path, maxEntries,
+				visit<Function>, &visitor, &completed, &error);
+		return Result<size_t>::withValue(completed, status, error);
+	}
 	/* Entry bytes include NUL. Moving the entry keeps its name alive. */
 	struct Entry {
 		Buffer storage;
@@ -221,6 +254,36 @@ public:
 private:
 	hx_os_directory *m_directory_;
 	hx_os_context *m_context_;
+	template <typename F> struct Visitor {
+		F *function;
+	};
+	template <typename F>
+	static Result<void> invokeVisitor(
+		F &function, StringView name, std::true_type) noexcept
+	{
+		static_assert(std::is_pointer<F>::value ||
+				std::is_function<F>::value ||
+				noexcept(function(name)),
+			"Directory callbacks must be noexcept");
+		return Result<void>(function(name) ? HX_OS_OK : HX_OS_EOF);
+	}
+	template <typename F>
+	static Result<void> invokeVisitor(
+		F &function, StringView name, std::false_type) noexcept
+	{
+		return detail::InvokeCallback(function, name);
+	}
+	template <typename F>
+	static hx_os_status HX_OS_CALL visit(
+		hx_string_view name, void *user, hx_os_error *error) noexcept
+	{
+		auto &function = *static_cast<Visitor<F> *>(user)->function;
+		typedef decltype(function(StringView(name))) Return;
+		auto result = invokeVisitor(function, StringView(name),
+			std::is_same<Return, bool>());
+		*error = result.error();
+		return result.status();
+	}
 };
 
 class Files {

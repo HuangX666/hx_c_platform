@@ -31,6 +31,8 @@ hx::Result<hx::String> load_configuration(const char *path) noexcept
 | 文件 readSome/readAt、本地套接字 readUntil | Result<ReadResult>；包括 EOF 或部分失败时，hasValue() 可取得 bytes/eof |
 | 文件 writeAll/writeAt、本地套接字 writeUntil | Result<size_t>；失败仍可取得已完成字节数 |
 | IoRequest::waitUntil | 等待失败没有值；原生 I/O 已完成时，即使 I/O 失败也携带 completion/bytes |
+| File::read | EOF 返回成功且 eof=true；失败保留字节进度 |
+| Directory::forEach / SettingsUpdate::finish | 失败仍提供完成／成功次数 |
 | Directory::next | EOF 不含目录项；分配失败不消费待取目录项 |
 | Lexer::next | EOF 携带 END token；复制 token 内存失败后可以重试 |
 | Task<T>::getUntil | 等待失败保留任务；完成后消费结果，包括取消或失败 |
@@ -47,9 +49,17 @@ hx::Result<hx::String> load_configuration(const char *path) noexcept
 
 C++ 回调和线程池任务将具体类型的捕获直接存入 context 分配的内存，不通过标准字符串、vector 或类型擦除函数容器进行库自身分配。自定义分配器回调和用户类型须遵守构造、析构不失败的契约。用户自行执行的标准库分配仍由用户负责；仅关闭编译器异常不能把这些分配变成可恢复失败。
 
+## 常用操作减少中间检查
+
+`String::trimAscii().lowerAscii()` 在同一已初始化字符串上执行，返回引用，不分配。`append` 和 `reserve` 继续报告可能失败的结果。设置和参数包提供明确的 `update()`／`edit()` 游标：setter 立即生效，首次失败跳过后续项，最后 `finish()` 检查一次。设置 finish 在失败时也保留成功次数。原有逐项返回 Result 的 setter 继续保留，完整调用见 [直接调用示例](../examples/direct_calls.cpp) 和 [C/C++ 契约](COMMON_UTILITIES.zh-CN.md)。
+
+`ConfigDocument::stringView`、`CallDataView::stringView` 和 `TextLookup::getView` 返回借用文本，保持文档／参数包／翻译表存储有效并排除修改。翻译项缺失时借用传入的 fallback。`Settings::stringView` 与 `SettingValue::asStringView` 返回 `SettingStringView`，持有不可变值字节，设置更新或关闭后仍有效；复制持有对象不分配。从该对象取得的普通 `StringView` 仍借用它。原有复制字符串 getter 全部保留。
+
+`Directory::forEach` 完成打开、读取和关闭，复用名称缓冲区；EOF 和 bool 回调返回 false 均正常结束。`File::read` 成功结果通过 `ReadResult::eof` 表达文件结束，`readSome/readAt` 保留原 EOF 状态。带默认值的设置 getter 只对 NOT_FOUND 回退。
+
 ## 回调与生命周期
 
-信号、过程、异步管道、目录监听、描述符监听和周期定时器回调可以返回 void、`hx_os_status` 或 `Result<void>`。函数对象和 lambda 必须声明 `noexcept`，C++11 函数指针通过契约保证相同行为。捕获的构造和析构不能失败。void 表示成功，状态码报告错误类别，Result 保留完整原生详情。
+信号、过程、异步管道、目录监听、描述符监听和周期定时器回调可以返回 void、`hx_os_status` 或 `Result<void>`。函数对象和 lambda 必须声明 `noexcept`，C++11 函数指针／引用通过契约保证相同行为。捕获的构造和析构不能失败。void 表示成功，状态码报告错误类别，Result 保留完整原生详情。
 
 信号和过程直接返回失败；过程参数仅成功时提交。异步 I/O 将回调失败与原生完成状态分开保存，完成后通过 `callbackResult()` 查询。监听和定时器回调失败会请求停止，退役或成功关闭后检查 `callbackResult()`；过早查询返回对应等待或忙碌状态，避免与回调读写竞争。
 
@@ -66,7 +76,7 @@ ThreadPool、Thread、IoLoop、AsyncPipe、Process、ProcessCapture、DirectoryW
 | 资源构造函数执行可能失败的工作 | 工厂返回 Result<Resource>，先检查再移动或访问值 |
 | 文本方法直接返回标准字符串 | Result<hx::String>，使用 c_str()/size()/view() |
 | getter 直接返回 T | Result<T>，先检查再取得 value |
-| 可变对象链式 setter | 分别检查每次 Result<void> |
+| 连续执行多个 setter | update()/edit() 后检查一次 finish()，或逐项检查 Result<void> |
 | 延迟转发回调错误 | 原生退役后调用 callbackResult() |
 | 通过栈展开检查取消 | token.check() 返回 Result<void> |
 | 提交后直接取得值 | 检查 Result<Task<T>>，再检查 getUntil() 的 Result<T> |

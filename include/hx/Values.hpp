@@ -27,6 +27,10 @@ public:
 	{
 		return m_view_.size;
 	}
+	bool empty() const noexcept
+	{
+		return size() == 0;
+	}
 	hx_string_view native() const noexcept
 	{
 		return m_view_;
@@ -79,6 +83,51 @@ public:
 		hx_os_status status =
 			hx_string_assign(&m_string_, text.native(), &error);
 		return detail::Status(status, error);
+	}
+	Result<void> append(StringView text) noexcept
+	{
+		hx_os_error error = {};
+		auto status =
+			hx_string_append(&m_string_, text.native(), &error);
+		return detail::Status(status, error);
+	}
+	Result<void> reserve(size_t bytes) noexcept
+	{
+		hx_os_error error = {};
+		auto status = hx_string_reserve(&m_string_, bytes, &error);
+		return detail::Status(status, error);
+	}
+	String &clear() & noexcept
+	{
+		hx_string_clear(&m_string_);
+		return *this;
+	}
+	String &trimAscii() & noexcept
+	{
+		hx_string_trim_ascii_in_place(&m_string_);
+		return *this;
+	}
+	String &lowerAscii() & noexcept
+	{
+		hx_string_lower_ascii_in_place(&m_string_);
+		return *this;
+	}
+	String &upperAscii() & noexcept
+	{
+		hx_string_upper_ascii_in_place(&m_string_);
+		return *this;
+	}
+	bool startsWith(StringView prefix) const noexcept
+	{
+		return hx_string_starts_with(&m_string_, prefix.native()) != 0;
+	}
+	bool endsWith(StringView suffix) const noexcept
+	{
+		return hx_string_ends_with(&m_string_, suffix.native()) != 0;
+	}
+	size_t find(StringView needle, size_t start = 0) const noexcept
+	{
+		return hx_string_find(&m_string_, needle.native(), start);
 	}
 	const char *c_str() const noexcept
 	{

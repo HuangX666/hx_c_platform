@@ -1,6 +1,6 @@
 # hx_c_platform
 
-[![CI configuration][ci-badge]](.github/workflows/build.yml) [![C99 core][c-badge]](CMakeLists.txt) [![C++11 facade][cpp-badge]](docs/CPP_POOL.md) [![Header-only C++ facade][header-badge]](docs/CPP_POOL.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![First-party license pending][license-badge]](THIRD_PARTY_NOTICES.md) [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md) [![macOS validation pending][macos-badge]](docs/VALIDATION.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.md) [![Windows 82/82 and Linux 84/84 local suites passed][tests-badge]](docs/VALIDATION.md) [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md) [![Android API 21 ARM cross-build passed][android-badge]](docs/ANDROID.md)
+[![CI configuration][ci-badge]](.github/workflows/build.yml) [![C99 core][c-badge]](CMakeLists.txt) [![C++11 facade][cpp-badge]](docs/CPP_POOL.md) [![Header-only C++ facade][header-badge]](docs/CPP_POOL.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![First-party license pending][license-badge]](THIRD_PARTY_NOTICES.md) [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md) [![macOS validation pending][macos-badge]](docs/VALIDATION.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.md) [![Windows 84/84 and Linux 86/86 local suites passed][tests-badge]](docs/VALIDATION.md) [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md) [![Android API 21 ARM cross-build passed][android-badge]](docs/ANDROID.md)
 
 [简体中文](README.zh-CN.md)
 
@@ -71,7 +71,7 @@ The library builds, tests, installs and runs independently of hx_c_log. It does 
 
 The C core is a compiled library, **not header-only**. Only the optional C++ facade is header-only. C++11 is verified; a C++14/17/20 matrix is not claimed. CMake **3.16** is the baseline; compiler/SDK support must be checked separately from operating system API compatibility, especially for a Win7 deployment.
 
-Badges describe local evidence through **2026-10-01**: 82 Windows and 84 Linux CTest entries, not individual assertions. Linux adds two native RNG failure tests. GitHub Actions is configured; no remote CI pass is claimed. Android's ten-suite subset is not the entire desktop suite. See [validation](docs/VALIDATION.md).
+Badges describe local evidence through **2026-10-01**: 84 Windows and 86 Linux CTest entries, not individual assertions. Linux adds two native RNG failure tests. GitHub Actions is configured; no remote CI pass is claimed. Android's eleven-suite subset is not the entire desktop suite. See [validation](docs/VALIDATION.md).
 
 <a id="section-3"></a>
 
@@ -217,6 +217,75 @@ int main()
 }
 ```
 
+### 4.4 Edit strings and settings with fewer checks
+
+After a successful string creation, ASCII trim/case changes operate in place and need no allocation or error check. `Settings::update()` and `CallData::edit()` apply setters immediately and report the first failure at `finish()`; later setters are skipped. Directory iteration opens, reads, grows one reusable name buffer and closes internally. This complete program is also [direct_calls.cpp](examples/direct_calls.cpp).
+
+The settings label is a retained `SettingStringView`: it remains valid after an update or settings close. The parameter-pack label is a borrowed `StringView`: keep the pack unchanged and alive while using it. Operations that allocate, perform I/O or can fail still return a checked result.
+
+```cpp
+#include <hx/Files.hpp>
+#include <hx/Settings.hpp>
+#include <hx/Signal.hpp>
+#include <cstdio>
+
+static int report_failure(hx_os_status status)
+{
+	std::fprintf(stderr, "%s\n", hx_os_status_name(status));
+	return 1;
+}
+int main()
+{
+	auto text = hx::String::copy("  Hello 中文😀  ");
+	if (!text)
+		return report_failure(text.status());
+	text.value().trimAscii().lowerAscii();
+	std::puts(text.value().c_str());
+	if (hx_os_capabilities() & HX_OS_CAP_SETTINGS) {
+		hx_settings *owner = NULL;
+		hx::Settings settings(owner);
+		auto created = settings.create();
+		if (!created)
+			return report_failure(created.status());
+		auto changed = settings.update()
+				       .setInt("port", 8080)
+				       .setString("label", "服务😀")
+				       .finish();
+		auto label = settings.stringView("label");
+		auto closed = settings.closeUntil(HX_OS_DEADLINE_NOW);
+		if (!closed)
+			return report_failure(closed.status());
+		if (!changed)
+			return report_failure(changed.status());
+		if (!label)
+			return report_failure(label.status());
+		/* The lease owns immutable bytes after the settings close. */
+		std::puts(label.value().c_str());
+	}
+	if (hx_os_capabilities() & (HX_OS_CAP_SIGNALS | HX_OS_CAP_PROCEDURES)) {
+		hx::CallData data;
+		auto prepared = data.edit()
+					.setInt("number", 42)
+					.setString("label", text.value().view())
+					.finish();
+		if (!prepared)
+			return report_failure(prepared.status());
+		auto label = data.view().stringView("label");
+		if (!label)
+			return report_failure(label.status());
+		std::printf("%.*s\n", static_cast<int>(label.value().size()),
+			label.value().data());
+	}
+	auto listed =
+		hx::Directory::forEach(".", [](hx::StringView name) noexcept {
+			std::printf("Entry: %.*s\n",
+				static_cast<int>(name.size()), name.data());
+			return false;
+		});
+	return listed ? 0 : report_failure(listed.status());
+}
+```
+
 <a id="section-5"></a>
 
 ## 5. Integrate, install and link
@@ -355,11 +424,11 @@ int main(void)
 	unsigned char utf16[128];
 	size_t i;
 	status = hx_string_assign_cstr(&text, " alpha,beta,中文😀 ", NULL);
-	if (status == HX_OS_OK)
-		status = hx_string_trim_ascii(&text, NULL);
-	if (status == HX_OS_OK)
+	if (status == HX_OS_OK) {
+		hx_string_trim_ascii_in_place(&text);
 		status = hx_string_split(&text,
 			hx_string_view_from_cstr(","), &parts, NULL);
+	}
 	if (status == HX_OS_OK) {
 		for (i = 0; i < hx_string_parts_count(parts); ++i) {
 			hx_string_view part;
@@ -392,6 +461,8 @@ int main(void)
 | Decode / encode | `hx_string_assign_encoded`, `hx_string_encode` |
 
 Offsets and lengths are bytes. Codepoint counts are not grapheme counts. Embedded NUL is supported, but C-string consumers stop at it. Ordinary views expire on mutation/destruction; split owns an input copy, so its views last until parts_destroy. Split defaults to at most 4096 pieces and retains empty pieces. ASCII case/trim operations do not implement Unicode case folding, normalization or locale collation. printf formatting follows the caller's locale; use numeric conversion utilities when locale independence matters.
+
+Use `hx_string_trim_ascii_in_place`, `lower_ascii_in_place` and `upper_ascii_in_place` for a valid initialized string. They return void, allocate nothing and preserve non-ASCII UTF-8 bytes; `hx::String` offers `trimAscii().lowerAscii()` on the same object. Assign, append and reserve remain fallible. The older status-returning ASCII APIs remain available.
 
 ### 7.2 Windows paths and legacy encodings
 
@@ -448,6 +519,8 @@ int main(void)
 
 File objects have no user-space stream buffer. `hx_os_file_sync` requests native persistence through fsync/FlushFileBuffers; it cannot guarantee the storage hardware's power-loss behavior. File close **consumes the handle even on error**, unlike retryable thread/I/O-owner shutdown. Never retry the same native close after ownership has been consumed.
 
+C++ `File::read()` returns a successful `ReadResult` with `eof=true` at end of input; `readSome()` and `readAt()` keep their existing EOF status. Actual failures still retain completed bytes through `hasValue()`.
+
 ### 8.2 Save and publish a complete file
 
 `hx_os_file_save` writes a whole byte span; `hx_os_file_write_text` atomically publishes an initialized UTF-8 string. `hx_os_file_save_atomic_ex` syncs a same-directory temporary, then publishes it by replacement. Publication and directory durability are reported separately.
@@ -480,7 +553,7 @@ Backup replacement is not a rollback transaction. Cross-filesystem move is not s
 | Need | Interfaces / example |
 | --- | --- |
 | Copy, existence, whole-file read, path composition | `hx_os_file.h`; [text_file.c](examples/text_file.c) |
-| Directories, bounded glob and recursive removal | Directory/path/glob APIs; recursive removal does not follow links |
+| Direct directory visit, bounded glob and recursive removal | `hx_os_directory_visit`, `hx::Directory::forEach`; recursive removal does not follow links |
 | Position-independent I/O | `hx_os_file_read_at`, `write_at`; [positioned_read.c](examples/positioned_read.c) |
 | Extended file type/timestamps | `hx_os_path_stat_extended`; [file_info.c](examples/file_info.c) |
 | Range locks, timestamps and permissions | `hx_os_file_extra.h`; [file_attributes.c](examples/file_attributes.c) |
@@ -628,25 +701,27 @@ flowchart LR
 int main(void)
 {
 	hx_settings *settings = NULL;
-	hx_string label = HX_STRING_INIT, json = HX_STRING_INIT;
+	hx_settings_string_ref label = HX_SETTINGS_STRING_REF_INIT;
+	hx_string json = HX_STRING_INIT;
 	int64_t port;
 	hx_os_error error;
 	hx_os_status status = hx_settings_create(NULL, &settings, &error);
 	if (status == HX_OS_OK)
 		status = hx_settings_set_default_i64(
 			settings, "port", 80, &error);
-	if (status == HX_OS_OK)
-		status = hx_settings_set_i64(settings, "port", 8080, &error);
-	if (status == HX_OS_OK)
-		status = hx_settings_set_string(
-			settings, "label", "服务😀", &error);
+	if (status == HX_OS_OK) {
+		hx_settings_update update = hx_settings_update_begin(settings);
+		hx_settings_update_set_i64(&update, "port", 8080);
+		hx_settings_update_set_string(&update, "label", "服务😀");
+		status = hx_settings_update_finish(&update, NULL, &error);
+	}
 	if (status == HX_OS_OK)
 		status = hx_settings_get_i64(settings, "port", &port, &error);
 	if (status == HX_OS_OK)
-		status = hx_settings_get_string(
+		status = hx_settings_get_string_ref(
 			settings, "label", &label, &error);
 	if (status == HX_OS_OK)
-		printf("%s: %lld\n", hx_string_c_str(&label), (long long)port);
+		printf("%s: %lld\n", label.text.data, (long long)port);
 	if (status == HX_OS_OK && (hx_os_capabilities() & HX_OS_CAP_CONFIG) &&
 		(hx_os_capabilities() & HX_OS_CAP_CONFIG_SERIALIZE)) {
 		status = hx_settings_to_json(settings, &json, &error);
@@ -658,7 +733,7 @@ int main(void)
 		if (status == HX_OS_OK)
 			status = closed;
 	}
-	hx_string_destroy(&label);
+	hx_settings_string_ref_destroy(&label);
 	hx_string_destroy(&json);
 	if (status != HX_OS_OK)
 		fprintf(stderr, "%s\n", hx_os_status_name(status));
@@ -667,6 +742,10 @@ int main(void)
 ```
 
 Use `hx_settings_snapshot` for a retained immutable tree and `hx_settings_value_release` when finished. A snapshot can outlive the settings object and retain its context. Limits apply to each tree, not the sum of all caller-held historical snapshots. Default JSON saving records explicit user values; the program continues to provide defaults. Loading failure preserves the existing state. Concurrent updates have bounded retries and can return BUSY. See [settings contracts](docs/PLATFORM_UTILITIES.md#mutable-settings-and-retained-snapshots-batch-23b).
+
+The update cursor commits and notifies for every successful setter. If setting the port succeeds but setting the name fails, the port remains changed and later setters do not run. `hx_settings_update_finish` / C++ `finish()` reports the first error and the count of successful setters, including on failure. It neither commits delayed work nor rolls back prior changes. Keep the settings owner alive through the setters.
+
+`hx_settings_get_string_ref` returns a retained immutable string without copying its bytes. Initialize with `HX_SETTINGS_STRING_REF_INIT`, copy via `hx_settings_string_ref_copy`, and release with `hx_settings_string_ref_destroy`; raw assignment is not an owning copy. The lease survives mutation/close and keeps its allocator context busy. C++ uses `SettingStringView` for the same lifetime. `integerOr`, `booleanOr`, `realOr` and `stringOr` default only on NOT_FOUND.
 
 <a id="section-12"></a>
 
@@ -1386,6 +1465,8 @@ Callbacks run outside internal locks. Signal emission follows its snapshot's reg
 
 Procedure names are copied UTF-8, unique, case-sensitive and 1..127 bytes. Parameters are copied for invocation and committed only after successful callback return; side effects through borrowed pointers cannot be rolled back. There is no signature DSL or type coercion. Defaults bound registrations, parallel calls and nesting. See [signal example](examples/signal_notifications.c) and [procedure contracts](docs/COMMON_UTILITIES.md).
 
+For multiple parameter assignments, use `hx_os_calldata_edit_begin`, its typed setters and `hx_os_calldata_edit_finish`, or C++ `data.edit().setInt(...).setString(...).finish()`. Each assignment is immediate; first failure preserves prior assignments and skips later ones. `CallDataView::stringView()` borrows the pack without copying; the pack must remain alive and unchanged. Named-procedure callback result publication still follows the existing success-only commit contract.
+
 ### 25.2 Profile an interval tree
 
 ```c
@@ -1569,7 +1650,7 @@ python tools/verify_android.py --ndk /absolute/path/to/ndk \
 
 Defaults cross-build both ARM ABIs for API 21/28; `--serial` explicitly selects runtime validation. `--abi x86_64` supports compatible emulators. An empty adb list can mean an installed AVD is stopped; check `emulator -list-avds` before concluding no emulator exists.
 
-The current C++ Result migration compiles API 21 ARM64/ARMv7 in full and minimal shared configurations. Each ARM64 configuration passes the ten-suite Android subset on an Android 14/API 34 x86_64 emulator through translation; ARMv7 runtime is unavailable. Earlier API 28/static/x86_64 runs are historical records. An API 21 build is not an Android 5.0 runtime pass. Physical ARM performance, application sandboxes and old OS releases remain target-specific work. Process support below API 28 and finite native join have explicit capability limits. See [ANDROID.md](docs/ANDROID.md).
+The current common-call changes compile API 21 ARM64/ARMv7 in full and minimal shared configurations. Each ARM64 configuration passes the eleven-suite Android subset on an Android 14/API 34 x86_64 emulator through translation; ARMv7 runtime is unavailable. Earlier API 28/static/x86_64 runs are historical records. An API 21 build is not an Android 5.0 runtime pass. Physical ARM performance, application sandboxes and old OS releases remain target-specific work. Process support below API 28 and finite native join have explicit capability limits. See [ANDROID.md](docs/ANDROID.md).
 
 ### 28.2 A small C-only board configuration
 
@@ -1609,6 +1690,8 @@ flowchart TD
 | --- | --- |
 | `hx_string` | Destroy once; views borrow owner storage |
 | Config document | Balance retain/release; nodes borrow the document |
+| Settings string reference | Release the C lease / destroy SettingStringView; valid after owner close |
+| Catalog / parameter-pack view | Keep source alive and unchanged; missing catalog key borrows fallback |
 | Settings snapshot | Release even after its mutable owner closes |
 | Thread / pool / watch | Preserve owner and borrowed state after timeout |
 | Request | Keep read/borrowed-write buffers through callback return; release request reference |
@@ -1630,7 +1713,7 @@ python tools/verify_install.py build --config Release
 python tools/verify_abi.py build-shared --config Release
 ```
 
-The first command installs to an isolated prefix under the build directory, then runs ten C/C++ consumers and seven consumers in a C-only project when the default facilities are available. The ABI command requires a prepared shared build and the repository baseline history. These are native-host checks, not cross-target emulators.
+The first command installs to an isolated prefix under the build directory, then runs eleven C/C++ consumers and seven consumers in a C-only project when the default facilities are available. The ABI command requires a prepared shared build and the repository baseline history. These are native-host checks, not cross-target emulators.
 
 For GCC/Clang memory checking, configure a separate build:
 
@@ -1657,7 +1740,7 @@ Use a different directory with `HX_OS_SANITIZER=thread` for TSan; do not combine
 | ARM Linux | ARMv7/AArch64 cross-build and QEMU-compatible subset |
 | Android | API 21/28 two-ARM-ABI matrix and minimal builds |
 
-The workflow file is [build.yml](.github/workflows/build.yml). Configuration does not mean a remote job has passed. Current local evidence is Windows 82/82, WSL Linux 84/84, ASan/UBSan/LSan 84/84 and TSan 84/84. The latest memory audit additionally checked 1,001 lifecycle rounds per host with zero tracked live bytes after cleanup. See [validation](docs/VALIDATION.md).
+The workflow file is [build.yml](.github/workflows/build.yml). Configuration does not mean a remote job has passed. Current full CTest results are Windows 84/84 and WSL Linux 86/86. This common-call change passed 11 affected ASan/UBSan/LSan tests and six TSan tests. Earlier full sanitizer runs and the 1,001-round lifecycle audit belong to their recorded versions; the audit observed zero tracked live bytes after cleanup. See [validation](docs/VALIDATION.md).
 
 ### 30.3 Measure actual cost
 
@@ -1708,6 +1791,6 @@ Future work includes native target validation and measured improvements. Corouti
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%2082%2F82%20Linux%2084%2F84-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%2084%2F84%20Linux%2086%2F86-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

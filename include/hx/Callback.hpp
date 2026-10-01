@@ -111,7 +111,7 @@ Result<void> InvokeResult(
 template <typename F, typename... A>
 Result<void> InvokeCallback(F &function, A &&...arguments) noexcept
 {
-	static_assert(std::is_pointer<F>::value ||
+	static_assert(std::is_pointer<F>::value || std::is_function<F>::value ||
 			noexcept(function(std::forward<A>(arguments)...)),
 		"Callbacks must be noexcept; C++11 function pointers promise "
 		"it by contract");

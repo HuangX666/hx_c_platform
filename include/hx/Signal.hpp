@@ -4,6 +4,47 @@
 #include <hx/Values.hpp>
 #include <hx/Callback.hpp>
 namespace hx {
+class CallDataEdit {
+public:
+	explicit CallDataEdit(hx_os_calldata &data) noexcept
+	    : m_edit_(hx_os_calldata_edit_begin(&data))
+	{
+	}
+	CallDataEdit &setInt(const char *name, int64_t value) noexcept
+	{
+		hx_os_calldata_edit_set_i64(&m_edit_, name, value);
+		return *this;
+	}
+	CallDataEdit &setBool(const char *name, bool value) noexcept
+	{
+		hx_os_calldata_edit_set_bool(&m_edit_, name, value);
+		return *this;
+	}
+	CallDataEdit &setDouble(const char *name, double value) noexcept
+	{
+		hx_os_calldata_edit_set_double(&m_edit_, name, value);
+		return *this;
+	}
+	CallDataEdit &setString(const char *name, StringView value) noexcept
+	{
+		hx_os_calldata_edit_set_string(&m_edit_, name, value.native());
+		return *this;
+	}
+	CallDataEdit &setPointer(const char *name, void *value) noexcept
+	{
+		hx_os_calldata_edit_set_pointer(&m_edit_, name, value);
+		return *this;
+	}
+	Result<void> finish() const noexcept
+	{
+		hx_os_error error = {};
+		auto status = hx_os_calldata_edit_finish(&m_edit_, &error);
+		return detail::Status(status, error);
+	}
+
+private:
+	hx_os_calldata_edit m_edit_;
+};
 class CallDataView {
 public:
 	explicit CallDataView(const hx_os_calldata &data) noexcept
@@ -54,13 +95,21 @@ public:
 	Result<String> string(
 		const char *name, hx_os_context *context = NULL) const noexcept
 	{
+		auto value = stringView(name);
+		if (!value)
+			return Failure(value.error());
+		return String::copy(value.value(), context);
+	}
+	/* Borrows the pack until mutation/destruction; allocates no storage. */
+	Result<StringView> stringView(const char *name) const noexcept
+	{
 		hx_string_view value = {};
 		hx_os_error error = {};
 		auto status = hx_os_calldata_get_string(
 			m_data_, name, &value, &error);
 		if (status != HX_OS_OK)
 			return Failure(status, error);
-		return String::copy(StringView(value), context);
+		return StringView(value);
 	}
 
 private:
@@ -75,6 +124,10 @@ public:
 	explicit CallData(const hx_os_calldata &data) noexcept
 	    : m_data_(data)
 	{
+	}
+	CallDataEdit edit() & noexcept
+	{
+		return CallDataEdit(m_data_);
 	}
 	Result<void> setInt(const char *name, int64_t value) noexcept
 	{

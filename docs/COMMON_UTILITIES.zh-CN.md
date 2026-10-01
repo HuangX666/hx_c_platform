@@ -8,7 +8,7 @@
 
 | 动作 | C99 | C++11 |
 | --- | --- | --- |
-| 去空白、替换、分割、拼接 | hx_string_trim_ascii / replace_all / split / join | hx::Strings |
+| 原地 ASCII 处理、替换、分割、拼接 | hx_string_trim_ascii_in_place / lower_ascii_in_place / replace_all / split / join | hx::String 原地处理；hx::Strings 副本 |
 | 读取指定编码并转为 UTF-8 | hx_os_file_read_text_encoded | hx::Files::readText(path, encoding) |
 | 得到应用配置文件路径 | hx_os_path_config_file | hx::Paths::configFile |
 | 加载翻译并覆盖部分词条 | hx_os_text_lookup_load / add_file / add_text | hx::TextLookup::load / addFile / addText |
@@ -22,32 +22,56 @@
 | 关闭并释放线程池 | hx_os_thread_pool_shutdown / _ex | hx::ThreadPool::shutdownUntil |
 | 指定线程数和队列容量 | 既有 pool options | hx::ThreadPool::withThreads |
 
-可编译示例：[common_tasks.c](../examples/common_tasks.c)、 [thread_pool.cpp](../examples/thread_pool.cpp)。完整 C++ 调用覆盖见 [test_cpp_utilities.cpp](../tests/test_cpp_utilities.cpp)。
+可编译示例：[direct_calls.cpp](../examples/direct_calls.cpp)、[settings.c](../examples/settings.c)、[common_tasks.c](../examples/common_tasks.c)、[thread_pool.cpp](../examples/thread_pool.cpp)。完整 C++ 调用覆盖见 [test_cpp_utilities.cpp](../tests/test_cpp_utilities.cpp)。
 
 ## 字符串与编码
 
 ~~~c
 hx_string text = HX_STRING_INIT;
 hx_string_parts *parts = NULL;
-hx_os_error error;
-hx_os_status status = hx_string_assign_cstr(&text, " one,two,中文 ", &error);
+hx_os_status status = hx_string_assign_cstr(&text, " one,two,中文 ", NULL);
 if (status == HX_OS_OK)
-	status = hx_string_trim_ascii(&text, &error);
+	hx_string_trim_ascii_in_place(&text);
 if (status == HX_OS_OK)
 	status = hx_string_split(&text, hx_string_view_from_cstr(","),
-		&parts, &error);
-/* Check status; parts_at returns a borrowed view. */
+		&parts, NULL);
+/* Check status before inspecting borrowed parts_at views. */
 hx_string_parts_destroy(&parts);
 hx_string_destroy(&text);
 ~~~
 
 字符串以 UTF-8 为默认编码，长度按字节计算，允许内嵌 NUL。 trim/lower/upper 只处理 ASCII，不做 Unicode 归一化或完整大小写折叠。 replace_all 从左到右非重叠替换，允许输入视图借用目标字符串；空查找串无效。替换、拼接失败保持原值，使用目标字符串自己的 context。
 
+ASCII 的 `_in_place` 入口要求非 NULL、已初始化的字符串，返回 void，不分配内存。既有返回状态码的去空白／大小写接口共用实现并保留参数检查。C++ `String::trimAscii/lowerAscii/upperAscii/clear` 返回同一对象的引用，assign/append/reserve 继续报告 Result。
+
 split 的结果拥有输入副本；原字符串销毁后，结果视图仍有效，直到 parts_destroy。默认保留空片段、最多 4096 项；_ex 可设 1..65536，超限返回 LIMIT，不截断。join 支持借用目标的片段。对象并发修改需外部同步。
 
 指定编码的文件读取默认最多 16 MiB，完整读取后严格转为 UTF-8。 BOM 模块开启时去掉匹配的 BOM，编码与 BOM 冲突报 INVALID_ENCODING； BOM 模块关闭时不做 BOM 识别，转换器保留解码后的 U+FEFF。 UTF-16LE BOM 后紧跟 NUL 与 UTF-32LE 标记存在歧义时，以显式编码为准。不进行编码猜测。旧 UTF-8 读取接口及可选 libiconv 适配保持原行为。
 
 POD 宏仅包裹已有有界容器，不引入另一套实现。宏参数 name 应为小写下划线名称。元素按字节复制，不能用于拥有资源的 hx_string 或非平凡 C++ 对象；这类元素继续使用已有 copy/drop 回调。元素对齐来自 C99 offsetof 探测，不使用 pack 或未对齐访问。视图在容器修改后失效。
+
+## 借用文本与持有设置字符串
+
+| getter | 生命周期与开销 |
+| --- | --- |
+| `ConfigDocument::stringView()` | 借用不可变文档字节，保持文档有效 |
+| `CallDataView::stringView()` | 借用参数包，修改或销毁后失效 |
+| `hx_os_text_lookup_get_view`／`TextLookup::getView()` | 命中时借用表，修改或销毁后失效；缺失时借用输入 fallback 本身 |
+| `hx_settings_get_string_ref`／`Settings::stringView()` | 持有不可变值引用，设置更新或关闭后仍有效；释放 C 引用或让 `SettingStringView` 析构 |
+
+这四种读取均不复制字符串字节。普通借用 getter 不分配内存。设置字符串引用的取得与复制不分配，但会保留／释放原子引用；从可变设置读取时仍使用既有根锁。从 `SettingStringView` 取出的普通 `StringView` 借用该持有对象，不能晚于它销毁。需要独立可变字符串时继续使用原有复制 getter。文档与翻译表的 C++ 借用 getter 拒绝持有者临时对象。
+
+## 连续设置与直接目录遍历
+
+使用 `hx_settings_update_begin`、类型化 setter 和一次 `hx_settings_update_finish`，或 `settings.update().setInt(...).setString(...).finish()`。每次成功都通过既有实现发布和通知。首次失败固定保留，后续项跳过，此前修改保留。finish 只检查游标，失败时也返回成功操作次数。它不提供事务回滚，也不合并通知。设置、分配器和用户状态须覆盖 setter 生命周期；`unset` 只修改显式层，游标不额外串行化既有设置操作。
+
+参数包提供对应的 `hx_os_calldata_edit_*` 与 `CallData::edit()`。后续失败时，之前成功的 setter 仍生效。游标借用参数包，调用方排除并发修改，并在调用消费者前检查 finish。单独使用既有 setter 时，仍分别返回自己的 Result／状态码。
+
+`hx_os_directory_visit(path, callback, user, error)` 在当前线程完成单目录打开、遍历和关闭。默认上限为启动 65536 次回调；`_ex` 接收 context、正数上限和完成次数输出。每个名称含 NUL 最多 4096 字节，内部复用一个按需增长的缓冲区。容量足够后包装层不增加逐项缓冲分配，原生适配自身可能分配。名称是未排序的借用 UTF-8 视图，仅回调期间有效；不递归、不查询类型、不创建目录快照。
+
+回调收到已清空的非 NULL 错误记录。OK 继续，EOF 正常停止，其他状态保留回调／原生错误详情。自然结束返回成功，超过数量上限返回 LIMIT；完成次数包括主动停止或失败的回调。恰好达到上限且原生已结束时成功。回调和原生目录调用不能被抢占，文件系统并发修改沿用原生行为，重入使用独立状态。所有返回路径均关闭目录、释放缓冲。关闭 FILE_UTILS 和 FILE_INFO 后仍可使用。
+
+C++ `Directory::forEach(path, callback, maxEntries, context)` 返回 `Result<size_t>`，失败时也带已执行数量。同步回调借用捕获，不分配回调状态。`void` 继续，`bool` 为 true 继续／false 正常停止，状态码／`Result<void>` 明确报告结果。lambda 和函数对象声明 `noexcept`，C++11 函数指针／引用遵守同一契约。需要每项独立持有文本或类型查询时，使用 `Directory::next()`。
 
 ## 翻译文件
 

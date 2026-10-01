@@ -6,6 +6,62 @@ extern "C" {
 #endif
 typedef struct hx_settings hx_settings;
 typedef struct hx_settings_value hx_settings_value;
+/* Fixed-layout lease of immutable UTF-8 bytes. Initialize before first use;
+ * no raw assignment copies. A getter replaces a previous lease on success,
+ * preserving it on failure. Release/copy through these APIs. The value keeps
+ * its allocator alive and survives settings mutation/close. Exclude concurrent
+ * changes to the lease itself. Future extensions require a new type.
+ */
+typedef struct hx_settings_string_ref {
+	hx_settings_value *value;
+	hx_string_view text;
+} hx_settings_string_ref;
+#define HX_SETTINGS_STRING_REF_INIT                                            \
+	{                                                                      \
+		NULL,                                                          \
+		{                                                              \
+			NULL, 0                                                \
+		}                                                              \
+	}
+HX_OS_API void HX_OS_CALL hx_settings_string_ref_destroy(
+	hx_settings_string_ref *ref);
+HX_OS_API void HX_OS_CALL hx_settings_string_ref_copy(
+	hx_settings_string_ref *out, const hx_settings_string_ref *source);
+HX_OS_API hx_os_status HX_OS_CALL hx_settings_value_get_string_ref(
+	const hx_settings_value *value, hx_settings_string_ref *out,
+	hx_os_error *error);
+/* Fixed-layout immediate update cursor. Each successful setter commits and
+ * notifies normally. First failure stops subsequent setters and preserves its
+ * native error. No rollback or deferred work; arguments are call-borrowed.
+ * Target stays alive through all setters; do not modify these storage fields.
+ */
+typedef struct hx_settings_update {
+	hx_os_error error;
+	hx_settings *settings;
+	size_t applied;
+} hx_settings_update;
+HX_OS_API hx_settings_update HX_OS_CALL hx_settings_update_begin(
+	hx_settings *settings);
+HX_OS_API void HX_OS_CALL hx_settings_update_set_bool(
+	hx_settings_update *update, const char *key, int value);
+HX_OS_API void HX_OS_CALL hx_settings_update_set_i64(
+	hx_settings_update *update, const char *key, int64_t value);
+HX_OS_API void HX_OS_CALL hx_settings_update_set_double(
+	hx_settings_update *update, const char *key, double value);
+HX_OS_API void HX_OS_CALL hx_settings_update_set_string(
+	hx_settings_update *update, const char *key, const char *value);
+HX_OS_API void HX_OS_CALL hx_settings_update_set_string_view(
+	hx_settings_update *update, hx_string_view key, hx_string_view value);
+HX_OS_API void HX_OS_CALL hx_settings_update_set_value(
+	hx_settings_update *update, hx_string_view key,
+	const hx_settings_value *value);
+HX_OS_API void HX_OS_CALL hx_settings_update_unset(
+	hx_settings_update *update, hx_string_view key);
+/* Copies the first error and successful-operation count, including failure.
+ * Pure inspection; repeated finish is allowed. applied saturates at SIZE_MAX.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_settings_update_finish(
+	const hx_settings_update *update, size_t *applied, hx_os_error *error);
 enum {
 	HX_SETTINGS_NULL,
 	HX_SETTINGS_BOOL,
@@ -156,6 +212,12 @@ HX_OS_API hx_os_status HX_OS_CALL hx_settings_set_default_value(
 	const hx_settings_value *value, hx_os_error *error);
 HX_OS_API hx_os_status HX_OS_CALL hx_settings_get_value(hx_settings *settings,
 	hx_string_view key, hx_settings_value **out, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_settings_get_string_ref(
+	hx_settings *settings, const char *key, hx_settings_string_ref *out,
+	hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_settings_get_string_ref_view(
+	hx_settings *settings, hx_string_view key, hx_settings_string_ref *out,
+	hx_os_error *error);
 HX_OS_API hx_os_status HX_OS_CALL hx_settings_unset(hx_settings *settings,
 	hx_string_view key, int layer, hx_os_error *error);
 HX_OS_API hx_os_status HX_OS_CALL hx_settings_snapshot(hx_settings *settings,

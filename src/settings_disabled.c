@@ -157,6 +157,13 @@ hx_os_status hx_settings_value_get_string(
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
+hx_os_status hx_settings_value_get_string_ref(const hx_settings_value *value,
+	hx_settings_string_ref *out, hx_os_error *error)
+{
+	(void)value;
+	(void)out;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
 hx_os_status hx_settings_value_get_pointer(
 	const hx_settings_value *value, void **out, hx_os_error *error)
 {

@@ -1,5 +1,6 @@
 #include "internal.h"
 #include "hx_string.h"
+#include <assert.h>
 
 struct hx_string_parts {
 	hx_string text;
@@ -48,11 +49,10 @@ static int hx_string_space(unsigned char value)
 {
 	return value == ' ' || (value >= '\t' && value <= '\r');
 }
-hx_os_status hx_string_trim_ascii(hx_string *string, hx_os_error *error)
+void hx_string_trim_ascii_in_place(hx_string *string)
 {
 	size_t start = 0, end;
-	if (!string)
-		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	assert(string);
 	end = string->size;
 	while (start < end &&
 		hx_string_space((unsigned char)string->data[start]))
@@ -65,14 +65,18 @@ hx_os_status hx_string_trim_ascii(hx_string *string, hx_os_error *error)
 		string->data[end - start] = 0;
 	}
 	string->size = end - start;
-	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
-static hx_os_status hx_string_case(
-	hx_string *string, int upper, hx_os_error *error)
+hx_os_status hx_string_trim_ascii(hx_string *string, hx_os_error *error)
 {
-	size_t i;
 	if (!string)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	hx_string_trim_ascii_in_place(string);
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+}
+static void hx_string_case_in_place(hx_string *string, int upper)
+{
+	size_t i;
+	assert(string);
 	for (i = 0; i < string->size; ++i) {
 		unsigned char c = (unsigned char)string->data[i];
 		if (upper && c >= 'a' && c <= 'z')
@@ -80,15 +84,28 @@ static hx_os_status hx_string_case(
 		if (!upper && c >= 'A' && c <= 'Z')
 			string->data[i] = (char)(c - 'A' + 'a');
 	}
-	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+}
+void hx_string_lower_ascii_in_place(hx_string *string)
+{
+	hx_string_case_in_place(string, 0);
+}
+void hx_string_upper_ascii_in_place(hx_string *string)
+{
+	hx_string_case_in_place(string, 1);
 }
 hx_os_status hx_string_lower_ascii(hx_string *string, hx_os_error *error)
 {
-	return hx_string_case(string, 0, error);
+	if (!string)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	hx_string_lower_ascii_in_place(string);
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
 hx_os_status hx_string_upper_ascii(hx_string *string, hx_os_error *error)
 {
-	return hx_string_case(string, 1, error);
+	if (!string)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	hx_string_upper_ascii_in_place(string);
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
 hx_os_status hx_string_replace_all(hx_string *string, hx_string_view needle,
 	hx_string_view replacement, size_t *replaced, hx_os_error *error)

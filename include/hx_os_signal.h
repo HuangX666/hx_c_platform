@@ -43,6 +43,29 @@ typedef struct hx_os_calldata {
 	{                                                                      \
 		0                                                              \
 	}
+/* Immediate, allocation-free edit cursor over an initialized pack. First
+ * failure stops later setters; earlier successful edits remain. The pack
+ * outlives the setters. Finish copies the first error without further work.
+ * Storage layout is fixed; do not modify these members directly.
+ */
+typedef struct hx_os_calldata_edit {
+	hx_os_error error;
+	hx_os_calldata *data;
+} hx_os_calldata_edit;
+HX_OS_API hx_os_calldata_edit HX_OS_CALL hx_os_calldata_edit_begin(
+	hx_os_calldata *data);
+HX_OS_API void HX_OS_CALL hx_os_calldata_edit_set_bool(
+	hx_os_calldata_edit *edit, const char *name, int value);
+HX_OS_API void HX_OS_CALL hx_os_calldata_edit_set_i64(
+	hx_os_calldata_edit *edit, const char *name, int64_t value);
+HX_OS_API void HX_OS_CALL hx_os_calldata_edit_set_double(
+	hx_os_calldata_edit *edit, const char *name, double value);
+HX_OS_API void HX_OS_CALL hx_os_calldata_edit_set_string(
+	hx_os_calldata_edit *edit, const char *name, hx_string_view value);
+HX_OS_API void HX_OS_CALL hx_os_calldata_edit_set_pointer(
+	hx_os_calldata_edit *edit, const char *name, void *value);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_calldata_edit_finish(
+	const hx_os_calldata_edit *edit, hx_os_error *error);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_calldata_init(
 	hx_os_calldata *data, size_t capacity);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_calldata_set_bool(

@@ -32,11 +32,11 @@ int main(void)
 	int64_t result = 0;
 	unsigned count = 0;
 	status = hx_string_assign_cstr(&text, " first,second,中文 ", &error);
-	if (status == HX_OS_OK)
-		status = hx_string_trim_ascii(&text, &error);
-	if (status == HX_OS_OK)
+	if (status == HX_OS_OK) {
+		hx_string_trim_ascii_in_place(&text);
 		status = hx_string_split(
 			&text, hx_string_view_from_cstr(","), &parts, &error);
+	}
 	if (status == HX_OS_OK)
 		printf("pieces: %lu\n",
 			(unsigned long)hx_string_parts_count(parts));

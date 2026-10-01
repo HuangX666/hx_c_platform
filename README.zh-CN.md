@@ -1,6 +1,6 @@
 # hx_c_platform
 
-[![CI 配置][ci-badge]](.github/workflows/build.yml) [![C99 核心][c-badge]](CMakeLists.txt) [![C++11 封装][cpp-badge]](docs/CPP_POOL.zh-CN.md) [![仅 C++ 封装为 header-only][header-badge]](docs/CPP_POOL.zh-CN.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![自有代码许可证待定][license-badge]](THIRD_PARTY_NOTICES.zh-CN.md) [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md) [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md) [![本地 Windows 82/82、Linux 84/84 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md) [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md) [![Android API 21 ARM 交叉编译通过][android-badge]](docs/ANDROID.zh-CN.md)
+[![CI 配置][ci-badge]](.github/workflows/build.yml) [![C99 核心][c-badge]](CMakeLists.txt) [![C++11 封装][cpp-badge]](docs/CPP_POOL.zh-CN.md) [![仅 C++ 封装为 header-only][header-badge]](docs/CPP_POOL.zh-CN.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![自有代码许可证待定][license-badge]](THIRD_PARTY_NOTICES.zh-CN.md) [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md) [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md) [![本地 Windows 84/84、Linux 86/86 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md) [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md) [![Android API 21 ARM 交叉编译通过][android-badge]](docs/ANDROID.zh-CN.md)
 
 [English](README.md)
 
@@ -71,7 +71,7 @@
 
 C 核心需要编译成库，**不是 header-only**；只有可选 C++ 便利层是仅头文件。已验证 C++11，不宣称 C++14/17/20 矩阵通过。CMake 最低基线为 **3.16**。编译器、CRT 和 SDK 的兼容性需要与操作系统 API 兼容性分别确认，尤其是 Win7 部署，不能因接口保留兼容就宣称当前工具链生成的所有二进制都能直接运行。
 
-徽章记录截至 **2026-10-01** 的本地证据：Windows 82 项、Linux 84 项 CTest，数字表示测试条目，不是断言数量；Linux 多两项原生随机源故障测试。 GitHub Actions 已配置，未宣称远程 CI 已通过。Android 的十项集合不等于桌面全部测试。具体配置与限制见[验证记录](docs/VALIDATION.zh-CN.md)。
+徽章记录截至 **2026-10-01** 的本地证据：Windows 84 项、Linux 86 项 CTest，数字表示测试条目，不是断言数量；Linux 多两项原生随机源故障测试。 GitHub Actions 已配置，未宣称远程 CI 已通过。Android 的十一项集合不等于桌面全部测试。具体配置与限制见[验证记录](docs/VALIDATION.zh-CN.md)。
 
 <a id="section-3"></a>
 
@@ -217,6 +217,75 @@ int main()
 }
 ```
 
+### 4.4 原地处理、连续设置与直接遍历
+
+字符串创建成功后，ASCII 去空白和大小写转换原地执行，不再分配，也不需要逐步检查。`Settings::update()` 和 `CallData::edit()` 立即执行各项设置，在 `finish()` 处检查一次；首次失败后跳过后续项。目录遍历在内部完成打开、读取、复用文件名缓冲区及关闭。下面是完整程序，对应 [direct_calls.cpp](examples/direct_calls.cpp)。
+
+设置名称使用持有引用的 `SettingStringView`，修改或关闭设置后仍有效。参数包名称使用借用的 `StringView`，读取期间必须保持参数包有效且不被修改。涉及分配、I/O 或其他可能失败的操作继续返回可检查的结果。
+
+```cpp
+#include <hx/Files.hpp>
+#include <hx/Settings.hpp>
+#include <hx/Signal.hpp>
+#include <cstdio>
+
+static int report_failure(hx_os_status status)
+{
+	std::fprintf(stderr, "%s\n", hx_os_status_name(status));
+	return 1;
+}
+int main()
+{
+	auto text = hx::String::copy("  Hello 中文😀  ");
+	if (!text)
+		return report_failure(text.status());
+	text.value().trimAscii().lowerAscii();
+	std::puts(text.value().c_str());
+	if (hx_os_capabilities() & HX_OS_CAP_SETTINGS) {
+		hx_settings *owner = NULL;
+		hx::Settings settings(owner);
+		auto created = settings.create();
+		if (!created)
+			return report_failure(created.status());
+		auto changed = settings.update()
+				       .setInt("port", 8080)
+				       .setString("label", "服务😀")
+				       .finish();
+		auto label = settings.stringView("label");
+		auto closed = settings.closeUntil(HX_OS_DEADLINE_NOW);
+		if (!closed)
+			return report_failure(closed.status());
+		if (!changed)
+			return report_failure(changed.status());
+		if (!label)
+			return report_failure(label.status());
+		/* The lease owns immutable bytes after the settings close. */
+		std::puts(label.value().c_str());
+	}
+	if (hx_os_capabilities() & (HX_OS_CAP_SIGNALS | HX_OS_CAP_PROCEDURES)) {
+		hx::CallData data;
+		auto prepared = data.edit()
+					.setInt("number", 42)
+					.setString("label", text.value().view())
+					.finish();
+		if (!prepared)
+			return report_failure(prepared.status());
+		auto label = data.view().stringView("label");
+		if (!label)
+			return report_failure(label.status());
+		std::printf("%.*s\n", static_cast<int>(label.value().size()),
+			label.value().data());
+	}
+	auto listed =
+		hx::Directory::forEach(".", [](hx::StringView name) noexcept {
+			std::printf("Entry: %.*s\n",
+				static_cast<int>(name.size()), name.data());
+			return false;
+		});
+	return listed ? 0 : report_failure(listed.status());
+}
+```
+
 <a id="section-5"></a>
 
 ## 5. 工程接入、安装与链接
@@ -355,11 +424,11 @@ int main(void)
 	unsigned char utf16[128];
 	size_t i;
 	status = hx_string_assign_cstr(&text, " alpha,beta,中文😀 ", NULL);
-	if (status == HX_OS_OK)
-		status = hx_string_trim_ascii(&text, NULL);
-	if (status == HX_OS_OK)
+	if (status == HX_OS_OK) {
+		hx_string_trim_ascii_in_place(&text);
 		status = hx_string_split(&text,
 			hx_string_view_from_cstr(","), &parts, NULL);
+	}
 	if (status == HX_OS_OK) {
 		for (i = 0; i < hx_string_parts_count(parts); ++i) {
 			hx_string_view part;
@@ -392,6 +461,8 @@ int main(void)
 | 解码与编码 | `hx_string_assign_encoded`、`hx_string_encode` |
 
 长度和偏移以字节计；Unicode 码点数量不等于用户看到的字素数量。允许嵌入 NUL，但 C 字符串消费者会在 NUL 处停止。普通视图在修改或销毁后失效；split 持有输入副本，其视图可保留到 parts_destroy。拆分默认最多 4096 项并保留空项。 ASCII 大小写和去空白不包含 Unicode 大小写折叠、规范化或本地化排序。 printf 格式化遵循调用者 locale；需要 locale 无关数字转换时使用专用工具。
+
+对有效、已初始化的字符串，可直接调用 `hx_string_trim_ascii_in_place`、`lower_ascii_in_place` 和 `upper_ascii_in_place`。这些 void 入口不分配内存，保留非 ASCII UTF-8 字节；C++ 可在同一对象上调用 `trimAscii().lowerAscii()`。赋值、追加、预留容量仍可能失败，既有返回状态码的 ASCII 接口继续保留。
 
 ### 7.2 Windows 路径与传统编码
 
@@ -448,6 +519,8 @@ int main(void)
 
 文件对象没有用户态流缓冲区。`hx_os_file_sync` 通过 fsync/FlushFileBuffers 请求持久化，不能保证存储硬件断电后的行为。文件 close **即使失败也消耗句柄**，这与线程或异步 I/O 所有者的可重试关闭不同；不能对已经消耗的原生句柄再次 close。
 
+C++ `File::read()` 在文件结束时返回成功的 `ReadResult`，通过 `eof=true` 表达结束；`readSome()` 和 `readAt()` 继续保留既有 EOF 状态。真正失败时仍可用 `hasValue()` 取得已完成字节数。
+
 ### 8.2 保存并发布完整文件
 
 `hx_os_file_save` 保存完整字节串，`hx_os_file_write_text` 原子发布已初始化的 UTF-8 字符串。 `hx_os_file_save_atomic_ex` 在同一目录创建临时文件，完整写入并同步后执行替换，分别报告“已经发布”与“目录持久化请求”的结果。
@@ -480,7 +553,7 @@ int main(void)
 | 需求 | 接口与示例 |
 | --- | --- |
 | 复制、存在检查、整文件读取、路径组合 | `hx_os_file.h`；[text_file.c](examples/text_file.c) |
-| 目录、有界 glob、递归删除 | 目录/路径/glob 接口；递归删除不跟随链接 |
+| 直接目录遍历、有界 glob、递归删除 | `hx_os_directory_visit`、`hx::Directory::forEach`；递归删除不跟随链接 |
 | 不改变文件位置的 I/O | `hx_os_file_read_at`、`write_at`；[positioned_read.c](examples/positioned_read.c) |
 | 扩展类型与时间戳 | `hx_os_path_stat_extended`；[file_info.c](examples/file_info.c) |
 | 区间锁、时间戳和权限 | `hx_os_file_extra.h`；[file_attributes.c](examples/file_attributes.c) |
@@ -628,25 +701,27 @@ flowchart LR
 int main(void)
 {
 	hx_settings *settings = NULL;
-	hx_string label = HX_STRING_INIT, json = HX_STRING_INIT;
+	hx_settings_string_ref label = HX_SETTINGS_STRING_REF_INIT;
+	hx_string json = HX_STRING_INIT;
 	int64_t port;
 	hx_os_error error;
 	hx_os_status status = hx_settings_create(NULL, &settings, &error);
 	if (status == HX_OS_OK)
 		status = hx_settings_set_default_i64(
 			settings, "port", 80, &error);
-	if (status == HX_OS_OK)
-		status = hx_settings_set_i64(settings, "port", 8080, &error);
-	if (status == HX_OS_OK)
-		status = hx_settings_set_string(
-			settings, "label", "服务😀", &error);
+	if (status == HX_OS_OK) {
+		hx_settings_update update = hx_settings_update_begin(settings);
+		hx_settings_update_set_i64(&update, "port", 8080);
+		hx_settings_update_set_string(&update, "label", "服务😀");
+		status = hx_settings_update_finish(&update, NULL, &error);
+	}
 	if (status == HX_OS_OK)
 		status = hx_settings_get_i64(settings, "port", &port, &error);
 	if (status == HX_OS_OK)
-		status = hx_settings_get_string(
+		status = hx_settings_get_string_ref(
 			settings, "label", &label, &error);
 	if (status == HX_OS_OK)
-		printf("%s: %lld\n", hx_string_c_str(&label), (long long)port);
+		printf("%s: %lld\n", label.text.data, (long long)port);
 	if (status == HX_OS_OK && (hx_os_capabilities() & HX_OS_CAP_CONFIG) &&
 		(hx_os_capabilities() & HX_OS_CAP_CONFIG_SERIALIZE)) {
 		status = hx_settings_to_json(settings, &json, &error);
@@ -658,7 +733,7 @@ int main(void)
 		if (status == HX_OS_OK)
 			status = closed;
 	}
-	hx_string_destroy(&label);
+	hx_settings_string_ref_destroy(&label);
 	hx_string_destroy(&json);
 	if (status != HX_OS_OK)
 		fprintf(stderr, "%s\n", hx_os_status_name(status));
@@ -667,6 +742,10 @@ int main(void)
 ```
 
 通过 `hx_settings_snapshot` 获取持有引用的不可变树，结束后调用 `hx_settings_value_release`。快照可以比设置对象活得更久，同时保留其 context。限制针对每棵树，不是调用者保留全部历史快照后的总内存配额。默认 JSON 保存只记录显式值，默认值继续由程序提供；加载失败保持旧状态。并发修改采用有界重试，可能返回 BUSY。完整契约见[平台工具中的设置说明](docs/PLATFORM_UTILITIES.zh-CN.md)。
+
+连续设置中的每次成功都立即提交，并按原规则通知观察者。端口成功、名称失败时，端口保留，后续设置不执行。`hx_settings_update_finish`／C++ `finish()` 返回首次错误及成功设置次数，失败时也保留次数。它不执行延迟提交，也不回滚之前的修改；各 setter 执行期间设置 owner 必须有效。
+
+`hx_settings_get_string_ref` 持有不可变字符串引用，无需复制字节。先使用 `HX_SETTINGS_STRING_REF_INIT`，通过 `hx_settings_string_ref_copy` 复制持有关系，再用 `hx_settings_string_ref_destroy` 释放；直接结构体赋值不等于增加引用。修改或关闭设置后该引用仍有效，会继续持有分配器 context。C++ `SettingStringView` 提供相同生命周期。`integerOr`、`booleanOr`、`realOr` 和 `stringOr` 只对 NOT_FOUND 使用默认值。
 
 <a id="section-12"></a>
 
@@ -1386,6 +1465,8 @@ int main(void)
 
 过程名复制 UTF-8，大小写敏感、唯一，长度为 1..127 字节。参数先复制，回调成功后才提交结果；借用指针指向的数据副作用不能回滚。没有签名 DSL 或隐式类型转换。默认对注册数、并发调用数与嵌套深度设限。见[信号示例](examples/signal_notifications.c)和[命名过程契约](docs/COMMON_UTILITIES.zh-CN.md)。
 
+连续填写参数可使用 `hx_os_calldata_edit_begin`、类型化 setter 和 `hx_os_calldata_edit_finish`，或 C++ `data.edit().setInt(...).setString(...).finish()`。每项立即生效，首次失败保留已有成功项并跳过后续项。`CallDataView::stringView()` 直接借用参数包，无需复制，使用期间参数包必须有效且不被修改。命名过程的回调结果仍按既有契约，仅成功返回后才发布。
+
 ### 25.2 区间计时树
 
 ```c
@@ -1569,7 +1650,7 @@ python tools/verify_android.py --ndk /absolute/path/to/ndk \
 
 默认交叉编译两种 ARM ABI 的 API 21/28 配置，通过 `--serial` 明确选择运行设备。 `--abi x86_64` 用于匹配的模拟器。adb 列表为空时，可能只是已有 AVD 未启动；先用 `emulator -list-avds` 检查，不能直接认定机器没有模拟器。
 
-当前 C++ Result 迁移已编译 API 21 ARM64/ARMv7 的完整与最小共享配置。ARM64 两种配置各通过十项 Android 测试，在 Android 14/API 34 x86_64 模拟器经翻译执行；ARMv7 缺少运行环境。此前 API 28、静态库和 x86_64 执行保留为历史记录。API 21 构建不等于 Android 5.0 运行通过；ARM 真机性能、应用沙箱和旧系统仍需目标验证。API 28 以下进程能力与有限时长原生 join 有明确限制，见 [ANDROID.zh-CN.md](docs/ANDROID.zh-CN.md)。
+当前常用接口改进已编译 API 21 ARM64/ARMv7 的完整与最小共享配置。ARM64 两种配置各通过十一项 Android 测试，在 Android 14/API 34 x86_64 模拟器经翻译执行；ARMv7 缺少运行环境。此前 API 28、静态库和 x86_64 执行保留为历史记录。API 21 构建不等于 Android 5.0 运行通过；ARM 真机性能、应用沙箱和旧系统仍需目标验证。API 28 以下进程能力与有限时长原生 join 有明确限制，见 [ANDROID.zh-CN.md](docs/ANDROID.zh-CN.md)。
 
 ### 28.2 板卡的最小纯 C 配置
 
@@ -1609,6 +1690,8 @@ flowchart TD
 | --- | --- |
 | `hx_string` | 销毁一次，视图借用字符串存储 |
 | 配置文档 | retain/release 配对，节点借用文档 |
+| 设置字符串引用 | 释放 C 引用／销毁 SettingStringView，owner 关闭后仍有效 |
+| 翻译表／参数包视图 | 保持来源有效且不变；翻译项缺失时借用 fallback |
 | 设置快照 | 可变所有者关闭后，仍需释放快照 |
 | 线程、线程池、监听器 | 超时后保留所有者和借用状态 |
 | Request | 读/借用写缓冲区保留到回调返回，结束后释放请求引用 |
@@ -1630,7 +1713,7 @@ python tools/verify_install.py build --config Release
 python tools/verify_abi.py build-shared --config Release
 ```
 
-安装工具使用构建目录内的独立前缀，默认能力齐全时运行十项 C/C++ 消费测试，再运行纯 C 工程的七项测试。ABI 命令要求已准备的共享库构建和仓库基线历史。它们是原生主机检查，不会自动模拟交叉编译目标。
+安装工具使用构建目录内的独立前缀，默认能力齐全时运行十一项 C/C++ 消费测试，再运行纯 C 工程的七项测试。ABI 命令要求已准备的共享库构建和仓库基线历史。它们是原生主机检查，不会自动模拟交叉编译目标。
 
 GCC/Clang 内存检查使用单独构建目录：
 
@@ -1657,7 +1740,7 @@ TSan 在另一个目录配置 `HX_OS_SANITIZER=thread`，不与 ASan 混用。�
 | ARM Linux | ARMv7/AArch64 交叉编译及 QEMU 兼容集合 |
 | Android | API 21/28、两种 ARM ABI 和最小配置 |
 
-工作流见 [build.yml](.github/workflows/build.yml)。配置存在不等于远程已运行通过。本地已有 Windows 82/82、WSL Linux 84/84、ASan/UBSan/LSan 84/84、TSan 84/84 通过证据；最近内存审查还分别进行了 1,001 轮生命周期测试，每轮清理后的追踪存活字节为零。详见[验证记录](docs/VALIDATION.zh-CN.md)。
+工作流见 [build.yml](.github/workflows/build.yml)。配置存在不等于远程已运行通过。本次全量 CTest 为 Windows 84/84、WSL Linux 86/86；常用接口改进另通过 ASan/UBSan/LSan 相关测试 11/11 和 TSan 6/6。此前全量 sanitizer 与 1,001 轮生命周期审查对应各自记录的版本，该次审查在每轮清理后观测到追踪存活字节为零。详见[验证记录](docs/VALIDATION.zh-CN.md)。
 
 ### 30.3 测量实际成本
 
@@ -1708,6 +1791,6 @@ TSan 在另一个目录配置 `HX_OS_SANITIZER=thread`，不与 ASan 混用。�
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%2082%2F82%20Linux%2084%2F84-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%2084%2F84%20Linux%2086%2F86-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

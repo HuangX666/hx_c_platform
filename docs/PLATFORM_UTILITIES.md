@@ -46,7 +46,7 @@ C++ convenience methods return Result<T> with copied native error details. CpuUs
 
 ## Dynamic libraries
 
-`HX_OS_ENABLE_LIBRARY` defaults to ON. `hx_os_library_open`, `symbol` and `close` provide the basic C interface; `_ex` variants also accept an initialized `hx_string` for owned diagnostic text. `hx::Library` supplies movable ownership and `symbol<Pointer>(name)`; a failure throws `LibraryError` with an owned message and the original status/domain/code.
+`HX_OS_ENABLE_LIBRARY` defaults to ON. `hx_os_library_open`, `symbol` and `close` provide the basic C interface; `_ex` variants also accept an initialized `hx_string` for owned diagnostic text. `hx::Library` supplies movable ownership and `symbol<Pointer>(name)` through Result; failures retain the original status/domain/code. An optional caller-owned String receives loader diagnostic text.
 
 ```cpp
 #include <hx/Library.hpp>
@@ -109,6 +109,8 @@ hx::Result<void> list_directory(const char *path) noexcept
 File::open and Directory::open return move-only core owners, including with FILE_UTILS disabled. File::get borrows its native handle. Serialize cursor operations. readSome/readAt return Result<ReadResult>; EOF and failures can retain byte progress through hasValue(). Files convenience methods return Result<String> or Result<Buffer>. Directory::next(true) also queries entry kind; default next() requires no optional file-info capability.
 
 `examples/text_file.c` reads UTF-8 in one call and optionally atomically publishes it to a second path; CTest runs the same C source on both hosts.
+
+`File::read` additionally treats EOF as successful `ReadResult{bytes, eof}`; errors still retain progress. `hx_os_directory_visit` and `Directory::forEach` visit directly with one reusable bounded name buffer and guaranteed close; EOF/explicit stop is success. See [visitor and text-view contracts](COMMON_UTILITIES.md).
 
 ## Environment
 
@@ -214,6 +216,8 @@ Serialization performs a bounded measurement pass followed by one output allocat
 TEXT_NUMBER separately exposes parse_double and format_double and can work without CONFIG. The config getters, numeric grammar and third-party adapters share the same first-party helpers; their existing behavior is retained even when the public text module is off. Parsing accepts a complete ASCII token in the existing numeric grammar (including TOML underscores/bases and signed inf/nan), without whitespace or embedded NUL; overflow/underflow is RANGE. Formatting uses 17 significant digits for IEEE binary64, canonical nan/inf, and C numeric locale. It never changes the process locale; POSIX temporarily selects and restores the calling thread's locale. The locale objects use native C-runtime allocation, outside injected allocator accounting, as the original config getter did.
 
 C++ ConfigDocument owns an immutable reference with copy/move support. parse/load, typed queries, serialize/save and missing-only stringOr return Result. Optional hx_os_config_error output retains parser position/message details. Text conversion and serialization return Result<String>, with an optional context. examples/config_save.c preserves exact large integers.
+
+`ConfigDocument::stringView(pointer)` returns Result<StringView> without copying bytes. Keep the immutable document alive; querying an owning temporary is rejected. The existing string/stringOr methods return independent owned copies.
 
 ## Periodic timers
 
@@ -469,6 +473,8 @@ The fixed-layout calldata pack has 16 entries and 512 bytes shared by copied nam
 CallData setters return Result<void>; getters return Result<T>. SignalHandler::connect stores typed captures in its context and releases them on retirement. CallDataView borrows the parameter pack; its string getter returns Result<String>. Callbacks declare noexcept and return void, a status or Result<void>; emit returns the failure directly, preserving native details. The facade references the host owner and requires closeUntil. SIGNALS remains independently optional; operational entries report NOT_SUPPORTED when disabled.
 
 
+`CallData::edit()` / `hx_os_calldata_edit_*` group immediate assignments with one final error check; earlier successes survive a later failure. `CallDataView::stringView` borrows the pack without allocation until mutation/destruction; `string` still copies. These helpers preserve signal and named-procedure publication contracts.
+
 ## Mutable settings and retained snapshots (batch 23b)
 
 `hx_settings_create` makes an independent mutable object. Use typed setters, `set_default_*`, and typed getters directly; `examples/settings.c` shows the common path. Explicit and default values are separate. Only an absent literal key falls back; null, wrong types, invalid data and permission errors never do. There is no numeric-string coercion or recursive default merge. Root keys are literal byte keys, so a dot does not imply a path. The view APIs support empty and NUL-containing UTF-8 keys and values. The standard C-string conveniences borrow their arguments for the call. Setters copy into the object's context.
@@ -486,6 +492,8 @@ Optional create-time observers run synchronously after commit, outside locks. Th
 Configuration integration keeps hx_config immutable. Import/load require an object root and support JSON-compatible kinds; XML/datetime and integer range failures are explicit. Load constructs the complete explicit replacement before publication, leaves defaults intact and preserves old state on failure. It is a whole-object replacement, not a merge. JSON/INI/properties serialization reuses the existing serializer and representability rules. Default save writes only explicit values. User pointers fail serialization, including NULL pointers with the pointer tag; use a null value for JSON null. `to_config` can export an explicit/default/effective snapshot; `to_json`, `load_json` and `save_json` are conveniences. Save uses existing atomic file publication and its durability limits. Config options still bound text, memory, depth and work; rich load errors preserve source/position and native failures. Locale-independent double formatting and private document construction are shared with existing config code; TEXT_NUMBER can be disabled while settings conversion still works.
 
 SETTINGS is independent of CONFIG, CONFIG_SERIALIZE, FILE_UTILS, SIGNALS and CONTAINERS; combinations missing prerequisites report NOT_SUPPORTED. C++ Settings setters return Result<void> individually. Getters return Result<T>, with owned String results. SettingValue factories return Result<SettingValue>; retained snapshots are copyable/movable and arrays/objects accept initializer lists of checked values. Mutable Settings references a host owner with explicit retryable close. C layouts and exports remain unchanged.
+
+Settings string references (`hx_settings_get_string_ref`, `SettingValue::asStringView`, `Settings::stringView`) retain immutable bytes without copying/allocating. They survive owner updates/close and retain the originating context; C leases must be initialized, copied through the lease API and released. `Settings::update` / `hx_settings_update_*` reuse individual setters and notifications, preserve prior successes on first failure and report applied count at finish. There is no rollback or combined atomic publication. See [common-call ownership](COMMON_UTILITIES.md).
 
 ## Bounded interval profiler (batch 23c)
 

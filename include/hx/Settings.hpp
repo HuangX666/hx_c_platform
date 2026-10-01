@@ -5,6 +5,94 @@
 #include <initializer_list>
 namespace hx {
 
+/* Owns a reference to immutable bytes, including after settings close.
+ * view() borrows this lease; copying the lease itself does not allocate.
+ */
+class SettingStringView {
+public:
+	SettingStringView() noexcept
+	    : m_ref_{}
+	{
+	}
+	SettingStringView(const SettingStringView &other) noexcept
+	    : m_ref_{}
+	{
+		hx_settings_string_ref_copy(&m_ref_, &other.m_ref_);
+	}
+	SettingStringView &operator=(const SettingStringView &other) noexcept
+	{
+		hx_settings_string_ref_copy(&m_ref_, &other.m_ref_);
+		return *this;
+	}
+	SettingStringView(SettingStringView &&other) noexcept
+	    : m_ref_(other.m_ref_)
+	{
+		other.m_ref_ = {};
+	}
+	SettingStringView &operator=(SettingStringView &&other) noexcept
+	{
+		if (this != &other) {
+			hx_settings_string_ref_destroy(&m_ref_);
+			m_ref_ = other.m_ref_;
+			other.m_ref_ = {};
+		}
+		return *this;
+	}
+	~SettingStringView() noexcept
+	{
+		hx_settings_string_ref_destroy(&m_ref_);
+	}
+	const char *data() const noexcept
+	{
+		return m_ref_.text.data ? m_ref_.text.data : "";
+	}
+	const char *c_str() const noexcept
+	{
+		return data();
+	}
+	size_t size() const noexcept
+	{
+		return m_ref_.text.size;
+	}
+	bool empty() const noexcept
+	{
+		return size() == 0;
+	}
+	StringView view() const noexcept
+	{
+		return StringView(data(), size());
+	}
+	operator StringView() const noexcept
+	{
+		return view();
+	}
+	static Result<SettingStringView> fromValue(
+		const hx_settings_value *value) noexcept
+	{
+		SettingStringView result;
+		hx_os_error error = {};
+		auto status = hx_settings_value_get_string_ref(
+			value, &result.m_ref_, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return result;
+	}
+	static Result<SettingStringView> fromSettings(
+		hx_settings *settings, StringView key) noexcept
+	{
+		SettingStringView result;
+		hx_os_error error = {};
+		auto status = hx_settings_get_string_ref_view(
+			settings, key.native(), &result.m_ref_, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return result;
+	}
+
+private:
+	hx_settings_string_ref m_ref_;
+};
+
 class SettingValue {
 public:
 	explicit SettingValue(hx_settings_value *value = NULL) noexcept
@@ -216,6 +304,10 @@ public:
 			},
 			context);
 	}
+	Result<SettingStringView> asStringView() const noexcept
+	{
+		return SettingStringView::fromValue(m_value_);
+	}
 	Result<SettingValue> at(size_t index) const noexcept
 	{
 		hx_settings_value *value = NULL;
@@ -250,6 +342,60 @@ public:
 private:
 	hx_settings_value *m_value_;
 };
+/* Immediate setters; finish reports the first error and applied count.
+ * The host retains settings through all setters, excluding final close.
+ */
+class SettingsUpdate {
+public:
+	explicit SettingsUpdate(hx_settings *settings) noexcept
+	    : m_update_(hx_settings_update_begin(settings))
+	{
+	}
+	SettingsUpdate &setInt(const char *key, int64_t value) noexcept
+	{
+		hx_settings_update_set_i64(&m_update_, key, value);
+		return *this;
+	}
+	SettingsUpdate &setBool(const char *key, bool value) noexcept
+	{
+		hx_settings_update_set_bool(&m_update_, key, value);
+		return *this;
+	}
+	SettingsUpdate &setDouble(const char *key, double value) noexcept
+	{
+		hx_settings_update_set_double(&m_update_, key, value);
+		return *this;
+	}
+	SettingsUpdate &setString(StringView key, StringView value) noexcept
+	{
+		hx_settings_update_set_string_view(
+			&m_update_, key.native(), value.native());
+		return *this;
+	}
+	SettingsUpdate &setValue(
+		StringView key, const SettingValue &value) noexcept
+	{
+		hx_settings_update_set_value(
+			&m_update_, key.native(), value.native());
+		return *this;
+	}
+	SettingsUpdate &unset(StringView key) noexcept
+	{
+		hx_settings_update_unset(&m_update_, key.native());
+		return *this;
+	}
+	Result<size_t> finish() const noexcept
+	{
+		size_t applied = 0;
+		hx_os_error error = {};
+		auto status =
+			hx_settings_update_finish(&m_update_, &applied, &error);
+		return Result<size_t>::withValue(applied, status, error);
+	}
+
+private:
+	hx_settings_update m_update_;
+};
 /* Mutable owner stays with the host through setters, observers and close.
  * Snapshots own C references. Observers return normally through the C ABI.
  */
@@ -275,6 +421,10 @@ public:
 		auto status =
 			hx_settings_set_i64(*m_owner_, key, value, &error);
 		return detail::Status(status, error);
+	}
+	SettingsUpdate update() const noexcept
+	{
+		return SettingsUpdate(*m_owner_);
 	}
 	Result<void> setBool(const char *key, bool value) noexcept
 	{
@@ -332,6 +482,18 @@ public:
 			return Failure(value.error());
 		return value.value().asString(context);
 	}
+	Result<SettingStringView> stringView(StringView key) const noexcept
+	{
+		return SettingStringView::fromSettings(*m_owner_, key);
+	}
+	Result<String> stringOr(StringView key, StringView fallback,
+		hx_os_context *context = NULL) const noexcept
+	{
+		auto result = string(key, context);
+		if (result.status() == HX_OS_NOT_FOUND)
+			return String::copy(fallback, context);
+		return result;
+	}
 	Result<int64_t> integer(StringView key) const noexcept
 	{
 		auto value = get(key);
@@ -352,6 +514,28 @@ public:
 		if (!value)
 			return Failure(value.error());
 		return value.value().asDouble();
+	}
+	Result<int64_t> integerOr(
+		StringView key, int64_t fallback) const noexcept
+	{
+		auto result = integer(key);
+		return result.status() == HX_OS_NOT_FOUND
+			? Result<int64_t>(fallback)
+			: std::move(result);
+	}
+	Result<bool> booleanOr(StringView key, bool fallback) const noexcept
+	{
+		auto result = boolean(key);
+		return result.status() == HX_OS_NOT_FOUND
+			? Result<bool>(fallback)
+			: std::move(result);
+	}
+	Result<double> realOr(StringView key, double fallback) const noexcept
+	{
+		auto result = real(key);
+		return result.status() == HX_OS_NOT_FOUND
+			? Result<double>(fallback)
+			: std::move(result);
 	}
 
 	Result<void> unset(

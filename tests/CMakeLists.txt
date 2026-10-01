@@ -37,7 +37,7 @@ set(hx_test_suites data options lifecycle config containers sysinfo file_utils
 	registry power obfuscate calendar text_lookup bitstream calldata signal
 	settings settings_concurrency settings_config profiler atomic
 	string_tools lexer wide_wait catalog_filename procedure
-	android_baseline)
+	android_baseline convenience)
 if(HX_OS_ENABLE_THREAD_POOL)
 	list(APPEND hx_test_suites pool)
 endif()

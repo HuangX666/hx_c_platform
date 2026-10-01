@@ -1,6 +1,274 @@
 #include "internal.h"
 #include "hx_os_paths.h"
 #include "hx_os_wait.h"
+#include "hx_settings.h"
+#include "hx_os_signal.h"
+#include <assert.h>
+
+void hx_settings_string_ref_destroy(hx_settings_string_ref *ref)
+{
+	if (ref) {
+		hx_settings_value_release(ref->value);
+		memset(ref, 0, sizeof(*ref));
+	}
+}
+void hx_settings_string_ref_copy(
+	hx_settings_string_ref *out, const hx_settings_string_ref *source)
+{
+	assert(out && source);
+	if (out != source) {
+		hx_settings_value_retain(source->value);
+		hx_settings_value_release(out->value);
+		*out = *source;
+	}
+}
+hx_os_status hx_settings_get_string_ref_view(hx_settings *settings,
+	hx_string_view key, hx_settings_string_ref *out, hx_os_error *error)
+{
+	hx_settings_value *value = NULL;
+	hx_os_status status;
+	if (!out)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	status = hx_settings_get_value(settings, key, &value, error);
+	if (status == HX_OS_OK)
+		status = hx_settings_value_get_string_ref(value, out, error);
+	hx_settings_value_release(value);
+	return status;
+}
+hx_os_status hx_settings_get_string_ref(hx_settings *settings, const char *key,
+	hx_settings_string_ref *out, hx_os_error *error)
+{
+	if (!key)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	return hx_settings_get_string_ref_view(
+		settings, hx_string_view_from_cstr(key), out, error);
+}
+hx_settings_update hx_settings_update_begin(hx_settings *settings)
+{
+	hx_settings_update update;
+	memset(&update, 0, sizeof(update));
+	update.settings = settings;
+#if HX_OS_ENABLE_SETTINGS
+	update.error.status = settings ? HX_OS_OK : HX_OS_CLOSED;
+#else
+	update.error.status = HX_OS_NOT_SUPPORTED;
+#endif
+	return update;
+}
+static void hx_settings_update_record(
+	hx_settings_update *update, hx_os_status status)
+{
+	update->error.status = status;
+	if (status == HX_OS_OK && update->applied != SIZE_MAX)
+		++update->applied;
+}
+void hx_settings_update_set_bool(
+	hx_settings_update *update, const char *key, int value)
+{
+	assert(update);
+	if (update->error.status == HX_OS_OK)
+		hx_settings_update_record(update,
+			hx_settings_set_bool(
+				update->settings, key, value, &update->error));
+}
+void hx_settings_update_set_i64(
+	hx_settings_update *update, const char *key, int64_t value)
+{
+	assert(update);
+	if (update->error.status == HX_OS_OK)
+		hx_settings_update_record(update,
+			hx_settings_set_i64(
+				update->settings, key, value, &update->error));
+}
+void hx_settings_update_set_double(
+	hx_settings_update *update, const char *key, double value)
+{
+	assert(update);
+	if (update->error.status == HX_OS_OK)
+		hx_settings_update_record(update,
+			hx_settings_set_double(
+				update->settings, key, value, &update->error));
+}
+void hx_settings_update_set_string(
+	hx_settings_update *update, const char *key, const char *value)
+{
+	assert(update);
+	if (update->error.status == HX_OS_OK)
+		hx_settings_update_record(update,
+			hx_settings_set_string(
+				update->settings, key, value, &update->error));
+}
+void hx_settings_update_set_string_view(
+	hx_settings_update *update, hx_string_view key, hx_string_view value)
+{
+	assert(update);
+	if (update->error.status == HX_OS_OK)
+		hx_settings_update_record(update,
+			hx_settings_set_string_view(
+				update->settings, key, value, &update->error));
+}
+void hx_settings_update_set_value(hx_settings_update *update,
+	hx_string_view key, const hx_settings_value *value)
+{
+	assert(update);
+	if (update->error.status == HX_OS_OK)
+		hx_settings_update_record(update,
+			hx_settings_set_value(
+				update->settings, key, value, &update->error));
+}
+void hx_settings_update_unset(hx_settings_update *update, hx_string_view key)
+{
+	assert(update);
+	if (update->error.status == HX_OS_OK)
+		hx_settings_update_record(update,
+			hx_settings_unset(update->settings, key,
+				HX_SETTINGS_EXPLICIT, &update->error));
+}
+hx_os_status hx_settings_update_finish(
+	const hx_settings_update *update, size_t *applied, hx_os_error *error)
+{
+	if (!update)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (applied)
+		*applied = update->applied;
+	if (error)
+		*error = update->error;
+	return update->error.status;
+}
+hx_os_calldata_edit hx_os_calldata_edit_begin(hx_os_calldata *data)
+{
+	hx_os_calldata_edit edit;
+	memset(&edit, 0, sizeof(edit));
+	edit.data = data;
+#if HX_OS_ENABLE_SIGNALS || HX_OS_ENABLE_PROCEDURES
+	edit.error.status = data ? HX_OS_OK : HX_OS_INVALID;
+#else
+	edit.error.status = HX_OS_NOT_SUPPORTED;
+#endif
+	return edit;
+}
+static void hx_os_calldata_edit_record(
+	hx_os_calldata_edit *edit, hx_os_status status)
+{
+	edit->error.status = status;
+}
+void hx_os_calldata_edit_set_bool(
+	hx_os_calldata_edit *edit, const char *name, int value)
+{
+	assert(edit);
+	if (edit->error.status == HX_OS_OK)
+		hx_os_calldata_edit_record(edit,
+			hx_os_calldata_set_bool(
+				edit->data, name, value, &edit->error));
+}
+void hx_os_calldata_edit_set_i64(
+	hx_os_calldata_edit *edit, const char *name, int64_t value)
+{
+	assert(edit);
+	if (edit->error.status == HX_OS_OK)
+		hx_os_calldata_edit_record(edit,
+			hx_os_calldata_set_i64(
+				edit->data, name, value, &edit->error));
+}
+void hx_os_calldata_edit_set_double(
+	hx_os_calldata_edit *edit, const char *name, double value)
+{
+	assert(edit);
+	if (edit->error.status == HX_OS_OK)
+		hx_os_calldata_edit_record(edit,
+			hx_os_calldata_set_double(
+				edit->data, name, value, &edit->error));
+}
+void hx_os_calldata_edit_set_string(
+	hx_os_calldata_edit *edit, const char *name, hx_string_view value)
+{
+	assert(edit);
+	if (edit->error.status == HX_OS_OK)
+		hx_os_calldata_edit_record(edit,
+			hx_os_calldata_set_string(
+				edit->data, name, value, &edit->error));
+}
+void hx_os_calldata_edit_set_pointer(
+	hx_os_calldata_edit *edit, const char *name, void *value)
+{
+	assert(edit);
+	if (edit->error.status == HX_OS_OK)
+		hx_os_calldata_edit_record(edit,
+			hx_os_calldata_set_pointer(
+				edit->data, name, value, &edit->error));
+}
+hx_os_status hx_os_calldata_edit_finish(
+	const hx_os_calldata_edit *edit, hx_os_error *error)
+{
+	if (!edit)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (error)
+		*error = edit->error;
+	return edit->error.status;
+}
+hx_os_status hx_os_directory_visit_ex(hx_os_context *context, const char *path,
+	size_t max_entries, hx_os_directory_visit_fn visit, void *user,
+	size_t *completed, hx_os_error *error)
+{
+	hx_os_directory *directory = NULL;
+	hx_string name;
+	hx_os_status status;
+	size_t count = 0;
+	if (completed)
+		*completed = 0;
+	if (!visit || !max_entries)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	status = hx_os_directory_open(context, path, &directory, error);
+	if (status != HX_OS_OK)
+		return status;
+	hx_string_init(&name, context);
+	status = hx_string_reserve(&name, 255, error);
+	while (status == HX_OS_OK) {
+		size_t required = 0;
+		hx_string_view entry;
+		hx_os_error callback_error;
+		status = hx_os_directory_next(
+			directory, name.data, name.capacity, &required, error);
+		if (status == HX_OS_EOF)
+			break;
+		if (status == HX_OS_OUTPUT_FULL) {
+			if (!required || required > 4096) {
+				status =
+					hx_os_i_error(error, HX_OS_LIMIT, 0, 0);
+				break;
+			}
+			status = hx_string_reserve(&name, required - 1, error);
+			continue;
+		}
+		if (status != HX_OS_OK)
+			break;
+		if (count == max_entries) {
+			status = hx_os_i_error(error, HX_OS_LIMIT, 0, 0);
+			break;
+		}
+		entry.data = name.data;
+		entry.size = required - 1;
+		hx_os_error_clear(&callback_error);
+		++count;
+		if (completed)
+			*completed = count;
+		status = visit(entry, user, &callback_error);
+		if (error) {
+			*error = callback_error;
+			error->status = status;
+		}
+	}
+	hx_string_destroy(&name);
+	hx_os_directory_close(directory);
+	return status == HX_OS_EOF ? hx_os_i_error(error, HX_OS_OK, 0, 0)
+				   : status;
+}
+hx_os_status hx_os_directory_visit(const char *path,
+	hx_os_directory_visit_fn visit, void *user, hx_os_error *error)
+{
+	return hx_os_directory_visit_ex(
+		NULL, path, 65536, visit, user, NULL, error);
+}
 hx_os_status hx_os_thread_pool_shutdown_ex(hx_os_thread_pool **pool, int mode,
 	hx_os_deadline deadline, hx_os_error *error)
 {

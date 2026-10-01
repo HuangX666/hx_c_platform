@@ -564,6 +564,20 @@ hx_os_status hx_settings_value_get_string(
 	text.size = value->count;
 	return hx_string_assign(out, text, error);
 }
+hx_os_status hx_settings_value_get_string_ref(const hx_settings_value *value,
+	hx_settings_string_ref *out, hx_os_error *error)
+{
+	hx_os_status status =
+		hx_settings_check_type(value, HX_SETTINGS_STRING, out, error);
+	if (status != HX_OS_OK)
+		return status;
+	hx_settings_value_retain((hx_settings_value *)value);
+	hx_settings_value_release(out->value);
+	out->value = (hx_settings_value *)value;
+	out->text.data = (const char *)(value + 1);
+	out->text.size = value->count;
+	return HX_OS_OK;
+}
 hx_os_status hx_settings_value_at(const hx_settings_value *value, size_t index,
 	hx_settings_value **out, hx_os_error *error)
 {

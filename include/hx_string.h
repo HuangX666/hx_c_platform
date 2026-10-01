@@ -101,6 +101,12 @@ HX_OS_API hx_os_status HX_OS_CALL hx_string_lower_ascii(
 	hx_string *string, hx_os_error *error);
 HX_OS_API hx_os_status HX_OS_CALL hx_string_upper_ascii(
 	hx_string *string, hx_os_error *error);
+/* Allocation-free edits on a valid initialized string. No Unicode folding.
+ * string must be non-NULL; borrowed views may change after these calls.
+ */
+HX_OS_API void HX_OS_CALL hx_string_trim_ascii_in_place(hx_string *string);
+HX_OS_API void HX_OS_CALL hx_string_lower_ascii_in_place(hx_string *string);
+HX_OS_API void HX_OS_CALL hx_string_upper_ascii_in_place(hx_string *string);
 /* Left-to-right nonoverlapping replacement; empty needle is INVALID.
  * Inputs may borrow from string. Failure preserves string and replaced.
  */

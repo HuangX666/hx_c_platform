@@ -144,4 +144,16 @@ if(CMAKE_CXX_COMPILER_LOADED)
 		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
 		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 	hx_apply_warnings(hx_os_cpp_thread_pool)
+	add_executable(hx_os_cpp_direct_calls direct_calls.cpp)
+	target_link_libraries(hx_os_cpp_direct_calls PRIVATE hx_c_platform::cpp)
+	set_target_properties(hx_os_cpp_direct_calls PROPERTIES
+		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+	hx_apply_warnings(hx_os_cpp_direct_calls)
+	if(HX_OS_BUILD_TESTS)
+		add_test(NAME cpp_direct_calls_example
+			COMMAND hx_os_cpp_direct_calls)
+		set_tests_properties(cpp_direct_calls_example
+			PROPERTIES TIMEOUT 20)
+	endif()
 endif()

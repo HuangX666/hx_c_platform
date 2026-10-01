@@ -31,6 +31,8 @@ hx::Result<hx::String> load_configuration(const char *path) noexcept
 | File readSome/readAt and local-socket readUntil | Result<ReadResult>; bytes/eof remain available with hasValue(), including EOF and partial failure |
 | File writeAll/writeAt and local-socket writeUntil | Result<size_t>; completed bytes remain available even on error |
 | IoRequest::waitUntil | Failed wait has no value; completed native I/O carries completion/bytes even on I/O error |
+| File::read | EOF succeeds with eof=true; failures retain byte progress |
+| Directory::forEach / SettingsUpdate::finish | Completed/applied count remains available on failure |
 | Directory::next | EOF has no entry; allocation failure does not consume the pending entry |
 | Lexer::next | EOF carries an END token; token-copy allocation failure leaves the cursor available for retry |
 | Task<T>::getUntil | Wait failure preserves the task; completed outcome consumes it, including cancellation/failure |
@@ -47,9 +49,17 @@ Check the operation's status before treating a value as successful data. A resul
 
 C++ callbacks and thread-pool jobs store typed captures directly in context-allocated storage. They do not route library-owned allocation through standard string, vector or type-erased function containers. Custom allocator callbacks and user types must honor the no-failure construction/destruction contract. User code remains responsible for any standard-library allocation it chooses to perform; disabling compiler exceptions alone cannot make such allocation recoverable.
 
+## Common operations with fewer checks
+
+`String::trimAscii().lowerAscii()` edits the same initialized string, returns a reference and allocates nothing. `append` and `reserve` remain fallible. Settings and parameter packs offer explicit `update()` / `edit()` cursors: setters apply immediately, the first failure skips later setters, and `finish()` reports it once. Settings finish retains the successful count on failure. Individual Result-returning setters remain available. See the complete [direct-call example](../examples/direct_calls.cpp) and [C/C++ contracts](COMMON_UTILITIES.md).
+
+`ConfigDocument::stringView`, `CallDataView::stringView` and `TextLookup::getView` return borrowed text. Keep their document/pack/catalog storage alive and exclude mutation. A missing catalog entry instead borrows the supplied fallback. `Settings::stringView` and `SettingValue::asStringView` return `SettingStringView`, which retains immutable value bytes and survives settings updates/close; copying the lease allocates nothing. A plain `StringView` obtained from that lease still borrows the lease. All copying string getters remain available.
+
+`Directory::forEach` handles open/read/close and reuses its name buffer; EOF and a bool callback returning false end successfully. `File::read` reports normal EOF through `ReadResult::eof` with success, while `readSome/readAt` retain their existing EOF status. Default-valued settings getters fall back only on NOT_FOUND.
+
 ## Callbacks and lifetimes
 
-Callbacks for signals, procedures, async pipes, directory/descriptor watches and periodic timers can return void, `hx_os_status` or `Result<void>`. Functors/lambdas must declare `noexcept`; C++11 function pointers promise this behavior by contract. Capture construction/destruction must not fail. Void means success, a status reports its category, and Result preserves full native details.
+Callbacks for signals, procedures, async pipes, directory/descriptor watches and periodic timers can return void, `hx_os_status` or `Result<void>`. Functors/lambdas must declare `noexcept`; C++11 function pointers/references promise this behavior by contract. Capture construction/destruction must not fail. Void means success, a status reports its category, and Result preserves full native details.
 
 Signal/procedure calls return the failure directly. Procedure parameter updates commit only on success. Async I/O stores callback failure separately from the native completion, available through `callbackResult()` after completion. Watch/timer failure requests stop; read `callbackResult()` after retirement or successful close. Early inspection returns the applicable waiting/busy status rather than racing callback state.
 
@@ -66,7 +76,7 @@ ThreadPool, Thread, IoLoop, AsyncPipe, Process, ProcessCapture, DirectoryWatch, 
 | Resource constructor performs fallible work | Factory returns Result<Resource>; check before moving/accessing value |
 | Text method returns a standard string | Result<hx::String>; use c_str()/size()/view() |
 | Getter returns T directly | Result<T>; inspect status and then value |
-| Chained mutable setters | Check each Result<void> separately |
+| Multiple mutable setters | update()/edit() plus one finish(), or check individual Result<void> calls |
 | Deferred callback error propagation | callbackResult() after native retirement |
 | Cancellation checks through unwinding | token.check() returns Result<void> |
 | submit followed by direct value retrieval | Check Result<Task<T>>, then Result<T> from getUntil() |

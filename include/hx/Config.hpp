@@ -109,6 +109,14 @@ public:
 	Result<String> string(const char *pointer,
 		hx_os_context *context = NULL) const noexcept
 	{
+		auto found = stringView(pointer);
+		if (!found)
+			return Failure(found.error());
+		return String::copy(found.value(), context);
+	}
+	/* The immutable document owns the borrowed bytes. */
+	Result<StringView> stringView(const char *pointer) const & noexcept
+	{
 		auto found = node(pointer);
 		if (!found)
 			return Failure(found.error());
@@ -116,9 +124,9 @@ public:
 		auto status = hx_os_config_get_string(found.value(), &value);
 		if (status != HX_OS_OK)
 			return Failure(status);
-		return String::copy(
-			StringView(value.data, value.bytes), context);
+		return StringView(value.data, value.bytes);
 	}
+	Result<StringView> stringView(const char *) const && = delete;
 	Result<String> stringOr(const char *pointer, StringView fallback,
 		hx_os_context *context = NULL) const noexcept
 	{

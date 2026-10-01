@@ -8,7 +8,7 @@ These interfaces follow OBS's direct-entry/shared-implementation pattern. No OBS
 
 | Task | C99 | C++11 |
 | --- | --- | --- |
-| Trim, replace, split, join UTF-8 | hx_string_trim_ascii / replace_all / split / join | hx::Strings |
+| In-place ASCII edits; replace, split, join | hx_string_trim_ascii_in_place / lower_ascii_in_place / replace_all / split / join | hx::String edits; hx::Strings copies |
 | Decode a file to UTF-8 | hx_os_file_read_text_encoded | hx::Files::readText(path, encoding) |
 | Compose an application config path | hx_os_path_config_file | hx::Paths::configFile |
 | Load/overlay translations | hx_os_text_lookup_load / add_file / add_text | hx::TextLookup::load / addFile / addText |
@@ -22,7 +22,7 @@ These interfaces follow OBS's direct-entry/shared-implementation pattern. No OBS
 | Close and release a pool | hx_os_thread_pool_shutdown / _ex | ThreadPool::shutdownUntil |
 | Select worker/queue counts | Existing pool options | ThreadPool::withThreads |
 
-Buildable examples: [common_tasks.c](../examples/common_tasks.c), [thread_pool.cpp](../examples/thread_pool.cpp); complete C++ call coverage: [test_cpp_utilities.cpp](../tests/test_cpp_utilities.cpp).
+Buildable examples: [direct_calls.cpp](../examples/direct_calls.cpp), [settings.c](../examples/settings.c), [common_tasks.c](../examples/common_tasks.c), [thread_pool.cpp](../examples/thread_pool.cpp); complete C++ call coverage: [test_cpp_utilities.cpp](../tests/test_cpp_utilities.cpp).
 
 ## Strings and encoding
 
@@ -31,7 +31,7 @@ hx_string text = HX_STRING_INIT;
 hx_string_parts *parts = NULL;
 hx_os_status status = hx_string_assign_cstr(&text, " one,two,中文 ", NULL);
 if (status == HX_OS_OK)
-	status = hx_string_trim_ascii(&text, NULL);
+	hx_string_trim_ascii_in_place(&text);
 if (status == HX_OS_OK)
 	status = hx_string_split(&text, hx_string_view_from_cstr(","),
 		&parts, NULL);
@@ -42,11 +42,36 @@ hx_string_destroy(&text);
 
 Strings are UTF-8 with byte lengths and embedded NUL support. ASCII trim/case operations leave Unicode unchanged; no normalization or Unicode case folding. Replacement is nonoverlapping, left-to-right, permits aliased input views, rejects empty needles, and preserves the destination/count on failure. Join is transactional and uses the destination context.
 
+The `_in_place` ASCII entry points require a non-NULL initialized string, return void and allocate nothing. Existing status-returning trim/case calls share the same implementation and retain argument validation. C++ `String::trimAscii/lowerAscii/upperAscii/clear` return the same object by reference; assign/append/reserve still report Result.
+
 Split owns an input copy. Views survive destruction of the original string until parts_destroy. Defaults retain empty pieces and limit results to 4096; _ex permits 1..65536. Excess results return LIMIT, never truncation. Mutation of any individual object requires external synchronization.
 
 Encoded file reads are bounded to 16 MiB and strictly decode the selected encoding. With BOM enabled, a matching BOM is removed and a conflicting BOM is INVALID_ENCODING. With BOM disabled, the decoder preserves U+FEFF. An ambiguous UTF-16LE BOM followed by NUL honors the explicit encoding. There is no encoding guessing; existing UTF-8 and optional iconv behavior stays.
 
 POD macros wrap the existing bounded containers. Use lowercase prefix names. Elements must be trivially byte-copyable, excluding owning hx_string values and nontrivial C++ objects; those still need existing copy/drop callbacks. Alignment comes from C99 offsetof, without packing. Views expire on mutation.
+
+## Borrowed text and retained settings strings
+
+| Getter | Lifetime and cost |
+| --- | --- |
+| `ConfigDocument::stringView()` | Borrows immutable document bytes; retain the document |
+| `CallDataView::stringView()` | Borrows the pack until mutation/destruction |
+| `hx_os_text_lookup_get_view` / `TextLookup::getView()` | Hit borrows the table until mutation/destruction; missing key borrows the input fallback itself |
+| `hx_settings_get_string_ref` / `Settings::stringView()` | Retains an immutable value; valid after settings update/close; release the C lease or let `SettingStringView` destroy it |
+
+All four avoid copying string bytes. Borrowed getters allocate nothing. Acquiring/copying a settings string reference allocates nothing but retains/releases atomic references; acquiring from mutable settings still uses its existing root locks. A plain `StringView` extracted from `SettingStringView` borrows that lease and cannot outlive it. Existing copying getters remain useful when independent mutable text is wanted. The config and catalog C++ borrowed getters reject an owning temporary.
+
+## Immediate updates and directory visits
+
+Use `hx_settings_update_begin` plus typed setters and one `hx_settings_update_finish`, or `settings.update().setInt(...).setString(...).finish()`. Each successful setter publishes and notifies through the original implementation. The first failure remains sticky, later setters are skipped, and earlier writes remain. Finish only inspects the cursor and reports the successful-operation count even on failure. This is not a rollback transaction or a combined notification. Settings/allocator/user state stay alive through the setters; `unset` affects the explicit layer, and the cursor adds no serialization beyond existing settings operations.
+
+Parameter packs offer the analogous `hx_os_calldata_edit_*` and `CallData::edit()`. A successful setter remains applied when a later one fails. The cursor borrows the pack; exclude concurrent mutation and check finish before invoking a consumer. Each original typed setter still reports its own Result/status when used separately.
+
+`hx_os_directory_visit(path, callback, user, error)` synchronously opens, visits and closes one directory. The default limit is 65536 callback starts. `_ex` accepts a context, positive limit and completed-count output; names are capped at 4096 bytes including NUL. One reusable buffer grows as needed. The wrapper adds no per-entry buffer allocation once capacity is sufficient; native adapters may allocate internally. Names are unsorted borrowed UTF-8 views, valid only during the callback. There is no recursion, type query or directory snapshot.
+
+The callback receives a cleared non-NULL error record. OK continues, EOF stops normally, other statuses preserve callback/native details. Natural end is success; exceeding the entry limit is LIMIT. The completed count includes a stopping/failing callback. Exactly the limit followed by native EOF succeeds. Callback return and native directory calls cannot be preempted. Concurrent filesystem changes follow native behavior; reentry uses independent visitor state. Every exit closes the directory and releases the buffer. It works with FILE_UTILS and FILE_INFO disabled.
+
+C++ `Directory::forEach(path, callback, maxEntries, context)` returns `Result<size_t>`, including progress on failure. The synchronous callback borrows its capture without allocating callback state. `void` continues, `bool` true continues/false stops normally, and status/`Result<void>` report explicit outcomes. Lambdas/functors declare `noexcept`; C++11 function pointers/references honor that contract. Prefer `Directory::next()` when each entry needs independent owned storage or a type query.
 
 ## Translation catalogs
 
