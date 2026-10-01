@@ -6,7 +6,15 @@ Entries below describe the versions tested at the time. Historical C++ exception
 
 This records development validation through 2026-10-01. A design, implemented adapter, successful compile and successful target run are different states. Local tests do not certify every operating-system release, filesystem, CPU, libc or network provider.
 
-The common-call refinement below records the current change. The Result migration, earlier Final delivery matrix and batch checkpoints describe their original versions.
+The documentation entry below records the current presentation change. The common-call refinement, Result migration, earlier Final delivery matrix and batch checkpoints describe their original versions.
+
+## Onboarding documentation (2026-10-01)
+
+The two homepages now use seven numbered sections and six common tasks. Complete programs and step-by-step explanations are in USAGE.md / USAGE.zh-CN.md; the original 32-section content is in REFERENCE.md / REFERENCE.zh-CN.md. All original code, command and Mermaid blocks are retained byte-for-byte in the reference. Library sources, public interfaces and build targets are unchanged.
+
+On Windows MSVC x64 and WSL Linux GCC, each host compiled and ran 11 complete tutorial programs and five homepage excerpts with their documented prerequisites (16/16). Their displayed outputs match the text. Eight failure cases per host cover missing text files, malformed JSON, missing keys and failed integer conversion. The documented C99 and C++11 CMake projects also build and run from source on both hosts (four project builds); the C++ configurations disable exceptions.
+
+The four new localized Mermaid diagrams render successfully. Paired examples/commands, local links/anchors, Markdown fences, UTF-8 without BOM, LF and code-block widths pass inspection. This is a documentation/example check; full application suites, sanitizers, Android and pending target environments were not rerun for this prose change. Their earlier code results remain in the records below.
 
 ## Common-call refinement (2026-10-01)
 
