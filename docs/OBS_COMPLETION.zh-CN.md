@@ -2,13 +2,9 @@
 
 [English](OBS_COMPLETION.md)
 
-确认范围为全部 24 个批次，包括同步／异步管道、直接可用的 C 便利入口，
-以及可选 C++11 封装。现有源码基线为 `main` 上的 `7cf52fc`，
-开发使用 `codex/obs-platform-completion`，不推送远程。
+确认范围为全部 24 个批次，包括同步／异步管道、直接可用的 C 便利入口，以及可选 C++11 封装。现有源码基线为 `main` 上的 `7cf52fc`，开发使用 `codex/obs-platform-completion`，不推送远程。
 
-每批完成条件为 Windows MSVC x64 和 WSL Linux 全量 CTest、相关
-AddressSanitizer 测试、公共头独立编译、功能关闭检查及中英文契约。
-macOS Intel 10.13／ARM64 11.0、Windows 7 SP1 和嵌入式目标实测单独标记。
+每批完成条件为 Windows MSVC x64 和 WSL Linux 全量 CTest、相关 AddressSanitizer 测试、公共头独立编译、功能关闭检查及中英文契约。 macOS Intel 10.13／ARM64 11.0、Windows 7 SP1 和嵌入式目标实测单独标记。
 
 | 批次 | 能力 | 状态 |
 | --- | --- | --- |
@@ -37,10 +33,6 @@ macOS Intel 10.13／ARM64 11.0、Windows 7 SP1 和嵌入式目标实测单独标
 | 23 | 信号、可变设置、区间 profiler | 已实现：Windows 72/72，Linux 74/74；profiler ASan/TSan 4/4；目标实测待补 |
 | 24 | 原子与内存序 | Windows 74/74；Linux 76/76；ASan/TSan 10/10；x86 5/5 |
 
-基线保留既有空白格式，包括第三方许可证的原始内容。
-构建产物、依赖缓存与安装输出不纳入 Git。
+基线保留既有空白格式，包括第三方许可证的原始内容。构建产物、依赖缓存与安装输出不纳入 Git。
 
-全部实现批次已完成。Windows／WSL 静态与共享安装消费、576 符号导出、
-旧头文件配新共享库的 ABI 验证通过。完整检查器、Clang、x86、CMake 3.16、
-QEMU 部分运行和目标限制见[最终矩阵](VALIDATION.zh-CN.md)。
-这不代表 macOS／Win7／真实板卡验收完成，也不代表 hx_c_log 性能已达标。
+全部实现批次已完成。Windows／WSL 静态与共享安装消费、576 符号导出、旧头文件配新共享库的 ABI 验证通过。完整检查器、Clang、x86、CMake 3.16、 QEMU 部分运行和目标限制见[最终矩阵](VALIDATION.zh-CN.md)。这不代表 macOS／Win7／真实板卡验收完成，也不代表 hx_c_log 性能已达标。

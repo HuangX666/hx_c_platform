@@ -2,15 +2,9 @@
 
 [简体中文](OBS_COMPLETION.zh-CN.md)
 
-The approved scope is all 24 batches, including synchronous and asynchronous
-pipes, direct C convenience entry points and optional C++11 wrappers.
-The reference source baseline is commit `7cf52fc` on `main`; development uses
-`codex/obs-platform-completion`. No remote publication is requested.
+The approved scope is all 24 batches, including synchronous and asynchronous pipes, direct C convenience entry points and optional C++11 wrappers. The reference source baseline is commit `7cf52fc` on `main`; development uses `codex/obs-platform-completion`. No remote publication is requested.
 
-Every completed batch requires Windows MSVC x64 and WSL Linux full CTest,
-relevant AddressSanitizer tests, isolated public headers, feature-off checks
-and bilingual contracts. macOS Intel 10.13 / ARM64 11.0, Windows 7 SP1 and
-embedded target runs remain separately identified target validation.
+Every completed batch requires Windows MSVC x64 and WSL Linux full CTest, relevant AddressSanitizer tests, isolated public headers, feature-off checks and bilingual contracts. macOS Intel 10.13 / ARM64 11.0, Windows 7 SP1 and embedded target runs remain separately identified target validation.
 
 | Batch | Capability | State |
 | --- | --- | --- |
@@ -39,11 +33,6 @@ embedded target runs remain separately identified target validation.
 | 23 | Signals, mutable settings and interval profiler | Complete: Windows 72/72, Linux 74/74; profiler ASan/TSan 4/4; native targets pending |
 | 24 | Atomics and memory ordering | Windows 74/74; Linux 76/76; ASan/TSan 10/10; x86 5/5 |
 
-The baseline preserves pre-existing whitespace, including vendor licenses.
-Build products, dependency caches and install outputs are excluded from Git.
+The baseline preserves pre-existing whitespace, including vendor licenses. Build products, dependency caches and install outputs are excluded from Git.
 
-All implementation batches are complete. Final static/shared installation,
-576-symbol export checks and old-header/new-library ABI probes passed on
-Windows and WSL. See [the final matrix](VALIDATION.md) for the full sanitizer,
-Clang, x86 and CMake 3.16 results, partial QEMU runs and native target limits.
-This is not a claim of macOS/Win7/embedded-board acceptance or hx_c_log speedup.
+All implementation batches are complete. Final static/shared installation, 576-symbol export checks and old-header/new-library ABI probes passed on Windows and WSL. See [the final matrix](VALIDATION.md) for the full sanitizer, Clang, x86 and CMake 3.16 results, partial QEMU runs and native target limits. This is not a claim of macOS/Win7/embedded-board acceptance or hx_c_log speedup.

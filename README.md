@@ -1,17 +1,6 @@
 # hx_c_platform
 
-[![CI configuration][ci-badge]](.github/workflows/build.yml)
-[![C99 core][c-badge]](CMakeLists.txt)
-[![C++11 facade][cpp-badge]](docs/CPP_POOL.md)
-[![Header-only C++ facade][header-badge]](docs/CPP_POOL.md)
-[![CMake 3.16+][cmake-badge]](CMakeLists.txt)
-[![First-party license pending][license-badge]](THIRD_PARTY_NOTICES.md)
-[![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md)
-[![macOS validation pending][macos-badge]](docs/VALIDATION.md)
-[![Windows MSVC][windows-badge]](docs/VALIDATION.md)
-[![Windows 82/82 and Linux 84/84 local suites passed][tests-badge]](docs/VALIDATION.md)
-[![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md)
-[![Android API 21 ARM cross-build passed][android-badge]](docs/ANDROID.md)
+[![CI configuration][ci-badge]](.github/workflows/build.yml) [![C99 core][c-badge]](CMakeLists.txt) [![C++11 facade][cpp-badge]](docs/CPP_POOL.md) [![Header-only C++ facade][header-badge]](docs/CPP_POOL.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![First-party license pending][license-badge]](THIRD_PARTY_NOTICES.md) [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md) [![macOS validation pending][macos-badge]](docs/VALIDATION.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.md) [![Windows 82/82 and Linux 84/84 local suites passed][tests-badge]](docs/VALIDATION.md) [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md) [![Android API 21 ARM cross-build passed][android-badge]](docs/ANDROID.md)
 
 [简体中文](README.zh-CN.md)
 
@@ -52,16 +41,9 @@
 
 ## 1. Purpose and interface boundaries
 
-`hx_c_platform` is an independent C99 foundation library with a C ABI and an
-optional C++11 facade. Applications use the same calls for common operating
-system tasks; shared behavior and native adapters live inside the library.
-The current project version is **0.1.0**. The names remain provisional and
-this is not a declared stable ABI release.
+`hx_c_platform` is an independent C99 foundation library with a C ABI and an optional C++11 facade. Applications use the same calls for common operating system tasks; shared behavior and native adapters live inside the library. The current project version is **0.1.0**. The names remain provisional and this is not a declared stable ABI release.
 
-Common calls handle their own composition: read a UTF-8 file into `hx_string`,
-get an environment value, load a translation catalog, capture a process, or
-submit a task. Options are for changing limits and behavior. Ordinary use
-does not require a global runtime initialization sequence.
+Common calls handle their own composition: read a UTF-8 file into `hx_string`, get an environment value, load a translation catalog, capture a process, or submit a task. Options are for changing limits and behavior. Ordinary use does not require a global runtime initialization sequence.
 
 | This library owns | Consumers own |
 | --- | --- |
@@ -71,11 +53,7 @@ does not require a global runtime initialization sequence.
 | File publication and timestamp mechanisms | Log rotation, retention, formatting and filtering |
 | Interval profiling and native system queries | Crash policy, LocalDumps setup and historical log rings |
 
-The library builds, tests, installs and runs independently of hx_c_log. It
-does not require Qt, C++, or the OBS runtime. OBS informs the unified API,
-shared implementation and build-selected adapter organization. hx_c_log
-integration and coroutines remain future work. Thread-local storage **TLS**
-does not mean network encryption TLS; no encryption protocol stack is bundled.
+The library builds, tests, installs and runs independently of hx_c_log. It does not require Qt, C++, or the OBS runtime. OBS informs the unified API, shared implementation and build-selected adapter organization. hx_c_log integration and coroutines remain future work. Thread-local storage **TLS** does not mean network encryption TLS; no encryption protocol stack is bundled.
 
 <a id="section-2"></a>
 
@@ -91,15 +69,9 @@ does not mean network encryption TLS; no encryption protocol stack is bundled.
 | iOS / BSD | Potential reuse of POSIX/common code | Not currently supported as completed targets |
 | FreeRTOS / bare metal | Separate memory/thread/filesystem model required | Outside current scope |
 
-The C core is a compiled library, **not header-only**. Only the optional C++
-facade is header-only. C++11 is verified; a C++14/17/20 matrix is not claimed.
-CMake **3.16** is the baseline; compiler/SDK support must be checked separately
-from operating system API compatibility, especially for a Win7 deployment.
+The C core is a compiled library, **not header-only**. Only the optional C++ facade is header-only. C++11 is verified; a C++14/17/20 matrix is not claimed. CMake **3.16** is the baseline; compiler/SDK support must be checked separately from operating system API compatibility, especially for a Win7 deployment.
 
-Badges describe local evidence through **2026-10-01**: 82 Windows and 84 Linux
-CTest entries, not individual assertions. Linux adds two native RNG failure
-tests. GitHub Actions is configured; no remote CI pass is claimed. Android's
-eight-suite subset is not the entire desktop suite. See [validation](docs/VALIDATION.md).
+Badges describe local evidence through **2026-10-01**: 82 Windows and 84 Linux CTest entries, not individual assertions. Linux adds two native RNG failure tests. GitHub Actions is configured; no remote CI pass is claimed. Android's ten-suite subset is not the entire desktop suite. See [validation](docs/VALIDATION.md).
 
 <a id="section-3"></a>
 
@@ -118,11 +90,7 @@ flowchart TD
     D --> J["Optional parser and encoding adapters"]
 ```
 
-Calls normally go directly to the implementation chosen by CMake. OS,
-compiler, CPU architecture and optional dependencies are separate decisions.
-Shared POSIX code is not copied into each OS directory. Necessary native
-conditionals stay below public business-facing calls. Unknown target systems
-fail configuration; unavailable capabilities do not silently succeed.
+Calls normally go directly to the implementation chosen by CMake. OS, compiler, CPU architecture and optional dependencies are separate decisions. Shared POSIX code is not copied into each OS directory. Necessary native conditionals stay below public business-facing calls. Unknown target systems fail configuration; unavailable capabilities do not silently succeed.
 
 ```text
 hx_c_platform/
@@ -171,8 +139,7 @@ hx_c_platform/
 
 ### 4.1 Desktop build
 
-Run from the source root. These commands also work with CMake 3.16; multi-config
-generators select Release at build/test time.
+Run from the source root. These commands also work with CMake 3.16; multi-config generators select Release at build/test time.
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -189,16 +156,11 @@ cmake -S . -B build-msvc -G "Visual Studio 17 2022" -A x64
 cmake --build build-msvc --config Release --parallel 4
 ```
 
-CMake 3.16 predates the VS2022 generator; use NMake in a configured MSVC
-developer shell for that CMake version. C-only deployment can disable tests
-and examples to avoid enabling a C++ compiler.
+CMake 3.16 predates the VS2022 generator; use NMake in a configured MSVC developer shell for that CMake version. C-only deployment can disable tests and examples to avoid enabling a C++ compiler.
 
 ### 4.2 Read UTF-8 text from C
 
-Save as `main.c` and place a UTF-8 `配置.json` beside the program's working
-directory. The call opens the file, reads with a default 16 MiB bound,
-removes an initial UTF-8 BOM, validates text and closes the file.
-Failure leaves the output string unchanged.
+Save as `main.c` and place a UTF-8 `配置.json` beside the program's working directory. The call opens the file, reads with a default 16 MiB bound, removes an initial UTF-8 BOM, validates text and closes the file. Failure leaves the output string unchanged.
 
 ```c
 #include <hx_os.h>
@@ -228,28 +190,30 @@ int main(void)
 
 ### 4.3 The corresponding C++11 calls
 
-The facade returns `std::string` and throws `hx::StatusError` on status
-failures. It uses the same C implementation. A config-path query does not
-create directories or save a file.
+The C++ facade returns `Result<T>`. Check `ok()` before reading `value()`, or inspect `error()` on failure. Text results own UTF-8 storage through `hx::String` and use the same C implementation. Library code uses no exception mechanism; allocation failures remain explicit with exceptions disabled. See [C++ Result contracts](docs/CPP_RESULTS.md) for partial results, callbacks, ownership and migration.
 
 ```cpp
 #include <hx/Files.hpp>
 #include <hx/Paths.hpp>
 #include <cstdio>
-#include <exception>
 
 int main()
 {
-	try {
-		const std::string text = hx::Files::readText("配置.json");
-		const std::string path =
-			hx::Paths::configFile("my_app", "settings.json");
-		std::printf("%s\n%s\n", text.c_str(), path.c_str());
-		return 0;
-	} catch (const std::exception &error) {
-		std::fprintf(stderr, "%s\n", error.what());
+	auto text = hx::Files::readText("配置.json");
+	if (!text) {
+		std::fprintf(stderr, "%s\n",
+			hx_os_status_name(text.status()));
 		return 1;
 	}
+	auto path = hx::Paths::configFile("hx_example", "settings.json");
+	if (!path) {
+		std::fprintf(stderr, "%s\n",
+			hx_os_status_name(path.status()));
+		return 1;
+	}
+	std::printf("%s\n%s\n", text.value().c_str(),
+		path.value().c_str());
+	return 0;
 }
 ```
 
@@ -297,24 +261,13 @@ if(MSVC)
 endif()
 ```
 
-Configure the consumer with `-DCMAKE_PREFIX_PATH=/absolute/install/prefix`.
-For a C++ application, use `LANGUAGES CXX`, a `.cpp` source and
-`hx_c_platform::cpp`; this target requests C++11 only for consumers selecting
-it. Do not add native libraries manually when using the exported target.
+Configure the consumer with `-DCMAKE_PREFIX_PATH=/absolute/install/prefix`. For a C++ application, use `LANGUAGES CXX`, a `.cpp` source and `hx_c_platform::cpp`; this target requests C++11 only for consumers selecting it. Do not add native libraries manually when using the exported target.
 
 ### 5.3 Static and shared deployment
 
-`BUILD_SHARED_LIBS=OFF` is the default. Set it to ON for a shared library.
-The package installs public headers, libraries, CMake exports and pkg-config
-metadata. Imported targets carry shared-library definitions and required
-static dependencies. Relative install layouts support relocation; explicitly
-absolute install directories keep their configured paths.
+`BUILD_SHARED_LIBS=OFF` is the default. Set it to ON for a shared library. The package installs public headers, libraries, CMake exports and pkg-config metadata. Imported targets carry shared-library definitions and required static dependencies. Relative install layouts support relocation; explicitly absolute install directories keep their configured paths.
 
-On Windows, deploy the DLL beside the application or on its runtime search
-path. Match architecture, compiler runtime and build configuration. A static
-copy inside each plugin does not create a shared allocator universe; free
-objects through their originating library/context and complete callbacks
-before unloading a module.
+On Windows, deploy the DLL beside the application or on its runtime search path. Match architecture, compiler runtime and build configuration. A static copy inside each plugin does not create a shared allocator universe; free objects through their originating library/context and complete callbacks before unloading a module.
 
 <a id="section-6"></a>
 
@@ -335,19 +288,11 @@ before unloading a module.
 | `HX_OS_NOT_SUPPORTED` | Disabled module or unavailable platform behavior |
 | `HX_OS_BUSY` / `HX_OS_DEADLOCK` | Lifetime or self-wait constraint prevents the call |
 
-`hx_os_error` preserves the unified status plus native domain/code and an
-available secondary cause. It contains no borrowed diagnostic string.
-`hx_os_error_message` writes to caller-owned storage. Dynamic-loader extended
-calls can additionally write an owned `hx_string` diagnostic. The library
-does not report its own errors through hx_c_log or a global last-error string.
+`hx_os_error` preserves the unified status plus native domain/code and an available secondary cause. It contains no borrowed diagnostic string. `hx_os_error_message` writes to caller-owned storage. Dynamic-loader extended calls can additionally write an owned `hx_string` diagnostic. The library does not report its own errors through hx_c_log or a global last-error string.
 
 ### 6.2 A context belongs to its consumer
 
-Passing `context=NULL` selects the immutable default allocator. Custom
-contexts copy an allocator table; user state is borrowed until destruction.
-Allocation/free callbacks must support cross-thread release and fundamental
-alignment. The wrapper handles requested extended alignment. Do not replace
-the allocator while objects are alive.
+Passing `context=NULL` selects the immutable default allocator. Custom contexts copy an allocator table; user state is borrowed until destruction. Allocation/free callbacks must support cross-thread release and fundamental alignment. The wrapper handles requested extended alignment. Do not replace the allocator while objects are alive.
 
 ```c
 #include <hx_os.h>
@@ -387,11 +332,7 @@ int main(void)
 }
 ```
 
-An initialized empty string can still hold a context lease. Destroy all
-strings, handles, snapshots and TLS values before destroying the context.
-`hx_os_context_destroy` returns BUSY while outstanding ownership remains.
-Exclude new API entrants during final destruction; a context is not a global
-configuration switch shared by unrelated consumers.
+An initialized empty string can still hold a context lease. Destroy all strings, handles, snapshots and TLS values before destroying the context. `hx_os_context_destroy` returns BUSY while outstanding ownership remains. Exclude new API entrants during final destruction; a context is not a global configuration switch shared by unrelated consumers.
 
 <a id="section-7"></a>
 
@@ -399,11 +340,7 @@ configuration switch shared by unrelated consumers.
 
 ### 7.1 Owning strings and views
 
-`hx_string` owns UTF-8 storage; `hx_string_view` borrows bytes. Use
-`HX_STRING_INIT` for the default context or `hx_string_init` once for a
-specific context. Copy with `hx_string_copy`, transfer with `hx_string_move`,
-and release with `hx_string_destroy`; plain structure assignment is not an
-owning copy.
+`hx_string` owns UTF-8 storage; `hx_string_view` borrows bytes. Use `HX_STRING_INIT` for the default context or `hx_string_init` once for a specific context. Copy with `hx_string_copy`, transfer with `hx_string_move`, and release with `hx_string_destroy`; plain structure assignment is not an owning copy.
 
 ```c
 #include <hx_os.h>
@@ -454,25 +391,13 @@ int main(void)
 | Formatting | `hx_string_format`, `hx_string_append_format` |
 | Decode / encode | `hx_string_assign_encoded`, `hx_string_encode` |
 
-Offsets and lengths are bytes. Codepoint counts are not grapheme counts.
-Embedded NUL is supported, but C-string consumers stop at it. Ordinary views
-expire on mutation/destruction; split owns an input copy, so its views last
-until parts_destroy. Split defaults to at most 4096 pieces and retains empty
-pieces. ASCII case/trim operations do not implement Unicode case folding,
-normalization or locale collation. printf formatting follows the caller's
-locale; use numeric conversion utilities when locale independence matters.
+Offsets and lengths are bytes. Codepoint counts are not grapheme counts. Embedded NUL is supported, but C-string consumers stop at it. Ordinary views expire on mutation/destruction; split owns an input copy, so its views last until parts_destroy. Split defaults to at most 4096 pieces and retains empty pieces. ASCII case/trim operations do not implement Unicode case folding, normalization or locale collation. printf formatting follows the caller's locale; use numeric conversion utilities when locale independence matters.
 
 ### 7.2 Windows paths and legacy encodings
 
-Public paths are UTF-8 and Windows adapters convert them to UTF-16 internally.
-There is no ANSI-codepage guess or implicit process-locale change. Compile
-consumer UTF-8 literals with MSVC `/utf-8`. Console display remains the host's
-responsibility; path support does not automatically reconfigure stdout.
+Public paths are UTF-8 and Windows adapters convert them to UTF-16 internally. There is no ANSI-codepage guess or implicit process-locale change. Compile consumer UTF-8 literals with MSVC `/utf-8`. Console display remains the host's responsibility; path support does not automatically reconfigure stdout.
 
-Built-in conversion covers UTF-8, UTF-16LE/BE, UTF-32LE/BE, ASCII and
-ISO-8859-1. Optional iconv supports additional encoding identifiers including
-GB2312, GBK, GB18030:2005/:2022, Big5, Shift-JIS, EUC-JP/KR and Windows
-1252/932/936/949/950, subject to backend availability.
+Built-in conversion covers UTF-8, UTF-16LE/BE, UTF-32LE/BE, ASCII and ISO-8859-1. Optional iconv supports additional encoding identifiers including GB2312, GBK, GB18030:2005/:2022, Big5, Shift-JIS, EUC-JP/KR and Windows 1252/932/936/949/950, subject to backend availability.
 
 ```sh
 python tools/fetch_iconv.py
@@ -481,12 +406,7 @@ cmake -S . -B build-text -DHX_OS_ENABLE_ICONV=ON \
 cmake --build build-text --config Release --parallel 4
 ```
 
-The Python 3.12+ helper prepares pinned, hash-checked sources. CMake never
-downloads or edits third-party sources. Without a source path, enabling ICONV
-selects a detected system iconv. Query `hx_os_encoding_supported()` before
-depending on a particular encoding. Strict string decoding is transactional;
-streaming conversion can report a consumed/produced prefix, so inspect both
-status and progress. Encoded output has no implicit terminator.
+The Python 3.12+ helper prepares pinned, hash-checked sources. CMake never downloads or edits third-party sources. Without a source path, enabling ICONV selects a detected system iconv. Query `hx_os_encoding_supported()` before depending on a particular encoding. Strict string decoding is transactional; streaming conversion can report a consumed/produced prefix, so inspect both status and progress. Encoded output has no implicit terminator.
 
 <a id="section-8"></a>
 
@@ -494,10 +414,7 @@ status and progress. Encoded output has no implicit terminator.
 
 ### 8.1 Low-level I/O with progress
 
-`read_some` separates EOF, error and bytes read. `write_some` may succeed with
-short progress; the caller retries the remaining span. `write_all` performs
-that loop and still reports completed bytes on failure. File position
-operations require caller serialization.
+`read_some` separates EOF, error and bytes read. `write_some` may succeed with short progress; the caller retries the remaining span. `write_all` performs that loop and still reports completed bytes on failure. File position operations require caller serialization.
 
 ```c
 #include <hx_os.h>
@@ -529,18 +446,11 @@ int main(void)
 }
 ```
 
-File objects have no user-space stream buffer. `hx_os_file_sync` requests
-native persistence through fsync/FlushFileBuffers; it cannot guarantee the
-storage hardware's power-loss behavior. File close **consumes the handle even
-on error**, unlike retryable thread/I/O-owner shutdown. Never retry the same
-native close after ownership has been consumed.
+File objects have no user-space stream buffer. `hx_os_file_sync` requests native persistence through fsync/FlushFileBuffers; it cannot guarantee the storage hardware's power-loss behavior. File close **consumes the handle even on error**, unlike retryable thread/I/O-owner shutdown. Never retry the same native close after ownership has been consumed.
 
 ### 8.2 Save and publish a complete file
 
-`hx_os_file_save` writes a whole byte span; `hx_os_file_write_text` atomically
-publishes an initialized UTF-8 string. `hx_os_file_save_atomic_ex` syncs a same-directory temporary,
-then publishes it by replacement. Publication and directory durability are
-reported separately.
+`hx_os_file_save` writes a whole byte span; `hx_os_file_write_text` atomically publishes an initialized UTF-8 string. `hx_os_file_save_atomic_ex` syncs a same-directory temporary, then publishes it by replacement. Publication and directory durability are reported separately.
 
 ```c
 #include <hx_os.h>
@@ -563,9 +473,7 @@ int main(void)
 }
 ```
 
-Backup replacement is not a rollback transaction. Cross-filesystem move is
-not silently emulated by copying. Preserve native errors and recovery state
-when replacement partly progresses.
+Backup replacement is not a rollback transaction. Cross-filesystem move is not silently emulated by copying. Preserve native errors and recovery state when replacement partly progresses.
 
 ### 8.3 Additional file facilities
 
@@ -577,17 +485,13 @@ when replacement partly progresses.
 | Extended file type/timestamps | `hx_os_path_stat_extended`; [file_info.c](examples/file_info.c) |
 | Range locks, timestamps and permissions | `hx_os_file_extra.h`; [file_attributes.c](examples/file_attributes.c) |
 
-Positioned calls do not change shared file position, but overlapping writes,
-truncate and close still need coordination. Append-mode positioned writes
-are rejected. Permission summaries are not an ACL/access check. Path helpers
-perform lexical operations, not a security sandbox or symlink containment test.
+Positioned calls do not change shared file position, but overlapping writes, truncate and close still need coordination. Append-mode positioned writes are rejected. Permission summaries are not an ACL/access check. Path helpers perform lexical operations, not a security sandbox or symlink containment test.
 
 <a id="section-9"></a>
 
 ## 9. Environment, special paths and process identity
 
-Use string outputs to avoid repeating capacity-query loops in consumers.
-An empty environment value differs from a missing variable.
+Use string outputs to avoid repeating capacity-query loops in consumers. An empty environment value differs from a missing variable.
 
 ```c
 #include <hx_os.h>
@@ -624,15 +528,9 @@ int main(void)
 | Environment get/set/remove/enumerate | `hx_os_env_*` |
 | UTF-8 arguments, PID, hostname, CPU features | `hx_os_system.h` |
 
-Special-path queries do not create or guarantee writable directories. User
-data and machine-wide data are different concepts. Explicit environment
-mutation affects the process/future children; the host coordinates changes
-from native APIs and other libraries. No helper implicitly changes cwd.
+Special-path queries do not create or guarantee writable directories. User data and machine-wide data are different concepts. Explicit environment mutation affects the process/future children; the host coordinates changes from native APIs and other libraries. No helper implicitly changes cwd.
 
-CPU capabilities include OS permission to use the instruction state, not
-only hardware bits. An unknown emulation state is not reported as definitely
-native. [special_paths.c](examples/special_paths.c) and
-[environment.c](examples/environment.c) provide complete examples.
+CPU capabilities include OS permission to use the instruction state, not only hardware bits. An unknown emulation state is not reported as definitely native. [special_paths.c](examples/special_paths.c) and [environment.c](examples/environment.c) provide complete examples.
 
 <a id="section-10"></a>
 
@@ -640,9 +538,7 @@ native. [special_paths.c](examples/special_paths.c) and
 
 ### 10.1 Formats and backends
 
-The default backend is always BUILTIN; installed dependencies do not change
-parsing silently. Select `options.backend` explicitly and query
-`hx_os_config_backend_available(format, backend)`.
+The default backend is always BUILTIN; installed dependencies do not change parsing silently. Select `options.backend` explicitly and query `hx_os_config_backend_available(format, backend)`.
 
 | Format | Built-in profile | Optional C backend |
 | --- | --- | --- |
@@ -654,11 +550,7 @@ parsing silently. Select `options.backend` explicitly and query
 | ENV | Explicit dotenv dialect; no shell evaluation | Built-in |
 | .properties | UTF-8 Java-style syntax and Unicode escapes | Built-in |
 
-These are defined profiles. Built-in YAML is not full YAML 1.2; anchors,
-aliases and custom tags are rejected in both adapters. XML loads no external
-entities or DTD. TOML multiline strings, arrays of tables and date/time need
-tomlc17. Legacy ISO-8859-1 properties input must be converted explicitly.
-See [format contracts](docs/CONFIGURATION.md) for exact limits and differences.
+These are defined profiles. Built-in YAML is not full YAML 1.2; anchors, aliases and custom tags are rejected in both adapters. XML loads no external entities or DTD. TOML multiline strings, arrays of tables and date/time need tomlc17. Legacy ISO-8859-1 properties input must be converted explicitly. See [format contracts](docs/CONFIGURATION.md) for exact limits and differences.
 
 ### 10.2 Parse, query and release
 
@@ -705,33 +597,19 @@ int main(void)
 }
 ```
 
-Inputs are borrowed only during parse; retained document values are copied.
-Documents are immutable and reference counted. Nodes/slices borrow the
-document; retaining a node pointer does not retain its owner. Queries use
-exact keys; JSON Pointer uses `/` segments, not implicit dotted paths.
-Wrong types return TYPE_MISMATCH and missing keys return NOT_FOUND.
+Inputs are borrowed only during parse; retained document values are copied. Documents are immutable and reference counted. Nodes/slices borrow the document; retaining a node pointer does not retain its owner. Queries use exact keys; JSON Pointer uses `/` segments, not implicit dotted paths. Wrong types return TYPE_MISMATCH and missing keys return NOT_FOUND.
 
-Default limits are 1 MiB input, 16 MiB parser memory, 65,536 nodes, depth 64
-and 16,777,216 work units. Parsing does not spawn a worker or modify process
-environment. Configuration errors include status and available source
-position without forwarding secret-bearing backend text.
+Default limits are 1 MiB input, 16 MiB parser memory, 65,536 nodes, depth 64 and 16,777,216 work units. Parsing does not spawn a worker or modify process environment. Configuration errors include status and available source position without forwarding secret-bearing backend text.
 
 ### 10.3 Write representable data
 
-`hx_os_config_serialize` supports JSON, INI and properties; `hx_os_config_save`
-combines serialization with atomic publication. Unsupported types/nesting
-fail instead of being flattened or coerced. Parsing seven formats does not
-mean seven lossless serializers. See [config_save.c](examples/config_save.c).
-Optional parser build commands are in section 27.
+`hx_os_config_serialize` supports JSON, INI and properties; `hx_os_config_save` combines serialization with atomic publication. Unsupported types/nesting fail instead of being flattened or coerced. Parsing seven formats does not mean seven lossless serializers. See [config_save.c](examples/config_save.c). Optional parser build commands are in section 27.
 
 <a id="section-11"></a>
 
 ## 11. Mutable settings, defaults and snapshots
 
-`hx_config` remains immutable. `hx_settings` owns explicit user values and a
-separate default layer. A default applies only when a key is absent; type
-errors and damaged files remain errors. Strings, arrays and objects are
-copied on assignment. Borrowed user pointers are not automatically freed.
+`hx_config` remains immutable. `hx_settings` owns explicit user values and a separate default layer. A default applies only when a key is absent; type errors and damaged files remain errors. Strings, arrays and objects are copied on assignment. Borrowed user pointers are not automatically freed.
 
 ```mermaid
 flowchart LR
@@ -788,21 +666,13 @@ int main(void)
 }
 ```
 
-Use `hx_settings_snapshot` for a retained immutable tree and
-`hx_settings_value_release` when finished. A snapshot can outlive the settings
-object and retain its context. Limits apply to each tree, not the sum of
-all caller-held historical snapshots. Default JSON saving records explicit
-user values; the program continues to provide defaults. Loading failure
-preserves the existing state. Concurrent updates have bounded retries and
-can return BUSY. See [settings contracts](docs/PLATFORM_UTILITIES.md#mutable-settings-and-retained-snapshots-batch-23b).
+Use `hx_settings_snapshot` for a retained immutable tree and `hx_settings_value_release` when finished. A snapshot can outlive the settings object and retain its context. Limits apply to each tree, not the sum of all caller-held historical snapshots. Default JSON saving records explicit user values; the program continues to provide defaults. Loading failure preserves the existing state. Concurrent updates have bounded retries and can return BUSY. See [settings contracts](docs/PLATFORM_UTILITIES.md#mutable-settings-and-retained-snapshots-batch-23b).
 
 <a id="section-12"></a>
 
 ## 12. C containers and element ownership
 
-The optional container module provides vector, deque, queue, stack, list,
-max-heap, ordered/hash map and set. It is a C facility with byte-sized
-elements and callbacks, not a C++ template emulation layer.
+The optional container module provides vector, deque, queue, stack, list, max-heap, ordered/hash map and set. It is a C facility with byte-sized elements and callbacks, not a C++ template emulation layer.
 
 ### 12.1 Typed POD vector
 
@@ -833,25 +703,13 @@ int main(void)
 }
 ```
 
-`HX_OS_DECLARE_QUEUE(name, type)` provides the corresponding FIFO adapter.
-The generated names use lowercase prefixes and share the existing sequence
-implementation. These macros are for trivially byte-copyable values, not
-owning `hx_string` objects or nontrivial C++ classes.
+`HX_OS_DECLARE_QUEUE(name, type)` provides the corresponding FIFO adapter. The generated names use lowercase prefixes and share the existing sequence implementation. These macros are for trivially byte-copyable values, not owning `hx_string` objects or nontrivial C++ classes.
 
 ### 12.2 Generic containers
 
-Initialize `hx_os_container_options` with the element size, then set count,
-byte and alignment limits. Use copy/drop callbacks for owned elements;
-the string preset performs deep copies. Normal insertion copies; `_take`
-operations transfer only on success. Pop/erase ownership depends on whether
-an output receives the element. Follow the documented operation contract.
+Initialize `hx_os_container_options` with the element size, then set count, byte and alignment limits. Use copy/drop callbacks for owned elements; the string preset performs deep copies. Normal insertion copies; `_take` operations transfer only on success. Pop/erase ownership depends on whether an output receives the element. Follow the documented operation contract.
 
-Ordered maps use O(log n) operations; hash keys use exact bytes and hash
-iteration preserves insertion order. A private unchanged uthash 2.4.0 header
-supports hash storage. Views/iterators cannot survive arbitrary mutation,
-and containers do not add implicit application-level synchronization.
-See [container contracts](docs/CONTAINERS.md) and
-[queue example](examples/containers.c).
+Ordered maps use O(log n) operations; hash keys use exact bytes and hash iteration preserves insertion order. A private unchanged uthash 2.4.0 header supports hash storage. Views/iterators cannot survive arbitrary mutation, and containers do not add implicit application-level synchronization. See [container contracts](docs/CONTAINERS.md) and [queue example](examples/containers.c).
 
 <a id="section-13"></a>
 
@@ -867,9 +725,7 @@ See [container contracts](docs/CONTAINERS.md) and
 | `hx_os_sleep_until` | Ordinary low-CPU wait |
 | `hx_os_sleep_until_precise_ex` | Sleep then spin within a caller-selected budget |
 
-Use one deadline across related shutdown steps rather than granting every
-step a fresh timeout. Native timespec conversion belongs at the POSIX seam;
-do not interpret these values as any arbitrary OS clock's absolute time.
+Use one deadline across related shutdown steps rather than granting every step a fresh timeout. Native timespec conversion belongs at the POSIX seam; do not interpret these values as any arbitrary OS clock's absolute time.
 
 For simple periodic work on the calling thread, no loop setup is needed:
 
@@ -894,13 +750,7 @@ int main(void)
 }
 ```
 
-`repeat` starts after one interval, coalesces missed periods and lets EOF
-stop successfully. Callbacks cannot be preempted. Precise wait defaults to a
-200 us spin window; `_ex` accepts 0..10 ms, with zero using ordinary sleep.
-INFINITE is invalid for precise wait. There are no global timer-resolution
-changes, hidden threads or hard-real-time guarantees. The Win7-compatible
-tick clock can limit short waits; QPC bounds spinning without changing clock
-semantics. Target measurements are in the [audit](docs/BUG_MEMORY_LEAK_AUDIT.md).
+`repeat` starts after one interval, coalesces missed periods and lets EOF stop successfully. Callbacks cannot be preempted. Precise wait defaults to a 200 us spin window; `_ex` accepts 0..10 ms, with zero using ordinary sleep. INFINITE is invalid for precise wait. There are no global timer-resolution changes, hidden threads or hard-real-time guarantees. The Win7-compatible tick clock can limit short waits; QPC bounds spinning without changing clock semantics. Target measurements are in the [audit](docs/BUG_MEMORY_LEAK_AUDIT.md).
 
 <a id="section-14"></a>
 
@@ -908,9 +758,7 @@ semantics. Target measurements are in the [audit](docs/BUG_MEMORY_LEAK_AUDIT.md)
 
 ### 14.1 Preserve the worker state across a timeout
 
-The following functions operate on an application-owned `app_worker`. Keep
-that object alive after start. Call finish with a monotonic deadline; on
-timeout retain it and retry. Read `answer` only after successful completion.
+The following functions operate on an application-owned `app_worker`. Keep that object alive after start. Call finish with a monotonic deadline; on timeout retain it and retry. Read `answer` only after successful completion.
 
 ```c
 #include <hx_os.h>
@@ -946,10 +794,7 @@ hx_os_status app_worker_finish(app_worker *worker,
 }
 ```
 
-There is one joiner at a time. Successful join includes native TLS cleanup;
-destroy is then safe. A timeout neither kills nor detaches the worker.
-Extended options add names, stack size, priority and affinity; unsupported
-strict binding returns NOT_SUPPORTED. Native IDs may be reused after exit.
+There is one joiner at a time. Successful join includes native TLS cleanup; destroy is then safe. A timeout neither kills nor detaches the worker. Extended options add names, stack size, priority and affinity; unsupported strict binding returns NOT_SUPPORTED. Native IDs may be reused after exit.
 
 ### 14.2 Choose the synchronization semantics
 
@@ -962,21 +807,13 @@ strict binding returns NOT_SUPPORTED. Native IDs may be reused after exit.
 | Bounded semaphore | Post is all-or-nothing at its maximum; wait consumes one token |
 | TLS key | Per-thread value with an optional normal-thread-exit destructor |
 
-Destroy synchronization objects only after excluding operations and waiters.
-TLS replacement does not destroy the replaced value. A key with live values
-returns BUSY on destruction; its destructor must not reset that key or throw.
-Windows uses FLS, so hosts switching native fibers see fiber-local values.
-Unload callback code only after every relevant thread/TLS cleanup completes.
-See [thread options example](examples/thread_options.c).
+Destroy synchronization objects only after excluding operations and waiters. TLS replacement does not destroy the replaced value. A key with live values returns BUSY on destruction; its destructor must not reset that key or throw. Windows uses FLS, so hosts switching native fibers see fiber-local values. Unload callback code only after every relevant thread/TLS cleanup completes. See [thread options example](examples/thread_options.c).
 
 <a id="section-15"></a>
 
 ## 15. C thread pools and delayed tasks
 
-A pool has explicit worker and queued-task limits. Accepted work has a task
-handle, work result, cooperative cancel flag and optional cleanup. Cleanup
-runs exactly once for accepted tasks, including queued cancellation; rejected
-submission does not adopt the user pointer.
+A pool has explicit worker and queued-task limits. Accepted work has a task handle, work result, cooperative cancel flag and optional cleanup. Cleanup runs exactly once for accepted tasks, including queued cancellation; rejected submission does not adopt the user pointer.
 
 ```c
 #include <hx_os.h>
@@ -1017,10 +854,7 @@ int main(void)
 }
 ```
 
-This command-line example uses a trivial task and reports a pending close as
-failure. A long-running application stores the retained pool in its shutdown
-state and retries; it must not discard the owner or referenced user state.
-The two-second budget is an example choice, not a library-wide policy.
+This command-line example uses a trivial task and reports a pending close as failure. A long-running application stores the retained pool in its shutdown state and retries; it must not discard the owner or referenced user state. The two-second budget is an example choice, not a library-wide policy.
 
 | Operation | Semantics |
 | --- | --- |
@@ -1033,19 +867,13 @@ The two-second budget is an example choice, not a library-wide policy.
 | `POOL_CANCEL_PENDING` | Retire queued work without waiting for future due times |
 | `shutdown` / `shutdown_ex` | Close and destroy; retain owner on failure |
 
-Tasks can retain completed results after pool shutdown. A worker cannot wait
-on an unfinished task from its own pool or close that pool: DEADLOCK avoids
-a direct self-wait. Cross-pool dependency cycles are not automatically
-detected. Delayed work reuses existing workers; no task dependency graph or
-goroutine scheduler is implemented. See [delayed_task.c](examples/delayed_task.c).
+Tasks can retain completed results after pool shutdown. A worker cannot wait on an unfinished task from its own pool or close that pool: DEADLOCK avoids a direct self-wait. Cross-pool dependency cycles are not automatically detected. Delayed work reuses existing workers; no task dependency graph or goroutine scheduler is implemented. See [delayed_task.c](examples/delayed_task.c).
 
 <a id="section-16"></a>
 
 ## 16. C++11 tasks, results and cooperative cancellation
 
-The facade accepts ordinary functions, lambdas, move-only arguments/results,
-member functions, reference wrappers and exceptions. It uses the C pool's
-capacity and lifecycle. Link `hx_c_platform::cpp`.
+The facade accepts ordinary functions, lambdas, move-only arguments/results, member functions and reference wrappers, with explicit Result outcomes. It uses the C pool's capacity and lifecycle. Link `hx_c_platform::cpp`.
 
 ```cpp
 #include <hx/ThreadPool.hpp>
@@ -1058,70 +886,50 @@ int main()
 		std::puts("Thread pools are disabled.");
 		return 0;
 	}
-	try {
-		auto pool = hx::ThreadPool::create(owner);
-		auto identity =
-			pool.submit([&pool]() { return pool.inside(); });
-		std::printf("On this pool's worker: %s\n",
-			identity.get() ? "yes" : "no");
-		auto answer =
-			pool.submit([](int value) { return value * 2; }, 21);
-		std::printf("Task result: %d\n", answer.get());
-		/* This example has only a completed CPU task and no external
-		 * waits. */
-		hx_os_status closed =
-			pool.shutdownUntil(hx_os_deadline_after_ms(2000));
-		if (closed != HX_OS_OK) {
-			std::fprintf(stderr, "Close pending: %s\n",
-				hx_os_status_name(closed));
-			/* A service must retain owner and retry from its
-			 * shutdown state. This command-line example reports
-			 * failure. */
-			return 1;
-		}
-		return 0;
-	} catch (const std::exception &error) {
-		std::fprintf(stderr, "%s\n", error.what());
-		if (owner) {
-			hx::ThreadPool remaining(owner);
-			(void)remaining.shutdownUntil(
-				hx_os_deadline_after_ms(2000),
-				HX_OS_POOL_CANCEL_PENDING);
-		}
+	auto created = hx::ThreadPool::withThreads(owner, 2);
+	if (!created) {
+		std::fprintf(
+			stderr, "%s\n", hx_os_status_name(created.status()));
 		return 1;
 	}
+	auto &pool = created.value();
+	auto submitted =
+		pool.submit([](int value) noexcept { return value * 2; }, 21);
+	hx_os_status workStatus = submitted.status();
+	if (submitted) {
+		auto answer = submitted.value().getUntil(
+			hx_os_deadline_after_ms(2000));
+		workStatus = answer.status();
+		if (answer)
+			std::printf("Task result: %d\n", answer.value());
+	}
+	auto closed = pool.shutdownUntil(
+		hx_os_deadline_after_ms(2000), HX_OS_POOL_CANCEL_PENDING);
+	if (!closed) {
+		std::fprintf(stderr, "Close pending: %s\n",
+			hx_os_status_name(closed.status()));
+		/* A service keeps owner in its shutdown state and retries.
+		 * This command-line example reports the pending close.
+		 */
+		return 1;
+	}
+	return workStatus == HX_OS_OK ? 0 : 1;
 }
 ```
 
-`submitCancelable` supplies `hx::CancellationToken`; the callable checks
-`stopRequested()` or calls `throwIfCancelled()` at safe points. A cancellation
-request cannot interrupt a blocking native call. `submitAfter`/`submitAt`
-schedule delayed eligibility. Returned task objects retain result state;
-`get()` retrieves the value or exception according to its ownership rules.
+`submitCancelable` supplies `hx::CancellationToken`; the callable checks `stopRequested()` or checks the result of `check()` at safe points. A cancellation request cannot interrupt a blocking native call. `submitAfter`/`submitAt` schedule delayed eligibility. Returned task objects retain result state; `getUntil()` returns Result<T>, retaining the task on wait failure and consuming a completed outcome.
 
-The host owns `hx_os_thread_pool *owner`; the facade refers to it. Its
-destructor does not hide an infinite wait, detach or force-kill. Use
-`closeUntil` when retaining the pool object, or `shutdownUntil` to close and
-release it. Keep owner and captured objects alive on failure. Full callable,
-result, exception and alignment contracts are in [CPP_POOL.md](docs/CPP_POOL.md).
+The host owns `hx_os_thread_pool *owner`; the facade refers to it. Its destructor does not hide an infinite wait, detach or force-kill. Use `closeUntil` when retaining the pool object, or `shutdownUntil` to close and release it. Keep owner and captured objects alive on failure. Full callable, result, failure and alignment contracts are in [CPP_POOL.md](docs/CPP_POOL.md).
 
-Other C++ facades include `hx::Files`, `Paths`, `Strings`, `TextLookup`,
-`Lexer`, `SystemInfo`, `CpuUsage`, `ProcedureHandler`, `Settings` and
-resource-specific wrappers under [include/hx](include/hx). Synchronous RAII
-and explicitly closable asynchronous owners have different lifetime duties.
+Other C++ facades include `hx::Files`, `Paths`, `Strings`, `TextLookup`, `Lexer`, `SystemInfo`, `CpuUsage`, `ProcedureHandler`, `Settings` and resource-specific wrappers under [include/hx](include/hx). Synchronous RAII and explicitly closable asynchronous owners have different lifetime duties.
 
 <a id="section-17"></a>
 
 ## 17. Atomics, alignment and memory order
 
-`hx_os_atomic32` has 4-byte alignment; the existing 64-bit atomic type keeps
-8-byte alignment. Pointer atomics are separate. Use the provided operations
-and initialization macros; never substitute volatile or access storage
-non-atomically while other threads use it atomically.
+`hx_os_atomic32` has 4-byte alignment; the existing 64-bit atomic type keeps 8-byte alignment. Pointer atomics are separate. Use the provided operations and initialization macros; never substitute volatile or access storage non-atomically while other threads use it atomically.
 
-This standalone example publishes a result with release/acquire. The short
-spin is illustrative; use an event or condition for a potentially long wait.
-The final infinite join is an explicit choice in this trivial example.
+This standalone example publishes a result with release/acquire. The short spin is illustrative; use an event or condition for a potentially long wait. The final infinite join is an explicit choice in this trivial example.
 
 ```c
 #include "hx_os.h"
@@ -1160,12 +968,7 @@ int main(void)
 }
 ```
 
-Loads, stores and compare-exchange have different legal memory orders.
-Compare-exchange failure order cannot be release/acq_rel or stronger than the
-success order. GCC/Clang dispatch to constant-order builtins; MSVC supplies
-ordering no weaker than requested. Capability queries identify lock-free
-64-bit support; a target can need libatomic. Fences do not make unrelated
-non-atomic races safe. See [atomic contracts](docs/ATOMICS.md).
+Loads, stores and compare-exchange have different legal memory orders. Compare-exchange failure order cannot be release/acq_rel or stronger than the success order. GCC/Clang dispatch to constant-order builtins; MSVC supplies ordering no weaker than requested. Capability queries identify lock-free 64-bit support; a target can need libatomic. Fences do not make unrelated non-atomic races safe. See [atomic contracts](docs/ATOMICS.md).
 
 <a id="section-18"></a>
 
@@ -1173,22 +976,13 @@ non-atomic races safe. See [atomic contracts](docs/ATOMICS.md).
 
 ### 18.1 Sockets and DNS
 
-Create a `hx_os_network` owner for native networking, then create sockets or
-resolve addresses. IPv4/IPv6, TCP/UDP, numeric addresses, DNS, connect/wait,
-short send/receive, peer queries and socket options are available in
-[hx_os_net.h](include/hx_os_net.h). DNS resolution may block; asynchronous
-resolution uses bounded workers and cannot forcibly interrupt getaddrinfo.
+Create a `hx_os_network` owner for native networking, then create sockets or resolve addresses. IPv4/IPv6, TCP/UDP, numeric addresses, DNS, connect/wait, short send/receive, peer queries and socket options are available in [hx_os_net.h](include/hx_os_net.h). DNS resolution may block; asynchronous resolution uses bounded workers and cannot forcibly interrupt getaddrinfo.
 
-Sockets are nonblocking and noninheritable. Retry short I/O using completed
-byte counts and the same deadline. `SO_REUSEADDR` is **explicit** through
-`hx_os_socket_set_reuseaddr`; bind never enables it silently. TCP_NODELAY and
-keepalive have common wrappers; native option numbers/layouts remain native.
-No HTTP, TLS encryption or reconnect policy is supplied by this layer.
+Sockets are nonblocking and noninheritable. Retry short I/O using completed byte counts and the same deadline. `SO_REUSEADDR` is **explicit** through `hx_os_socket_set_reuseaddr`; bind never enables it silently. TCP_NODELAY and keepalive have common wrappers; native option numbers/layouts remain native. No HTTP, TLS encryption or reconnect policy is supplied by this layer.
 
 ### 18.2 A local loop without networking
 
-Use `hx_os_loop_create_local` for posts, timers and local pipes. Poll/run
-execute on the owner thread; they do not create a polling thread.
+Use `hx_os_loop_create_local` for posts, timers and local pipes. Poll/run execute on the owner thread; they do not create a polling thread.
 
 ```c
 #include <hx_os.h>
@@ -1245,17 +1039,9 @@ sequenceDiagram
     App->>Reactor: Release request and close resources
 ```
 
-Accepted requests complete once on the polling thread, never inline during
-submit. Rejection calls no completion and transfers no ownership. Writes
-copy by default; borrowed writes and read buffers live until callback return.
-Waiting on a request does not drive the loop. Cancel/deadline requests do
-not promise hard completion deadlines.
+Accepted requests complete once on the polling thread, never inline during submit. Rejection calls no completion and transfers no ownership. Writes copy by default; borrowed writes and read buffers live until callback return. Waiting on a request does not drive the loop. Cancel/deadline requests do not promise hard completion deadlines.
 
-The creator thread owns polling, ordinary I/O submission and final close;
-POST and request cancel/retain/release/wait have documented cross-thread use.
-Do not mix direct socket I/O with loop-owned pending operations. Windows uses
-IOCP, Linux/Android epoll, macOS kqueue. POSIX external descriptor readiness
-is a separate optional extension in `hx_os_loop_fd.h`.
+The creator thread owns polling, ordinary I/O submission and final close; POST and request cancel/retain/release/wait have documented cross-thread use. Do not mix direct socket I/O with loop-owned pending operations. Windows uses IOCP, Linux/Android epoll, macOS kqueue. POSIX external descriptor readiness is a separate optional extension in `hx_os_loop_fd.h`.
 
 <a id="section-19"></a>
 
@@ -1270,20 +1056,11 @@ is a separate optional extension in `hx_os_loop_fd.h`.
 | Child standard-stream redirection | Synchronous child end plus async parent end |
 | Bidirectional local connection | Local stream sockets or duplex file endpoints |
 
-Windows async pipes use private named pipes supporting overlapped I/O;
-CreatePipe handles alone cannot supply that behavior. POSIX pipe writes
-handle SIGPIPE without installing a process-wide signal handler. Do not mix
-synchronous and asynchronous I/O on the same endpoint. Local socket support
-and Windows fallback capabilities are explicit; see
-[pipe_transfer.c](examples/pipe_transfer.c) and
-[duplex_message.c](examples/duplex_message.c).
+Windows async pipes use private named pipes supporting overlapped I/O; CreatePipe handles alone cannot supply that behavior. POSIX pipe writes handle SIGPIPE without installing a process-wide signal handler. Do not mix synchronous and asynchronous I/O on the same endpoint. Local socket support and Windows fallback capabilities are explicit; see [pipe_transfer.c](examples/pipe_transfer.c) and [duplex_message.c](examples/duplex_message.c).
 
 ### 19.2 Start once and keep a capture session
 
-The functions below act on an application-owned `session`. Arguments are a
-NULL-terminated array of UTF-8 arguments excluding argv[0], not a shell
-command string. Pass an executable path supported by the process contract.
-The capture entry point creates pipes and drains stdout/stderr together.
+The functions below act on an application-owned `session`. Arguments are a NULL-terminated array of UTF-8 arguments excluding argv[0], not a shell command string. Pass an executable path supported by the process contract. The capture entry point creates pipes and drains stdout/stderr together.
 
 ```c
 #include <hx_os.h>
@@ -1314,18 +1091,9 @@ hx_os_status app_capture_finish(hx_os_process_capture **session,
 }
 ```
 
-After start, inspect both status and session. Creation failure leaves it
-NULL; TIMEOUT, LIMIT or an I/O failure can retain a live session. Retry wait
-on that same object. The default bound is **1 MiB per stream**; explicitly
-raise the bound or request discard when needed. The library never silently
-drops captured bytes or kills the child to make close succeed.
+After start, inspect both status and session. Creation failure leaves it NULL; TIMEOUT, LIMIT or an I/O failure can retain a live session. Retry wait on that same object. The default bound is **1 MiB per stream**; explicitly raise the bound or request discard when needed. The library never silently drops captured bytes or kills the child to make close succeed.
 
-Text access defaults to strict UTF-8; raw views preserve bytes and `_encoded`
-access converts a selected encoding. A timeout can split a character, so
-text conversion can fail until more bytes arrive. Close waits for process
-exit and both pipe EOFs; descendants inheriting streams can delay EOF.
-Keep the session even if text conversion fails, then handle/close it explicitly.
-See [capture_process.c](examples/capture_process.c) for a runnable CLI policy.
+Text access defaults to strict UTF-8; raw views preserve bytes and `_encoded` access converts a selected encoding. A timeout can split a character, so text conversion can fail until more bytes arrive. Close waits for process exit and both pipe EOFs; descendants inheriting streams can delay EOF. Keep the session even if text conversion fails, then handle/close it explicitly. See [capture_process.c](examples/capture_process.c) for a runnable CLI policy.
 
 <a id="section-20"></a>
 
@@ -1333,10 +1101,7 @@ See [capture_process.c](examples/capture_process.c) for a runnable CLI policy.
 
 ### 20.1 Timers
 
-A periodic timer is a dedicated object; existing one-shot loop requests
-retain their original behavior. Interval units are nanoseconds. The timer
-uses its original time axis, coalesces missed periods, and permits stop from
-the callback. Polling determines when callbacks can actually execute.
+A periodic timer is a dedicated object; existing one-shot loop requests retain their original behavior. Interval units are nanoseconds. The timer uses its original time axis, coalesces missed periods, and permits stop from the callback. Polling determines when callbacks can actually execute.
 
 ```c
 #include <hx_os.h>
@@ -1373,21 +1138,13 @@ int main(void)
 }
 ```
 
-For synchronous periodic work, use section 13's `hx_os_repeat` instead.
-Timer close retains ownership on failure; its loop must remain alive until
-the timer has retired.
+For synchronous periodic work, use section 13's `hx_os_repeat` instead. Timer close retains ownership on failure; its loop must remain alive until the timer has retired.
 
 ### 20.2 Directory watches
 
-`hx_os_watch_create` accepts a UTF-8 path, recursion choice, callback and
-borrowed user state. It owns bounded notification storage and its native
-watch machinery, including necessary worker activity. Merely enabling the
-module starts nothing. Callback paths are borrowed for the invocation.
+`hx_os_watch_create` accepts a UTF-8 path, recursion choice, callback and borrowed user state. It owns bounded notification storage and its native watch machinery, including necessary worker activity. Merely enabling the module starts nothing. Callback paths are borrowed for the invocation.
 
-Handle `HX_OS_WATCH_OVERFLOW` by rescanning; notifications are not a complete
-filesystem transaction log. Do not infer exact event correspondence across
-Windows/Linux/macOS. Stop/close before releasing user state; a close timeout
-retains the watch for retry. Full code: [watch_directory.c](examples/watch_directory.c).
+Handle `HX_OS_WATCH_OVERFLOW` by rescanning; notifications are not a complete filesystem transaction log. Do not infer exact event correspondence across Windows/Linux/macOS. Stop/close before releasing user state; a close timeout retains the watch for retry. Full code: [watch_directory.c](examples/watch_directory.c).
 
 <a id="section-21"></a>
 
@@ -1425,28 +1182,15 @@ int main(void)
 }
 ```
 
-CPU usage is current-process user+kernel time between samples, divided by
-elapsed monotonic time and creation-time logical CPU count. Creation supplies
-the first baseline. Zero elapsed time returns WOULD_BLOCK without advancing
-the sample. This is not whole-machine instantaneous CPU load or child usage.
+CPU usage is current-process user+kernel time between samples, divided by elapsed monotonic time and creation-time logical CPU count. Creation supplies the first baseline. Zero elapsed time returns WOULD_BLOCK without advancing the sample. This is not whole-machine instantaneous CPU load or child usage.
 
-System queries also distinguish total/available RAM, physical/logical cores,
-page size, disk availability, resident memory and virtual address space.
-Unknown physical topology returns NOT_SUPPORTED instead of another metric.
-Linux/Android OS version reports the kernel, not a distribution or Android API.
+System queries also distinguish total/available RAM, physical/logical cores, page size, disk availability, resident memory and virtual address space. Unknown physical topology returns NOT_SUPPORTED instead of another metric. Linux/Android OS version reports the kernel, not a distribution or Android API.
 
 ### 21.2 Load a plugin through an explicit ABI
 
-`hx_os_library_open_ex` and `bind_ex` place loader diagnostics in a caller-owned
-string. `bind_ex` copies a symbol representation into a function-pointer
-object of the supplied size; avoid assuming a portable data-pointer cast.
-The [load_plugin.c example](examples/load_plugin.c) checks an ABI version
-before calling a plugin function, then closes the module.
+`hx_os_library_open_ex` and `bind_ex` place loader diagnostics in a caller-owned string. `bind_ex` copies a symbol representation into a function-pointer object of the supplied size; avoid assuming a portable data-pointer cast. The [load_plugin.c example](examples/load_plugin.c) checks an ABI version before calling a plugin function, then closes the module.
 
-A successful symbol lookup does not validate a signature. Stop plugin work,
-retire callbacks/TLS destructors and release plugin-allocated objects before
-unloading. No global last-loader-error pointer or automatic plugin registry
-is introduced.
+A successful symbol lookup does not validate a signature. Stop plugin work, retire callbacks/TLS destructors and release plugin-allocated objects before unloading. No global last-loader-error pointer or automatic plugin registry is introduced.
 
 <a id="section-22"></a>
 
@@ -1460,11 +1204,7 @@ is introduced.
 | Virtual pages | Explicit allocation/protection/release; page alignment requirements |
 | File mapping | Read-only, shared writable or private copy-on-write modes |
 
-Pool `reserved_bytes` includes retained pages/metadata, while
-`live_allocations` and `requested_bytes` track live requests. collect releases
-empty pages; destroy requires zero live blocks and quiescence. Arena reset
-may retain a normal-sized block for reuse. A higher RSS after free alone
-does not prove a leak.
+Pool `reserved_bytes` includes retained pages/metadata, while `live_allocations` and `requested_bytes` track live requests. collect releases empty pages; destroy requires zero live blocks and quiescence. Arena reset may retain a normal-sized block for reuse. A higher RSS after free alone does not prove a leak.
 
 Read-only mapping and CRC inspection:
 
@@ -1489,12 +1229,7 @@ int main(void)
 }
 ```
 
-Mapping objects retain their own native resources after the original file
-object closes. Empty-file mapping returns EOF. Concurrent truncation can
-invalidate mapped access and must be excluded by the application. Shared
-flush requests persistence; private copy-on-write changes are not written
-back. See [memory contracts](docs/CONTRACTS.md) and
-[mapped_file.c](examples/mapped_file.c).
+Mapping objects retain their own native resources after the original file object closes. Empty-file mapping returns EOF. Concurrent truncation can invalidate mapped access and must be excluded by the application. Shared flush requests persistence; private copy-on-write changes are not written back. See [memory contracts](docs/CONTRACTS.md) and [mapped_file.c](examples/mapped_file.c).
 
 <a id="section-23"></a>
 
@@ -1520,10 +1255,7 @@ int main(void)
 }
 ```
 
-`hx_os_random_bytes` uses a system cryptographic source and reports native
-failure; it does not fall back to a predictable PRNG. CRC32 detects accidental
-changes, not malicious tampering. `hx_os_secure_zero` is for intentional
-buffer erasure; string obfuscation is reversible encoding, not encryption.
+`hx_os_random_bytes` uses a system cryptographic source and reports native failure; it does not fall back to a predictable PRNG. CRC32 detects accidental changes, not malicious tampering. `hx_os_secure_zero` is for intentional buffer erasure; string obfuscation is reversible encoding, not encryption.
 
 ### 23.2 Exact timebase conversion
 
@@ -1544,18 +1276,11 @@ int main(void)
 }
 ```
 
-The 128-bit product is retained before division. Rounding supports down/up/
-nearest, with ties upward. Division by zero is INVALID; a uint64 result
-overflow is RANGE. Failure preserves the output. Compiler 128-bit arithmetic
-is used where available; other targets keep the correct portable fallback.
+The 128-bit product is retained before division. Rounding supports down/up/ nearest, with ties upward. Division by zero is INVALID; a uint64 result overflow is RANGE. Failure preserves the output. Compiler 128-bit arithmetic is used where available; other targets keep the correct portable fallback.
 
 ### 23.3 Bit cursors and integer helpers
 
-`hx_os_bit_reader` and writer borrow fixed buffers, use MSB-first order and
-operate on 0..64 bits at a time. Read shortage returns EOF; write shortage
-returns OUTPUT_FULL. Failure leaves cursor/data/output unchanged. Integer
-helpers cover checked size arithmetic, alignment and related small operations;
-see `hx_os_bits.h`, `hx_os_bitstream.h` and `hx_os_wide.h`.
+`hx_os_bit_reader` and writer borrow fixed buffers, use MSB-first order and operate on 0..64 bits at a time. Read shortage returns EOF; write shortage returns OUTPUT_FULL. Failure leaves cursor/data/output unchanged. Integer helpers cover checked size arithmetic, alignment and related small operations; see `hx_os_bits.h`, `hx_os_bitstream.h` and `hx_os_wide.h`.
 
 <a id="section-24"></a>
 
@@ -1599,25 +1324,13 @@ int main(void)
 }
 ```
 
-Catalogs accept a UTF-8 BOM, LF/CRLF, comments, quoted JSON-style escapes and
-trimmed unquoted text. No sections, includes, interpolation or locale changes
-are performed. Later duplicate keys win; a missing key returns the key itself.
-`add_file` overlays transactionally: malformed input, I/O failure and limit
-errors preserve every old entry. Defaults are 4096 entries and 1 MiB combined
-key/value text; old and candidate tables can coexist during an update.
+Catalogs accept a UTF-8 BOM, LF/CRLF, comments, quoted JSON-style escapes and trimmed unquoted text. No sections, includes, interpolation or locale changes are performed. Later duplicate keys win; a missing key returns the key itself. `add_file` overlays transactionally: malformed input, I/O failure and limit errors preserve every old entry. Defaults are 4096 entries and 1 MiB combined key/value text; old and candidate tables can coexist during an update.
 
 ### 24.2 Calendar and filename rules
 
-UTC formatting accepts Unix milliseconds and tokens `%CCYY`, `%MM`, `%DD`,
-`%hh`, `%mm`, `%ss`, `%%`; it does not use strftime's token grammar.
-The default is an ISO-like UTC string. A separate query reports the current
-local offset in minutes; it is not a historical timezone database.
+UTC formatting accepts Unix milliseconds and tokens `%CCYY`, `%MM`, `%DD`, `%hh`, `%mm`, `%ss`, `%%`; it does not use strftime's token grammar. The default is an ISO-like UTC string. A separate query reports the current local offset in minutes; it is not a historical timezone database.
 
-Filename generation creates one portable component, repairs Windows-invalid
-characters/device stems and preserves Unicode. It does not reserve a unique
-file, create a directory or guarantee collision freedom. Use exclusive file
-creation when uniqueness matters. C++ equivalents are `hx::TextLookup` and
-`hx::Calendar`. See [common utilities](docs/COMMON_UTILITIES.md).
+Filename generation creates one portable component, repairs Windows-invalid characters/device stems and preserves Unicode. It does not reserve a unique file, create a directory or guarantee collision freedom. Use exclusive file creation when uniqueness matters. C++ equivalents are `hx::TextLookup` and `hx::Calendar`. See [common utilities](docs/COMMON_UTILITIES.md).
 
 <a id="section-25"></a>
 
@@ -1669,18 +1382,9 @@ int main(void)
 }
 ```
 
-Callbacks run outside internal locks. Signal emission follows its snapshot's
-registration order; a disconnected callback that has not started is skipped.
-Disconnect stops new starts, while an explicit wait retires in-flight calls.
-Waiting on the current/ancestor callback returns DEADLOCK. Concurrent emits
-or calls can overlap; the consumer synchronizes its own callback state.
+Callbacks run outside internal locks. Signal emission follows its snapshot's registration order; a disconnected callback that has not started is skipped. Disconnect stops new starts, while an explicit wait retires in-flight calls. Waiting on the current/ancestor callback returns DEADLOCK. Concurrent emits or calls can overlap; the consumer synchronizes its own callback state.
 
-Procedure names are copied UTF-8, unique, case-sensitive and 1..127 bytes.
-Parameters are copied for invocation and committed only after successful
-callback return; side effects through borrowed pointers cannot be rolled back.
-There is no signature DSL or type coercion. Defaults bound registrations,
-parallel calls and nesting. See [signal example](examples/signal_notifications.c)
-and [procedure contracts](docs/COMMON_UTILITIES.md).
+Procedure names are copied UTF-8, unique, case-sensitive and 1..127 bytes. Parameters are copied for invocation and committed only after successful callback return; side effects through borrowed pointers cannot be rolled back. There is no signature DSL or type coercion. Defaults bound registrations, parallel calls and nesting. See [signal example](examples/signal_notifications.c) and [procedure contracts](docs/COMMON_UTILITIES.md).
 
 ### 25.2 Profile an interval tree
 
@@ -1719,20 +1423,13 @@ int main(void)
 }
 ```
 
-The profiler records bounded interval trees, not native call stacks or task
-dependency graphs. Pair each successful enter with leave. Clear idle thread
-caches with restart_thread or retire them on thread exit before destruction.
-Close can time out while other threads retain caches; do not unload callback
-code or discard the profiler at that point. See the
-[profiler contract](docs/PLATFORM_UTILITIES.md#bounded-interval-profiler-batch-23c).
+The profiler records bounded interval trees, not native call stacks or task dependency graphs. Pair each successful enter with leave. Clear idle thread caches with restart_thread or retire them on thread exit before destruction. Close can time out while other threads retain caches; do not unload callback code or discard the profiler at that point. See the [profiler contract](docs/PLATFORM_UTILITIES.md#bounded-interval-profiler-batch-23c).
 
 <a id="section-26"></a>
 
 ## 26. Bounded lexical analysis
 
-The lexer copies UTF-8 input and returns borrowed token views. It recognizes
-identifiers, numbers, strings, punctuation, whitespace/newlines and selected
-comments. It is not a C parser, preprocessor or expression evaluator.
+The lexer copies UTF-8 input and returns borrowed token views. It recognizes identifiers, numbers, strings, punctuation, whitespace/newlines and selected comments. It is not a C parser, preprocessor or expression evaluator.
 
 ```c
 #include <hx_os.h>
@@ -1761,12 +1458,7 @@ int main(void)
 }
 ```
 
-Offsets are bytes; line/column are one-based Unicode codepoints, with a tab
-counting as one. EOF produces an END token; lexical errors are sticky until
-reset and preserve the output token. Default bounds are 16 MiB input, 1 MiB
-per token and 1 Mi tokens; skipped comments/space still consume limits.
-`hx_os_token_string` decodes quoted escapes into an owned string. The C++
-facade is `hx::Lexer`. See [hx_os_lexer.h](include/hx_os_lexer.h).
+Offsets are bytes; line/column are one-based Unicode codepoints, with a tab counting as one. EOF produces an END token; lexical errors are sticky until reset and preserve the output token. Default bounds are 16 MiB input, 1 MiB per token and 1 Mi tokens; skipped comments/space still consume limits. `hx_os_token_string` decodes quoted escapes into an owned string. The C++ facade is `hx::Lexer`. See [hx_os_lexer.h](include/hx_os_lexer.h).
 
 <a id="section-27"></a>
 
@@ -1774,9 +1466,7 @@ facade is `hx::Lexer`. See [hx_os_lexer.h](include/hx_os_lexer.h).
 
 ### 27.1 Module switches
 
-All new native/common modules default to ON; optional third-party encoding
-and parser adapters default to OFF. Enabling a module does not itself start
-threads. Use capability queries as well as compile-time configuration.
+All new native/common modules default to ON; optional third-party encoding and parser adapters default to OFF. Enabling a module does not itself start threads. Use capability queries as well as compile-time configuration.
 
 | Option | Default | Purpose |
 | --- | --- | --- |
@@ -1838,12 +1528,7 @@ threads. Use capability queries as well as compile-time configuration.
 | `HX_OS_ICONV_SOURCE_DIR` | empty | Unmodified iconv source path |
 | `HX_OS_<PARSER>_SOURCE_DIR` | empty | Selected parser source path |
 
-Disabled modules preserve public declarations and ABI entry points; creation
-or active operations report NOT_SUPPORTED and capability bits are cleared.
-Dependency combinations are checked explicitly. A local loop remains useful
-without NETWORK; asynchronous DNS needs NETWORK, LOOP and THREAD_POOL.
-Capture also needs PIPE and LOOP; catalog file loading needs TEXT_LOOKUP,
-LEXER and FILE_UTILS. Header presence alone is not runtime capability proof.
+Disabled modules preserve public declarations and ABI entry points; creation or active operations report NOT_SUPPORTED and capability bits are cleared. Dependency combinations are checked explicitly. A local loop remains useful without NETWORK; asynchronous DNS needs NETWORK, LOOP and THREAD_POOL. Capture also needs PIPE and LOOP; catalog file loading needs TEXT_LOOKUP, LEXER and FILE_UTILS. Header presence alone is not runtime capability proof.
 
 ### 27.2 Optional configuration backends
 
@@ -1863,12 +1548,7 @@ cmake -S . -B build-parsers \
 cmake --build build-parsers --config Release --parallel 4
 ```
 
-These are POSIX-shell continuations; PowerShell users can put the configure
-arguments on one line or use PowerShell continuation. The helper verifies
-pinned archives; dependencies stay private and unchanged. Enabling a backend
-does not select it for parsing. Core Unicode/native facilities have no
-mandatory third-party dependency; default-enabled containers privately use
-vendored uthash. Third-party terms are listed separately.
+These are POSIX-shell continuations; PowerShell users can put the configure arguments on one line or use PowerShell continuation. The helper verifies pinned archives; dependencies stay private and unchanged. Enabling a backend does not select it for parsing. Core Unicode/native facilities have no mandatory third-party dependency; default-enabled containers privately use vendored uthash. Third-party terms are listed separately.
 
 <a id="section-28"></a>
 
@@ -1887,17 +1567,9 @@ python tools/verify_android.py --ndk /absolute/path/to/ndk \
   --api 21 --abi arm64-v8a --serial DEVICE_SERIAL
 ```
 
-Defaults cross-build both ARM ABIs for API 21/28; `--serial` explicitly
-selects runtime validation. `--abi x86_64` supports compatible emulators.
-An empty adb list can mean an installed AVD is stopped; check
-`emulator -list-avds` before concluding no emulator exists.
+Defaults cross-build both ARM ABIs for API 21/28; `--serial` explicitly selects runtime validation. `--abi x86_64` supports compatible emulators. An empty adb list can mean an installed AVD is stopped; check `emulator -list-avds` before concluding no emulator exists.
 
-Current runtime evidence: six configurations, eight suites each, on an
-Android 14/API 34 x86_64 emulator; x86_64 runs natively and ARM64 through
-translation. ARMv7 was unavailable there. API 21 compilation is not an Android
-5.0 runtime pass. ARM hardware performance, application sandboxes and old OS
-versions still need matching targets. Process support below API 28 and finite
-native join availability have explicit capability limitations. See [ANDROID.md](docs/ANDROID.md).
+The current C++ Result migration compiles API 21 ARM64/ARMv7 in full and minimal shared configurations. Each ARM64 configuration passes the ten-suite Android subset on an Android 14/API 34 x86_64 emulator through translation; ARMv7 runtime is unavailable. Earlier API 28/static/x86_64 runs are historical records. An API 21 build is not an Android 5.0 runtime pass. Physical ARM performance, application sandboxes and old OS releases remain target-specific work. Process support below API 28 and finite native join have explicit capability limits. See [ANDROID.md](docs/ANDROID.md).
 
 ### 28.2 A small C-only board configuration
 
@@ -1911,29 +1583,15 @@ cmake -C cmake/minimal.cmake -S . -B build-board \
 cmake --build build-board --parallel 4
 ```
 
-Replace the example paths with the actual SDK. ARMv7 float ABI, libc, kernel
-and atomics support come from that SDK, not the example triplet. The minimal
-profile retains base errors/context, clocks, ordinary files, UTF-8 strings,
-core conversion, threads/synchronization/TLS and atomics. Put desired
-`-DHX_OS_ENABLE_...=ON` overrides after `-C`, using a fresh build directory.
-QEMU results are separate from real-board acceptance; musl/uClibc-ng need
-their own target checks. FreeRTOS/bare metal are not implied by this profile.
+Replace the example paths with the actual SDK. ARMv7 float ABI, libc, kernel and atomics support come from that SDK, not the example triplet. The minimal profile retains base errors/context, clocks, ordinary files, UTF-8 strings, core conversion, threads/synchronization/TLS and atomics. Put desired `-DHX_OS_ENABLE_...=ON` overrides after `-C`, using a fresh build directory. QEMU results are separate from real-board acceptance; musl/uClibc-ng need their own target checks. FreeRTOS/bare metal are not implied by this profile.
 
 <a id="section-29"></a>
 
 ## 29. ABI, ownership and shutdown rules
 
-Public C functions use the `hx_os_` prefix, with `hx_string` and `hx_settings`
-families for their respective value models. Public headers have guards and
-`extern "C"`; `HX_OS_API` controls exports/imports and `HX_OS_CALL` the call
-convention. Native HANDLE, pthread and Mach types stay behind opaque handles
-where practical.
+Public C functions use the `hx_os_` prefix, with `hx_string` and `hx_settings` families for their respective value models. Public headers have guards and `extern "C"`; `HX_OS_API` controls exports/imports and `HX_OS_CALL` the call convention. Native HANDLE, pthread and Mach types stay behind opaque handles where practical.
 
-Existing public layouts are preserved. New expandable structures require
-version/capacity-aware initialization; adding size/version fields alone does
-not make an unsafe larger write ABI-compatible. Version 0.1.0 still has no
-blanket stable-ABI release promise. Shared-library ABI checks use baseline
-headers against the newer implementation.
+Existing public layouts are preserved. New expandable structures require version/capacity-aware initialization; adding size/version fields alone does not make an unsafe larger write ABI-compatible. Version 0.1.0 still has no blanket stable-ABI release promise. Shared-library ABI checks use baseline headers against the newer implementation.
 
 ```mermaid
 flowchart TD
@@ -1959,12 +1617,7 @@ flowchart TD
 | TLS key / plugin callbacks | Retire values and in-flight calls before code unload |
 | Allocator context | Destroy only after all allocations/leases and new entrants are gone |
 
-The library does not force process termination or kill business threads.
-Deadline expiry is not permission to free live resources. Callbacks must obey
-their documented reentry rules; raw C callbacks must not throw, longjmp or
-exit their thread across the library frame. The host coordinates final
-destruction and unload. A future hx_c_log adapter can retain its own default
-two-second shutdown policy without imposing it on other consumers.
+The library does not force process termination or kill business threads. Deadline expiry is not permission to free live resources. Callbacks must obey their documented reentry rules; raw C callbacks must not throw, longjmp or exit their thread across the library frame. The host coordinates final destruction and unload. A future hx_c_log adapter can retain its own default two-second shutdown policy without imposing it on other consumers.
 
 <a id="section-30"></a>
 
@@ -1977,11 +1630,7 @@ python tools/verify_install.py build --config Release
 python tools/verify_abi.py build-shared --config Release
 ```
 
-The first command installs to an isolated prefix under the build directory,
-then runs ten C/C++ consumers and seven consumers in a C-only project when
-the default facilities are available. The ABI command requires a prepared
-shared build and the repository baseline history. These are native-host
-checks, not cross-target emulators.
+The first command installs to an isolated prefix under the build directory, then runs ten C/C++ consumers and seven consumers in a C-only project when the default facilities are available. The ABI command requires a prepared shared build and the repository baseline history. These are native-host checks, not cross-target emulators.
 
 For GCC/Clang memory checking, configure a separate build:
 
@@ -1994,10 +1643,7 @@ ASAN_OPTIONS=detect_leaks=1 ctest --output-on-failure
 cd ..
 ```
 
-Use a different directory with `HX_OS_SANITIZER=thread` for TSan; do not
-combine it with ASan. Tests cover UTF-8 paths, short I/O, failures and bounds,
-timeout/retry, cancellation, callbacks, TLS cleanup, C/C++ headers, module
-selection and installed consumption. Relevant target limits remain visible.
+Use a different directory with `HX_OS_SANITIZER=thread` for TSan; do not combine it with ASan. Tests cover UTF-8 paths, short I/O, failures and bounds, timeout/retry, cancellation, callbacks, TLS cleanup, C/C++ headers, module selection and installed consumption. Relevant target limits remain visible.
 
 ### 30.2 CI configuration versus executed evidence
 
@@ -2011,49 +1657,23 @@ selection and installed consumption. Relevant target limits remain visible.
 | ARM Linux | ARMv7/AArch64 cross-build and QEMU-compatible subset |
 | Android | API 21/28 two-ARM-ABI matrix and minimal builds |
 
-The workflow file is [build.yml](.github/workflows/build.yml). Configuration
-does not mean a remote job has passed. Current local evidence is Windows
-82/82, WSL Linux 84/84, ASan/UBSan/LSan 84/84 and TSan 84/84. The latest
-memory audit additionally checked 1,001 lifecycle rounds per host with zero
-tracked live bytes after cleanup. See [validation](docs/VALIDATION.md).
+The workflow file is [build.yml](.github/workflows/build.yml). Configuration does not mean a remote job has passed. Current local evidence is Windows 82/82, WSL Linux 84/84, ASan/UBSan/LSan 84/84 and TSan 84/84. The latest memory audit additionally checked 1,001 lifecycle rounds per host with zero tracked live bytes after cleanup. See [validation](docs/VALIDATION.md).
 
 ### 30.3 Measure actual cost
 
-Enable `HX_OS_BUILD_BENCHMARKS=ON` for development benchmarks. Record
-throughput/latency, allocations, locks, system calls, contention and target
-configuration. Object size/alignment matters for arrays and frequently
-allocated objects, but a smaller object is not itself runtime speed evidence.
+Enable `HX_OS_BUILD_BENCHMARKS=ON` for development benchmarks. Record throughput/latency, allocations, locks, system calls, contention and target configuration. Object size/alignment matters for arrays and frequently allocated objects, but a smaller object is not itself runtime speed evidence.
 
-The [performance and memory audit](docs/BUG_MEMORY_LEAK_AUDIT.md) identifies
-repeated-prefix search, large-capacity procedure scans and the MSVC wide
-division fallback as optimization candidates. C tasks allocate four context
-blocks, and the measured C++ integer-result case five. These are current
-costs, not completed optimization claims. hx_c_log's locked five-times
-baseline and no-single-thread-regression targets await actual integration.
+The [performance and memory audit](docs/BUG_MEMORY_LEAK_AUDIT.md) identifies repeated-prefix search, large-capacity procedure scans and the MSVC wide division fallback as optimization candidates. C tasks allocate four context blocks, and the measured C++ integer-result case five. These are costs at the audit's stated baseline, not fresh measurements of the migrated C++ Result facade. hx_c_log's locked five-times baseline and no-single-thread-regression targets await actual integration.
 
 <a id="section-31"></a>
 
 ## 31. Engineering rules, platform extensions and licensing
 
-First-party source is UTF-8 without BOM, LF, Tab width 8, with an 80-column
-source/script limit and lowercase underscore C functions, including static
-functions and callbacks. Warnings are target-local and follow the recorded
-OBS-derived policy. Third-party files remain unchanged. Layout decisions
-respect natural alignment, ABI and access patterns rather than mechanically
-sorting members by size.
+First-party source is UTF-8 without BOM, LF, Tab width 8, with an 80-column source/script limit and lowercase underscore C functions, including static functions and callbacks. Warnings are target-local and follow the recorded OBS-derived policy. Third-party files remain unchanged. Layout decisions respect natural alignment, ABI and access patterns rather than mechanically sorting members by size.
 
-Native APIs and compiler builtins come first; assembly is reserved for
-measured local improvements with correct supported-target fallbacks. Most
-Apple code remains C; the optional Apple performance request adapter alone
-uses Objective-C/Foundation. Linux power/performance requests return
-NOT_SUPPORTED. Registry access is an explicit Windows extension. Strict
-affinity is not promised where the OS cannot implement it.
+Native APIs and compiler builtins come first; assembly is reserved for measured local improvements with correct supported-target fallbacks. Most Apple code remains C; the optional Apple performance request adapter alone uses Objective-C/Foundation. Linux power/performance requests return NOT_SUPPORTED. Registry access is an explicit Windows extension. Strict affinity is not promised where the OS cannot implement it.
 
-Future work includes native target validation and measured improvements.
-Coroutines, hx_c_log migration, crash-policy frameworks and FreeRTOS/bare
-metal adaptation are not delivered features. The first-party distribution
-license is **not yet selected**; third-party licenses remain independently
-applicable. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Future work includes native target validation and measured improvements. Coroutines, hx_c_log migration, crash-policy frameworks and FreeRTOS/bare metal adaptation are not delivered features. The first-party distribution license is **not yet selected**; third-party licenses remain independently applicable. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 <a id="section-32"></a>
 
@@ -2064,6 +1684,7 @@ applicable. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 | Core behavior and lifetime | [CONTRACTS.md](docs/CONTRACTS.md) |
 | Configuration profiles | [CONFIGURATION.md](docs/CONFIGURATION.md) |
 | C containers and element ownership | [CONTAINERS.md](docs/CONTAINERS.md) |
+| C++ Result and migration | [CPP_RESULTS.md](docs/CPP_RESULTS.md) |
 | C++ task pool | [CPP_POOL.md](docs/CPP_POOL.md) |
 | Platform utilities | [PLATFORM_UTILITIES.md](docs/PLATFORM_UTILITIES.md) |
 | Direct string/catalog/procedure/lexer calls | [COMMON_UTILITIES.md](docs/COMMON_UTILITIES.md) |

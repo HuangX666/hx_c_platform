@@ -2,9 +2,7 @@
 
 [简体中文](ANDROID.zh-CN.md) · [Home](../README.md)
 
-The agreed baseline is **Android 5.0 / API 21**, **arm64-v8a and armeabi-v7a**.
-API 28 also covers newer native facilities. Android is an explicit target;
-desktop Linux, WSL and glibc/QEMU results are not Android runtime evidence.
+The agreed baseline is **Android 5.0 / API 21**, **arm64-v8a and armeabi-v7a**. API 28 also covers newer native facilities. Android is an explicit target; desktop Linux, WSL and glibc/QEMU results are not Android runtime evidence.
 
 ## Build and run
 
@@ -14,41 +12,30 @@ Use an existing NDK; the script does not download or modify SDK/vendor files:
 python tools/verify_android.py --ndk /absolute/path/to/ndk/28.2.13676358
 ~~~
 
-Default: both ABIs at API 21/28, library, examples, benchmark, all test
-executables and standalone C99/C++11 public headers. Use --ninja to select
-Ninja explicitly. Local Windows paths are E:/Android/Sdk/ndk/28.2.13676358
-and E:/Android/Sdk/cmake/3.22.1/bin/ninja.exe.
+Default: both ABIs at API 21/28, library, examples, benchmark, all test executables and standalone C99/C++11 public headers. Use --ninja to select Ninja explicitly. Local Windows paths are E:/Android/Sdk/ndk/28.2.13676358 and E:/Android/Sdk/cmake/3.22.1/bin/ninja.exe.
 
 ~~~text
 python tools/verify_android.py --ndk /path/to/ndk --api 21 --minimal
 python tools/verify_android.py --ndk /path/to/ndk --api 21 --static
 ~~~
 
-Minimal uses cmake/minimal.cmake. Shared is default; --static selects static.
-Use --build-root for separate records. Without --serial, the script only
-cross-compiles and never selects a device or executes ARM binaries.
+Minimal uses cmake/minimal.cmake. Shared is default; --static selects static. Use --build-root for separate records. Without --serial, the script only cross-compiles and never selects a device or executes ARM binaries.
 
-An empty adb list can mean an installed AVD is stopped. This host has
-Qt_Android_34:
+An empty adb list can mean an installed AVD is stopped. This host has Qt_Android_34:
 
 ~~~text
 emulator -list-avds
 emulator -avd Qt_Android_34 -port 5580 -read-only -no-snapshot
 ~~~
 
-Wait for boot and select emulator-5580. Read-only mode preserves AVD user
-data; no-snapshot disables snapshot load/save. Automated runs may add
--no-window -no-audio. The AVD is x86_64; --abi x86_64 is now available as an
-additional emulator configuration. The two default ARM ABIs are unchanged.
+Wait for boot and select emulator-5580. Read-only mode preserves AVD user data; no-snapshot disables snapshot load/save. Automated runs may add -no-window -no-audio. The AVD is x86_64; --abi x86_64 is now available as an additional emulator configuration. The two default ARM ABIs are unchanged.
 
 ~~~text
 adb devices -l
 python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --serial DEVICE_SERIAL
 ~~~
 
-Pass --adb for an absolute adb path. The runner checks ABI/API, uploads only
-its artifacts into a fresh /data/local/tmp/hx_c_platform-UUID directory,
-sets that process's LD_LIBRARY_PATH, and executes eight suites:
+Pass --adb for an absolute adb path. The runner checks ABI/API, uploads only its artifacts into a fresh /data/local/tmp/hx_c_platform-UUID directory, sets that process's LD_LIBRARY_PATH, and executes ten suites:
 
 | Suite | Coverage |
 | --- | --- |
@@ -59,22 +46,13 @@ sets that process's LD_LIBRARY_PATH, and executes eight suites:
 | catalog_filename | Overlays, allocation failure, BOM/encoding, filenames |
 | procedure | In-flight retirement, retry/self-wait, allocator reentry, allocation-free warm calls |
 | atomic | 32/64-bit atomics, publication, concurrent counters |
-| cpp_utilities | C++11 strings, lexing, translations, procedures and pools |
+| cpp_utilities | No-exception C++11 results, strings, lexing, procedures and allocation rollback |
+| cpp_pool | Typed results, cancellation, admission, preparation/close races and cleanup |
+| cpp_extensions | Settings snapshots, signal results, capture retirement, bitstreams and extensions |
 
-hx_os_portable_baseline also records atomic, ASCII, wide conversion,
-named-call and precise-wait observations without fixed timing thresholds.
-Logs include NDK, source revision/dirty status, ABI/API, device model,
-fingerprint, runtime API, emulator marker and command output. Cleanup removes
-only explicitly uploaded files, never recursively deleting test directories.
-Failed fixtures remain. An adb timeout may leave the target process running;
-preserve/report its directory without killing it. Record load/temperature/
-frequency conditions and collect repeated performance samples.
+hx_os_portable_baseline also records atomic, ASCII, wide conversion, named-call and precise-wait observations without fixed timing thresholds. Logs include NDK, source revision/dirty status, ABI/API, device model, fingerprint, runtime API, emulator marker and command output. Cleanup removes only explicitly uploaded files, never recursively deleting test directories. Failed fixtures remain. An adb timeout may leave the target process running; preserve/report its directory without killing it. Record load/temperature/ frequency conditions and collect repeated performance samples.
 
-Reports distinguish build minimum API, runtime API, native machine and
-translation, with a result per executable. Failures do not remain labeled
-as unrun. Shared validation executables have $ORIGIN RUNPATH for newer Android;
-older native systems still use LD_LIBRARY_PATH. Only test/example/benchmark
-targets receive this option; consumer and system library paths are unchanged.
+Reports distinguish build minimum API, runtime API, native machine and translation, with a result per executable. Failures do not remain labeled as unrun. Shared validation executables have $ORIGIN RUNPATH for newer Android; older native systems still use LD_LIBRARY_PATH. Only test/example/benchmark targets receive this option; consumer and system library paths are unchanged.
 
 ## Platform boundaries
 
@@ -92,13 +70,13 @@ targets receive this option; consumer and system library paths are unchanged.
 | Unimplemented registry/power extensions | NOT_SUPPORTED with existing capability rules |
 | /proc, topology, process/network access | Preserve native/permission failures, never fake metrics or success |
 
-Module bits describe compiled families, not every platform extension.
-API 21 binaries remain process-disabled on newer devices; build with the
-higher minimum API for that feature. No JNI/Java dependency, APK, manifest
-permissions, asset API or UI automation is supplied. Consumers own those.
-Standalone validation uses c++_static; consumers retain their NDK STL policy.
+Module bits describe compiled families, not every platform extension. API 21 binaries remain process-disabled on newer devices; build with the higher minimum API for that feature. No JNI/Java dependency, APK, manifest permissions, asset API or UI automation is supplied. Consumers own those. Standalone validation uses c++_static; consumers retain their NDK STL policy.
 
-## Current evidence
+## Result migration verification (2026-10-01)
+
+API 21 arm64-v8a and armeabi-v7a full/minimal shared configurations compile. Both ARM64 configurations pass 10/10 suites on the existing API 34 x86_64 emulator through native-bridge translation. ARMv7 is absent from its ABI list and is explicitly skipped at runtime. All C++ tests disable exceptions. Finite join reports the capability limit; controlled tests explicitly choose an infinite final join. The table below preserves the earlier eight-suite baseline; other API/link configurations were not rerun for this migration.
+
+## Earlier baseline evidence
 
 2026-10-01, Windows build host, NDK r28c / Clang 19.0.1:
 
@@ -113,25 +91,8 @@ Standalone validation uses c++_static; consumers retain their NDK STL policy.
 | API 21 arm64-v8a, static/default modules | Passed | Android 14 translated, 8/8 |
 | API 21 arm64-v8a, shared/minimal modules | Passed | Android 14 translated, 8/8 |
 
-See [validation](VALIDATION.md) for minimal/static and host results.
-The existing Qt_Android_34 AVD was booted as emulator-5580: API 34, native
-x86_64, with libndk_translation. Each of the six executed configurations
-passes the eight Android suites listed above and runs the benchmark once.
-Minimal verifies disabled-feature behavior. These eight suites are not the
-entire desktop CTest collection.
+See [validation](VALIDATION.md) for minimal/static and host results. The existing Qt_Android_34 AVD was booted as emulator-5580: API 34, native x86_64, with libndk_translation. Each of the six executed configurations passes the eight Android suites listed above and runs the benchmark once. Minimal verifies disabled-feature behavior. These eight suites are not the entire desktop CTest collection.
 
-ARM64 shared execution initially could not locate the library through
-LD_LIBRARY_PATH. Executable-relative RUNPATH fixed both shared configurations
-and minimal. RUNPATH is supported since API 24; see the
-[Android linker documentation](https://android.googlesource.com/platform/bionic/+/refs/heads/android15-tests-release/android-changes-for-ndk-developers.md).
-ARM64 results include translation/virtualization and are not hardware
-performance evidence. The AVD offers no ARMv7 ABI, so deployment explicitly
-skips it. Building with minimum API 21 is not an Android 5.0 runtime test.
-Old OS releases, ARMv7, physical ARM and application sandbox permissions
-still require matching environments.
+ARM64 shared execution initially could not locate the library through LD_LIBRARY_PATH. Executable-relative RUNPATH fixed both shared configurations and minimal. RUNPATH is supported since API 24; see the [Android linker documentation](https://android.googlesource.com/platform/bionic/+/refs/heads/android15-tests-release/android-changes-for-ndk-developers.md). ARM64 results include translation/virtualization and are not hardware performance evidence. The AVD offers no ARMv7 ABI, so deployment explicitly skips it. Building with minimum API 21 is not an Android 5.0 runtime test. Old OS releases, ARMv7, physical ARM and application sandbox permissions still require matching environments.
 
-Reports: build-android-emulator/report.json, build-android/report.json,
-build-android/report-minimal.json and build-android-static/report.json;
-run-*.log files under each configuration contain actual program output.
-CI contains the pinned-NDK matrix and API 21 minimal builds; no remote run
-is claimed.
+Reports: build-android-emulator/report.json, build-android/report.json, build-android/report-minimal.json and build-android-static/report.json; run-*.log files under each configuration contain actual program output. CI contains the pinned-NDK matrix and API 21 minimal builds; no remote run is claimed.
