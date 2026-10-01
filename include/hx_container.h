@@ -181,6 +181,60 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_map_clear(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_map_destroy(
 	hx_os_map **map, hx_os_error *error);
 
+/* Thin typed adapters for trivially byte-copyable values, not owning strings
+ * or nontrivial C++ objects. name must be a lowercase C identifier.
+ * Generated static functions reuse the same C sequence implementation.
+ * max_items=0 keeps the existing default bound. Views expire on mutation.
+ */
+#define HX_OS_DECLARE_POD_SEQUENCE(name, type, factory, popper)                \
+	typedef hx_os_sequence name;                                           \
+	typedef type name##_value_type;                                        \
+	typedef struct name##_alignment {                                      \
+		char prefix;                                                   \
+		name##_value_type value;                                       \
+	} name##_alignment;                                                    \
+	static inline hx_os_status name##_create(hx_os_context *context,       \
+		size_t max_items, name **out, hx_os_error *error)              \
+	{                                                                      \
+		hx_os_container_options options;                               \
+		hx_os_container_options_init(&options, sizeof(type));          \
+		options.element_alignment = offsetof(name##_alignment, value); \
+		if (max_items)                                                 \
+			options.max_items = max_items;                         \
+		return factory(context, &options, out, error);                 \
+	}                                                                      \
+	static inline hx_os_status name##_push(                                \
+		name *container, name##_value_type value, hx_os_error *error)  \
+	{                                                                      \
+		return hx_os_sequence_push_back(container, &value, error);     \
+	}                                                                      \
+	static inline hx_os_status name##_pop(                                 \
+		name *container, name##_value_type *out, hx_os_error *error)   \
+	{                                                                      \
+		return popper(container, out, error);                          \
+	}                                                                      \
+	static inline size_t name##_size(const name *container)                \
+	{                                                                      \
+		return hx_os_sequence_size(container);                         \
+	}                                                                      \
+	static inline const name##_value_type *name##_at(                      \
+		const name *container, size_t index)                           \
+	{                                                                      \
+		return (const name##_value_type *)hx_os_sequence_at(           \
+			container, index);                                     \
+	}                                                                      \
+	static inline hx_os_status name##_destroy(                             \
+		name **container, hx_os_error *error)                          \
+	{                                                                      \
+		return hx_os_sequence_destroy(container, error);               \
+	}
+#define HX_OS_DECLARE_VECTOR(name, type)                                       \
+	HX_OS_DECLARE_POD_SEQUENCE(                                            \
+		name, type, hx_os_vector_create, hx_os_sequence_pop_back)
+#define HX_OS_DECLARE_QUEUE(name, type)                                        \
+	HX_OS_DECLARE_POD_SEQUENCE(                                            \
+		name, type, hx_os_deque_create, hx_os_sequence_pop_front)
+
 #ifdef __cplusplus
 }
 #endif

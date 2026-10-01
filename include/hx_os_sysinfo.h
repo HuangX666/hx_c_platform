@@ -53,7 +53,9 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_sys_disk_space(
 /* virtual_bytes is committed + reserved address space, not commit charge. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sys_proc_memory(
 	hx_os_sys_proc_memory_info *info, hx_os_error *error);
-/* required includes NUL; OUTPUT_FULL permits retry with a larger buffer. */
+/* required includes NUL; OUTPUT_FULL permits retry with a larger buffer.
+ * Linux/Android report the kernel release, not distribution/Android API.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sys_version(
 	char *buffer, size_t capacity, size_t *required, hx_os_error *error);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sys_version_string(

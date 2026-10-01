@@ -36,6 +36,27 @@ public:
 	{
 		hx_os_text_lookup_destroy(&m_handle_);
 	}
+	static TextLookup load(const char *path, hx_os_context *context = NULL)
+	{
+		TextLookup table(context);
+		table.addFile(path);
+		return table;
+	}
+	void addFile(const char *path)
+	{
+		hx_os_error error;
+		detail::CheckStatus(
+			hx_os_text_lookup_add_file(m_handle_, path, &error),
+			error);
+	}
+	void addText(const std::string &text)
+	{
+		hx_string_view view = {text.data(), text.size()};
+		hx_os_error error;
+		detail::CheckStatus(
+			hx_os_text_lookup_add_text(m_handle_, view, &error),
+			error);
+	}
 	void add(const char *fallback, const char *translated)
 	{
 		hx_os_error error;

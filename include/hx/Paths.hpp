@@ -17,6 +17,17 @@ public:
 	{
 		return query(hx_os_path_config_home_string);
 	}
+	static std::string configFile(const char *application, const char *name)
+	{
+		hx_string text = HX_STRING_INIT;
+		std::unique_ptr<hx_string, decltype(&hx_string_destroy)>
+			cleanup(&text, hx_string_destroy);
+		hx_os_error error;
+		detail::CheckStatus(hx_os_path_config_file(
+					    application, name, &text, &error),
+			error);
+		return std::string(hx_string_c_str(&text), text.size);
+	}
 	static std::string dataHome()
 	{
 		return query(hx_os_path_data_home_string);

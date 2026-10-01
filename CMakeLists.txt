@@ -54,6 +54,10 @@ option(HX_OS_ENABLE_SIGNALS "Build synchronous signals and parameter packs" ON)
 option(HX_OS_ENABLE_SETTINGS
 	"Build mutable settings and immutable snapshots" ON)
 option(HX_OS_ENABLE_PROFILER "Build bounded interval profiling trees" ON)
+option(HX_OS_ENABLE_WIDE_MATH "Build exact wide integer conversion" ON)
+option(HX_OS_ENABLE_PRECISE_WAIT "Build explicit bounded spin waits" ON)
+option(HX_OS_ENABLE_LEXER "Build bounded UTF-8 tokenization" ON)
+option(HX_OS_ENABLE_PROCEDURES "Build named synchronous procedures" ON)
 set(HX_OS_ICONV_SOURCE_DIR "" CACHE PATH "Unmodified GNU libiconv source")
 set(HX_OS_SANITIZER "" CACHE STRING "address,undefined or thread")
 
@@ -82,6 +86,19 @@ set(hx_platform_sources)
 set(hx_private_include)
 set(HX_OS_HAVE_PTHREAD_TRYJOIN 0)
 set(HX_OS_HAVE_TIMED_JOIN 1)
+set(HX_OS_HAVE_NATIVE_PROCESS 1)
+if(ANDROID)
+	set(hx_android_api "${CMAKE_SYSTEM_VERSION}")
+	if(DEFINED ANDROID_PLATFORM_LEVEL)
+		set(hx_android_api "${ANDROID_PLATFORM_LEVEL}")
+	endif()
+	if(hx_android_api LESS 21)
+		message(FATAL_ERROR "Android API 21 or newer is required")
+	endif()
+	if(hx_android_api LESS 28)
+		set(HX_OS_HAVE_NATIVE_PROCESS 0)
+	endif()
+endif()
 set(HX_OS_NEED_RT 0)
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
 	list(APPEND hx_platform_sources src/windows/thread_native.c
@@ -90,13 +107,13 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
 		list(APPEND hx_platform_sources src/windows/loop_native.c)
 	endif()
 	set(hx_private_include src/windows)
-elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR ANDROID OR
 	CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 	list(APPEND hx_platform_sources src/posix/thread_native.c
 		src/posix/file_native.c)
 	if(HX_OS_ENABLE_LOOP)
 		list(APPEND hx_platform_sources src/posix/loop_io.c)
-		if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+		if(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR ANDROID)
 			list(APPEND hx_platform_sources src/linux/loop_native.c)
 		else()
 			list(APPEND hx_platform_sources src/apple/loop_native.c)
@@ -108,7 +125,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR
 	unset(HX_OS_HAVE_PTHREAD_TRYJOIN)
 	check_symbol_exists(pthread_tryjoin_np pthread.h
 		HX_OS_HAVE_PTHREAD_TRYJOIN)
-	if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	if(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR ANDROID)
 		check_symbol_exists(explicit_bzero string.h
 			HX_OS_HAVE_EXPLICIT_BZERO)
 		check_symbol_exists(getauxval sys/auxv.h HX_OS_HAVE_GETAUXVAL)
@@ -198,7 +215,8 @@ configure_file(cmake/hx_os_config.h.in
 
 add_library(hx_c_platform
 	src/base.c src/atomic.c src/time.c src/unicode.c src/thread.c
-	src/string.c src/file.c src/text.c src/optional.c
+	src/convenience.c src/lexer.c src/wide.c src/wait.c src/string.c
+	src/string_utils.c src/file.c src/text.c src/optional.c
 	src/config.c src/config_values.c
 	src/containers.c
 	src/sysinfo.c src/library.c src/path.c src/env.c src/paths.c
@@ -209,8 +227,8 @@ add_library(hx_c_platform
 	src/system.c src/cpu_features.c src/time_posix.c
 	src/process.c src/process_capture.c src/local.c src/duplex_pipe.c
 	src/registry.c src/power.c src/obfuscate.c
-	src/calendar.c src/text_lookup.c src/bitstream.c
-	src/calldata.c src/signal.c
+	src/calendar.c src/filename.c src/text_lookup.c src/bitstream.c
+	src/calldata.c src/dispatch.c src/signal.c src/procedure.c
 	src/settings.c
 	src/profiler.c
 	${hx_parser_sources} ${hx_parser_objects}
@@ -237,7 +255,7 @@ if(HX_OS_ENABLE_CALENDAR)
 			src/posix/calendar_native.c)
 	endif()
 endif()
-if(HX_OS_ENABLE_PROCESS)
+if(HX_OS_ENABLE_PROCESS AND HX_OS_HAVE_NATIVE_PROCESS)
 	if(WIN32)
 		target_sources(hx_c_platform PRIVATE
 			src/windows/process_native.c)
@@ -289,7 +307,7 @@ endif()
 if(HX_OS_ENABLE_WATCH)
 	if(WIN32)
 		target_sources(hx_c_platform PRIVATE src/windows/watch_native.c)
-	elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR ANDROID)
 		target_sources(hx_c_platform PRIVATE src/linux/watch_native.c)
 	else()
 		target_sources(hx_c_platform PRIVATE src/apple/watch_native.c)

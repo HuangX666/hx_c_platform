@@ -163,6 +163,14 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_file_load_utf8(hx_os_context *context,
 /* Strict UTF-8, removes UTF-8 BOM, 16 MiB input limit, output's context. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_read_text(
 	const char *path, hx_string *out, hx_os_error *error);
+/* Explicit encoding, 16 MiB input limit, transactional UTF-8 output.
+ * With BOM enabled, a matching leading BOM is removed and a conflicting BOM
+ * is INVALID_ENCODING; BOM=OFF preserves it through the selected converter.
+ * Unsupported legacy encodings return NOT_SUPPORTED. No ANSI guessing.
+ */
+/* Ambiguous UTF-16LE BOM + NUL uses the explicit encoding, not guessing. */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_file_read_text_encoded(const char *path,
+	hx_os_encoding encoding, hx_string *out, hx_os_error *error);
 /* Publishes an initialized UTF-8 string using the atomic-save contract. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_write_text(
 	const char *path, const hx_string *text, hx_os_error *error);

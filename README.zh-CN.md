@@ -10,8 +10,9 @@
 [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md)
 [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md)
 [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md)
-[![本地 Windows 74/74、Linux 76/76 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md)
+[![本地 Windows 82/82、Linux 84/84 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md)
 [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md)
+[![Android API 21 ARM 交叉编译通过][android-badge]](docs/ANDROID.zh-CN.md)
 
 系统信息可通过 C 接口或 `hx::SystemInfo` 直接查询；
 进程 CPU 采样使用独立的 `hx::CpuUsage` 对象。
@@ -20,10 +21,10 @@
 
 [English](README.md)
 
-徽章依据截至 **2026-09-30** 的记录：CI 已配置，本项目尚未声明远程 CI 通过。
+徽章依据截至 **2026-10-01** 的记录：CI 已配置，本项目尚未声明远程 CI 通过。
 **只有 C++ 封装是 header-only**，C 核心需要编译为静态库／共享库。
 C++11 已验证，尚未验证 C++14/17/20 矩阵。
-测试数字表示**Windows 74 项／Linux 76 项 CTest 入口**，不是断言数量；
+测试数字表示**Windows 82 项／Linux 84 项 CTest 入口**，不是断言数量；
 Linux 额外两项验证原生随机源故障。
 Linux 证据来自 WSL：GCC 与 Clang 全量库及 C++11 测试；
 Windows 证据来自本地 MSVC x86/x64 构建。
@@ -39,6 +40,12 @@ macOS、Win7、板卡和 musl 仍待验证，自有代码分发许可证也尚�
 基础库不依赖 hx_c_log、Qt、C++ 或 OBS 运行库。借鉴 OBS 的统一接口、
 共用实现、平台源码选择和警告配置方式，保持独立构建、测试和安装。
 当前没有执行 hx_c_log 接入。
+
+新增[常用工具](docs/COMMON_UTILITIES.zh-CN.md)：字符串分割/替换、
+翻译文件加载、宽位换算、命名过程、文件名、精细等待与分词，
+以及类型化 POD 容器和一次完成关闭释放的线程池入口。
+[Android API 21 基准](docs/ANDROID.zh-CN.md)覆盖两种 ARM ABI，
+已交叉编译，目标运行待设备；CI 配置与真机证据分别记录。
 
 ## 从要完成的事情开始
 
@@ -360,5 +367,6 @@ C++ 封装按项目的 C++ 类名和方法名规范命名。
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%2074%2F74%20Linux%2076%2F76-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%2082%2F82%20Linux%2084%2F84-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
+[android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

@@ -529,6 +529,16 @@ public:
 			throw StatusError(error);
 		return ThreadPool(owner);
 	}
+	static ThreadPool withThreads(hx_os_thread_pool *&owner,
+		std::size_t threads, std::size_t queueCapacity = 256,
+		hx_os_context *context = NULL)
+	{
+		hx_os_thread_pool_options options;
+		hx_os_thread_pool_options_init(&options);
+		options.threads = threads;
+		options.queue_capacity = queueCapacity;
+		return create(owner, context, &options);
+	}
 	hx_os_thread_pool *nativeHandle() const noexcept
 	{
 		return *m_owner_;
@@ -612,6 +622,14 @@ public:
 		}
 		return hx_os_thread_pool_close_until(
 			*m_owner_, mode, deadline, error);
+	}
+	/* Combined close/release; timeout keeps the external owner reachable.
+	 */
+	hx_os_status shutdownUntil(hx_os_deadline deadline,
+		int mode = HX_OS_POOL_DRAIN, hx_os_error *error = NULL) noexcept
+	{
+		return hx_os_thread_pool_shutdown_ex(
+			m_owner_, mode, deadline, error);
 	}
 	hx_os_status destroy(hx_os_error *error = NULL) noexcept
 	{

@@ -182,7 +182,7 @@ hx_os_status hx_os_i_thread_priority(
 hx_os_status hx_os_i_thread_affinity(
 	hx_os_thread *thread, uint64_t mask, hx_os_error *error)
 {
-#if defined(__linux__)
+#if defined(__linux__) && !defined(__ANDROID__)
 	cpu_set_t saved, desired, actual;
 	pthread_t native = thread ? thread->native.id : pthread_self();
 	int code, restored, i;

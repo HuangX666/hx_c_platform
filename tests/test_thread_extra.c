@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#if defined(__linux__)
+#if defined(__linux__) && !defined(__ANDROID__)
 #include <pthread.h>
 #include <sched.h>
 #elif defined(_WIN32)
@@ -26,7 +26,7 @@ typedef struct thread_test {
 	hx_os_status name_status;
 	uint64_t affinity;
 } thread_test;
-#if defined(__linux__)
+#if defined(__linux__) && !defined(__ANDROID__)
 static void test_restricted_affinity(const cpu_set_t *available, int selected)
 {
 	cpu_set_t actual;
@@ -55,7 +55,7 @@ static void *thread_entry(void *user)
 		      HX_OS_THREAD_PRIORITY_NORMAL, NULL) == HX_OS_OK);
 	CHECK(hx_os_thread_set_current_priority(99, NULL) == HX_OS_INVALID);
 	CHECK(hx_os_thread_set_current_affinity(0, NULL) == HX_OS_INVALID);
-#if defined(__linux__)
+#if defined(__linux__) && !defined(__ANDROID__)
 	{
 		cpu_set_t available, actual;
 		int i;
@@ -91,7 +91,7 @@ static void *thread_entry(void *user)
 #endif
 	state->name_status =
 		hx_os_thread_set_current_name("中文测试名称超过限制", NULL);
-#if defined(__linux__)
+#if defined(__linux__) && !defined(__ANDROID__)
 	{
 		char name[64];
 		size_t invalid, stack_size;

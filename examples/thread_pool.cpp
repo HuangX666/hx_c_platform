@@ -20,7 +20,7 @@ int main()
 		/* This example has only a completed CPU task and no external
 		 * waits. */
 		hx_os_status closed =
-			pool.closeUntil(hx_os_deadline_after_ms(2000));
+			pool.shutdownUntil(hx_os_deadline_after_ms(2000));
 		if (closed != HX_OS_OK) {
 			std::fprintf(stderr, "Close pending: %s\n",
 				hx_os_status_name(closed));
@@ -29,14 +29,14 @@ int main()
 			 * failure. */
 			return 1;
 		}
-		return pool.destroy() == HX_OS_OK ? 0 : 1;
+		return 0;
 	} catch (const std::exception &error) {
 		std::fprintf(stderr, "%s\n", error.what());
 		if (owner) {
 			hx::ThreadPool remaining(owner);
-			if (remaining.closeUntil(hx_os_deadline_after_ms(2000),
-				    HX_OS_POOL_CANCEL_PENDING) == HX_OS_OK)
-				(void)remaining.destroy();
+			(void)remaining.shutdownUntil(
+				hx_os_deadline_after_ms(2000),
+				HX_OS_POOL_CANCEL_PENDING);
 		}
 		return 1;
 	}

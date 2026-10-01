@@ -18,6 +18,18 @@ public:
 			error);
 		return std::string(hx_string_c_str(&text), text.size);
 	}
+	static std::string filename(int64_t milliseconds,
+		const char *extension = NULL, const char *pattern = NULL)
+	{
+		hx_string text = HX_STRING_INIT;
+		std::unique_ptr<hx_string, decltype(&hx_string_destroy)>
+			cleanup(&text, hx_string_destroy);
+		hx_os_error error;
+		detail::CheckStatus(hx_os_filename_format_string(milliseconds,
+					    pattern, extension, &text, &error),
+			error);
+		return std::string(hx_string_c_str(&text), text.size);
+	}
 	/* Offset east of UTC in minutes; DST 0/1/-1 (unknown). */
 	static std::pair<int, int> localOffset()
 	{

@@ -23,7 +23,33 @@ struct hx_os_signal_handler {
 	size_t emits;
 	uint64_t generation;
 	int closing;
+	int unique_names;
 };
 hx_os_status hx_os_i_signal_name(
 	const char *name, size_t *bytes, hx_os_error *error);
+hx_os_status hx_os_i_dispatch_options_init(
+	hx_os_signal_options *options, size_t capacity);
+hx_os_status hx_os_i_dispatch_handler_create(
+	hx_os_context *context, hx_os_signal_handler **out, hx_os_error *error);
+hx_os_status hx_os_i_dispatch_handler_create_with_options(
+	hx_os_context *context, const hx_os_signal_options *options,
+	hx_os_signal_handler **out, hx_os_error *error);
+hx_os_status hx_os_i_dispatch_connect(hx_os_signal_handler *handler,
+	const char *signal, hx_os_signal_fn function, void *user,
+	hx_os_signal_cleanup_fn cleanup, hx_os_signal_connection *out,
+	hx_os_error *error);
+hx_os_status hx_os_i_dispatch_emit(hx_os_signal_handler *handler,
+	const char *signal, const hx_os_calldata *data, size_t *called,
+	hx_os_error *error);
+hx_os_status hx_os_i_dispatch_disconnect(hx_os_signal_handler *handler,
+	hx_os_signal_connection connection, hx_os_error *error);
+hx_os_status hx_os_i_dispatch_disconnect_until(hx_os_signal_handler *handler,
+	hx_os_signal_connection connection, hx_os_deadline deadline,
+	hx_os_error *error);
+void hx_os_i_dispatch_handler_stop(hx_os_signal_handler *handler);
+hx_os_status hx_os_i_dispatch_handler_close_until(hx_os_signal_handler **owner,
+	hx_os_deadline deadline, hx_os_error *error);
+hx_os_status hx_os_i_dispatch_handler_destroy(
+	hx_os_signal_handler **handler, hx_os_error *error);
+
 #endif

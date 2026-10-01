@@ -9,7 +9,7 @@ hx_os_status hx_os_process_options_init(
 	*options = value;
 	return HX_OS_OK;
 }
-#if HX_OS_ENABLE_PROCESS
+#if HX_OS_ENABLE_PROCESS && HX_OS_HAVE_NATIVE_PROCESS
 static hx_os_status hx_os_process_strings(hx_os_context *context,
 	const char *const entries[], const char *first, int environment,
 	hx_os_string_list **out, hx_os_error *error)
@@ -56,7 +56,7 @@ hx_os_status hx_os_process_spawn(hx_os_context *context, const char *path,
 	const hx_os_process_options *options, hx_os_process **out,
 	hx_os_error *error)
 {
-#if HX_OS_ENABLE_PROCESS
+#if HX_OS_ENABLE_PROCESS && HX_OS_HAVE_NATIVE_PROCESS
 	hx_os_process_options defaults = HX_OS_PROCESS_OPTIONS_INIT;
 	hx_os_string_list *args = NULL, *env = NULL;
 	hx_os_process *process = NULL;
@@ -128,7 +128,7 @@ hx_os_status hx_os_process_wait_until(hx_os_process *process,
 	hx_os_deadline deadline, hx_os_process_result *result,
 	hx_os_error *error)
 {
-#if HX_OS_ENABLE_PROCESS
+#if HX_OS_ENABLE_PROCESS && HX_OS_HAVE_NATIVE_PROCESS
 	hx_os_status status;
 	if (!process)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
@@ -166,7 +166,7 @@ uint64_t hx_os_process_identifier(const hx_os_process *process)
 }
 hx_os_status hx_os_process_destroy(hx_os_process **process, hx_os_error *error)
 {
-#if HX_OS_ENABLE_PROCESS
+#if HX_OS_ENABLE_PROCESS && HX_OS_HAVE_NATIVE_PROCESS
 	hx_os_status status;
 	if (!process)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);

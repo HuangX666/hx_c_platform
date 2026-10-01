@@ -11,6 +11,9 @@
 #include "hx_os_obfuscate.h"
 #include "hx_os_bitstream.h"
 #include "hx_os_text_lookup.h"
+#include "hx_os_wide.h"
+#include "hx_os_lexer.h"
+#include "hx_os_procedure.h"
 #include "signal_private.h"
 #include "settings_private.h"
 #include "profiler_private.h"
@@ -29,6 +32,10 @@
 int main(void)
 {
 	HX_OS_LAYOUT(hx_string);
+	HX_OS_LAYOUT(hx_os_uint128);
+	HX_OS_LAYOUT(hx_os_token);
+	HX_OS_LAYOUT(hx_os_lexer_options);
+	HX_OS_LAYOUT(hx_os_proc_options);
 	HX_OS_LAYOUT(hx_os_atomic);
 	HX_OS_LAYOUT(hx_os_atomic32);
 	HX_OS_LAYOUT(hx_os_atomic_ptr);

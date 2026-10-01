@@ -47,6 +47,19 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_text_lookup_get(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_lookup_get_string(
 	const hx_os_text_lookup *lookup, const char *fallback, hx_string *out,
 	hx_os_error *error);
+/* OBS-style flat language catalog: UTF-8/BOM, key=value, # comments,
+ * quoted strings with JSON escapes, or trimmed unquoted text. No sections,
+ * includes, interpolation or process locale changes. Duplicate keys use last.
+ * Overlay is transactional; syntax/I/O/limit failures preserve every entry.
+ * Uses LEXER; file entries also need FILE_UTILS. Input limit equals the table
+ * text budget. Old and candidate tables may coexist during the call.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_text_lookup_load(hx_os_context *context,
+	const char *path, hx_os_text_lookup **out, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_text_lookup_add_file(
+	hx_os_text_lookup *lookup, const char *path, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_text_lookup_add_text(
+	hx_os_text_lookup *lookup, hx_string_view text, hx_os_error *error);
 HX_OS_API void HX_OS_CALL hx_os_text_lookup_destroy(hx_os_text_lookup **lookup);
 #ifdef __cplusplus
 }

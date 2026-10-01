@@ -145,8 +145,10 @@ int main(void)
 			      &threads[i], NULL) == HX_OS_OK);
 	for (i = 0; i < 4; ++i) {
 		CHECK(hx_os_thread_join_until(threads[i],
-			      hx_os_deadline_after_ms(10000), NULL,
-			      NULL) == HX_OS_OK);
+			      (hx_os_capabilities() & HX_OS_CAP_TIMED_JOIN)
+				      ? hx_os_deadline_after_ms(10000)
+				      : HX_OS_DEADLINE_INFINITE,
+			      NULL, NULL) == HX_OS_OK);
 		CHECK(hx_os_thread_destroy(&threads[i], NULL) == HX_OS_OK);
 	}
 	CHECK(hx_os_atomic_load(&state.counter, HX_OS_RELAXED) == 80000);
@@ -164,7 +166,10 @@ int main(void)
 		hx_os_atomic_ptr_store(&state.published, NULL, HX_OS_RELEASE);
 	}
 	CHECK(hx_os_thread_join_until(threads[0],
-		      hx_os_deadline_after_ms(10000), NULL, NULL) == HX_OS_OK);
+		      (hx_os_capabilities() & HX_OS_CAP_TIMED_JOIN)
+			      ? hx_os_deadline_after_ms(10000)
+			      : HX_OS_DEADLINE_INFINITE,
+		      NULL, NULL) == HX_OS_OK);
 	CHECK(hx_os_thread_destroy(&threads[0], NULL) == HX_OS_OK);
 	return 0;
 }

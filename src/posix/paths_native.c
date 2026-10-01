@@ -97,6 +97,12 @@ hx_os_status hx_os_i_special_path(int kind, hx_string *out, hx_os_error *error)
 {
 	hx_os_status status;
 	const char *suffix;
+#if defined(__ANDROID__)
+	/* App-private roots need a Java/NativeActivity host; never guess them.
+	 */
+	if (kind != HX_OS_I_PATH_EXECUTABLE && kind != HX_OS_I_PATH_MODULE)
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
 	if (kind == HX_OS_I_PATH_HOME)
 		return hx_os_path_user_home(out, error);
 	if (kind == HX_OS_I_PATH_EXECUTABLE)

@@ -35,7 +35,9 @@ set(hx_test_suites data options lifecycle config containers sysinfo file_utils
 	env paths thread_extra pipe io_options file_info config_serialize timer
 	error_text util vm file_extra watch loop_fd system delayed local duplex
 	registry power obfuscate calendar text_lookup bitstream calldata signal
-	settings settings_concurrency settings_config profiler atomic)
+	settings settings_concurrency settings_config profiler atomic
+	string_tools lexer wide_wait catalog_filename procedure
+	android_baseline)
 if(HX_OS_ENABLE_THREAD_POOL)
 	list(APPEND hx_test_suites pool)
 endif()
@@ -128,6 +130,15 @@ set_target_properties(hx_os_header_c PROPERTIES
 hx_apply_warnings(hx_os_header_c)
 
 if(CMAKE_CXX_COMPILER_LOADED)
+	add_executable(hx_os_test_cpp_utilities test_cpp_utilities.cpp)
+	target_link_libraries(hx_os_test_cpp_utilities PRIVATE
+		hx_c_platform::cpp)
+	set_target_properties(hx_os_test_cpp_utilities PROPERTIES
+		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+	hx_apply_warnings(hx_os_test_cpp_utilities)
+	add_test(NAME cpp_utilities COMMAND hx_os_test_cpp_utilities)
+	set_tests_properties(cpp_utilities PROPERTIES TIMEOUT 20)
 	add_executable(hx_os_test_cpp_extensions test_cpp_extensions.cpp)
 	target_link_libraries(hx_os_test_cpp_extensions PRIVATE
 		hx_c_platform::cpp)

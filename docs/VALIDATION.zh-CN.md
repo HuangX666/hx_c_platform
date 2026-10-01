@@ -809,3 +809,83 @@ cmake/minimal.cmake 是兼容 3.16 的初始缓存示例，不增加运行时配
 
 第 3 批失败夹具留在忽略的构建输出中：自动审批以“blocked by policy”拒绝了
 此前请求的递归清理，未改用其它删除方式绕过。
+
+## 2026-10-01：常用工具与 Android 基准
+
+本节补充前述 24 批验收，旧批次的数字与提交证据保留原样。
+新增能力及所有权契约见 [常用工具](COMMON_UTILITIES.zh-CN.md)，
+Android 操作入口见 [Android 基准](ANDROID.zh-CN.md)。
+
+| 配置 | 结果 |
+| --- | --- |
+| Windows MSVC x64 Debug 静态，外部解析器 | 82/82 |
+| Windows MSVC x64 Release 共享 | 82/82 |
+| Windows MSVC v142 Win32 Debug 静态 | 82/82 |
+| Windows CMake 3.16.8 / NMake / v142 | 82/82 |
+| WSL GCC Debug 静态、Release 共享 | 各 84/84 |
+| WSL Clang Release | 84/84 |
+| WSL ASan/UBSan、TSan | 各 84/84 |
+| Windows 全部可选模块关闭，共享 | 52/52 |
+| WSL 仅开启 PROCEDURES，其余可选模块关闭，共享 | 52/52，含 SIGNALS 关闭时的参数包 |
+| Windows/WSL 静态和共享安装后 find_package | 各配置 C/C++ 10/10，纯 C 7/7 |
+| 7cf52fc 旧头/测试配新 Windows DLL、Linux so | 各 10/10 |
+| Windows 默认/最小、WSL 默认/仅过程模块导出 | 均 624 个公共函数，无丢失或内部符号泄漏 |
+
+Android 使用已有 NDK 28.2.13676358 / Clang 19.0.1，8 组交叉构建通过：
+API 21/28 × 两个 ARM ABI 的默认共享配置，API 21 两个 ABI 的最小共享配置，
+API 21 两个 ABI 的默认静态配置。均包含 C99/C++11 独立公共头、测试、示例与
+基准程序编译。adb 无连接设备；Android 目标运行、基准耗时和设备沙箱待验证。
+CI 矩阵已写入并通过 actionlint，本轮没有执行远程 CI。
+
+新增测试覆盖 UTF-8/NUL/别名、失败保持、分配失败、翻译文件叠加回滚、
+词法位置与错误保持、独立 BigInt 生成的 48 组宽位参考值、舍入/溢出、
+单调等待、同步周期回调、过程自等待/在途关闭/重试、allocator 回入、
+热路径分配次数与 C++ 异常转换。32 位编译运行也覆盖可移植宽位算法。
+Windows 自旋增加 QPC 预算上限后，再次运行受影响测试通过。
+
+### 布局与成本观察
+
+核对 298bf51 中的 47 个既有具名公共结构体/联合定义，忽略空白/说明后未改变。
+新增代表类型的 size/alignment（字节）：
+
+| 类型 | MSVC x64 / Linux x64 | MSVC Win32 |
+| --- | --- | --- |
+| hx_os_uint128 | 16/8 | 16/8 |
+| hx_os_token | 48/8 | 24/4 |
+| hx_os_lexer_options | 40/8 | 24/4 |
+| hx_os_proc_options | 32/8 | 20/4 |
+
+使用自然对齐，不使用 pack。字符串 ASCII 操作、宽位数学无分配/锁；
+注册后的过程调用测试确认不增加 context 分配，但仍有槽表扫描、锁和间接调用。
+信号共用原有退役实现，不复制一套并发控制代码。普通池任务路径未改动。
+
+Release 共享库、每项 100000 次、三次本机观察的中位数（ns/操作）：
+
+| 操作 | Windows x64 | WSL Linux x64 |
+| --- | --- | --- |
+| relaxed 原子增量 | 8.58 | 8.36 |
+| ASCII 大小写成对转换 | 24.91 | 22.20 |
+| 64×64÷64 | 198.37 | 6.24 |
+| 单个命名过程 | 341.46 | 388.18 |
+
+Windows 宽位算法走可移植分支，Linux x64 走编译器 128 位整数；没有据此
+宣称跨平台性能等价。微基准 Windows 用 QPC 计时，避免短操作被 tick 时钟
+量化成零。原始输出为 build-shared-msvc/util-perf.log 和
+build-shared-linux/util-perf.log。没有同负载的旧实现可比，因此不称为提速。
+
+默认 200 us 自旋、2 ms 请求、每次 30 个等待样本：Windows 各次平均晚醒
+约 13.1..13.5 ms，WSL 约 0.31..0.72 us；是本机调度/时钟观察，绝非精度保证。
+Windows 原有 deadline 时钟保持兼容，自旋由独立 QPC 限制，预算耗尽后睡眠；
+没有修改系统计时器精度。hx_c_log 五倍/单线程不回退门槛仍属于未来接入验收。
+
+### 提交历史与复现记录
+
+在原有 28 个提交中重写 27 条说明，源码树、作者与提交时间逐项一致；
+保留根基线 7cf52fc。原历史保存为 backup/pre-message-cleanup-20261001，
+旧顶端 622ee2e 对应新顶端 298bf51。历史文档中的旧散列仍可从备份访问。
+没有推送远程。新的提交使用简短中文主题。
+
+构建目录内 util-build/test/install/abi 日志、Android report.json 与
+report-minimal.json 保存原始记录；部分最后补测使用 util-final 或 util-budget
+前缀。编译产物、SDK、依赖缓存未入库，第三方源码未改动。
+macOS、Win7/8.1、musl 和真实嵌入式板卡的既有待验证状态不变。

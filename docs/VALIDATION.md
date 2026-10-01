@@ -960,3 +960,90 @@ First-party distribution licensing is still undecided.
 Failed batch-3 fixture directories under ignored build outputs remain:
 automatic approval review rejected their requested recursive cleanup with
 "blocked by policy". No alternative deletion bypass was attempted.
+
+## 2026-10-01: common utilities and Android baseline
+
+This extends the completed 24 batches; earlier counts and evidence stay intact.
+See [common contracts](COMMON_UTILITIES.md) and [Android usage](ANDROID.md).
+
+| Configuration | Result |
+| --- | --- |
+| Windows MSVC x64 Debug static, external parsers | 82/82 |
+| Windows MSVC x64 Release shared | 82/82 |
+| Windows MSVC v142 Win32 Debug static | 82/82 |
+| Windows CMake 3.16.8 / NMake / v142 | 82/82 |
+| WSL GCC Debug static / Release shared | 84/84 each |
+| WSL Clang Release | 84/84 |
+| WSL ASan/UBSan / TSan | 84/84 each |
+| Windows all optional modules OFF, shared | 52/52 |
+| WSL only PROCEDURES ON, shared | 52/52, including parameter packs without SIGNALS |
+| Windows/WSL static/shared installed consumers | C/C++ 10/10 and pure C 7/7 per configuration |
+| 7cf52fc headers/tests with current DLL/so | 10/10 per host |
+| Windows full/minimal, WSL full/procedures-only exports | 624 each, no missing public or leaked private symbols |
+
+Eight Android cross-builds passed using existing NDK 28.2.13676358 / Clang
+19.0.1: both ARM ABIs at API 21/28 with default shared modules, both at API 21
+with minimal shared modules, and both at API 21 with default static modules.
+Each includes C99/C++11 public headers, tests, examples and benchmarks.
+adb found no device: target execution, performance and sandbox acceptance
+remain pending. CI configuration passes actionlint; no remote CI run occurred.
+
+New coverage includes UTF-8/NUL/aliasing, transactional failure, allocation
+faults, catalog overlays, lexer position/sticky errors, 48 independent BigInt
+wide-arithmetic reference vectors, rounding/overflow, monotonic waits/repeat,
+procedure self-wait/in-flight close/retry, allocator reentry, warm allocation
+counts and C++ exception conversion. Win32 also exercises portable arithmetic.
+Affected Windows suites passed again after adding the QPC spin-budget guard.
+
+### Layout and performance observations
+
+The 47 pre-existing named public struct/union declarations in 298bf51 are
+unchanged after removing whitespace/comments. New size/alignment in bytes:
+
+| Type | MSVC x64 / Linux x64 | MSVC Win32 |
+| --- | --- | --- |
+| hx_os_uint128 | 16/8 | 16/8 |
+| hx_os_token | 48/8 | 24/4 |
+| hx_os_lexer_options | 40/8 | 24/4 |
+| hx_os_proc_options | 32/8 | 20/4 |
+
+Natural alignment, no packing. ASCII edits/wide arithmetic add no allocation
+or lock. Registered procedure calls allocate no context storage, but still
+scan slots, lock and invoke indirectly. Signals share the existing retirement
+implementation. Ordinary pool task paths are unchanged.
+
+Release shared, 100000 iterations, median of three local observations (ns/op):
+
+| Operation | Windows x64 | WSL Linux x64 |
+| --- | --- | --- |
+| Relaxed atomic increment | 8.58 | 8.36 |
+| ASCII lower/upper pair | 24.91 | 22.20 |
+| 64*64/64 | 198.37 | 6.24 |
+| Single named procedure | 341.46 | 388.18 |
+
+Windows uses portable wide arithmetic; Linux x64 uses compiler 128-bit
+integers. No cross-platform parity claim. Windows benchmark intervals use
+QPC so short operations are not quantized to zero by the deadline clock.
+Raw outputs: build-shared-msvc/util-perf.log and build-shared-linux/util-perf.log.
+There is no equivalent old workload baseline, so these are not speedup claims.
+
+Default 200 us spin, 2 ms request, 30 waits per run: Windows mean lateness was
+about 13.1..13.5 ms; WSL about 0.31..0.72 us. These are local clock/scheduler
+observations, never precision guarantees. Windows keeps its existing deadline
+domain and bounds spinning independently with QPC before falling back to sleep.
+No global timer-resolution change. hx_c_log performance gates remain future
+migration acceptance.
+
+### History and reproduction
+
+27 of 28 historical commit messages were shortened while retaining every
+source tree, author and timestamp. Root 7cf52fc remains; old history is kept
+on backup/pre-message-cleanup-20261001. Old tip 622ee2e maps to 298bf51;
+historical document hashes remain accessible through the backup. No push.
+New commits use short Chinese subjects.
+
+Build directories contain util-build/test/install/abi logs; final focused
+checks use util-final/util-budget prefixes. Android records are report.json
+and report-minimal.json. Outputs/SDK/dependency caches remain untracked and
+vendor sources unchanged. Existing macOS, Win7/8.1, musl and physical-board
+validation gaps remain.

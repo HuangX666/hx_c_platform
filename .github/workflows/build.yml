@@ -138,3 +138,44 @@ jobs:
         run: >-
           ctest --test-dir build --output-on-failure
           -E '${{ matrix.exclude }}'
+
+  android:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a]
+        api: [21, 28]
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install pinned Android NDK
+        run: sdkmanager "ndk;28.2.13676358"
+      - name: Build Android C99 and C++11 contracts
+        run: >-
+          python3 tools/verify_android.py
+          --ndk "$ANDROID_HOME/ndk/28.2.13676358"
+          --abi ${{ matrix.abi }} --api ${{ matrix.api }}
+      - name: Build minimal Android profile
+        if: matrix.api == 21
+        run: >-
+          python3 tools/verify_android.py
+          --ndk "$ANDROID_HOME/ndk/28.2.13676358"
+          --abi ${{ matrix.abi }} --api 21 --minimal
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-${{ matrix.abi }}-api${{ matrix.api }}
+          path: |
+            build-android/*.json
+            build-android/*/*.log
+
+  independent_procedures:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - run: >-
+          cmake -S . -B build -C cmake/minimal.cmake
+          -DHX_OS_ENABLE_PROCEDURES=ON -DHX_OS_BUILD_TESTS=ON
+          -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build build --parallel 4
+      - run: ctest --test-dir build --output-on-failure

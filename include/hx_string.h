@@ -87,6 +87,49 @@ HX_OS_API hx_os_status HX_OS_CALL hx_string_encode(const hx_string *string,
 	hx_os_encoding encoding, void *output, size_t capacity,
 	hx_os_text_result *result, hx_os_error *error);
 
+/* Common operations preserve UTF-8 and use the string's own context.
+ * Trimming/case conversion affects ASCII only (Unicode bytes stay intact).
+ * Prefix/suffix predicates return false for an invalid view.
+ */
+HX_OS_API int HX_OS_CALL hx_string_starts_with(
+	const hx_string *string, hx_string_view prefix);
+HX_OS_API int HX_OS_CALL hx_string_ends_with(
+	const hx_string *string, hx_string_view suffix);
+HX_OS_API hx_os_status HX_OS_CALL hx_string_trim_ascii(
+	hx_string *string, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_string_lower_ascii(
+	hx_string *string, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_string_upper_ascii(
+	hx_string *string, hx_os_error *error);
+/* Left-to-right nonoverlapping replacement; empty needle is INVALID.
+ * Inputs may borrow from string. Failure preserves string and replaced.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_string_replace_all(hx_string *string,
+	hx_string_view needle, hx_string_view replacement, size_t *replaced,
+	hx_os_error *error);
+/* Owns a copy of the input; views remain valid until parts_destroy.
+ * Embedded NUL is supported. Default: retain empty pieces, at most 4096.
+ * ex max_parts is 1..65536; excess pieces fail with LIMIT, never truncate.
+ * Empty separator is INVALID. Failure sets *out=NULL.
+ */
+typedef struct hx_string_parts hx_string_parts;
+HX_OS_API hx_os_status HX_OS_CALL hx_string_split(const hx_string *string,
+	hx_string_view separator, hx_string_parts **out, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_string_split_ex(const hx_string *string,
+	hx_string_view separator, size_t max_parts, int keep_empty,
+	hx_string_parts **out, hx_os_error *error);
+HX_OS_API size_t HX_OS_CALL hx_string_parts_count(const hx_string_parts *parts);
+HX_OS_API hx_os_status HX_OS_CALL hx_string_parts_at(
+	const hx_string_parts *parts, size_t index, hx_string_view *out);
+HX_OS_API void HX_OS_CALL hx_string_parts_destroy(hx_string_parts **parts);
+/* Transactional, validates each UTF-8 view. Parts may borrow from out.
+ * count=0 produces an empty string. Parts array and output object may not
+ * overlap. No locale collation, Unicode normalization or case folding.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_string_join(hx_string *out,
+	const hx_string_view *parts, size_t count, hx_string_view separator,
+	hx_os_error *error);
+
 #ifdef __cplusplus
 }
 #endif

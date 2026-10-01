@@ -112,6 +112,14 @@ public:
 	{
 		return CallDataView(m_data_);
 	}
+	explicit CallData(const hx_os_calldata &data) noexcept
+	    : m_data_(data)
+	{
+	}
+	hx_os_calldata &native() noexcept
+	{
+		return m_data_;
+	}
 	const hx_os_calldata &native() const noexcept
 	{
 		return m_data_;

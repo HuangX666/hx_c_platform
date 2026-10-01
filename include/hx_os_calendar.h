@@ -24,6 +24,23 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_wall_time_format_utc_string(
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_wall_time_local_offset_minutes(
 	int *minutes, int *dst, hx_os_error *error);
+/* Portable single-component UTF-8 filename using UTC calendar tokens.
+ * Default pattern: %CCYY-%MM-%DD_%hh-%mm-%ss. Replaces controls and
+ * <>:"/\|?* with _, repairs trailing spaces/dots, prefixes Windows reserved
+ * device stems with _. Extension is optional, ASCII alphanumeric/-/_ up to
+ * 32 bytes; one leading dot is accepted. Output is capped at 240 UTF-8 bytes.
+ * No directory creation, uniqueness guarantee or implicit collision overwrite.
+ * Failure preserves outputs; required includes NUL. String uses its context.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_filename_format_string(
+	int64_t milliseconds, const char *pattern, const char *extension,
+	hx_string *out, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_filename_format(int64_t milliseconds,
+	const char *pattern, const char *extension, char *buffer,
+	size_t capacity, size_t *required, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_filename_generate(
+	const char *extension, hx_string *out, hx_os_error *error);
+
 #ifdef __cplusplus
 }
 #endif

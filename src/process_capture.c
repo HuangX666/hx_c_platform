@@ -34,7 +34,8 @@ hx_os_status hx_os_process_capture_options_init(
 	*options = value;
 	return HX_OS_OK;
 }
-#if HX_OS_ENABLE_PROCESS && HX_OS_ENABLE_PIPE && HX_OS_ENABLE_LOOP
+#if HX_OS_ENABLE_PROCESS && HX_OS_HAVE_NATIVE_PROCESS && HX_OS_ENABLE_PIPE &&  \
+	HX_OS_ENABLE_LOOP
 static void HX_OS_CALL hx_os_capture_read(
 	hx_os_request *request, const hx_os_completion *completion, void *user)
 {
@@ -162,7 +163,8 @@ hx_os_status hx_os_process_capture_run_with_options(hx_os_context *context,
 	const hx_os_process_capture_options *options, hx_os_deadline deadline,
 	hx_os_process_capture **out, hx_os_error *error)
 {
-#if HX_OS_ENABLE_PROCESS && HX_OS_ENABLE_PIPE && HX_OS_ENABLE_LOOP
+#if HX_OS_ENABLE_PROCESS && HX_OS_HAVE_NATIVE_PROCESS && HX_OS_ENABLE_PIPE &&  \
+	HX_OS_ENABLE_LOOP
 	hx_os_process_capture_options defaults =
 		HX_OS_PROCESS_CAPTURE_OPTIONS_INIT;
 	hx_os_process_options spawn = HX_OS_PROCESS_OPTIONS_INIT;
@@ -248,7 +250,8 @@ hx_os_status hx_os_process_capture_wait_until(hx_os_process_capture *capture,
 	hx_os_deadline deadline, hx_os_process_result *result,
 	hx_os_error *error)
 {
-#if HX_OS_ENABLE_PROCESS && HX_OS_ENABLE_PIPE && HX_OS_ENABLE_LOOP
+#if HX_OS_ENABLE_PROCESS && HX_OS_HAVE_NATIVE_PROCESS && HX_OS_ENABLE_PIPE &&  \
+	HX_OS_ENABLE_LOOP
 	hx_os_error local;
 	hx_os_status status, first;
 	int polled = 0, i;
@@ -360,7 +363,8 @@ hx_os_status hx_os_process_capture_discard(
 hx_os_status hx_os_process_capture_close_until(hx_os_process_capture **capture,
 	hx_os_deadline deadline, hx_os_error *error)
 {
-#if HX_OS_ENABLE_PROCESS && HX_OS_ENABLE_PIPE && HX_OS_ENABLE_LOOP
+#if HX_OS_ENABLE_PROCESS && HX_OS_HAVE_NATIVE_PROCESS && HX_OS_ENABLE_PIPE &&  \
+	HX_OS_ENABLE_LOOP
 	hx_os_status status;
 	if (!capture)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);

@@ -228,6 +228,17 @@ public:
 			hx_os_file_read_text(path, &text, &error), error);
 		return std::string(hx_string_c_str(&text), text.size);
 	}
+	static std::string readText(const char *path, hx_os_encoding encoding)
+	{
+		hx_string text = HX_STRING_INIT;
+		std::unique_ptr<hx_string, decltype(&hx_string_destroy)>
+			cleanup(&text, hx_string_destroy);
+		hx_os_error error;
+		detail::CheckStatus(hx_os_file_read_text_encoded(
+					    path, encoding, &text, &error),
+			error);
+		return std::string(hx_string_c_str(&text), text.size);
+	}
 	static void writeText(const char *path, const std::string &text)
 	{
 		size_t invalid;

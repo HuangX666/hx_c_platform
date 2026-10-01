@@ -19,7 +19,8 @@ int main(void)
 	int64_t integer = 99;
 	double real = 0;
 	void *pointer = NULL;
-	if (!(hx_os_capabilities() & HX_OS_CAP_SIGNALS)) {
+	if (!(hx_os_capabilities() &
+		    (HX_OS_CAP_SIGNALS | HX_OS_CAP_PROCEDURES))) {
 		CHECK(hx_os_calldata_set_i64(&data, "value", 1, NULL) ==
 			HX_OS_NOT_SUPPORTED);
 		return 0;

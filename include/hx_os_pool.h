@@ -95,6 +95,15 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_close_until(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_destroy(
 	hx_os_thread_pool **pool, hx_os_error *error);
 
+/* Close and destroy in one operation. Default drains; ex selects the
+ * existing close mode. Failure retains *pool for retry; success sets NULL.
+ * Same external exclusion and monotonic shared budget as the original close.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_shutdown(
+	hx_os_thread_pool **pool, hx_os_deadline deadline, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_shutdown_ex(
+	hx_os_thread_pool **pool, int mode, hx_os_deadline deadline,
+	hx_os_error *error);
 #ifdef __cplusplus
 }
 #endif

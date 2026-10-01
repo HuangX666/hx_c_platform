@@ -551,7 +551,7 @@ uint64_t hx_os_capabilities(void)
 #if HX_OS_ENABLE_SYSTEM_UTILS
 	result |= HX_OS_CAP_SYSTEM_UTILS;
 #endif
-#if HX_OS_ENABLE_PROCESS
+#if HX_OS_ENABLE_PROCESS && HX_OS_HAVE_NATIVE_PROCESS
 	result |= HX_OS_CAP_PROCESS;
 #endif
 #if HX_OS_ENABLE_LOCAL_SOCKETS && HX_OS_ENABLE_NETWORK
@@ -586,6 +586,18 @@ uint64_t hx_os_capabilities(void)
 #endif
 #if HX_OS_ENABLE_SETTINGS
 	result |= HX_OS_CAP_SETTINGS;
+#endif
+#if HX_OS_ENABLE_PROCEDURES
+	result |= HX_OS_CAP_PROCEDURES;
+#endif
+#if HX_OS_ENABLE_LEXER
+	result |= HX_OS_CAP_LEXER;
+#endif
+#if HX_OS_ENABLE_WIDE_MATH
+	result |= HX_OS_CAP_WIDE_MATH;
+#endif
+#if HX_OS_ENABLE_PRECISE_WAIT
+	result |= HX_OS_CAP_PRECISE_WAIT;
 #endif
 #if HX_OS_ENABLE_PROFILER
 	result |= HX_OS_CAP_PROFILER;

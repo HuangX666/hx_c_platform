@@ -3,7 +3,8 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 	pipe_transfer positioned_read file_info config_save periodic_timer
 	random_uuid mapped_file file_attributes watch_directory capture_process
 	delayed_task duplex_message obfuscated_string localized_time
-	signal_notifications settings profile_intervals atomic_publication)
+	signal_notifications settings profile_intervals atomic_publication
+	common_tasks)
 	add_executable(hx_os_${example} ${example}.c)
 	target_link_libraries(hx_os_${example} PRIVATE hx_c_platform)
 	set_target_properties(hx_os_${example} PROPERTIES
@@ -12,6 +13,8 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 	hx_apply_warnings(hx_os_${example})
 endforeach()
 if(HX_OS_BUILD_TESTS)
+	add_test(NAME common_tasks_example COMMAND hx_os_common_tasks)
+	set_tests_properties(common_tasks_example PROPERTIES TIMEOUT 20)
 	add_test(NAME atomic_publication_example
 		COMMAND hx_os_atomic_publication)
 	set_tests_properties(atomic_publication_example PROPERTIES TIMEOUT 20)

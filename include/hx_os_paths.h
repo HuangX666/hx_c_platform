@@ -30,6 +30,13 @@ HX_OS_DECLARE_PATH(executable);
 HX_OS_DECLARE_PATH(module);
 
 #undef HX_OS_DECLARE_PATH
+/* Config root/application/name, without creating directories. Components
+ * must be nonempty UTF-8 without slash, backslash, colon, "." or "..".
+ * Lexical composition is not a sandbox or symlink containment guarantee.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_path_config_file(
+	const char *application, const char *name, hx_string *out,
+	hx_os_error *error);
 
 #ifdef __cplusplus
 }

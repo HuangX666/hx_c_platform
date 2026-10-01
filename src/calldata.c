@@ -1,5 +1,5 @@
 #include "signal_private.h"
-#if HX_OS_ENABLE_SIGNALS
+#if HX_OS_ENABLE_SIGNALS || HX_OS_ENABLE_PROCEDURES
 hx_os_status hx_os_i_signal_name(
 	const char *name, size_t *bytes, hx_os_error *error)
 {
@@ -63,7 +63,7 @@ static hx_os_status hx_os_calldata_set(hx_os_calldata *data, const char *name,
 	unsigned kind, hx_os_calldata_value value, hx_string_view text,
 	hx_os_error *error)
 {
-#if HX_OS_ENABLE_SIGNALS
+#if HX_OS_ENABLE_SIGNALS || HX_OS_ENABLE_PROCEDURES
 	hx_os_calldata result = HX_OS_CALLDATA_INIT;
 	size_t bytes, invalid;
 	uint32_t i;
@@ -117,7 +117,7 @@ static hx_os_status hx_os_calldata_get(const hx_os_calldata *data,
 	const char *name, unsigned kind, const void *out,
 	hx_os_calldata_value *value, hx_os_error *error)
 {
-#if HX_OS_ENABLE_SIGNALS
+#if HX_OS_ENABLE_SIGNALS || HX_OS_ENABLE_PROCEDURES
 	size_t bytes;
 	uint32_t i;
 	hx_os_status status;

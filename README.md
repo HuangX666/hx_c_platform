@@ -10,8 +10,9 @@
 [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md)
 [![macOS validation pending][macos-badge]](docs/VALIDATION.md)
 [![Windows MSVC][windows-badge]](docs/VALIDATION.md)
-[![Windows 74/74 and Linux 76/76 local suites passed][tests-badge]](docs/VALIDATION.md)
+[![Windows 82/82 and Linux 84/84 local suites passed][tests-badge]](docs/VALIDATION.md)
 [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md)
+[![Android API 21 ARM cross-build passed][android-badge]](docs/ANDROID.md)
 
 Query system information directly through C or `hx::SystemInfo`;
 `hx::CpuUsage` owns an independent process CPU sampler. See
@@ -20,11 +21,11 @@ Query system information directly through C or `hx::SystemInfo`;
 
 [简体中文](README.zh-CN.md)
 
-Badge evidence is recorded through **2026-09-30**. CI is configured; no remote
+Badge evidence is recorded through **2026-10-01**. CI is configured; no remote
 CI pass is claimed for this project. The **C++ facade only** is header-only;
 the C core is a compiled static/shared library. C++11 has been checked;
-a C++14/17/20 matrix has not been verified. Counts describe **74 Windows /
-76 Linux CTest entries**, not individual assertions. The extra Linux entries
+a C++14/17/20 matrix has not been verified. Counts describe **82 Windows /
+84 Linux CTest entries**, not individual assertions. The extra Linux entries
 exercise native random-provider failures.
 Linux evidence is from WSL: full GCC and Clang library/C++11 suites.
 Windows evidence covers local MSVC x86/x64 builds. ARMv7/AArch64 glibc cross
@@ -43,6 +44,12 @@ There is no dependency on hx_c_log, Qt, C++, or the OBS runtime. OBS informs the
 interface/shared-implementation/platform-selection pattern and warning profile.
 The project builds, tests and installs independently. No hx_c_log integration
 has been performed.
+
+New [common utilities](docs/COMMON_UTILITIES.md) cover string operations,
+catalog loading, wide arithmetic, named procedures, filenames, explicit
+precise waits and lexing, with typed POD containers and combined pool shutdown.
+The [Android API 21 baseline](docs/ANDROID.md) covers both ARM ABIs; cross-builds
+pass, while device execution is pending. CI configuration is not runtime proof.
 
 ## Start with a task
 
@@ -384,5 +391,6 @@ by this new library or a migration.
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%2074%2F74%20Linux%2076%2F76-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%2082%2F82%20Linux%2084%2F84-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
+[android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

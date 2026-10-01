@@ -288,6 +288,8 @@ hx_os_status hx_os_i_sys_version(
 		return hx_os_i_error(error, HX_OS_IO_ERROR, 0, 0);
 #if defined(__APPLE__)
 	(void)snprintf(text, 256, "macOS %.128s", release);
+#elif defined(__ANDROID__)
+	(void)snprintf(text, 256, "Android kernel %.128s", release);
 #else
 	(void)snprintf(text, 256, "Linux %.128s", release);
 #endif
