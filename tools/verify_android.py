@@ -47,8 +47,15 @@ def device_info(args):
 
 
 def device_run(args, build, abi, api, record):
+    record["runtime"] = "failed: device setup or test execution"
     info = device_info(args)
     record["device"] = info
+    record["native_machine"] = adb_text(args, "shell", "uname -m")
+    record["execution"] = (
+        "native ISA" if abi == info["ro.product.cpu.abi"]
+        else "guest/compatibility ISA; not a native CPU validation"
+    )
+    record["tests"] = {}
     supported = (info["ro.product.cpu.abilist"]
                  or info["ro.product.cpu.abi"]).split(",")
     if abi not in supported or int(info["ro.build.version.sdk"]) < api:
@@ -80,8 +87,10 @@ def device_run(args, build, abi, api, record):
                 "cd " + shlex.quote(remote) + " && LD_LIBRARY_PATH="
                 + shlex.quote(remote) + " ./" + shlex.quote(path.name)
             )
+            record["tests"][path.name] = "failed or interrupted"
             run([args.adb, "-s", args.serial, "shell", command],
                 build / ("run-" + path.name + ".log"), 60)
+            record["tests"][path.name] = "passed"
         record["runtime"] = (
             "passed on emulator" if info["ro.kernel.qemu"] == "1"
             else "passed on adb target; verify physical-device provenance"
@@ -110,8 +119,10 @@ def main():
                         default=os.environ.get("ANDROID_NDK_ROOT"))
     parser.add_argument("--build-root", type=Path,
                         default=ROOT / "build-android")
-    parser.add_argument("--abi", choices=("arm64-v8a", "armeabi-v7a"),
-                        action="append")
+    parser.add_argument("--abi",
+                        choices=("arm64-v8a", "armeabi-v7a", "x86_64"),
+                        action="append",
+                        help="x86_64 supplements the two ARM baselines")
     parser.add_argument("--api", type=int, action="append")
     parser.add_argument("--minimal", action="store_true")
     parser.add_argument("--static", action="store_true")

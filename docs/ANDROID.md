@@ -28,6 +28,19 @@ Minimal uses cmake/minimal.cmake. Shared is default; --static selects static.
 Use --build-root for separate records. Without --serial, the script only
 cross-compiles and never selects a device or executes ARM binaries.
 
+An empty adb list can mean an installed AVD is stopped. This host has
+Qt_Android_34:
+
+~~~text
+emulator -list-avds
+emulator -avd Qt_Android_34 -port 5580 -read-only -no-snapshot
+~~~
+
+Wait for boot and select emulator-5580. Read-only mode preserves AVD user
+data; no-snapshot disables snapshot load/save. Automated runs may add
+-no-window -no-audio. The AVD is x86_64; --abi x86_64 is now available as an
+additional emulator configuration. The two default ARM ABIs are unchanged.
+
 ~~~text
 adb devices -l
 python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --serial DEVICE_SERIAL
@@ -57,6 +70,12 @@ Failed fixtures remain. An adb timeout may leave the target process running;
 preserve/report its directory without killing it. Record load/temperature/
 frequency conditions and collect repeated performance samples.
 
+Reports distinguish build minimum API, runtime API, native machine and
+translation, with a result per executable. Failures do not remain labeled
+as unrun. Shared validation executables have $ORIGIN RUNPATH for newer Android;
+older native systems still use LD_LIBRARY_PATH. Only test/example/benchmark
+targets receive this option; consumer and system library paths are unchanged.
+
 ## Platform boundaries
 
 | Facility | Current behavior |
@@ -85,14 +104,34 @@ Standalone validation uses c++_static; consumers retain their NDK STL policy.
 
 | Configuration | Cross-build | Target execution |
 | --- | --- | --- |
-| API 21 arm64-v8a, shared/default modules | Passed | Pending device |
+| API 21 arm64-v8a, shared/default modules | Passed | Android 14 translated, 8/8 |
 | API 21 armeabi-v7a, shared/default modules | Passed | Pending device |
-| API 28 arm64-v8a, shared/default modules | Passed | Pending device |
+| API 28 arm64-v8a, shared/default modules | Passed | Android 14 translated, 8/8 |
 | API 28 armeabi-v7a, shared/default modules | Passed | Pending device |
+| API 21 x86_64, shared/default modules | Passed | Android 14 native ISA, 8/8 |
+| API 28 x86_64, shared/default modules | Passed | Android 14 native ISA, 8/8 |
+| API 21 arm64-v8a, static/default modules | Passed | Android 14 translated, 8/8 |
+| API 21 arm64-v8a, shared/minimal modules | Passed | Android 14 translated, 8/8 |
 
 See [validation](VALIDATION.md) for minimal/static and host results.
-adb found no attached device. No Android runtime pass count, performance or
-emulator/physical-device success is claimed. CI contains the pinned-NDK
-matrix and API 21 minimal builds; no remote run is claimed. Target acceptance
-still needs API 21/newer systems, both bit widths, app sandbox, permissions,
-device provenance and repeated measurements.
+The existing Qt_Android_34 AVD was booted as emulator-5580: API 34, native
+x86_64, with libndk_translation. Each of the six executed configurations
+passes the eight Android suites listed above and runs the benchmark once.
+Minimal verifies disabled-feature behavior. These eight suites are not the
+entire desktop CTest collection.
+
+ARM64 shared execution initially could not locate the library through
+LD_LIBRARY_PATH. Executable-relative RUNPATH fixed both shared configurations
+and minimal. RUNPATH is supported since API 24; see the
+[Android linker documentation](https://android.googlesource.com/platform/bionic/+/refs/heads/android15-tests-release/android-changes-for-ndk-developers.md).
+ARM64 results include translation/virtualization and are not hardware
+performance evidence. The AVD offers no ARMv7 ABI, so deployment explicitly
+skips it. Building with minimum API 21 is not an Android 5.0 runtime test.
+Old OS releases, ARMv7, physical ARM and application sandbox permissions
+still require matching environments.
+
+Reports: build-android-emulator/report.json, build-android/report.json,
+build-android/report-minimal.json and build-android-static/report.json;
+run-*.log files under each configuration contain actual program output.
+CI contains the pinned-NDK matrix and API 21 minimal builds; no remote run
+is claimed.

@@ -889,3 +889,40 @@ Windows 原有 deadline 时钟保持兼容，自旋由独立 QPC 限制，预算
 report-minimal.json 保存原始记录；部分最后补测使用 util-final 或 util-budget
 前缀。编译产物、SDK、依赖缓存未入库，第三方源码未改动。
 macOS、Win7/8.1、musl 和真实嵌入式板卡的既有待验证状态不变。
+
+## 2026-10-01：Android 模拟器补测
+
+上一轮 adb 没有在线设备，但本机实际已有未启动的 Qt_Android_34 AVD。
+本轮以 -read-only、-no-snapshot、-no-window 启动该 AVD，未清空用户数据。
+实际系统 Android 14 / API 34，原生机器 x86_64，启用 libndk_translation；
+设备指纹 google/sdk_gphone64_x86_64/emu64xa:14/UE1A.230829.036.A4/12096271:user/release-keys。
+
+| 编译最低 API | ABI | 配置 | API 34 模拟器运行 |
+| --- | --- | --- | --- |
+| 21 | x86_64 | 默认模块、共享 | 原生 ISA，8/8 |
+| 28 | x86_64 | 默认模块、共享 | 原生 ISA，8/8 |
+| 21 | arm64-v8a | 默认模块、共享 | 翻译执行，8/8 |
+| 28 | arm64-v8a | 默认模块、共享 | 翻译执行，8/8 |
+| 21 | arm64-v8a | 默认模块、静态 | 翻译执行，8/8 |
+| 21 | arm64-v8a | 最小模块、共享 | 翻译执行，8/8 |
+
+共 6 组配置、48 次基准套件执行通过，另有 6 次性能基准程序执行完成。
+8 项集合见 [Android 基准](ANDROID.zh-CN.md)，并非桌面全部 CTest。
+最小配置验证不支持/关闭行为。基准值受模拟器、翻译和并发负载影响，
+这里只确认执行完成，不作为 ARM 硬件性能验收。
+
+实跑发现 ARM64 共享程序无法仅靠 LD_LIBRARY_PATH 找到 libhx_c_platform.so。
+仅对 Android 共享验证程序添加 $ORIGIN RUNPATH 后，默认与最小配置通过；
+核心库、消费者链接选项和操作系统路径均未修改。
+脚本补充 x86_64 参数、原生机器/执行方式、逐程序结果和失败状态记录。
+原 ARM 默认配置保留。失败报告不再误保留“未运行”状态。
+
+报告为 build-android-emulator/report.json、build-android/report.json、
+build-android/report-minimal.json、build-android-static/report.json；
+各配置的 run-*.log 为原始 stdout/stderr。ARMv7 兼容检查结果保存在
+build-android-emulator/armv7-device-check.json：目标不提供该 ABI，未部署运行。
+build-android-emulator/arm64-execution-probe.json 保存修复前的加载失败。
+原交叉编译报告另存于 build-android-emulator/arm-cross-build-report.json。
+
+仍未验证 Android 5.0 / API 21 系统、ARMv7、ARM 原生硬件和 APK 应用沙箱。
+API 21/28 是编译最低版本，实际执行系统均为 API 34；没有远程 CI 运行声明。

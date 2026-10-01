@@ -1047,3 +1047,45 @@ checks use util-final/util-budget prefixes. Android records are report.json
 and report-minimal.json. Outputs/SDK/dependency caches remain untracked and
 vendor sources unchanged. Existing macOS, Win7/8.1, musl and physical-board
 validation gaps remain.
+
+## 2026-10-01: Android emulator execution
+
+The earlier empty adb list overlooked the stopped Qt_Android_34 AVD already
+installed on this host. It was booted with -read-only, -no-snapshot and
+-no-window, without wiping user data. Runtime: Android 14 / API 34, native
+x86_64 with libndk_translation. Fingerprint:
+google/sdk_gphone64_x86_64/emu64xa:14/UE1A.230829.036.A4/12096271:user/release-keys.
+
+| Build minimum API | ABI | Configuration | API 34 emulator result |
+| --- | --- | --- | --- |
+| 21 | x86_64 | Default modules, shared | Native ISA, 8/8 |
+| 28 | x86_64 | Default modules, shared | Native ISA, 8/8 |
+| 21 | arm64-v8a | Default modules, shared | Translated, 8/8 |
+| 28 | arm64-v8a | Default modules, shared | Translated, 8/8 |
+| 21 | arm64-v8a | Default modules, static | Translated, 8/8 |
+| 21 | arm64-v8a | Minimal modules, shared | Translated, 8/8 |
+
+Six configurations, 48 successful suite executions, plus six completed
+benchmark runs. The eight-suite set is listed in [Android validation](ANDROID.md),
+not the entire desktop CTest collection. Minimal verifies unsupported/disabled
+behavior. Benchmark values include virtualization, translation and concurrent
+load; completion is recorded without a hardware performance claim.
+
+Actual execution exposed ARM64 shared-library lookup failure with only
+LD_LIBRARY_PATH. Adding $ORIGIN RUNPATH to Android shared validation
+executables fixed default and minimal runs. Core library, consumer link
+options and system library paths remain unchanged. The runner now supports
+supplementary x86_64, records native machine/execution kind and per-program
+results, and no longer leaves a failed run labeled unrun. ARM defaults remain.
+
+Reports: build-android-emulator/report.json, build-android/report.json,
+build-android/report-minimal.json, build-android-static/report.json.
+Configuration run-*.log files contain raw stdout/stderr.
+build-android-emulator/armv7-device-check.json records the unsupported ABI
+before deployment. build-android-emulator/arm64-execution-probe.json preserves
+the initial loader failure; arm-cross-build-report.json preserves the earlier
+cross-only report in the same directory.
+
+Android 5.0/API 21 OS, ARMv7, native ARM hardware and APK application sandbox
+remain unverified. API 21/28 are build minima; all execution above used API 34.
+No remote CI execution is claimed.

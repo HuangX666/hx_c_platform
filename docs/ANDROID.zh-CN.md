@@ -27,6 +27,17 @@ python tools/verify_android.py --ndk /path/to/ndk --api 21 --static
 --minimal 使用现有 cmake/minimal.cmake。默认共享库，--static 选择静态库。
 --build-root 隔离记录。脚本默认只交叉编译，不执行 ARM 文件或自动选择设备。
 
+adb 列表为空时，先检查未启动的 AVD。本机已有 Qt_Android_34：
+
+~~~text
+emulator -list-avds
+emulator -avd Qt_Android_34 -port 5580 -read-only -no-snapshot
+~~~
+
+等待启动完成后使用 emulator-5580。--read-only 保留原 AVD 用户数据，
+--no-snapshot 不加载或保存快照。自动验证可加 -no-window -no-audio。
+本机 AVD 为 x86_64；新增 --abi x86_64 作为模拟器补充配置，ARM 默认值不变。
+
 ~~~text
 adb devices -l
 python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --serial DEVICE_SERIAL
@@ -53,6 +64,11 @@ python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --ser
 模拟器标记和每项输出。清理只移除确切上传文件，不递归删除目录；
 失败夹保留排查。ADB 超时可能留下目标进程，保留目录并报告，不强杀。
 性能采样需记录负载、温度、调频状态并重复多轮。
+
+报告区分编译最低 API、实际系统 API、原生机器架构和翻译执行，逐程序记录结果。
+失败不会继续写成“未运行”。验证用共享库程序带 $ORIGIN RUNPATH，支持新版
+Android 从程序所在目录加载依赖；旧系统仍使用 LD_LIBRARY_PATH。
+这些链接选项仅作用于测试/示例/基准程序，不传给消费者或修改系统库路径。
 
 ## 能力边界
 
@@ -81,12 +97,30 @@ APK、Manifest 权限、资产系统或 UI 自动化，这些由消费者处理�
 
 | 配置 | 交叉编译 | 目标运行 |
 | --- | --- | --- |
-| API 21 arm64-v8a，共享、默认模块 | 通过 | 待设备 |
+| API 21 arm64-v8a，共享、默认模块 | 通过 | Android 14 翻译执行 8/8 |
 | API 21 armeabi-v7a，共享、默认模块 | 通过 | 待设备 |
-| API 28 arm64-v8a，共享、默认模块 | 通过 | 待设备 |
+| API 28 arm64-v8a，共享、默认模块 | 通过 | Android 14 翻译执行 8/8 |
 | API 28 armeabi-v7a，共享、默认模块 | 通过 | 待设备 |
+| API 21 x86_64，共享、默认模块 | 通过 | Android 14 原生 ISA 执行 8/8 |
+| API 28 x86_64，共享、默认模块 | 通过 | Android 14 原生 ISA 执行 8/8 |
+| API 21 arm64-v8a，静态、默认模块 | 通过 | Android 14 翻译执行 8/8 |
+| API 21 arm64-v8a，共享、最小模块 | 通过 | Android 14 翻译执行 8/8 |
 
 最小/静态配置及宿主验证见[验证记录](VALIDATION.zh-CN.md)。
-本机 adb 无连接设备，没有 Android 运行通过率、性能或模拟器/真机通过声明。
+已启动现有 Qt_Android_34，序列号 emulator-5580，实际系统为 API 34，
+原生机器为 x86_64，提供 libndk_translation。上表 6 个已运行配置分别通过
+8 项安卓基准测试，另各执行一次性能基准程序。最小配置验证功能关闭语义。
+这 8 项是本页列出的安卓基准集合，不是整套桌面 CTest。
+
+ARM64 共享程序最初无法通过 LD_LIBRARY_PATH 找到本库；加入程序自身目录的
+RUNPATH 后，两组共享配置及最小配置通过。该路径机制在 API 24 起可用，
+参阅 [Android 动态链接器说明](https://android.googlesource.com/platform/bionic/+/refs/heads/android15-tests-release/android-changes-for-ndk-developers.md)。
+ARM64 是翻译执行，性能数据含翻译和虚拟化开销，不代表 ARM 硬件性能。
+模拟器未提供 ARMv7 ABI，该配置在部署前明确跳过，未伪装运行成功。
+编译最低 API 21 并不代表在 Android 5.0 系统运行过；旧系统、ARMv7、
+真实 ARM 设备和应用沙箱权限仍需对应环境验证。
+
+原始报告分别位于 build-android-emulator/report.json、build-android/report.json、
+build-android/report-minimal.json、build-android-static/report.json，
+每个配置目录内 run-*.log 保存程序实际输出。
 CI 已加入固定 NDK 矩阵和 API 21 最小配置，尚无远程执行证据。
-后续补 API 21 与较新系统的 32/64 位、应用沙箱、权限和基准运行记录。

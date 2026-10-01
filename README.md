@@ -48,8 +48,9 @@ has been performed.
 New [common utilities](docs/COMMON_UTILITIES.md) cover string operations,
 catalog loading, wide arithmetic, named procedures, filenames, explicit
 precise waits and lexing, with typed POD containers and combined pool shutdown.
-The [Android API 21 baseline](docs/ANDROID.md) covers both ARM ABIs; cross-builds
-pass, while device execution is pending. CI configuration is not runtime proof.
+The [Android API 21 baseline](docs/ANDROID.md) covers both ARM ABIs. Six
+configurations pass eight suites each on an Android 14 emulator, using native
+x86_64 and translated ARM64. ARMv7, API 21 OS and physical runs remain pending.
 
 ## Start with a task
 

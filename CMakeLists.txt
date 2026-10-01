@@ -513,6 +513,33 @@ if(HX_OS_BUILD_BENCHMARKS)
 	add_subdirectory(benchmarks)
 endif()
 
+# Keep deployed test libraries beside their executables. Android 24+ uses
+# RUNPATH; older native targets still use the runner's LD_LIBRARY_PATH.
+if(ANDROID AND BUILD_SHARED_LIBS)
+	set(hx_validation_dirs)
+	if(HX_OS_BUILD_TESTS)
+		list(APPEND hx_validation_dirs tests)
+	endif()
+	if(HX_OS_BUILD_EXAMPLES)
+		list(APPEND hx_validation_dirs examples)
+	endif()
+	if(HX_OS_BUILD_BENCHMARKS)
+		list(APPEND hx_validation_dirs benchmarks)
+	endif()
+	foreach(directory IN LISTS hx_validation_dirs)
+		get_property(hx_validation_targets DIRECTORY
+			"${PROJECT_SOURCE_DIR}/${directory}"
+			PROPERTY BUILDSYSTEM_TARGETS)
+		foreach(target IN LISTS hx_validation_targets)
+			get_target_property(hx_validation_type ${target} TYPE)
+			if(hx_validation_type STREQUAL "EXECUTABLE")
+				target_link_options(${target} PRIVATE
+					"-Wl,-rpath,$ORIGIN")
+			endif()
+		endforeach()
+	endforeach()
+endif()
+
 install(TARGETS hx_c_platform EXPORT hx_c_platformTargets
 	RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
