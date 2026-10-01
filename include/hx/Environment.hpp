@@ -1,50 +1,40 @@
 #ifndef HX_C_PLATFORM_CPP_ENVIRONMENT_HPP
 #define HX_C_PLATFORM_CPP_ENVIRONMENT_HPP
-
 #include <hx_os_env.h>
-#include <hx/Status.hpp>
-#include <memory>
-#include <string>
-
+#include <hx/Values.hpp>
 namespace hx {
-
 class Environment {
 public:
-	static std::string get(const char *name)
+	static Result<String> get(
+		const char *name, hx_os_context *context = NULL) noexcept
 	{
-		hx_string text = HX_STRING_INIT;
-		std::unique_ptr<hx_string, decltype(&hx_string_destroy)>
-			cleanup(&text, hx_string_destroy);
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_env_get_string(name, &text, &error), error);
-		return std::string(hx_string_c_str(&text), text.size);
+		return detail::StringQuery(
+			[=](hx_string *out, hx_os_error *error) noexcept {
+				return hx_os_env_get_string(name, out, error);
+			},
+			context);
 	}
-	static std::string getOr(const char *name, const std::string &fallback)
+	static Result<String> getOr(const char *name, StringView fallback,
+		hx_os_context *context = NULL) noexcept
 	{
-		hx_string text = HX_STRING_INIT;
-		std::unique_ptr<hx_string, decltype(&hx_string_destroy)>
-			cleanup(&text, hx_string_destroy);
-		hx_os_error error;
-		hx_os_status status = hx_os_env_get_string(name, &text, &error);
-		if (status == HX_OS_NOT_FOUND)
-			return fallback;
-		detail::CheckStatus(status, error);
-		return std::string(hx_string_c_str(&text), text.size);
+		auto result = get(name, context);
+		if (result.status() == HX_OS_NOT_FOUND)
+			return String::copy(fallback, context);
+		return result;
 	}
-	static void set(
-		const char *name, const char *value, bool replace = true)
+	static Result<void> set(const char *name, const char *value,
+		bool replace = true) noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_env_set(name, value, replace, &error), error);
+		hx_os_error error = {};
+		auto status = hx_os_env_set(name, value, replace, &error);
+		return detail::Status(status, error);
 	}
-	static void remove(const char *name)
+	static Result<void> remove(const char *name) noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(hx_os_env_remove(name, &error), error);
+		hx_os_error error = {};
+		auto status = hx_os_env_remove(name, &error);
+		return detail::Status(status, error);
 	}
 };
-
 } // namespace hx
 #endif

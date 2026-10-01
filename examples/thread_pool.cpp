@@ -8,36 +8,32 @@ int main()
 		std::puts("Thread pools are disabled.");
 		return 0;
 	}
-	try {
-		auto pool = hx::ThreadPool::create(owner);
-		auto identity =
-			pool.submit([&pool]() { return pool.inside(); });
-		std::printf("On this pool's worker: %s\n",
-			identity.get() ? "yes" : "no");
-		auto answer =
-			pool.submit([](int value) { return value * 2; }, 21);
-		std::printf("Task result: %d\n", answer.get());
-		/* This example has only a completed CPU task and no external
-		 * waits. */
-		hx_os_status closed =
-			pool.shutdownUntil(hx_os_deadline_after_ms(2000));
-		if (closed != HX_OS_OK) {
-			std::fprintf(stderr, "Close pending: %s\n",
-				hx_os_status_name(closed));
-			/* A service must retain owner and retry from its
-			 * shutdown state. This command-line example reports
-			 * failure. */
-			return 1;
-		}
-		return 0;
-	} catch (const std::exception &error) {
-		std::fprintf(stderr, "%s\n", error.what());
-		if (owner) {
-			hx::ThreadPool remaining(owner);
-			(void)remaining.shutdownUntil(
-				hx_os_deadline_after_ms(2000),
-				HX_OS_POOL_CANCEL_PENDING);
-		}
+	auto created = hx::ThreadPool::withThreads(owner, 2);
+	if (!created) {
+		std::fprintf(
+			stderr, "%s\n", hx_os_status_name(created.status()));
 		return 1;
 	}
+	auto &pool = created.value();
+	auto submitted =
+		pool.submit([](int value) noexcept { return value * 2; }, 21);
+	hx_os_status workStatus = submitted.status();
+	if (submitted) {
+		auto answer = submitted.value().getUntil(
+			hx_os_deadline_after_ms(2000));
+		workStatus = answer.status();
+		if (answer)
+			std::printf("Task result: %d\n", answer.value());
+	}
+	auto closed = pool.shutdownUntil(
+		hx_os_deadline_after_ms(2000), HX_OS_POOL_CANCEL_PENDING);
+	if (!closed) {
+		std::fprintf(stderr, "Close pending: %s\n",
+			hx_os_status_name(closed.status()));
+		/* A service keeps owner in its shutdown state and retries.
+		 * This command-line example reports the pending close.
+		 */
+		return 1;
+	}
+	return workStatus == HX_OS_OK ? 0 : 1;
 }

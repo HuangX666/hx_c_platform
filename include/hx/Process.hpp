@@ -1,28 +1,36 @@
 #ifndef HX_C_PLATFORM_CPP_PROCESS_HPP
 #define HX_C_PLATFORM_CPP_PROCESS_HPP
 #include <hx_os_process.h>
-#include <hx/Status.hpp>
-#include <memory>
-#include <vector>
+#include <hx/Values.hpp>
+#include <initializer_list>
 namespace hx {
+
 namespace detail {
-inline std::vector<const char *> process_arguments(
-	const std::vector<std::string> &arguments)
+inline Result<Buffer> ProcessArguments(
+	std::initializer_list<const char *> arguments,
+	hx_os_context *context) noexcept
 {
-	std::vector<const char *> result;
-	result.reserve(arguments.size() + 1);
-	for (const auto &argument : arguments) {
-		if (argument.find('\0') != std::string::npos)
-			throw StatusError(HX_OS_INVALID);
-		result.push_back(argument.c_str());
+	if (arguments.size() >= 65536)
+		return Failure(HX_OS_LIMIT);
+	auto buffer =
+		Buffer::allocate((arguments.size() + 1) * sizeof(const char *),
+			context, alignof(const char *));
+	if (!buffer)
+		return Failure(buffer.error());
+	auto output = reinterpret_cast<const char **>(buffer.value().data());
+	typedef const char *Argument;
+	size_t index = 0;
+	for (auto argument : arguments) {
+		if (!argument)
+			return Failure(HX_OS_INVALID);
+		new (&output[index++]) Argument(argument);
 	}
-	result.push_back(NULL);
-	return result;
+	new (&output[index]) Argument(NULL);
+	return buffer;
 }
 } // namespace detail
-/* Host-owned handles remain reachable on timeout or exception. Facades do
- * not close, detach or kill in their destructors. The owner variable must
- * outlive the facade and must be explicitly closed.
+/* Host-owned handles survive timeout/limit/error. Facades never kill, detach
+ * or close them implicitly. Arguments are copied/consumed during the call.
  */
 class Process {
 public:
@@ -30,35 +38,43 @@ public:
 	    : m_owner_(&owner)
 	{
 	}
-	void spawn(const char *path,
-		const std::vector<std::string> &arguments = {},
+	Result<void> spawn(const char *path,
+		std::initializer_list<const char *> arguments = {},
 		hx_os_context *context = NULL,
-		const hx_os_process_options *options = NULL)
+		const hx_os_process_options *options = NULL) noexcept
 	{
 		if (*m_owner_)
-			throw StatusError(HX_OS_BUSY);
-		auto args = detail::process_arguments(arguments);
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_process_spawn(context, path, args.data(), NULL,
-				options, m_owner_, &error),
-			error);
+			return Failure(HX_OS_BUSY);
+		auto args = detail::ProcessArguments(arguments, context);
+		if (!args)
+			return Failure(args.error());
+		hx_os_error error = {};
+		auto status = hx_os_process_spawn(context, path,
+			reinterpret_cast<const char *const *>(
+				args.value().data()),
+			NULL, options, m_owner_, &error);
+		return detail::Status(status, error);
 	}
-	hx_os_status waitUntil(hx_os_deadline deadline,
-		hx_os_process_result &result,
-		hx_os_error *error = NULL) noexcept
+	Result<hx_os_process_result> waitUntil(hx_os_deadline deadline) noexcept
 	{
-		return hx_os_process_wait_until(
-			*m_owner_, deadline, &result, error);
+		hx_os_process_result result = {};
+		hx_os_error error = {};
+		auto status = hx_os_process_wait_until(
+			*m_owner_, deadline, &result, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return result;
 	}
 	uint64_t identifier() const noexcept
 	{
 		return hx_os_process_identifier(*m_owner_);
 	}
-	hx_os_status closeUntil(
-		hx_os_deadline deadline, hx_os_error *error = NULL) noexcept
+	Result<void> closeUntil(hx_os_deadline deadline) noexcept
 	{
-		return hx_os_process_close_until(m_owner_, deadline, error);
+		hx_os_error error = {};
+		auto status =
+			hx_os_process_close_until(m_owner_, deadline, &error);
+		return detail::Status(status, error);
 	}
 
 private:
@@ -70,71 +86,76 @@ public:
 	    : m_owner_(&owner)
 	{
 	}
-	hx_os_status run(const char *path,
-		const std::vector<std::string> &arguments,
-		hx_os_deadline deadline, hx_os_error *error = NULL,
-		hx_os_context *context = NULL,
-		const hx_os_process_capture_options *options = NULL)
+	Result<void> run(const char *path,
+		std::initializer_list<const char *> arguments,
+		hx_os_deadline deadline, hx_os_context *context = NULL,
+		const hx_os_process_capture_options *options = NULL) noexcept
 	{
 		if (*m_owner_)
-			throw StatusError(HX_OS_BUSY);
-		auto args = detail::process_arguments(arguments);
-		return hx_os_process_capture_run_with_options(context, path,
-			args.data(), NULL, options, deadline, m_owner_, error);
+			return Failure(HX_OS_BUSY);
+		auto args = detail::ProcessArguments(arguments, context);
+		if (!args)
+			return Failure(args.error());
+		hx_os_error error = {};
+		auto status =
+			hx_os_process_capture_run_with_options(context, path,
+				reinterpret_cast<const char *const *>(
+					args.value().data()),
+				NULL, options, deadline, m_owner_, &error);
+		return detail::Status(status, error);
 	}
-	hx_os_status waitUntil(hx_os_deadline deadline,
-		hx_os_process_result *result = NULL,
-		hx_os_error *error = NULL) noexcept
+	Result<hx_os_process_result> waitUntil(hx_os_deadline deadline) noexcept
 	{
-		return hx_os_process_capture_wait_until(
-			*m_owner_, deadline, result, error);
-	}
-	std::string text(int stream = HX_OS_PROCESS_STDOUT,
-		hx_os_encoding encoding = HX_OS_UTF8) const
-	{
-		hx_string value = HX_STRING_INIT;
-		std::unique_ptr<hx_string, decltype(&hx_string_destroy)>
-			cleanup(&value, hx_string_destroy);
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_process_capture_text_encoded(
-				*m_owner_, stream, encoding, &value, &error),
-			error);
-		return std::string(hx_string_c_str(&value), value.size);
-	}
-	std::vector<unsigned char> bytes(
-		int stream = HX_OS_PROCESS_STDOUT) const
-	{
-		const void *data;
-		size_t size;
-		hx_os_status status = hx_os_process_capture_view(
-			*m_owner_, stream, &data, &size);
+		hx_os_process_result result = {};
+		hx_os_error error = {};
+		auto status = hx_os_process_capture_wait_until(
+			*m_owner_, deadline, &result, &error);
 		if (status != HX_OS_OK)
-			throw StatusError(status);
-		if (!size)
-			return {};
-		const auto *begin = static_cast<const unsigned char *>(data);
-		return std::vector<unsigned char>(begin, begin + size);
+			return Failure(status, error);
+		return result;
 	}
-	void raiseLimit(int stream, size_t bytes)
+	Result<String> text(int stream = HX_OS_PROCESS_STDOUT,
+		hx_os_encoding encoding = HX_OS_UTF8,
+		hx_os_context *context = NULL) const noexcept
 	{
-		hx_os_status status = hx_os_process_capture_raise_limit(
-			*m_owner_, stream, bytes);
+		return detail::StringQuery(
+			[=](hx_string *out, hx_os_error *error) noexcept {
+				return hx_os_process_capture_text_encoded(
+					*m_owner_, stream, encoding, out,
+					error);
+			},
+			context);
+	}
+	Result<Buffer> bytes(int stream = HX_OS_PROCESS_STDOUT,
+		hx_os_context *context = NULL) const noexcept
+	{
+		const void *data = NULL;
+		size_t bytes = 0;
+		auto status = hx_os_process_capture_view(
+			*m_owner_, stream, &data, &bytes);
 		if (status != HX_OS_OK)
-			throw StatusError(status);
+			return Failure(status);
+		auto result = Buffer::allocate(bytes, context);
+		if (result && bytes)
+			std::memcpy(result.value().data(), data, bytes);
+		return result;
 	}
-	void discard(int stream)
+	Result<void> raiseLimit(int stream, size_t bytes) noexcept
 	{
-		hx_os_status status =
-			hx_os_process_capture_discard(*m_owner_, stream);
-		if (status != HX_OS_OK)
-			throw StatusError(status);
+		return Result<void>(hx_os_process_capture_raise_limit(
+			*m_owner_, stream, bytes));
 	}
-	hx_os_status closeUntil(
-		hx_os_deadline deadline, hx_os_error *error = NULL) noexcept
+	Result<void> discard(int stream) noexcept
 	{
-		return hx_os_process_capture_close_until(
-			m_owner_, deadline, error);
+		return Result<void>(
+			hx_os_process_capture_discard(*m_owner_, stream));
+	}
+	Result<void> closeUntil(hx_os_deadline deadline) noexcept
+	{
+		hx_os_error error = {};
+		auto status = hx_os_process_capture_close_until(
+			m_owner_, deadline, &error);
+		return detail::Status(status, error);
 	}
 
 private:

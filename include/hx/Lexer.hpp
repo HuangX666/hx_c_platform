@@ -1,81 +1,93 @@
 #ifndef HX_C_PLATFORM_CPP_LEXER_HPP
 #define HX_C_PLATFORM_CPP_LEXER_HPP
 #include <hx_os_lexer.h>
-#include <hx/Status.hpp>
-#include <memory>
-#include <utility>
+#include <hx/Values.hpp>
 namespace hx {
-/* C++ tokens own their text and remain valid after the lexer is destroyed. */
+
+/* A token owns its UTF-8 text independently of the lexer. */
 struct Token {
-	std::string text;
+	String text;
 	size_t offset, line, column;
 	int kind;
-	std::string value() const
+	Result<String> value(hx_os_context *context = NULL) const noexcept
 	{
 		hx_os_token token = {
 			{text.data(), text.size()}, offset, line, column, kind};
-		hx_string decoded = HX_STRING_INIT;
-		std::unique_ptr<hx_string, decltype(&hx_string_destroy)>
-			cleanup(&decoded, hx_string_destroy);
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_token_string(&token, &decoded, &error), error);
-		return std::string(hx_string_c_str(&decoded), decoded.size);
+		return detail::StringQuery(
+			[&](hx_string *out, hx_os_error *error) noexcept {
+				return hx_os_token_string(&token, out, error);
+			},
+			context);
 	}
 };
 class Lexer {
 public:
-	explicit Lexer(const std::string &input, hx_os_context *context = NULL,
-		const hx_os_lexer_options *options = NULL)
+	Lexer() noexcept
 	    : m_handle_(NULL)
+	    , m_context_(NULL)
 	{
-		hx_string_view view = {input.data(), input.size()};
-		hx_os_error error;
-		detail::CheckStatus(hx_os_lexer_create_with_options(context,
-					    view, options, &m_handle_, &error),
-			error);
+	}
+	static Result<Lexer> create(StringView input,
+		hx_os_context *context = NULL,
+		const hx_os_lexer_options *options = NULL) noexcept
+	{
+		Lexer result;
+		hx_os_error error = {};
+		auto status = hx_os_lexer_create_with_options(context,
+			input.native(), options, &result.m_handle_, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		result.m_context_ = context;
+		return result;
 	}
 	Lexer(const Lexer &) = delete;
 	Lexer &operator=(const Lexer &) = delete;
 	Lexer(Lexer &&other) noexcept
 	    : m_handle_(other.m_handle_)
+	    , m_context_(other.m_context_)
 	{
 		other.m_handle_ = NULL;
+		other.m_context_ = NULL;
 	}
 	Lexer &operator=(Lexer &&other) noexcept
 	{
-		if (this != &other) {
-			hx_os_lexer_destroy(&m_handle_);
-			m_handle_ = other.m_handle_;
-			other.m_handle_ = NULL;
-		}
+		std::swap(m_handle_, other.m_handle_);
+		std::swap(m_context_, other.m_context_);
 		return *this;
 	}
-	~Lexer()
+	~Lexer() noexcept
 	{
 		hx_os_lexer_destroy(&m_handle_);
 	}
-	bool next(Token &out)
+	Result<Token> next() noexcept
 	{
-		hx_os_token token;
-		hx_os_error error;
+		if (!m_handle_)
+			return Failure(HX_OS_CLOSED);
+		hx_os_token token = {};
+		hx_os_error error = {};
 		auto status = hx_os_lexer_peek(m_handle_, &token, &error);
 		if (status != HX_OS_OK && status != HX_OS_EOF)
-			detail::CheckStatus(status, error);
-		Token result = {std::string(token.text.data, token.text.size),
-			token.offset, token.line, token.column, token.kind};
-		/* Allocation succeeded before advancing the C cursor. */
+			return Failure(status, error);
+		auto text = String::copy(StringView(token.text), m_context_);
+		if (!text)
+			return Failure(text.error());
+		/* Allocate before advancing so OOM leaves the next token
+		 * available. */
 		(void)hx_os_lexer_next(m_handle_, &token, NULL);
-		out = std::move(result);
-		return status == HX_OS_OK;
+		return Result<Token>::withValue(
+			Token{std::move(text.value()), token.offset, token.line,
+				token.column, token.kind},
+			status, error);
 	}
 	void reset() noexcept
 	{
-		hx_os_lexer_reset(m_handle_);
+		if (m_handle_)
+			hx_os_lexer_reset(m_handle_);
 	}
 
 private:
 	hx_os_lexer *m_handle_;
+	hx_os_context *m_context_;
 };
 } // namespace hx
 #endif

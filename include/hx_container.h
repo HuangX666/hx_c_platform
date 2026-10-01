@@ -206,12 +206,13 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_map_destroy(
 	static inline hx_os_status name##_push(                                \
 		name *container, name##_value_type value, hx_os_error *error)  \
 	{                                                                      \
-		return hx_os_sequence_push_back(container, &value, error);     \
+		return hx_os_sequence_push_back(                               \
+			container, (const void *)&value, error);               \
 	}                                                                      \
 	static inline hx_os_status name##_pop(                                 \
 		name *container, name##_value_type *out, hx_os_error *error)   \
 	{                                                                      \
-		return popper(container, out, error);                          \
+		return popper(container, (void *)out, error);                  \
 	}                                                                      \
 	static inline size_t name##_size(const name *container)                \
 	{                                                                      \

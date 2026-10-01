@@ -1,23 +1,29 @@
 #ifndef HX_C_PLATFORM_CPP_MAPPING_HPP
 #define HX_C_PLATFORM_CPP_MAPPING_HPP
-
 #include <hx_os_vm.h>
 #include <hx/Status.hpp>
-#include <utility>
-
 namespace hx {
-/* Synchronous RAII; use close explicitly to observe native cleanup errors. */
+
+/* Explicit close reports native failures. Move assignment swaps ownership,
+ * so a retryable close failure cannot be hidden by overwriting a handle.
+ */
 class Pages {
 public:
-	explicit Pages(size_t bytes,
-		unsigned protection = HX_OS_PAGE_READ | HX_OS_PAGE_WRITE,
-		hx_os_context *context = NULL)
+	Pages() noexcept
 	    : m_pages_(NULL)
 	{
-		hx_os_error error;
-		detail::CheckStatus(hx_os_pages_alloc(context, bytes,
-					    protection, &m_pages_, &error),
-			error);
+	}
+	static Result<Pages> allocate(size_t bytes,
+		unsigned protection = HX_OS_PAGE_READ | HX_OS_PAGE_WRITE,
+		hx_os_context *context = NULL) noexcept
+	{
+		Pages result;
+		hx_os_error error = {};
+		auto status = hx_os_pages_alloc(
+			context, bytes, protection, &result.m_pages_, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return result;
 	}
 	Pages(const Pages &) = delete;
 	Pages &operator=(const Pages &) = delete;
@@ -26,16 +32,12 @@ public:
 	{
 		other.m_pages_ = NULL;
 	}
-	Pages &operator=(Pages &&other)
+	Pages &operator=(Pages &&other) noexcept
 	{
-		if (this != &other) {
-			close();
-			m_pages_ = other.m_pages_;
-			other.m_pages_ = NULL;
-		}
+		std::swap(m_pages_, other.m_pages_);
 		return *this;
 	}
-	~Pages()
+	~Pages() noexcept
 	{
 		(void)hx_os_pages_free(&m_pages_, NULL);
 	}
@@ -47,41 +49,50 @@ public:
 	{
 		return hx_os_pages_size(m_pages_);
 	}
-	void protect(unsigned protection)
+	Result<void> protect(unsigned protection) noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_pages_protect(m_pages_, protection, &error),
-			error);
+		hx_os_error error = {};
+		auto status = hx_os_pages_protect(m_pages_, protection, &error);
+		return detail::Status(status, error);
 	}
-	void close()
+	Result<void> close() noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(hx_os_pages_free(&m_pages_, &error), error);
+		hx_os_error error = {};
+		auto status = hx_os_pages_free(&m_pages_, &error);
+		return detail::Status(status, error);
 	}
 
 private:
 	hx_os_pages *m_pages_;
 };
-
 class MappedFile {
 public:
-	explicit MappedFile(const char *path, int mode = HX_OS_MAP_READ)
+	MappedFile() noexcept
 	    : m_map_(NULL)
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_file_map_open(path, mode, &m_map_, &error),
-			error);
 	}
-	MappedFile(hx_os_file *file, uint64_t offset, uint64_t bytes,
-		int mode = HX_OS_MAP_READ, hx_os_context *context = NULL)
-	    : m_map_(NULL)
+	static Result<MappedFile> open(
+		const char *path, int mode = HX_OS_MAP_READ) noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(hx_os_file_map_create(context, file, offset,
-					    bytes, mode, &m_map_, &error),
-			error);
+		MappedFile result;
+		hx_os_error error = {};
+		auto status =
+			hx_os_file_map_open(path, mode, &result.m_map_, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return result;
+	}
+	static Result<MappedFile> create(hx_os_file *file, uint64_t offset,
+		uint64_t bytes, int mode = HX_OS_MAP_READ,
+		hx_os_context *context = NULL) noexcept
+	{
+		MappedFile result;
+		hx_os_error error = {};
+		auto status = hx_os_file_map_create(context, file, offset,
+			bytes, mode, &result.m_map_, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return result;
 	}
 	MappedFile(const MappedFile &) = delete;
 	MappedFile &operator=(const MappedFile &) = delete;
@@ -90,16 +101,12 @@ public:
 	{
 		other.m_map_ = NULL;
 	}
-	MappedFile &operator=(MappedFile &&other)
+	MappedFile &operator=(MappedFile &&other) noexcept
 	{
-		if (this != &other) {
-			close();
-			m_map_ = other.m_map_;
-			other.m_map_ = NULL;
-		}
+		std::swap(m_map_, other.m_map_);
 		return *this;
 	}
-	~MappedFile()
+	~MappedFile() noexcept
 	{
 		(void)hx_os_file_map_destroy(&m_map_, NULL);
 	}
@@ -107,31 +114,31 @@ public:
 	{
 		return hx_os_file_map_view(m_map_);
 	}
-	void *writableData()
+	Result<void *> writableData() noexcept
 	{
 		if (!m_map_)
-			throw StatusError(HX_OS_CLOSED);
+			return Failure(HX_OS_CLOSED);
 		void *view = hx_os_file_map_write_view(m_map_);
 		if (!view)
-			throw StatusError(HX_OS_ACCESS_DENIED);
+			return Failure(HX_OS_ACCESS_DENIED);
 		return view;
 	}
 	size_t size() const noexcept
 	{
 		return hx_os_file_map_size(m_map_);
 	}
-	void flush(bool durable = false)
+	Result<void> flush(bool durable = false) noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_file_map_flush(m_map_, durable ? 1 : 0, &error),
-			error);
+		hx_os_error error = {};
+		auto status =
+			hx_os_file_map_flush(m_map_, durable ? 1 : 0, &error);
+		return detail::Status(status, error);
 	}
-	void close()
+	Result<void> close() noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_file_map_destroy(&m_map_, &error), error);
+		hx_os_error error = {};
+		auto status = hx_os_file_map_destroy(&m_map_, &error);
+		return detail::Status(status, error);
 	}
 
 private:

@@ -7,79 +7,201 @@
 #include <hx/Paths.hpp>
 #include <hx/Files.hpp>
 #include <hx/ThreadPool.hpp>
-#include <cstdio>
-#include <cstdlib>
-#define CHECK(value)                                                           \
-	do {                                                                   \
-		if (!(value)) {                                                \
-			std::fprintf(                                          \
-				stderr, "line %d: %s\n", __LINE__, #value);    \
-			std::exit(1);                                          \
-		}                                                              \
-	} while (0)
+#include "cpp_check.hpp"
+
+static void TestResults() noexcept
+{
+	hx::Result<int> first(42);
+	CHECK(first.ok() && first.hasValue() && first.value() == 42);
+	auto moved = std::move(first);
+	CHECK(moved && !first.hasValue() && first.status() == HX_OS_CLOSED);
+	hx_os_error native = {HX_OS_IO_ERROR, HX_OS_ERROR_ERRNO, 17, 23};
+	hx::Result<int> failure(hx::Failure(HX_OS_IO_ERROR, native));
+	CHECK(!failure && !failure.hasValue() && !failure.get());
+	CHECK(failure.error().native_code == 17);
+	auto partial = hx::Result<size_t>::withValue(7, HX_OS_IO_ERROR, native);
+	CHECK(!partial && partial.hasValue() && partial.value() == 7);
+	CHECK(partial.error().cause_code == 23);
+	int referred = 9;
+	hx::Result<int &> reference(referred);
+	CHECK(reference && &reference.value() == &referred);
+	hx::Result<void> empty;
+	CHECK(empty);
+	hx_os_context *context = NULL;
+	CHECK(hx_os_context_create(NULL, &context, NULL) == HX_OS_OK);
+	{
+		auto value =
+			hx::String::copy(hx::StringView("a\0b", 3), context);
+		CHECK(value && value.value().size() == 3);
+		auto destination = hx::String::copy("old", context);
+		CHECK(destination);
+		destination = std::move(value);
+		CHECK(!value.hasValue() &&
+			Equal(destination.value(), hx::StringView("a\0b", 3)));
+		CHECK(hx_os_context_destroy(&context, NULL) == HX_OS_BUSY);
+	}
+	CHECK(hx_os_context_destroy(&context, NULL) == HX_OS_OK);
+}
+
+struct FailingAllocator {
+	size_t attempts;
+	size_t fail;
+	size_t live;
+};
+static void *fail_allocate(size_t bytes, void *user)
+{
+	auto *state = static_cast<FailingAllocator *>(user);
+	if (++state->attempts == state->fail)
+		return NULL;
+	void *memory = std::malloc(bytes);
+	if (memory)
+		++state->live;
+	return memory;
+}
+static void fail_free(void *memory, void *user)
+{
+	--static_cast<FailingAllocator *>(user)->live;
+	std::free(memory);
+}
+static void TestAllocationFailure()
+{
+	FailingAllocator state = {};
+	hx_os_context_options options;
+	hx_os_context_options_init(&options);
+	options.allocator = {fail_allocate, fail_free, &state};
+	hx_os_context *context = NULL;
+	CHECK(hx_os_context_create(&options, &context, NULL) == HX_OS_OK);
+	{
+		auto string = Take(hx::String::copy("preserved", context));
+		state.fail = state.attempts + 1;
+		char large[4096];
+		std::memset(large, 'a', sizeof(large));
+		CHECK(string.assign({large, sizeof(large)}).status() ==
+			HX_OS_NO_MEMORY);
+		CHECK(Equal(string, "preserved"));
+		state.fail = state.attempts + 1;
+		CHECK(hx::Buffer::allocate(4096, context).status() ==
+			HX_OS_NO_MEMORY);
+		state.fail = 0;
+	}
+	if (hx_os_capabilities() & HX_OS_CAP_LEXER) {
+		auto lexer = Take(hx::Lexer::create("first second", context));
+		state.fail = state.attempts + 1;
+		CHECK(lexer.next().status() == HX_OS_NO_MEMORY);
+		state.fail = 0;
+		CHECK(Equal(Take(lexer.next()).value(), "first"));
+	}
+	if (hx_os_capabilities() & HX_OS_CAP_PROCEDURES) {
+		hx_os_proc_handler *owner = NULL;
+		hx::ProcedureHandler procedures(owner);
+		Take(procedures.create(context));
+		hx_os_atomic captures = HX_OS_ATOMIC_INIT(0);
+		CaptureProbe token(captures);
+		const size_t baseline = state.live;
+		bool succeeded = false;
+		for (size_t failure = 1; failure < 12; ++failure) {
+			state.fail = state.attempts + failure;
+			auto added = procedures.add(
+				"probe", [token](hx::CallData &) noexcept {});
+			if (added) {
+				state.fail = 0;
+				Take(procedures.removeUntil(
+					added.value(), HX_OS_DEADLINE_NOW));
+				succeeded = true;
+			}
+			else {
+				CHECK(added.status() == HX_OS_NO_MEMORY);
+			}
+			CHECK(state.live == baseline);
+			CHECK(hx_os_atomic_load(&captures, HX_OS_ACQUIRE) == 1);
+			if (succeeded)
+				break;
+		}
+		CHECK(succeeded);
+		Take(procedures.closeUntil(HX_OS_DEADLINE_NOW));
+	}
+	CHECK(hx_os_context_destroy(&context, NULL) == HX_OS_OK);
+	CHECK(state.live == 0);
+}
 int main()
 {
+	TestResults();
+	TestAllocationFailure();
 	uint64_t caps = hx_os_capabilities();
-	CHECK(hx::Strings::trim(" \t中文😀  ") == "中文😀");
-	CHECK(hx::Strings::lowerAscii("AB中文") == "ab中文");
-	CHECK(hx::Strings::replace("a.a", "a", "中文") == "中文.中文");
-	auto parts = hx::Strings::split("one,,two", ",");
-	CHECK(parts.size() == 3 && parts[1].empty());
-	CHECK(hx::Strings::join(parts, ":") == "one::two");
+	CHECK(Equal(hx::Strings::trim(" \t中文😀  "), "中文😀"));
+	CHECK(Equal(hx::Strings::lowerAscii("AB中文"), "ab中文"));
+	CHECK(Equal(hx::Strings::replace("a.a", "a", "中文"), "中文.中文"));
+	auto parts = Take(hx::Strings::split("one,,two", ","));
+	CHECK(parts.size() == 3 && Take(parts.at(1)).size() == 0);
+	hx::StringView views[] = {
+		Take(parts.at(0)), Take(parts.at(1)), Take(parts.at(2))};
+	CHECK(Equal(hx::Strings::join(views, 3, ":"), "one::two"));
 	if (caps & HX_OS_CAP_LEXER) {
 		hx::Token token;
 		{
-			hx::Lexer lexer("\"\\uD83D\\uDE00\"");
-			CHECK(lexer.next(token) && token.value() == "😀");
+			auto lexer =
+				Take(hx::Lexer::create("\"\\uD83D\\uDE00\""));
+			token = Take(lexer.next());
+			CHECK(Equal(token.value(), "😀"));
+			auto end = lexer.next();
+			CHECK(end.status() == HX_OS_EOF && end.hasValue());
 		}
-		CHECK(token.value() == "😀");
+		CHECK(Equal(token.value(), "😀"));
 		if (caps & HX_OS_CAP_TEXT_LOOKUP) {
-			hx::TextLookup lookup;
-			lookup.addText("hello=\"你好\"");
-			CHECK(lookup.get("hello") == "你好");
-			CHECK(lookup.get("missing") == "missing");
+			auto lookup = Take(hx::TextLookup::create());
+			Take(lookup.addText("hello=\"你好\""));
+			CHECK(Equal(lookup.get("hello"), "你好"));
+			CHECK(Equal(lookup.get("missing"), "missing"));
 		}
 	}
-	if (caps & HX_OS_CAP_WIDE_MATH)
-		CHECK(hx::Wide::multiplyDivide(1001, 1000000000, 30000) ==
+	if (caps & HX_OS_CAP_WIDE_MATH) {
+		CHECK(Take(hx::Wide::multiplyDivide(1001, 1000000000, 30000)) ==
 			33366666);
+		CHECK(hx::Wide::multiplyDivide(1, 1, 0).status() ==
+			HX_OS_INVALID);
+	}
 	if (caps & HX_OS_CAP_PRECISE_WAIT)
-		hx::Wait::precise(HX_OS_DEADLINE_NOW);
+		Take(hx::Wait::precise(HX_OS_DEADLINE_NOW));
 	size_t calls = 0;
-	CHECK(hx::Wait::repeat(1, 10, [&calls] { return ++calls < 2; }) == 2);
+	CHECK(Take(hx::Wait::repeat(1, 10,
+		      [&calls]() noexcept { return ++calls < 2; })) == 2);
 	if (caps & HX_OS_CAP_CALENDAR)
-		CHECK(hx::Calendar::filename(0, "txt") ==
-			"1970-01-01_00-00-00.txt");
+		CHECK(Equal(hx::Calendar::filename(0, "txt"),
+			"1970-01-01_00-00-00.txt"));
 	if (caps & HX_OS_CAP_PROCEDURES) {
 		hx_os_proc_handler *owner = NULL;
 		hx::ProcedureHandler procedures(owner);
-		procedures.create();
-		auto id = procedures.add("double", [](hx::CallData &data) {
-			data.setInt("result", data.view().integer("value") * 2);
-		});
-		auto result = procedures.call(
-			"double", hx::CallData().setInt("value", 21));
-		CHECK(result.view().integer("result") == 42);
-		procedures.add("fail", [](hx::CallData &) {
-			throw hx::StatusError(HX_OS_ACCESS_DENIED);
-		});
-		try {
-			(void)procedures.call("fail");
-			CHECK(false);
-		} catch (const hx::StatusError &error) {
-			CHECK(error.status() == HX_OS_ACCESS_DENIED);
-		}
-		CHECK(procedures.removeUntil(id, HX_OS_DEADLINE_NOW) ==
-			HX_OS_OK);
-		CHECK(procedures.closeUntil(HX_OS_DEADLINE_NOW) == HX_OS_OK);
+		Take(procedures.create());
+		auto id = Take(procedures.add("double",
+			[](hx::CallData &data) noexcept -> hx::Result<void> {
+				auto value = data.view().integer("value");
+				if (!value)
+					return hx::Failure(value.error());
+				return data.setInt("result", value.value() * 2);
+			}));
+		hx::CallData input;
+		Take(input.setInt("value", 21));
+		auto result = Take(procedures.call("double", input));
+		CHECK(Take(result.view().integer("result")) == 42);
+		Take(procedures.add("fail",
+			[](hx::CallData &) noexcept -> hx::Result<void> {
+				hx_os_error error = {HX_OS_ACCESS_DENIED,
+					HX_OS_ERROR_ERRNO, 13, 0};
+				return hx::Failure(error);
+			}));
+		auto failed = procedures.call("fail");
+		CHECK(failed.status() == HX_OS_ACCESS_DENIED);
+		CHECK(failed.error().native_code == 13);
+		Take(procedures.removeUntil(id, HX_OS_DEADLINE_NOW));
+		Take(procedures.closeUntil(HX_OS_DEADLINE_NOW));
 		CHECK(!owner);
 	}
 	if (caps & HX_OS_CAP_THREAD_POOL) {
 		hx_os_thread_pool *owner = NULL;
-		auto pool = hx::ThreadPool::withThreads(owner, 1, 4);
-		auto task = pool.submit([] { return 42; });
-		CHECK(task.get() == 42);
-		CHECK(pool.shutdownUntil(HX_OS_DEADLINE_INFINITE) == HX_OS_OK);
+		auto pool = Take(hx::ThreadPool::withThreads(owner, 1, 4));
+		auto task = Take(pool.submit([]() noexcept { return 42; }));
+		CHECK(Take(task.get()) == 42);
+		Take(pool.shutdownUntil(TestJoinDeadline()));
 		CHECK(!owner);
 	}
 	return 0;

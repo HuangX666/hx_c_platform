@@ -2,61 +2,82 @@
 #define HX_C_PLATFORM_CPP_UTILITIES_HPP
 #include <hx_os_wait.h>
 #include <hx_os_wide.h>
-#include <hx/Status.hpp>
-#include <functional>
+#include <hx/Callback.hpp>
 namespace hx {
+
 class Wide {
 public:
-	static uint64_t multiplyDivide(uint64_t a, uint64_t b, uint64_t divisor,
-		int rounding = HX_OS_ROUND_DOWN)
+	static Result<uint64_t> multiplyDivide(uint64_t a, uint64_t b,
+		uint64_t divisor, int rounding = HX_OS_ROUND_DOWN) noexcept
 	{
-		uint64_t result;
-		hx_os_error error;
-		detail::CheckStatus(hx_os_muldiv_u64(a, b, divisor, rounding,
-					    &result, &error),
-			error);
-		return result;
+		uint64_t value = 0;
+		hx_os_error error = {};
+		auto status = hx_os_muldiv_u64(
+			a, b, divisor, rounding, &value, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return value;
 	}
 };
 class Wait {
 public:
-	static void precise(hx_os_deadline deadline, uint64_t spinNs = 200000)
+	static Result<void> precise(
+		hx_os_deadline deadline, uint64_t spinNs = 200000) noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_sleep_until_precise_ex(deadline, spinNs, &error),
-			error);
+		hx_os_error error = {};
+		auto status =
+			hx_os_sleep_until_precise_ex(deadline, spinNs, &error);
+		return detail::Status(status, error);
 	}
-	/* Synchronous; callback returns false to stop normally. */
-	static size_t repeat(uint64_t intervalMs, size_t ticks,
-		const std::function<bool()> &callback,
-		hx_os_deadline deadline = HX_OS_DEADLINE_INFINITE)
+	/* Synchronous: borrows the callable for this call. false stops
+	 * normally. Result<bool> additionally preserves a callback's explicit
+	 * error details.
+	 */
+	template <typename F>
+	static Result<size_t> repeat(uint64_t intervalMs, size_t ticks,
+		F &&callback,
+		hx_os_deadline deadline = HX_OS_DEADLINE_INFINITE) noexcept
 	{
-		if (!callback)
-			throw StatusError(HX_OS_INVALID);
-		auto owned = callback;
-		size_t completed;
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_repeat_until(intervalMs, ticks, invoke, &owned,
-				deadline, &completed, &error),
-			error);
-		return completed;
+		typedef typename std::remove_reference<F>::type Function;
+		if (detail::NullCallable(callback, std::is_pointer<Function>()))
+			return Failure(HX_OS_INVALID);
+		size_t completed = 0;
+		hx_os_error error = {};
+		Borrowed<Function> borrowed = {&callback};
+		auto status =
+			hx_os_repeat_until(intervalMs, ticks, invoke<Function>,
+				&borrowed, deadline, &completed, &error);
+		return Result<size_t>::withValue(completed, status, error);
 	}
 
 private:
-	static hx_os_status HX_OS_CALL invoke(void *user, hx_os_error *error)
+	template <typename F> struct Borrowed {
+		F *function;
+	};
+	static Result<bool> continuation(bool value) noexcept
 	{
-		try {
-			return (*static_cast<std::function<bool()> *>(user))()
-				? HX_OS_OK
-				: HX_OS_EOF;
-		} catch (const StatusError &failure) {
-			*error = failure.error();
-			return failure.status();
-		} catch (...) {
-			return HX_OS_IO_ERROR;
+		return value;
+	}
+	static Result<bool> continuation(Result<bool> value) noexcept
+	{
+		return value;
+	}
+	template <typename F>
+	static hx_os_status HX_OS_CALL invoke(
+		void *user, hx_os_error *error) noexcept
+	{
+		auto &function = *static_cast<Borrowed<F> *>(user)->function;
+		static_assert(std::is_pointer<F>::value ||
+				std::is_function<F>::value ||
+				noexcept(function()),
+			"Repeat callbacks must be noexcept");
+		auto result = continuation(function());
+		if (!result) {
+			if (error)
+				*error = result.error();
+			return result.status();
 		}
+		return result.value() ? HX_OS_OK : HX_OS_EOF;
 	}
 };
 } // namespace hx

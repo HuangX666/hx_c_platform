@@ -1,33 +1,31 @@
 #ifndef HX_C_PLATFORM_CPP_RANDOM_HPP
 #define HX_C_PLATFORM_CPP_RANDOM_HPP
-
 #include <hx_os_util.h>
-#include <hx/Status.hpp>
-#include <vector>
-
+#include <hx/Values.hpp>
 namespace hx {
 class Random {
 public:
-	static void fill(void *buffer, size_t bytes)
+	static Result<void> fill(void *buffer, size_t bytes) noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_random_bytes(buffer, bytes, &error), error);
+		hx_os_error error = {};
+		auto status = hx_os_random_bytes(buffer, bytes, &error);
+		return detail::Status(status, error);
 	}
-	static std::vector<unsigned char> bytes(size_t count)
+	static Result<Buffer> bytes(
+		size_t count, hx_os_context *context = NULL) noexcept
 	{
-		std::vector<unsigned char> result(count);
-		fill(result.data(), result.size());
+		auto result = Buffer::allocate(count, context);
+		if (!result)
+			return Failure(result.error());
+		auto filled =
+			fill(result.value().data(), result.value().size());
+		if (!filled)
+			return Failure(filled.error());
 		return result;
 	}
-	static std::string uuid()
+	static Result<String> uuid(hx_os_context *context = NULL) noexcept
 	{
-		unsigned char value[16];
-		char text[37];
-		hx_os_error error;
-		detail::CheckStatus(hx_os_uuid_generate(value, &error), error);
-		(void)hx_os_uuid_format(value, text);
-		return text;
+		return detail::StringQuery(hx_os_uuid_generate_string, context);
 	}
 };
 } // namespace hx

@@ -1,104 +1,75 @@
 #ifndef HX_C_PLATFORM_CPP_TIMER_HPP
 #define HX_C_PLATFORM_CPP_TIMER_HPP
-
 #include <hx_os_timer.h>
 #include <hx/Io.hpp>
 #include <chrono>
-
 namespace hx {
-namespace detail {
-struct TimerCallback {
-	std::function<void(const hx_os_error &)> function;
-	std::exception_ptr exception;
-	explicit TimerCallback(std::function<void(const hx_os_error &)> fn)
-	    : function(std::move(fn))
-	{
-	}
-};
-inline void HX_OS_CALL timer_tick(
-	hx_os_timer *timer, const hx_os_error *error, void *user)
-{
-	auto &state = *static_cast<std::shared_ptr<TimerCallback> *>(user);
-	try {
-		state->function(*error);
-	} catch (...) {
-		state->exception = std::current_exception();
-		hx_os_timer_stop(timer);
-	}
-}
-inline void HX_OS_CALL timer_cleanup(void *user)
-{
-	std::unique_ptr<std::shared_ptr<TimerCallback>> state(
-		static_cast<std::shared_ptr<TimerCallback> *>(user));
-	(*state)->function = nullptr;
-}
-} // namespace detail
 
-/* Host-owned pointer; explicit close preserves access after a timeout. */
 class PeriodicTimer {
 public:
-	static PeriodicTimer create(hx_os_timer *&owner, IoLoop &loop,
-		uint64_t intervalNs,
-		std::function<void(const hx_os_error &)> function)
+	template <typename F>
+	static Result<PeriodicTimer> create(hx_os_timer *&owner, IoLoop &loop,
+		uint64_t intervalNs, F &&function) noexcept
 	{
 		if (owner)
-			throw StatusError(HX_OS_BUSY);
-		if (!function)
-			throw StatusError(HX_OS_INVALID);
-		auto callback = std::make_shared<detail::TimerCallback>(
-			std::move(function));
-		std::unique_ptr<std::shared_ptr<detail::TimerCallback>> user(
-			new std::shared_ptr<detail::TimerCallback>(callback));
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_timer_create_with_cleanup(loop.nativeHandle(),
-				intervalNs, detail::timer_tick,
-				detail::timer_cleanup, user.get(), &owner,
-				&error),
-			error);
-		(void)user.release();
-		return PeriodicTimer(owner, std::move(callback));
+			return Failure(HX_OS_BUSY);
+		typedef typename std::decay<F>::type Function;
+		auto callback = detail::CallbackOwner::create(
+			loop.context(), std::forward<F>(function));
+		if (!callback)
+			return Failure(callback.error());
+		auto *state = callback.value().nativeLease();
+		hx_os_error error = {};
+		auto status = hx_os_timer_create_with_cleanup(
+			loop.nativeHandle(), intervalNs, tick<Function>,
+			detail::callback_cleanup, state, &owner, &error);
+		if (status != HX_OS_OK) {
+			state->release();
+			return Failure(status, error);
+		}
+		return PeriodicTimer(owner, std::move(callback.value()));
 	}
-	static PeriodicTimer every(hx_os_timer *&owner, IoLoop &loop,
-		std::chrono::milliseconds interval, std::function<void()> tick)
+	template <typename F>
+	static Result<PeriodicTimer> every(hx_os_timer *&owner, IoLoop &loop,
+		std::chrono::milliseconds interval, F &&function) noexcept
 	{
-		if (interval.count() <= 0 || !tick)
-			throw StatusError(HX_OS_INVALID);
+		typedef typename std::decay<F>::type Function;
+		if (interval.count() <= 0)
+			return Failure(HX_OS_INVALID);
+		if (detail::NullCallable(function, std::is_pointer<Function>()))
+			return Failure(HX_OS_INVALID);
 		uint64_t milliseconds = static_cast<uint64_t>(interval.count());
 		if (milliseconds > UINT64_MAX / UINT64_C(1000000))
-			throw StatusError(HX_OS_RANGE);
+			return Failure(HX_OS_RANGE);
 		return create(owner, loop, milliseconds * UINT64_C(1000000),
-			[tick](const hx_os_error &error) {
-				detail::CheckStatus(error.status, error);
-				tick();
-			});
+			Every<Function>(std::forward<F>(function)));
 	}
 	void stop() const noexcept
 	{
 		hx_os_timer_stop(*m_owner_);
 	}
-	hx_os_status waitUntil(hx_os_deadline deadline,
-		hx_os_error *error = NULL) const noexcept
+	Result<void> waitUntil(hx_os_deadline deadline) const noexcept
 	{
-		if (!*m_owner_) {
-			hx_os_error_clear(error);
-			return HX_OS_OK;
-		}
-		return hx_os_timer_wait_until(*m_owner_, deadline, error);
+		if (!*m_owner_)
+			return Result<void>();
+		hx_os_error error = {};
+		auto status =
+			hx_os_timer_wait_until(*m_owner_, deadline, &error);
+		return detail::Status(status, error);
 	}
-	hx_os_status closeUntil(
-		hx_os_deadline deadline, hx_os_error *error = NULL) noexcept
+	Result<void> closeUntil(hx_os_deadline deadline) noexcept
 	{
-		return hx_os_timer_close_until(m_owner_, deadline, error);
+		hx_os_error error = {};
+		auto status =
+			hx_os_timer_close_until(m_owner_, deadline, &error);
+		return detail::Status(status, error);
 	}
-	/* Call after retirement; this synchronizes with the callback first. */
-	void rethrowCallbackError() const
+	Result<void> callbackResult() const noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			waitUntil(HX_OS_DEADLINE_NOW, &error), error);
-		if (m_callback_->exception)
-			std::rethrow_exception(m_callback_->exception);
+		auto waited = waitUntil(HX_OS_DEADLINE_NOW);
+		if (!waited)
+			return waited;
+		return m_callback_.result();
 	}
 	hx_os_timer *nativeHandle() const noexcept
 	{
@@ -107,13 +78,41 @@ public:
 
 private:
 	hx_os_timer **m_owner_;
-	std::shared_ptr<detail::TimerCallback> m_callback_;
-	PeriodicTimer(hx_os_timer *&owner,
-		std::shared_ptr<detail::TimerCallback> callback)
+	detail::CallbackOwner m_callback_;
+	PeriodicTimer(
+		hx_os_timer *&owner, detail::CallbackOwner callback) noexcept
 	    : m_owner_(&owner)
 	    , m_callback_(std::move(callback))
 	{
 	}
+	template <typename F>
+	static void HX_OS_CALL tick(hx_os_timer *timer,
+		const hx_os_error *error, void *user) noexcept
+	{
+		auto *state = static_cast<detail::CallbackModel<F> *>(
+			static_cast<detail::CallbackState *>(user));
+		auto result = detail::InvokeCallback(state->function(), *error);
+		state->record(result);
+		if (!result)
+			hx_os_timer_stop(timer);
+	}
+	template <typename Function> struct Every {
+		Function function;
+		template <typename F>
+		explicit Every(F &&input) noexcept
+		    : function(std::forward<F>(input))
+		{
+			static_assert(std::is_nothrow_constructible<Function,
+					      F &&>::value,
+				"Move or copy timer captures without failure");
+		}
+		Result<void> operator()(const hx_os_error &error) noexcept
+		{
+			if (error.status != HX_OS_OK)
+				return Failure(error);
+			return detail::InvokeCallback(function);
+		}
+	};
 };
 } // namespace hx
 #endif

@@ -1,20 +1,36 @@
 #ifndef HX_C_PLATFORM_CPP_TEXT_LOOKUP_HPP
 #define HX_C_PLATFORM_CPP_TEXT_LOOKUP_HPP
 #include <hx_os_text_lookup.h>
-#include <hx/Status.hpp>
-#include <memory>
+#include <hx/Values.hpp>
 namespace hx {
+
 class TextLookup {
 public:
-	explicit TextLookup(hx_os_context *context = NULL,
-		const hx_os_text_lookup_options *options = NULL)
+	TextLookup() noexcept
 	    : m_handle_(NULL)
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_text_lookup_create_with_options(
-				context, options, &m_handle_, &error),
-			error);
+	}
+	static Result<TextLookup> create(hx_os_context *context = NULL,
+		const hx_os_text_lookup_options *options = NULL) noexcept
+	{
+		TextLookup result;
+		hx_os_error error = {};
+		auto status = hx_os_text_lookup_create_with_options(
+			context, options, &result.m_handle_, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return result;
+	}
+	static Result<TextLookup> load(
+		const char *path, hx_os_context *context = NULL) noexcept
+	{
+		TextLookup result;
+		hx_os_error error = {};
+		auto status = hx_os_text_lookup_load(
+			context, path, &result.m_handle_, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return result;
 	}
 	TextLookup(const TextLookup &) = delete;
 	TextLookup &operator=(const TextLookup &) = delete;
@@ -25,55 +41,51 @@ public:
 	}
 	TextLookup &operator=(TextLookup &&other) noexcept
 	{
-		if (this != &other) {
-			hx_os_text_lookup_destroy(&m_handle_);
-			m_handle_ = other.m_handle_;
-			other.m_handle_ = NULL;
-		}
+		std::swap(m_handle_, other.m_handle_);
 		return *this;
 	}
-	~TextLookup()
+	~TextLookup() noexcept
 	{
 		hx_os_text_lookup_destroy(&m_handle_);
 	}
-	static TextLookup load(const char *path, hx_os_context *context = NULL)
+	Result<void> addFile(const char *path) noexcept
 	{
-		TextLookup table(context);
-		table.addFile(path);
-		return table;
+		if (!m_handle_)
+			return Failure(HX_OS_CLOSED);
+		hx_os_error error = {};
+		auto status =
+			hx_os_text_lookup_add_file(m_handle_, path, &error);
+		return detail::Status(status, error);
 	}
-	void addFile(const char *path)
+	Result<void> addText(StringView text) noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_text_lookup_add_file(m_handle_, path, &error),
-			error);
+		if (!m_handle_)
+			return Failure(HX_OS_CLOSED);
+		hx_os_error error = {};
+		auto status = hx_os_text_lookup_add_text(
+			m_handle_, text.native(), &error);
+		return detail::Status(status, error);
 	}
-	void addText(const std::string &text)
+	Result<void> add(const char *fallback, const char *translated) noexcept
 	{
-		hx_string_view view = {text.data(), text.size()};
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_text_lookup_add_text(m_handle_, view, &error),
-			error);
+		if (!m_handle_)
+			return Failure(HX_OS_CLOSED);
+		hx_os_error error = {};
+		auto status = hx_os_text_lookup_add(
+			m_handle_, fallback, translated, &error);
+		return detail::Status(status, error);
 	}
-	void add(const char *fallback, const char *translated)
+	Result<String> get(const char *fallback,
+		hx_os_context *context = NULL) const noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(hx_os_text_lookup_add(m_handle_, fallback,
-					    translated, &error),
-			error);
-	}
-	std::string get(const char *fallback) const
-	{
-		hx_string text = HX_STRING_INIT;
-		std::unique_ptr<hx_string, decltype(&hx_string_destroy)>
-			cleanup(&text, hx_string_destroy);
-		hx_os_error error;
-		detail::CheckStatus(hx_os_text_lookup_get_string(
-					    m_handle_, fallback, &text, &error),
-			error);
-		return std::string(hx_string_c_str(&text), text.size);
+		if (!m_handle_)
+			return Failure(HX_OS_CLOSED);
+		return detail::StringQuery(
+			[=](hx_string *out, hx_os_error *error) noexcept {
+				return hx_os_text_lookup_get_string(
+					m_handle_, fallback, out, error);
+			},
+			context);
 	}
 
 private:

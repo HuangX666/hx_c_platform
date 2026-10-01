@@ -3,32 +3,38 @@
 #include <hx_os_bitstream.h>
 #include <hx/Status.hpp>
 namespace hx {
-/* Buffers are borrowed; neither copying a cursor nor destroying it extends
- * buffer lifetime. Synchronize overlapping writes separately.
- */
+/* Cursors borrow their buffers; copies do not extend buffer lifetime. */
 class BitReader {
 public:
-	BitReader(const void *data, size_t bytes)
+	BitReader() noexcept
+	    : m_reader_{}
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_bit_reader_init(&m_reader_, data, bytes, &error),
-			error);
 	}
-	uint64_t read(unsigned bits)
+	static Result<BitReader> create(const void *data, size_t bytes) noexcept
 	{
-		uint64_t value;
-		hx_os_error error;
-		detail::CheckStatus(hx_os_bit_reader_read_bits(
-					    &m_reader_, bits, &value, &error),
-			error);
+		BitReader result;
+		hx_os_error error = {};
+		auto status = hx_os_bit_reader_init(
+			&result.m_reader_, data, bytes, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return result;
+	}
+	Result<uint64_t> read(unsigned bits) noexcept
+	{
+		uint64_t value = 0;
+		hx_os_error error = {};
+		auto status = hx_os_bit_reader_read_bits(
+			&m_reader_, bits, &value, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
 		return value;
 	}
-	void align()
+	Result<void> align() noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_bit_reader_align(&m_reader_, &error), error);
+		hx_os_error error = {};
+		auto status = hx_os_bit_reader_align(&m_reader_, &error);
+		return detail::Status(status, error);
 	}
 	size_t remaining() const noexcept
 	{
@@ -40,25 +46,32 @@ private:
 };
 class BitWriter {
 public:
-	BitWriter(void *data, size_t bytes)
+	BitWriter() noexcept
+	    : m_writer_{}
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_bit_writer_init(&m_writer_, data, bytes, &error),
-			error);
 	}
-	void write(unsigned bits, uint64_t value)
+	static Result<BitWriter> create(void *data, size_t bytes) noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(hx_os_bit_writer_write_bits(
-					    &m_writer_, bits, value, &error),
-			error);
+		BitWriter result;
+		hx_os_error error = {};
+		auto status = hx_os_bit_writer_init(
+			&result.m_writer_, data, bytes, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return result;
 	}
-	void align()
+	Result<void> write(unsigned bits, uint64_t value) noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_bit_writer_align(&m_writer_, &error), error);
+		hx_os_error error = {};
+		auto status = hx_os_bit_writer_write_bits(
+			&m_writer_, bits, value, &error);
+		return detail::Status(status, error);
+	}
+	Result<void> align() noexcept
+	{
+		hx_os_error error = {};
+		auto status = hx_os_bit_writer_align(&m_writer_, &error);
+		return detail::Status(status, error);
 	}
 	size_t bytesWritten() const noexcept
 	{

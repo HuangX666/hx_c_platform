@@ -1,28 +1,15 @@
 #ifndef HX_C_PLATFORM_CPP_THREAD_POOL_HPP
 #define HX_C_PLATFORM_CPP_THREAD_POOL_HPP
-
-#include <hx_os_atomic.h>
 #include <hx_os_pool.h>
-#include <hx/Status.hpp>
+#include <hx/Callback.hpp>
 #include <chrono>
-#include <cstddef>
-#include <exception>
 #include <functional>
-#include <memory>
-#include <new>
 #include <tuple>
-#include <type_traits>
-#include <utility>
-
 namespace hx {
 
 class CancellationToken {
 public:
-	CancellationToken() noexcept
-	    : m_task_(NULL)
-	{
-	}
-	explicit CancellationToken(hx_os_task *task) noexcept
+	explicit CancellationToken(hx_os_task *task = NULL) noexcept
 	    : m_task_(task)
 	{
 		if (m_task_)
@@ -42,7 +29,7 @@ public:
 		std::swap(m_task_, other.m_task_);
 		return *this;
 	}
-	~CancellationToken()
+	~CancellationToken() noexcept
 	{
 		hx_os_task_release(m_task_);
 	}
@@ -50,17 +37,16 @@ public:
 	{
 		return m_task_ && hx_os_task_cancel_requested(m_task_);
 	}
-	void throwIfCancelled() const
+	Result<void> check() const noexcept
 	{
-		if (stopRequested())
-			throw StatusError(HX_OS_CANCELLED);
+		return Result<void>(
+			stopRequested() ? HX_OS_CANCELLED : HX_OS_OK);
 	}
 
 private:
 	friend class CancellationSource;
 	hx_os_task *m_task_;
 };
-
 class CancellationSource {
 public:
 	explicit CancellationSource(hx_os_task *task = NULL) noexcept
@@ -84,218 +70,130 @@ public:
 private:
 	CancellationToken m_token_;
 };
-
 namespace detail {
-
-template <typename Function, typename... Arguments>
-auto CallImpl(std::false_type, Function &function, Arguments &&...arguments)
-	-> decltype(function(std::forward<Arguments>(arguments)...))
+template <typename F, typename... A>
+auto CallImpl(std::false_type, F &function, A &&...arguments) noexcept(
+	noexcept(function(std::forward<A>(arguments)...)))
+	-> decltype(function(std::forward<A>(arguments)...))
 {
-	return function(std::forward<Arguments>(arguments)...);
+	return function(std::forward<A>(arguments)...);
 }
-
-template <typename Function, typename... Arguments>
-auto CallImpl(std::true_type, Function &function, Arguments &&...arguments)
-	-> decltype(std::mem_fn(function)(
-		std::forward<Arguments>(arguments)...))
+template <typename F, typename... A>
+auto CallImpl(std::true_type, F &function, A &&...arguments) noexcept
+	-> decltype(std::mem_fn(function)(std::forward<A>(arguments)...))
 {
-	return std::mem_fn(function)(std::forward<Arguments>(arguments)...);
+	/* C++11 member-pointer types cannot encode their noexcept contract. */
+	return std::mem_fn(function)(std::forward<A>(arguments)...);
 }
-
-template <typename Function, typename... Arguments>
-auto Call(Function &function, Arguments &&...arguments)
-	-> decltype(CallImpl(std::is_member_pointer<Function>(), function,
-		std::forward<Arguments>(arguments)...))
+template <typename F, typename... A>
+auto Call(F &function, A &&...arguments) noexcept(noexcept(CallImpl(
+	std::is_member_pointer<F>(), function, std::forward<A>(arguments)...)))
+	-> decltype(CallImpl(std::is_member_pointer<F>(), function,
+		std::forward<A>(arguments)...))
 {
-	return CallImpl(std::is_member_pointer<Function>(), function,
-		std::forward<Arguments>(arguments)...);
+	static_assert(std::is_pointer<F>::value ||
+			std::is_member_pointer<F>::value ||
+			noexcept(CallImpl(std::is_member_pointer<F>(), function,
+				std::forward<A>(arguments)...)),
+		"Task callables must be noexcept");
+	return CallImpl(std::is_member_pointer<F>(), function,
+		std::forward<A>(arguments)...);
 }
-
-template <std::size_t... Values> struct Indices {};
-template <std::size_t Count, std::size_t... Values>
-struct MakeIndices : MakeIndices<Count - 1, Count - 1, Values...> {};
-template <std::size_t... Values> struct MakeIndices<0, Values...> {
-	typedef Indices<Values...> type;
+template <size_t... I> struct Indices {};
+template <size_t N, size_t... I>
+struct MakeIndices : MakeIndices<N - 1, N - 1, I...> {};
+template <size_t... I> struct MakeIndices<0, I...> {
+	typedef Indices<I...> type;
 };
-
-template <typename Result> class ResultSlot {
-public:
-	ResultSlot() noexcept
-	    : m_ready_(false)
-	{
-		static_assert(std::is_nothrow_destructible<Result>::value,
-			"Task results must have non-throwing destructors");
-		static_assert(!std::is_rvalue_reference<Result>::value,
-			"Return values, lvalue references or void from a task");
-	}
-	~ResultSlot()
-	{
-		if (m_ready_)
-			reinterpret_cast<Result *>(&m_storage_)->~Result();
-	}
-	template <typename Function, typename... Arguments>
-	void invoke(Function &function, Arguments &&...arguments)
-	{
-		new (&m_storage_) Result(
-			Call(function, std::forward<Arguments>(arguments)...));
-		m_ready_ = true;
-	}
-	Result take()
-	{
-		if (!m_ready_)
-			throw StatusError(HX_OS_CANCELLED);
-		return std::move(*reinterpret_cast<Result *>(&m_storage_));
-	}
-
-private:
-	alignas(Result) unsigned char m_storage_[sizeof(Result)];
-	bool m_ready_;
+template <typename T> struct UnwrapResult {
+	typedef T type;
 };
-
-template <typename Result> class ResultSlot<Result &> {
-public:
-	ResultSlot() noexcept
-	    : m_value_(NULL)
-	{
-	}
-	template <typename Function, typename... Arguments>
-	void invoke(Function &function, Arguments &&...arguments)
-	{
-		m_value_ = std::addressof(
-			Call(function, std::forward<Arguments>(arguments)...));
-	}
-	Result &take()
-	{
-		if (!m_value_)
-			throw StatusError(HX_OS_CANCELLED);
-		return *m_value_;
-	}
-
-private:
-	Result *m_value_;
+template <typename T> struct UnwrapResult<Result<T>> {
+	typedef T type;
 };
-
-template <> class ResultSlot<void> {
-public:
-	template <typename Function, typename... Arguments>
-	void invoke(Function &function, Arguments &&...arguments)
-	{
-		Call(function, std::forward<Arguments>(arguments)...);
-	}
-	void take() const noexcept
-	{
-	}
-};
-
-template <typename Result> struct TaskState;
-
-template <typename Result, bool Inherit> struct TaskStorage;
-
-/* A short base before the aligned reference count can grow 32-bit objects. */
-template <typename Result> struct TaskStorage<Result, false> {
-	hx_os_atomic m_references_;
-	std::exception_ptr m_exception_;
-	ResultSlot<Result> m_result_;
-	void (*m_dispose_)(TaskState<Result> *);
-	TaskStorage() noexcept
-	    : m_references_{2}
-	    , m_dispose_(NULL)
-	{
-	}
-	ResultSlot<Result> &result() noexcept
-	{
-		return m_result_;
-	}
-};
-
-/* Empty bases and aligned result storage avoid an extra member boundary. */
-template <typename Result>
-struct TaskStorage<Result, true> : ResultSlot<Result> {
-	hx_os_atomic m_references_;
-	std::exception_ptr m_exception_;
-	void (*m_dispose_)(TaskState<Result> *);
-	TaskStorage() noexcept
-	    : m_references_{2}
-	    , m_dispose_(NULL)
-	{
-	}
-	ResultSlot<Result> &result() noexcept
-	{
-		return *this;
-	}
-};
-
-template <typename Result>
-struct TaskState
-    : TaskStorage<Result,
-	      std::is_empty<ResultSlot<Result>>::value ||
-		      sizeof(ResultSlot<Result>) % alignof(hx_os_atomic) == 0> {
-	void release() noexcept
-	{
-		if (hx_os_atomic_fetch_add(
-			    &this->m_references_, -1, HX_OS_ACQ_REL) == 1)
-			this->m_dispose_(this);
-	}
-};
-
-template <bool WithToken> struct Invoke;
+template <typename T, typename V> Result<T> NormalizeTask(V &&value) noexcept
+{
+	return Result<T>(std::forward<V>(value));
+}
+template <typename T> Result<T> NormalizeTask(Result<T> &&value) noexcept
+{
+	return std::move(value);
+}
+template <bool Token> struct Invoke;
 template <> struct Invoke<false> {
-	template <typename Slot, typename Function, typename Tuple,
-		std::size_t... I>
-	static void call(Slot &slot, Function &function, Tuple &arguments,
-		hx_os_task *, Indices<I...>)
+	template <typename F, typename Tuple, size_t... I>
+	static auto call(F &function, Tuple &arguments, hx_os_task *,
+		Indices<I...>) noexcept -> decltype(Call(function,
+		std::move(std::get<I>(arguments))...))
 	{
-		slot.invoke(function, std::move(std::get<I>(arguments))...);
+		return Call(function, std::move(std::get<I>(arguments))...);
 	}
 };
 template <> struct Invoke<true> {
-	template <typename Slot, typename Function, typename Tuple,
-		std::size_t... I>
-	static void call(Slot &slot, Function &function, Tuple &arguments,
-		hx_os_task *task, Indices<I...>)
+	template <typename F, typename Tuple, size_t... I>
+	static auto call(F &function, Tuple &arguments, hx_os_task *task,
+		Indices<I...>) noexcept -> decltype(Call(function,
+		CancellationToken(task), std::move(std::get<I>(arguments))...))
 	{
-		slot.invoke(function, CancellationToken(task),
+		return Call(function, CancellationToken(task),
 			std::move(std::get<I>(arguments))...);
 	}
 };
-
-template <bool WithToken, typename Function, typename... Arguments>
-struct ReturnType {
-	typedef decltype(hx::detail::Call(
-		std::declval<typename std::decay<Function>::type &>(),
-		std::declval<typename std::decay<Arguments>::type>()...)) type;
+template <bool Token, typename F, typename... A> struct ReturnType {
+	typedef decltype(Call(std::declval<typename std::decay<F>::type &>(),
+		std::declval<typename std::decay<A>::type>()...)) raw;
+	typedef typename UnwrapResult<raw>::type type;
 };
-template <typename Function, typename... Arguments>
-struct ReturnType<true, Function, Arguments...> {
-	typedef decltype(hx::detail::Call(
-		std::declval<typename std::decay<Function>::type &>(),
+template <typename F, typename... A> struct ReturnType<true, F, A...> {
+	typedef decltype(Call(std::declval<typename std::decay<F>::type &>(),
 		std::declval<CancellationToken>(),
-		std::declval<typename std::decay<Arguments>::type>()...)) type;
+		std::declval<typename std::decay<A>::type>()...)) raw;
+	typedef typename UnwrapResult<raw>::type type;
 };
-
-template <bool WithToken, typename Function, typename... Arguments>
-class Job
-    : public TaskState<
-	      typename ReturnType<WithToken, Function, Arguments...>::type> {
-public:
-	typedef typename ReturnType<WithToken, Function, Arguments...>::type
-		Result;
-	typedef TaskState<Result> State;
-	typedef std::tuple<typename std::decay<Function>::type,
-		typename std::decay<Arguments>::type...>
-		Payload;
-	Job(Function &&function, Arguments &&...arguments)
-	    : m_live_(false)
+template <typename T> struct TaskState {
+	hx_os_atomic references;
+	Result<T> result;
+	void (*dispose)(TaskState *);
+	bool invoked;
+	TaskState() noexcept
+	    : references{2}
+	    , result(Failure(HX_OS_CANCELLED))
+	    , dispose(NULL)
+	    , invoked(false)
 	{
-		static_assert(std::is_nothrow_destructible<Payload>::value,
-			"Task callables and arguments must have non-throwing "
-			"destructors");
-		this->m_dispose_ = destroy_state;
-		new (&m_payload_) Payload(std::forward<Function>(function),
-			std::forward<Arguments>(arguments)...);
-		m_live_ = true;
+		static_assert(!std::is_rvalue_reference<T>::value,
+			"Return values, lvalue references or void, not rvalue "
+			"references");
 	}
-	~Job()
+	void release() noexcept
+	{
+		if (hx_os_atomic_fetch_add(&references, -1, HX_OS_ACQ_REL) == 1)
+			dispose(this);
+	}
+};
+template <bool Token, typename F, typename... A>
+class Job : public TaskState<typename ReturnType<Token, F, A...>::type> {
+public:
+	typedef typename ReturnType<Token, F, A...>::type Value;
+	typedef typename ReturnType<Token, F, A...>::raw Raw;
+	typedef TaskState<Value> State;
+	typedef std::tuple<typename std::decay<F>::type,
+		typename std::decay<A>::type...>
+		Payload;
+	Job(F &&function, A &&...arguments) noexcept
+	    : m_live_(true)
+	{
+		static_assert(std::is_nothrow_constructible<Payload, F &&,
+				      A &&...>::value,
+			"Task captures/arguments must be copied or moved "
+			"without failure");
+		static_assert(std::is_nothrow_destructible<Payload>::value,
+			"Task captures/arguments need noexcept destruction");
+		this->dispose = destroy_state;
+		new (&m_payload_) Payload(std::forward<F>(function),
+			std::forward<A>(arguments)...);
+	}
+	~Job() noexcept
 	{
 		dropPayload();
 	}
@@ -303,14 +201,10 @@ public:
 		hx_os_task *task, void *user) noexcept
 	{
 		Job *job = static_cast<Job *>(user);
-		try {
-			job->run(task,
-				typename MakeIndices<sizeof...(
-					Arguments)>::type());
-		} catch (...) {
-			job->m_exception_ = std::current_exception();
-		}
-		return HX_OS_OK;
+		job->run(task, typename MakeIndices<sizeof...(A)>::type(),
+			std::is_void<Raw>());
+		job->invoked = true;
+		return job->result.status();
 	}
 	static void HX_OS_CALL cleanup(void *user) noexcept
 	{
@@ -329,14 +223,25 @@ private:
 			m_live_ = false;
 		}
 	}
-	template <std::size_t... I> void run(hx_os_task *task, Indices<I...>)
+	template <size_t... I>
+	void run(hx_os_task *task, Indices<I...>, std::false_type) noexcept
 	{
-		Payload &payload = *reinterpret_cast<Payload *>(&m_payload_);
-		/* Reference tuple avoids copying bound move-only arguments. */
+		auto &payload = *reinterpret_cast<Payload *>(&m_payload_);
 		auto arguments =
 			std::forward_as_tuple(std::get<I + 1>(payload)...);
-		Invoke<WithToken>::call(this->result(), std::get<0>(payload),
-			arguments, task, Indices<I...>());
+		this->result = NormalizeTask<Value>(
+			Invoke<Token>::call(std::get<0>(payload), arguments,
+				task, Indices<I...>()));
+	}
+	template <size_t... I>
+	void run(hx_os_task *task, Indices<I...>, std::true_type) noexcept
+	{
+		auto &payload = *reinterpret_cast<Payload *>(&m_payload_);
+		auto arguments =
+			std::forward_as_tuple(std::get<I + 1>(payload)...);
+		Invoke<Token>::call(
+			std::get<0>(payload), arguments, task, Indices<I...>());
+		this->result = Result<void>();
 	}
 	static void destroy_state(State *state) noexcept
 	{
@@ -345,61 +250,46 @@ private:
 		hx_os_memory_free(job);
 	}
 };
-
-template <bool WithToken, typename Function, typename... Arguments>
-class Factory {
+template <bool Token, typename F, typename... A> class Factory {
 public:
-	typedef Job<WithToken, Function, Arguments...> Work;
+	typedef Job<Token, F, A...> Work;
 	typedef typename Work::State State;
-	hx_os_context *m_context_;
-	State *m_state_;
-	std::exception_ptr m_exception_;
-	std::tuple<Function &&, Arguments &&...> m_arguments_;
-	Factory(hx_os_context *contextValue, Function &&function,
-		Arguments &&...values)
-	    : m_context_(contextValue)
-	    , m_state_(NULL)
-	    , m_arguments_(std::forward<Function>(function),
-		      std::forward<Arguments>(values)...)
+	hx_os_context *context;
+	State *state;
+	std::tuple<F &&, A &&...> arguments;
+	Factory(hx_os_context *ctx, F &&function, A &&...values) noexcept
+	    : context(ctx)
+	    , state(NULL)
+	    , arguments(std::forward<F>(function), std::forward<A>(values)...)
 	{
 	}
 	static hx_os_status HX_OS_CALL prepare(void *user, void **out) noexcept
 	{
-		Factory *factory = static_cast<Factory *>(user);
+		auto *factory = static_cast<Factory *>(user);
 		void *memory = NULL;
 		*out = NULL;
-		hx_os_status status = hx_os_memory_alloc(factory->m_context_,
-			sizeof(Work), alignof(Work), &memory, NULL);
+		auto status = hx_os_memory_alloc(factory->context, sizeof(Work),
+			alignof(Work), &memory, NULL);
 		if (status != HX_OS_OK)
 			return status;
-		try {
-			factory->construct(memory,
-				typename MakeIndices<sizeof...(
-					Arguments)>::type());
-		} catch (...) {
-			factory->m_exception_ = std::current_exception();
-			hx_os_memory_free(memory);
-			return HX_OS_INVALID;
-		}
-		*out = static_cast<Work *>(factory->m_state_);
+		factory->construct(
+			memory, typename MakeIndices<sizeof...(A)>::type());
+		*out = static_cast<Work *>(factory->state);
 		return HX_OS_OK;
 	}
 
 private:
-	template <std::size_t... I> void construct(void *memory, Indices<I...>)
+	template <size_t... I>
+	void construct(void *memory, Indices<I...>) noexcept
 	{
-		m_state_ = new (memory)
-			Work(std::forward<Function>(std::get<0>(m_arguments_)),
-				std::forward<Arguments>(
-					std::get<I + 1>(m_arguments_))...);
+		state = new (memory)
+			Work(std::forward<F>(std::get<0>(arguments)),
+				std::forward<A>(std::get<I + 1>(arguments))...);
 	}
 };
-
 } // namespace detail
-
 class ThreadPool;
-
-template <typename Result> class Task {
+template <typename T> class Task {
 public:
 	Task() noexcept
 	    : m_task_(NULL)
@@ -426,7 +316,7 @@ public:
 	}
 	Task(const Task &) = delete;
 	Task &operator=(const Task &) = delete;
-	~Task()
+	~Task() noexcept
 	{
 		reset();
 	}
@@ -444,49 +334,61 @@ public:
 		if (m_task_)
 			hx_os_task_cancel(m_task_);
 	}
-	/* Copy this source before handing the Task to another thread. */
 	CancellationSource cancellationSource() const noexcept
 	{
 		return CancellationSource(m_task_);
 	}
-	hx_os_status waitUntil(hx_os_deadline deadline) const noexcept
+	Result<void> waitUntil(hx_os_deadline deadline) const noexcept
 	{
-		return hx_os_task_wait_until(m_task_, deadline, NULL, NULL);
+		if (!m_task_)
+			return Failure(HX_OS_CLOSED);
+		hx_os_error error = {};
+		auto status =
+			hx_os_task_wait_until(m_task_, deadline, NULL, &error);
+		return detail::Status(status, error);
 	}
-	hx_os_status waitFor(std::chrono::milliseconds duration) const noexcept
+	Result<void> waitFor(std::chrono::milliseconds duration) const noexcept
 	{
 		return waitUntil(duration.count() <= 0
 				? HX_OS_DEADLINE_NOW
 				: hx_os_deadline_after_ms(static_cast<uint64_t>(
 					  duration.count())));
 	}
-	void wait() const
+	Result<void> wait() const noexcept
 	{
-		hx_os_error error;
-		if (hx_os_task_wait_until(m_task_, HX_OS_DEADLINE_INFINITE,
-			    NULL, &error) != HX_OS_OK)
-			throw StatusError(error);
+		return waitUntil(HX_OS_DEADLINE_INFINITE);
 	}
-	Result get()
+	/* Failed waits retain the task. Completed work consumes it even on
+	 * error. A callable returning Result<T> is flattened into Task<T>,
+	 * preserving native error details and partial values. Reference results
+	 * borrow external data.
+	 */
+	Result<T> getUntil(hx_os_deadline deadline) noexcept
 	{
-		hx_os_status work;
-		hx_os_error error;
-		if (hx_os_task_wait_until(m_task_, HX_OS_DEADLINE_INFINITE,
-			    &work, &error) != HX_OS_OK)
-			throw StatusError(error);
+		if (!m_task_)
+			return Failure(HX_OS_CLOSED);
+		hx_os_status work = HX_OS_OK;
+		hx_os_error error = {};
+		auto status =
+			hx_os_task_wait_until(m_task_, deadline, &work, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
 		Task owner(std::move(*this));
-		if (work != HX_OS_OK)
-			throw StatusError(work);
-		if (owner.m_state_->m_exception_)
-			std::rethrow_exception(owner.m_state_->m_exception_);
-		return owner.m_state_->result().take();
+		if (!owner.m_state_->invoked)
+			return Failure(
+				work == HX_OS_OK ? HX_OS_CANCELLED : work);
+		return std::move(owner.m_state_->result);
+	}
+	Result<T> get() noexcept
+	{
+		return getUntil(HX_OS_DEADLINE_INFINITE);
 	}
 
 private:
 	friend class ThreadPool;
 	hx_os_task *m_task_;
-	detail::TaskState<Result> *m_state_;
-	Task(hx_os_task *task, detail::TaskState<Result> *state) noexcept
+	detail::TaskState<T> *m_state_;
+	Task(hx_os_task *task, detail::TaskState<T> *state) noexcept
 	    : m_task_(task)
 	    , m_state_(state)
 	{
@@ -500,38 +402,33 @@ private:
 		m_state_ = NULL;
 	}
 };
-
-/*
- * A non-owning facade over a host-owned C pointer variable. The variable
- * outlives the facade; closeUntil is bounded/retryable and never destroys.
- * After success, externally exclude all pool calls and explicitly destroy.
- * Facade destruction performs no wait, detach, implicit close or ownership
- * loss: the original C owner remains available for retry. Task results own
- * references independently and may outlive the successfully destroyed pool.
+/* The host owns the C pointer. Explicit bounded shutdown preserves it on
+ * failure. Destruction of this facade never waits, detaches or kills.
  */
 class ThreadPool {
 public:
 	explicit ThreadPool(hx_os_thread_pool *&owner,
-		std::size_t maxTaskBytes = 1024 * 1024) noexcept
+		size_t maxTaskBytes = 1024 * 1024) noexcept
 	    : m_owner_(&owner)
 	    , m_maxTaskBytes_(maxTaskBytes)
 	{
 	}
-	static ThreadPool create(hx_os_thread_pool *&owner,
+	static Result<ThreadPool> create(hx_os_thread_pool *&owner,
 		hx_os_context *context = NULL,
-		const hx_os_thread_pool_options *options = NULL)
+		const hx_os_thread_pool_options *options = NULL) noexcept
 	{
 		if (owner)
-			throw StatusError(HX_OS_BUSY);
-		hx_os_error error;
-		if (hx_os_thread_pool_create(
-			    context, options, &owner, &error) != HX_OS_OK)
-			throw StatusError(error);
+			return Failure(HX_OS_BUSY);
+		hx_os_error error = {};
+		auto status = hx_os_thread_pool_create(
+			context, options, &owner, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
 		return ThreadPool(owner);
 	}
-	static ThreadPool withThreads(hx_os_thread_pool *&owner,
-		std::size_t threads, std::size_t queueCapacity = 256,
-		hx_os_context *context = NULL)
+	static Result<ThreadPool> withThreads(hx_os_thread_pool *&owner,
+		size_t threads, size_t queueCapacity = 256,
+		hx_os_context *context = NULL) noexcept
 	{
 		hx_os_thread_pool_options options;
 		hx_os_thread_pool_options_init(&options);
@@ -543,122 +440,120 @@ public:
 	{
 		return *m_owner_;
 	}
-	bool inside() const
+	Result<bool> inside() const noexcept
 	{
 		if (!*m_owner_)
-			throw StatusError(HX_OS_CLOSED);
-		int value;
-		hx_os_status status =
-			hx_os_thread_pool_inside(*m_owner_, &value);
+			return Failure(HX_OS_CLOSED);
+		int value = 0;
+		auto status = hx_os_thread_pool_inside(*m_owner_, &value);
 		if (status != HX_OS_OK)
-			throw StatusError(status);
+			return Failure(status);
 		return value != 0;
 	}
-	template <typename Function, typename... Arguments>
-	Task<typename detail::ReturnType<false, Function, Arguments...>::type>
-	submit(Function &&function, Arguments &&...arguments) const
+	template <typename F, typename... A>
+	Result<Task<typename detail::ReturnType<false, F, A...>::type>> submit(
+		F &&function, A &&...arguments) const noexcept
 	{
-		return submitImpl<false>(false, 0,
-			std::forward<Function>(function),
-			std::forward<Arguments>(arguments)...);
+		return submitImpl<false>(false, 0, std::forward<F>(function),
+			std::forward<A>(arguments)...);
 	}
-	template <typename Function, typename... Arguments>
-	Task<typename detail::ReturnType<true, Function, Arguments...>::type>
-	submitCancelable(Function &&function, Arguments &&...arguments) const
+	template <typename F, typename... A>
+	Result<Task<typename detail::ReturnType<true, F, A...>::type>>
+	submitCancelable(F &&function, A &&...arguments) const noexcept
 	{
-		return submitImpl<true>(false, 0,
-			std::forward<Function>(function),
-			std::forward<Arguments>(arguments)...);
+		return submitImpl<true>(false, 0, std::forward<F>(function),
+			std::forward<A>(arguments)...);
 	}
-	template <typename Function, typename... Arguments>
-	Task<typename detail::ReturnType<false, Function, Arguments...>::type>
-	submitAt(hx_os_deadline due, Function &&function,
-		Arguments &&...arguments) const
+	template <typename F, typename... A>
+	Result<Task<typename detail::ReturnType<false, F, A...>::type>>
+	submitAt(hx_os_deadline due, F &&function,
+		A &&...arguments) const noexcept
 	{
-		return submitImpl<false>(true, due,
-			std::forward<Function>(function),
-			std::forward<Arguments>(arguments)...);
+		return submitImpl<false>(true, due, std::forward<F>(function),
+			std::forward<A>(arguments)...);
 	}
-	template <typename Function, typename... Arguments>
-	Task<typename detail::ReturnType<false, Function, Arguments...>::type>
-	submitAfter(std::chrono::milliseconds duration, Function &&function,
-		Arguments &&...arguments) const
+	template <typename F, typename... A>
+	Result<Task<typename detail::ReturnType<true, F, A...>::type>>
+	submitCancelableAt(hx_os_deadline due, F &&function,
+		A &&...arguments) const noexcept
+	{
+		return submitImpl<true>(true, due, std::forward<F>(function),
+			std::forward<A>(arguments)...);
+	}
+	template <typename F, typename... A>
+	Result<Task<typename detail::ReturnType<false, F, A...>::type>>
+	submitAfter(std::chrono::milliseconds duration, F &&function,
+		A &&...arguments) const noexcept
 	{
 		return submitAt(duration.count() <= 0
 				? HX_OS_DEADLINE_NOW
 				: hx_os_deadline_after_ms(static_cast<uint64_t>(
 					  duration.count())),
-			std::forward<Function>(function),
-			std::forward<Arguments>(arguments)...);
+			std::forward<F>(function),
+			std::forward<A>(arguments)...);
 	}
-	template <typename Function, typename... Arguments>
-	Task<typename detail::ReturnType<true, Function, Arguments...>::type>
-	submitCancelableAt(hx_os_deadline due, Function &&function,
-		Arguments &&...arguments) const
-	{
-		return submitImpl<true>(true, due,
-			std::forward<Function>(function),
-			std::forward<Arguments>(arguments)...);
-	}
-	template <typename Function, typename... Arguments>
-	Task<typename detail::ReturnType<true, Function, Arguments...>::type>
-	submitCancelableAfter(std::chrono::milliseconds duration,
-		Function &&function, Arguments &&...arguments) const
+	template <typename F, typename... A>
+	Result<Task<typename detail::ReturnType<true, F, A...>::type>>
+	submitCancelableAfter(std::chrono::milliseconds duration, F &&function,
+		A &&...arguments) const noexcept
 	{
 		return submitCancelableAt(duration.count() <= 0
 				? HX_OS_DEADLINE_NOW
 				: hx_os_deadline_after_ms(static_cast<uint64_t>(
 					  duration.count())),
-			std::forward<Function>(function),
-			std::forward<Arguments>(arguments)...);
+			std::forward<F>(function),
+			std::forward<A>(arguments)...);
 	}
-	hx_os_status closeUntil(hx_os_deadline deadline,
-		int mode = HX_OS_POOL_DRAIN,
-		hx_os_error *error = NULL) const noexcept
+
+	Result<void> closeUntil(hx_os_deadline deadline,
+		int mode = HX_OS_POOL_DRAIN) const noexcept
 	{
-		if (!*m_owner_) {
-			hx_os_error_clear(error);
-			return HX_OS_OK;
-		}
-		return hx_os_thread_pool_close_until(
-			*m_owner_, mode, deadline, error);
+		if (!*m_owner_)
+			return Result<void>();
+		hx_os_error error = {};
+		auto status = hx_os_thread_pool_close_until(
+			*m_owner_, mode, deadline, &error);
+		return detail::Status(status, error);
 	}
-	/* Combined close/release; timeout keeps the external owner reachable.
-	 */
-	hx_os_status shutdownUntil(hx_os_deadline deadline,
-		int mode = HX_OS_POOL_DRAIN, hx_os_error *error = NULL) noexcept
+	Result<void> shutdownUntil(
+		hx_os_deadline deadline, int mode = HX_OS_POOL_DRAIN) noexcept
 	{
-		return hx_os_thread_pool_shutdown_ex(
-			m_owner_, mode, deadline, error);
+		hx_os_error error = {};
+		auto status = hx_os_thread_pool_shutdown_ex(
+			m_owner_, mode, deadline, &error);
+		return detail::Status(status, error);
 	}
-	hx_os_status destroy(hx_os_error *error = NULL) noexcept
+	Result<void> destroy() noexcept
 	{
-		return hx_os_thread_pool_destroy(m_owner_, error);
+		hx_os_error error = {};
+		auto status = hx_os_thread_pool_destroy(m_owner_, &error);
+		return detail::Status(status, error);
 	}
 
 private:
 	hx_os_thread_pool **m_owner_;
-	std::size_t m_maxTaskBytes_;
-	template <bool WithToken, typename Function, typename... Arguments>
-	Task<typename detail::ReturnType<WithToken, Function,
-		Arguments...>::type>
-	submitImpl(bool delayed, hx_os_deadline due, Function &&function,
-		Arguments &&...arguments) const
+	size_t m_maxTaskBytes_;
+	template <bool Token, typename F, typename... A>
+	Result<Task<typename detail::ReturnType<Token, F, A...>::type>>
+	submitImpl(bool delayed, hx_os_deadline due, F &&function,
+		A &&...arguments) const noexcept
 	{
-		typedef detail::Factory<WithToken, Function, Arguments...>
-			Factory;
+		typedef detail::Factory<Token, F, A...> Factory;
 		typedef typename Factory::Work Work;
-		typedef typename Work::Result Result;
+		typedef typename Work::Value Value;
+		typedef typename std::decay<F>::type Function;
 		if (!*m_owner_)
-			throw StatusError(HX_OS_CLOSED);
+			return Failure(HX_OS_CLOSED);
 		if (sizeof(Work) > m_maxTaskBytes_)
-			throw StatusError(HX_OS_LIMIT);
+			return Failure(HX_OS_LIMIT);
+		if (detail::NullCallable(function, std::is_pointer<Function>()))
+			return Failure(HX_OS_INVALID);
 		Factory factory(hx_os_thread_pool_context(*m_owner_),
-			std::forward<Function>(function),
-			std::forward<Arguments>(arguments)...);
+			std::forward<F>(function),
+			std::forward<A>(arguments)...);
 		hx_os_task *task = NULL;
-		hx_os_error error;
-		hx_os_status status = delayed
+		hx_os_error error = {};
+		auto status = delayed
 			? hx_os_thread_pool_submit_delayed_prepared(*m_owner_,
 				  due, Factory::prepare, &factory,
 				  Work::execute, Work::cleanup, &task, &error)
@@ -666,15 +561,12 @@ private:
 				  Factory::prepare, &factory, Work::execute,
 				  Work::cleanup, &task, &error);
 		if (status != HX_OS_OK) {
-			if (factory.m_state_)
-				factory.m_state_->release();
-			if (factory.m_exception_)
-				std::rethrow_exception(factory.m_exception_);
-			throw StatusError(error);
+			if (factory.state)
+				factory.state->release();
+			return Failure(status, error);
 		}
-		return Task<Result>(task, factory.m_state_);
+		return Task<Value>(task, factory.state);
 	}
 };
-
 } // namespace hx
 #endif

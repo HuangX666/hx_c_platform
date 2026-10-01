@@ -1,9 +1,8 @@
 #ifndef HX_C_PLATFORM_CPP_OBFUSCATE_HPP
 #define HX_C_PLATFORM_CPP_OBFUSCATE_HPP
 #include <hx_os_obfuscate.h>
-#include <hx/Status.hpp>
+#include <hx/Values.hpp>
 #include <array>
-#include <memory>
 namespace hx {
 namespace detail {
 template <size_t... Values> struct ObfuscationIndices {};
@@ -28,16 +27,15 @@ public:
 	{
 		return {m_bytes_.data(), Size - 1, Key};
 	}
-	std::string decode() const
+	Result<String> decode(hx_os_context *context = NULL) const noexcept
 	{
 		auto encoded = view();
-		hx_string text = HX_STRING_INIT;
-		std::unique_ptr<hx_string, decltype(&hx_string_destroy)>
-			cleanup(&text, hx_string_destroy);
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_obfuscate_string(&encoded, &text, &error), error);
-		return std::string(hx_string_c_str(&text), text.size);
+		return detail::StringQuery(
+			[&](hx_string *out, hx_os_error *error) noexcept {
+				return hx_os_obfuscate_string(
+					&encoded, out, error);
+			},
+			context);
 	}
 
 private:

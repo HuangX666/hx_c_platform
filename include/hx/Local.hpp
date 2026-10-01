@@ -3,104 +3,116 @@
 #include <hx_os_local.h>
 #include <hx/Files.hpp>
 namespace hx {
+
 class DuplexPipe {
 public:
-	static std::pair<File, File> pair(hx_os_context *context = NULL)
+	static Result<std::pair<File, File>> pair(
+		hx_os_context *context = NULL) noexcept
 	{
 		hx_os_file *first = NULL, *second = NULL;
-		hx_os_error error;
-		detail::CheckStatus(hx_os_pipe_pair_socket(
-					    context, &first, &second, &error),
-			error);
+		hx_os_error error = {};
+		auto status = hx_os_pipe_pair_socket(
+			context, &first, &second, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
 		return std::make_pair(File::adopt(first), File::adopt(second));
 	}
-	static void shutdown(File &file, int direction = HX_OS_SHUT_WRITE)
+	static Result<void> shutdown(
+		File &file, int direction = HX_OS_SHUT_WRITE) noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(hx_os_pipe_socket_shutdown(
-					    file.get(), direction, &error),
-			error);
+		hx_os_error error = {};
+		auto status = hx_os_pipe_socket_shutdown(
+			file.get(), direction, &error);
+		return detail::Status(status, error);
 	}
 };
-/* The host owns both network and socket pointer variables. Explicit close
- * retains a socket with pending async I/O. Facade destruction does not lose
- * the host's handle or silently cancel another owner's request.
- */
+/* Host owns the network and socket. Failed close preserves pending I/O. */
 class LocalSocket {
 public:
 	explicit LocalSocket(hx_os_socket *&owner) noexcept
 	    : m_owner_(&owner)
 	{
 	}
-	void listen(hx_os_network *network, const char *path, int backlog = 16)
+	Result<void> listen(hx_os_network *network, const char *path,
+		int backlog = 16) noexcept
 	{
 		if (*m_owner_)
-			throw StatusError(HX_OS_BUSY);
-		hx_os_error error;
-		detail::CheckStatus(hx_os_local_listen(network, path, backlog,
-					    m_owner_, &error),
-			error);
+			return Failure(HX_OS_BUSY);
+		hx_os_error error = {};
+		auto status = hx_os_local_listen(
+			network, path, backlog, m_owner_, &error);
+		return detail::Status(status, error);
 	}
-	hx_os_status connect(hx_os_network *network, const char *path,
-		hx_os_deadline deadline, hx_os_error *error = NULL)
+	Result<void> connect(hx_os_network *network, const char *path,
+		hx_os_deadline deadline) noexcept
 	{
 		if (*m_owner_)
-			throw StatusError(HX_OS_BUSY);
-		return hx_os_local_connect(
-			network, path, deadline, m_owner_, error);
+			return Failure(HX_OS_BUSY);
+		hx_os_error error = {};
+		auto status = hx_os_local_connect(
+			network, path, deadline, m_owner_, &error);
+		return detail::Status(status, error);
 	}
-	hx_os_status finishConnect(
-		hx_os_deadline deadline, hx_os_error *error = NULL) noexcept
+	Result<void> finishConnect(hx_os_deadline deadline) noexcept
 	{
-		return hx_os_local_socket_finish_connect(
-			*m_owner_, deadline, error);
+		hx_os_error error = {};
+		auto status = hx_os_local_socket_finish_connect(
+			*m_owner_, deadline, &error);
+		return detail::Status(status, error);
 	}
-	hx_os_status acceptUntil(LocalSocket &destination,
-		hx_os_deadline deadline, hx_os_error *error = NULL)
+	Result<void> acceptUntil(
+		LocalSocket &destination, hx_os_deadline deadline) noexcept
 	{
 		if (*destination.m_owner_)
-			throw StatusError(HX_OS_BUSY);
-		return hx_os_local_socket_accept_until(
-			*m_owner_, deadline, destination.m_owner_, error);
+			return Failure(HX_OS_BUSY);
+		hx_os_error error = {};
+		auto status = hx_os_local_socket_accept_until(
+			*m_owner_, deadline, destination.m_owner_, &error);
+		return detail::Status(status, error);
 	}
-	File::ReadResult readUntil(
-		void *data, size_t bytes, hx_os_deadline deadline)
+	Result<File::ReadResult> readUntil(
+		void *data, size_t bytes, hx_os_deadline deadline) noexcept
 	{
 		size_t completed = 0;
-		hx_os_error error;
-		hx_os_status status = hx_os_socket_receive_until(
+		hx_os_error error = {};
+		auto status = hx_os_socket_receive_until(
 			*m_owner_, data, bytes, deadline, &completed, &error);
-		if (status != HX_OS_OK && status != HX_OS_EOF)
-			throw IoError(error, completed);
-		return {completed, status == HX_OS_EOF};
+		return Result<File::ReadResult>::withValue(
+			File::ReadResult{completed, status == HX_OS_EOF},
+			status, error);
 	}
-	void writeUntil(const void *data, size_t bytes, hx_os_deadline deadline)
+	Result<size_t> writeUntil(const void *data, size_t bytes,
+		hx_os_deadline deadline) noexcept
 	{
 		size_t completed = 0;
-		hx_os_error error;
-		if (hx_os_socket_send_until(*m_owner_, data, bytes, deadline,
-			    &completed, &error) != HX_OS_OK)
-			throw IoError(error, completed);
+		hx_os_error error = {};
+		auto status = hx_os_socket_send_until(
+			*m_owner_, data, bytes, deadline, &completed, &error);
+		return Result<size_t>::withValue(completed, status, error);
 	}
-	void shutdown(int direction = HX_OS_SHUT_WRITE)
+	Result<void> shutdown(int direction = HX_OS_SHUT_WRITE) noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_socket_shutdown(*m_owner_, direction, &error),
-			error);
+		hx_os_error error = {};
+		auto status =
+			hx_os_socket_shutdown(*m_owner_, direction, &error);
+		return detail::Status(status, error);
 	}
-	std::string address(bool peer = false) const
+	Result<String> address(
+		bool peer = false, hx_os_context *context = NULL) const noexcept
 	{
-		hx_os_local_address value;
-		hx_os_error error;
-		detail::CheckStatus(hx_os_local_socket_address(*m_owner_,
-					    peer ? 1 : 0, &value, &error),
-			error);
-		return value.path;
+		hx_os_local_address value = {};
+		hx_os_error error = {};
+		auto status = hx_os_local_socket_address(
+			*m_owner_, peer ? 1 : 0, &value, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return String::copy(value.path, context);
 	}
-	hx_os_status close(hx_os_error *error = NULL) noexcept
+	Result<void> close() noexcept
 	{
-		return hx_os_socket_close(m_owner_, error);
+		hx_os_error error = {};
+		auto status = hx_os_socket_close(m_owner_, &error);
+		return detail::Status(status, error);
 	}
 	hx_os_socket *nativeHandle() const noexcept
 	{

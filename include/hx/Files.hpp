@@ -1,52 +1,33 @@
 #ifndef HX_C_PLATFORM_CPP_FILES_HPP
 #define HX_C_PLATFORM_CPP_FILES_HPP
-
 #include <hx_os_file.h>
-#include <hx/Status.hpp>
-#include <memory>
-#include <string>
-#include <utility>
-#include <vector>
-
+#include <hx/Values.hpp>
 namespace hx {
-
-class IoError : public StatusError {
-public:
-	IoError(const hx_os_error &error, size_t completed) noexcept
-	    : StatusError(error)
-	    , m_completed_(completed)
-	{
-	}
-	size_t completed() const noexcept
-	{
-		return m_completed_;
-	}
-
-private:
-	size_t m_completed_;
-};
 
 class File {
 public:
-	/* Explicitly transfer a C handle; no allocation and no native call. */
-	static File adopt(hx_os_file *&owner) noexcept
-	{
-		File value(owner, 0);
-		owner = NULL;
-		return value;
-	}
-	struct ReadResult {
-		size_t bytes;
-		bool eof;
-	};
-	explicit File(const char *path, uint32_t flags = HX_OS_FILE_READ,
-		hx_os_context *context = NULL)
+	File() noexcept
 	    : m_file_(NULL)
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_file_open(context, path, flags, &m_file_, &error),
-			error);
+	}
+	static File adopt(hx_os_file *&owner) noexcept
+	{
+		File result;
+		result.m_file_ = owner;
+		owner = NULL;
+		return result;
+	}
+	static Result<File> open(const char *path,
+		uint32_t flags = HX_OS_FILE_READ,
+		hx_os_context *context = NULL) noexcept
+	{
+		File result;
+		hx_os_error error = {};
+		auto status = hx_os_file_open(
+			context, path, flags, &result.m_file_, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return result;
 	}
 	File(const File &) = delete;
 	File &operator=(const File &) = delete;
@@ -64,67 +45,86 @@ public:
 		}
 		return *this;
 	}
-	~File()
+	~File() noexcept
 	{
 		(void)hx_os_file_close(&m_file_, NULL);
 	}
-	ReadResult readSome(void *data, size_t bytes)
+	struct ReadResult {
+		size_t bytes;
+		bool eof;
+	};
+	/* A failed result can still own a progress value. EOF is kept as
+	 * status. */
+	Result<ReadResult> readSome(void *data, size_t bytes) noexcept
 	{
+		if (!m_file_)
+			return Failure(HX_OS_CLOSED);
 		size_t completed = 0;
-		hx_os_error error;
-		hx_os_status status = hx_os_file_read_some(
+		hx_os_error error = {};
+		auto status = hx_os_file_read_some(
 			m_file_, data, bytes, &completed, &error);
-		if (status != HX_OS_OK && status != HX_OS_EOF)
-			throw IoError(error, completed);
-		return {completed, status == HX_OS_EOF};
+		return Result<ReadResult>::withValue(
+			ReadResult{completed, status == HX_OS_EOF}, status,
+			error);
 	}
-	void writeAll(const void *data, size_t bytes)
+	Result<size_t> writeAll(const void *data, size_t bytes) noexcept
 	{
+		if (!m_file_)
+			return Failure(HX_OS_CLOSED);
 		size_t completed = 0;
-		hx_os_error error;
-		if (hx_os_file_write_all(m_file_, data, bytes, &completed,
-			    &error) != HX_OS_OK)
-			throw IoError(error, completed);
+		hx_os_error error = {};
+		auto status = hx_os_file_write_all(
+			m_file_, data, bytes, &completed, &error);
+		return Result<size_t>::withValue(completed, status, error);
 	}
-	ReadResult readAt(uint64_t offset, void *data, size_t bytes)
+	Result<ReadResult> readAt(
+		uint64_t offset, void *data, size_t bytes) noexcept
 	{
+		if (!m_file_)
+			return Failure(HX_OS_CLOSED);
 		size_t completed = 0;
-		hx_os_error error;
-		hx_os_status status = hx_os_file_read_at(
+		hx_os_error error = {};
+		auto status = hx_os_file_read_at(
 			m_file_, offset, data, bytes, &completed, &error);
-		if (status != HX_OS_OK && status != HX_OS_EOF)
-			throw IoError(error, completed);
-		return {completed, status == HX_OS_EOF};
+		return Result<ReadResult>::withValue(
+			ReadResult{completed, status == HX_OS_EOF}, status,
+			error);
 	}
-	size_t writeAt(uint64_t offset, const void *data, size_t bytes)
+	Result<size_t> writeAt(
+		uint64_t offset, const void *data, size_t bytes) noexcept
 	{
+		if (!m_file_)
+			return Failure(HX_OS_CLOSED);
 		size_t completed = 0;
-		hx_os_error error;
-		if (hx_os_file_write_at(m_file_, offset, data, bytes,
-			    &completed, &error) != HX_OS_OK)
-			throw IoError(error, completed);
-		return completed;
+		hx_os_error error = {};
+		auto status = hx_os_file_write_at(
+			m_file_, offset, data, bytes, &completed, &error);
+		return Result<size_t>::withValue(completed, status, error);
 	}
-	void sync()
+	Result<void> sync() noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(hx_os_file_sync(m_file_, &error), error);
+		if (!m_file_)
+			return Failure(HX_OS_CLOSED);
+		hx_os_error error = {};
+		auto status = hx_os_file_sync(m_file_, &error);
+		return detail::Status(status, error);
 	}
-	uint64_t size() const
+	Result<uint64_t> size() const noexcept
 	{
-		uint64_t value;
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_file_size(m_file_, &value, &error), error);
+		if (!m_file_)
+			return Failure(HX_OS_CLOSED);
+		uint64_t value = 0;
+		hx_os_error error = {};
+		auto status = hx_os_file_size(m_file_, &value, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
 		return value;
 	}
-	void close()
+	Result<void> close() noexcept
 	{
-		if (m_file_) {
-			hx_os_error error;
-			detail::CheckStatus(
-				hx_os_file_close(&m_file_, &error), error);
-		}
+		hx_os_error error = {};
+		auto status = hx_os_file_close(&m_file_, &error);
+		return detail::Status(status, error);
 	}
 	hx_os_file *get() const noexcept
 	{
@@ -132,180 +132,192 @@ public:
 	}
 
 private:
-	File(hx_os_file *file, int) noexcept
-	    : m_file_(file)
-	{
-	}
 	hx_os_file *m_file_;
 };
 
 class Directory {
 public:
-	explicit Directory(const char *path, hx_os_context *context = NULL)
+	/* Entry bytes include NUL. Moving the entry keeps its name alive. */
+	struct Entry {
+		Buffer storage;
+		unsigned kind;
+		bool kindKnown;
+		const char *name() const noexcept
+		{
+			return reinterpret_cast<const char *>(storage.data());
+		}
+	};
+	Directory() noexcept
 	    : m_directory_(NULL)
+	    , m_context_(NULL)
 	{
-		hx_os_error error;
-		detail::CheckStatus(hx_os_directory_open(context, path,
-					    &m_directory_, &error),
-			error);
+	}
+	static Result<Directory> open(
+		const char *path, hx_os_context *context = NULL) noexcept
+	{
+		Directory result;
+		hx_os_error error = {};
+		auto status = hx_os_directory_open(
+			context, path, &result.m_directory_, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		result.m_context_ = context;
+		return result;
 	}
 	Directory(const Directory &) = delete;
 	Directory &operator=(const Directory &) = delete;
 	Directory(Directory &&other) noexcept
 	    : m_directory_(other.m_directory_)
+	    , m_context_(other.m_context_)
 	{
 		other.m_directory_ = NULL;
+		other.m_context_ = NULL;
 	}
 	Directory &operator=(Directory &&other) noexcept
 	{
 		if (this != &other) {
 			hx_os_directory_close(m_directory_);
 			m_directory_ = other.m_directory_;
+			m_context_ = other.m_context_;
 			other.m_directory_ = NULL;
+			other.m_context_ = NULL;
 		}
 		return *this;
 	}
-	~Directory()
+	~Directory() noexcept
 	{
 		hx_os_directory_close(m_directory_);
 	}
-	bool next(std::string &out)
+	Result<Entry> next(bool queryKind = false) noexcept
 	{
-		return nextImpl(out, NULL);
-	}
-	bool next(std::string &out, unsigned &kind)
-	{
-		return nextImpl(out, &kind);
+		if (!m_directory_)
+			return Failure(HX_OS_CLOSED);
+		size_t capacity = 256;
+		for (;;) {
+			auto buffer = Buffer::allocate(capacity, m_context_);
+			if (!buffer)
+				return Failure(buffer.error());
+			size_t required = 0;
+			unsigned kind = HX_OS_FILE_OTHER;
+			hx_os_error error = {};
+			auto *name =
+				reinterpret_cast<char *>(buffer.value().data());
+			auto status = queryKind
+				? hx_os_directory_next_info(m_directory_, name,
+					  capacity, &required, &kind, &error)
+				: hx_os_directory_next(m_directory_, name,
+					  capacity, &required, &error);
+			if (status == HX_OS_OUTPUT_FULL) {
+				capacity = required;
+				continue;
+			}
+			if (status != HX_OS_OK)
+				return Failure(status, error);
+			return Entry{
+				std::move(buffer.value()), kind, queryKind};
+		}
 	}
 
 private:
 	hx_os_directory *m_directory_;
-	bool nextImpl(std::string &out, unsigned *kind)
-	{
-		std::string value(256, '\0');
-		hx_os_error error;
-		size_t required;
-		for (;;) {
-			hx_os_status status = kind
-				? hx_os_directory_next_info(m_directory_,
-					  &value[0], value.size(), &required,
-					  kind, &error)
-				: hx_os_directory_next(m_directory_, &value[0],
-					  value.size(), &required, &error);
-			if (status == HX_OS_EOF)
-				return false;
-			if (status == HX_OS_OUTPUT_FULL) {
-				value.resize(required);
-				continue;
-			}
-			detail::CheckStatus(status, error);
-			value.resize(required - 1);
-			out.swap(value);
-			return true;
-		}
-	}
+	hx_os_context *m_context_;
 };
 
 class Files {
 public:
-	static hx_os_file_info_extended info(
-		const char *path, bool follow = true)
+	static Result<hx_os_file_info_extended> info(
+		const char *path, bool follow = true) noexcept
 	{
 		hx_os_file_info_extended value = HX_OS_FILE_INFO_EXTENDED_INIT;
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_path_stat_extended(path, follow, &value, &error),
-			error);
+		hx_os_error error = {};
+		auto status =
+			hx_os_path_stat_extended(path, follow, &value, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
 		return value;
 	}
-	static std::string readText(const char *path)
+	static Result<String> readText(
+		const char *path, hx_os_context *context = NULL) noexcept
 	{
-		hx_string text = HX_STRING_INIT;
-		std::unique_ptr<hx_string, decltype(&hx_string_destroy)>
-			cleanup(&text, hx_string_destroy);
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_file_read_text(path, &text, &error), error);
-		return std::string(hx_string_c_str(&text), text.size);
+		return detail::StringQuery(
+			[=](hx_string *out, hx_os_error *error) noexcept {
+				return hx_os_file_read_text(path, out, error);
+			},
+			context);
 	}
-	static std::string readText(const char *path, hx_os_encoding encoding)
+	static Result<String> readText(const char *path,
+		hx_os_encoding encoding, hx_os_context *context = NULL) noexcept
 	{
-		hx_string text = HX_STRING_INIT;
-		std::unique_ptr<hx_string, decltype(&hx_string_destroy)>
-			cleanup(&text, hx_string_destroy);
-		hx_os_error error;
-		detail::CheckStatus(hx_os_file_read_text_encoded(
-					    path, encoding, &text, &error),
-			error);
-		return std::string(hx_string_c_str(&text), text.size);
+		return detail::StringQuery(
+			[=](hx_string *out, hx_os_error *error) noexcept {
+				return hx_os_file_read_text_encoded(
+					path, encoding, out, error);
+			},
+			context);
 	}
-	static void writeText(const char *path, const std::string &text)
+	static Result<void> writeText(
+		const char *path, StringView text) noexcept
 	{
-		size_t invalid;
-		hx_os_status status = hx_os_text_validate_utf8(
+		size_t invalid = 0;
+		auto status = hx_os_text_validate_utf8(
 			text.data(), text.size(), &invalid);
 		if (status != HX_OS_OK)
-			throw StatusError(status);
-		hx_os_error error;
-		detail::CheckStatus(hx_os_file_save_atomic(path, text.data(),
-					    text.size(), &error),
-			error);
+			return Failure(status);
+		hx_os_error error = {};
+		status = hx_os_file_save_atomic(
+			path, text.data(), text.size(), &error);
+		return detail::Status(status, error);
 	}
-	static std::vector<unsigned char> load(
-		const char *path, size_t maxBytes = 16 * 1024 * 1024)
+	static Result<Buffer> load(const char *path,
+		size_t maxBytes = 16 * 1024 * 1024,
+		hx_os_context *context = NULL) noexcept
 	{
-		void *data;
-		size_t bytes;
-		hx_os_error error;
-		detail::CheckStatus(hx_os_file_load(NULL, path, maxBytes, &data,
-					    &bytes, &error),
-			error);
-		std::unique_ptr<void, decltype(&hx_os_memory_free)> cleanup(
-			data, hx_os_memory_free);
-		const auto *begin = static_cast<const unsigned char *>(data);
-		return std::vector<unsigned char>(begin, begin + bytes);
+		void *data = NULL;
+		size_t bytes = 0;
+		hx_os_error error = {};
+		auto status = hx_os_file_load(
+			context, path, maxBytes, &data, &bytes, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return Buffer::adopt(data, bytes);
 	}
-	static bool exists(const char *path)
+	static Result<bool> exists(const char *path) noexcept
 	{
-		int value;
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_file_exists(path, &value, &error), error);
+		int value = 0;
+		hx_os_error error = {};
+		auto status = hx_os_file_exists(path, &value, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
 		return value != 0;
 	}
-	static void copy(const char *from, const char *to, bool replace = false)
+	static Result<void> copy(
+		const char *from, const char *to, bool replace = false) noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_file_copy(from, to, replace, &error), error);
+		hx_os_error error = {};
+		auto status = hx_os_file_copy(from, to, replace, &error);
+		return detail::Status(status, error);
 	}
-	static void removeTree(const char *path)
+	static Result<void> removeTree(const char *path) noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_directory_remove_recursive(path, &error), error);
+		hx_os_error error = {};
+		auto status = hx_os_directory_remove_recursive(path, &error);
+		return detail::Status(status, error);
 	}
-	static std::string currentPath()
+	static Result<String> currentPath(
+		hx_os_context *context = NULL) noexcept
 	{
-		hx_string text = HX_STRING_INIT;
-		std::unique_ptr<hx_string, decltype(&hx_string_destroy)>
-			cleanup(&text, hx_string_destroy);
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_path_current_string(&text, &error), error);
-		return std::string(hx_string_c_str(&text), text.size);
+		return detail::StringQuery(hx_os_path_current_string, context);
 	}
-	static std::string absolutePath(const char *path)
+	static Result<String> absolutePath(
+		const char *path, hx_os_context *context = NULL) noexcept
 	{
-		hx_string text = HX_STRING_INIT;
-		std::unique_ptr<hx_string, decltype(&hx_string_destroy)>
-			cleanup(&text, hx_string_destroy);
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_path_absolute_string(path, &text, &error), error);
-		return std::string(hx_string_c_str(&text), text.size);
+		return detail::StringQuery(
+			[=](hx_string *out, hx_os_error *error) noexcept {
+				return hx_os_path_absolute_string(
+					path, out, error);
+			},
+			context);
 	}
 };
-
 } // namespace hx
 #endif

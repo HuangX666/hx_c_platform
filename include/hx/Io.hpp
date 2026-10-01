@@ -1,38 +1,17 @@
 #ifndef HX_C_PLATFORM_CPP_IO_HPP
 #define HX_C_PLATFORM_CPP_IO_HPP
-
 #include <hx_os_pipe.h>
 #include <hx/Files.hpp>
-#include <functional>
-#include <memory>
-#include <utility>
-
+#include <hx/Callback.hpp>
 namespace hx {
-namespace detail {
-struct IoCallback {
-	std::function<void(const hx_os_completion &)> function;
-	std::exception_ptr exception;
-	explicit IoCallback(std::function<void(const hx_os_completion &)> fn)
-	    : function(std::move(fn))
-	{
-	}
-};
-inline void HX_OS_CALL io_completed(
-	hx_os_request *, const hx_os_completion *completion, void *user)
-{
-	std::unique_ptr<std::shared_ptr<IoCallback>> owner(
-		static_cast<std::shared_ptr<IoCallback> *>(user));
-	try {
-		if ((*owner)->function)
-			(*owner)->function(*completion);
-	} catch (...) {
-		(*owner)->exception = std::current_exception();
-	}
-}
-} // namespace detail
 
+class AsyncPipe;
 class IoRequest {
 public:
+	IoRequest() noexcept
+	    : m_request_(NULL)
+	{
+	}
 	IoRequest(IoRequest &&other) noexcept
 	    : m_request_(other.m_request_)
 	    , m_callback_(std::move(other.m_callback_))
@@ -51,7 +30,7 @@ public:
 	}
 	IoRequest(const IoRequest &) = delete;
 	IoRequest &operator=(const IoRequest &) = delete;
-	~IoRequest()
+	~IoRequest() noexcept
 	{
 		hx_os_request_release(m_request_);
 	}
@@ -59,20 +38,28 @@ public:
 	{
 		hx_os_request_cancel(m_request_);
 	}
-	hx_os_status waitUntil(hx_os_deadline deadline,
-		hx_os_completion *completion = NULL,
-		hx_os_error *error = NULL) const noexcept
+	/* Wait failure has no value; completed I/O failure retains byte
+	 * progress. */
+	Result<hx_os_completion> waitUntil(
+		hx_os_deadline deadline) const noexcept
 	{
-		return hx_os_request_wait_until(
-			m_request_, deadline, completion, error);
+		hx_os_completion completion = {};
+		hx_os_error error = {};
+		auto status = hx_os_request_wait_until(
+			m_request_, deadline, &completion, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return Result<hx_os_completion>::withValue(
+			completion, completion.error.status, completion.error);
 	}
-	void rethrowCallbackError() const
+	Result<void> callbackResult() const noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			waitUntil(HX_OS_DEADLINE_NOW, NULL, &error), error);
-		if (m_callback_->exception)
-			std::rethrow_exception(m_callback_->exception);
+		hx_os_error error = {};
+		auto status = hx_os_request_wait_until(
+			m_request_, HX_OS_DEADLINE_NOW, NULL, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return m_callback_.result();
 	}
 	hx_os_request *nativeHandle() const noexcept
 	{
@@ -82,100 +69,112 @@ public:
 private:
 	friend class AsyncPipe;
 	hx_os_request *m_request_;
-	std::shared_ptr<detail::IoCallback> m_callback_;
-	IoRequest(hx_os_request *request,
-		std::shared_ptr<detail::IoCallback> callback)
+	detail::CallbackOwner m_callback_;
+	IoRequest(
+		hx_os_request *request, detail::CallbackOwner callback) noexcept
 	    : m_request_(request)
 	    , m_callback_(std::move(callback))
 	{
 	}
 };
-
-/* A host-owned pointer remains available after facade destruction/timeouts. */
+/* Native owner outlives facade and every associated request/resource. */
 class IoLoop {
 public:
-	explicit IoLoop(hx_os_loop *&owner) noexcept
+	explicit IoLoop(
+		hx_os_loop *&owner, hx_os_context *context = NULL) noexcept
 	    : m_owner_(&owner)
+	    , m_context_(context)
 	{
 	}
-	static IoLoop create(hx_os_loop *&owner, hx_os_context *context = NULL,
-		const hx_os_loop_options *options = NULL)
+	static Result<IoLoop> create(hx_os_loop *&owner,
+		hx_os_context *context = NULL,
+		const hx_os_loop_options *options = NULL) noexcept
 	{
 		if (owner)
-			throw StatusError(HX_OS_BUSY);
-		hx_os_error error;
-		detail::CheckStatus(hx_os_loop_create_local(
-					    context, options, &owner, &error),
-			error);
-		return IoLoop(owner);
+			return Failure(HX_OS_BUSY);
+		hx_os_error error = {};
+		auto status = hx_os_loop_create_local(
+			context, options, &owner, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return IoLoop(owner, context);
 	}
-	hx_os_status runUntil(hx_os_deadline deadline,
-		hx_os_error *error = NULL) const noexcept
+	Result<void> runUntil(hx_os_deadline deadline) const noexcept
 	{
-		return hx_os_loop_run_until(*m_owner_, deadline, error);
+		hx_os_error error = {};
+		auto status = hx_os_loop_run_until(*m_owner_, deadline, &error);
+		return detail::Status(status, error);
 	}
-	hx_os_status closeUntil(
-		hx_os_deadline deadline, hx_os_error *error = NULL) noexcept
+	Result<void> closeUntil(hx_os_deadline deadline) noexcept
 	{
-		if (!*m_owner_) {
-			hx_os_error_clear(error);
-			return HX_OS_OK;
-		}
-		hx_os_status status =
-			hx_os_loop_close_until(*m_owner_, deadline, error);
-		return status == HX_OS_OK ? hx_os_loop_destroy(m_owner_, error)
-					  : status;
+		if (!*m_owner_)
+			return Result<void>();
+		hx_os_error error = {};
+		auto status =
+			hx_os_loop_close_until(*m_owner_, deadline, &error);
+		if (status == HX_OS_OK)
+			status = hx_os_loop_destroy(m_owner_, &error);
+		return detail::Status(status, error);
 	}
 	hx_os_loop *nativeHandle() const noexcept
 	{
 		return *m_owner_;
 	}
+	hx_os_context *context() const noexcept
+	{
+		return m_context_;
+	}
 
 private:
 	hx_os_loop **m_owner_;
+	hx_os_context *m_context_;
 };
-
 class AsyncPipe {
 public:
 	explicit AsyncPipe(hx_os_pipe *&owner) noexcept
 	    : m_owner_(&owner)
 	{
 	}
-	static void createPair(hx_os_pipe *&reader, hx_os_pipe *&writer,
-		hx_os_context *context = NULL)
+	static Result<void> createPair(hx_os_pipe *&reader, hx_os_pipe *&writer,
+		hx_os_context *context = NULL) noexcept
 	{
 		if (reader || writer)
-			throw StatusError(HX_OS_BUSY);
-		hx_os_error error;
-		detail::CheckStatus(hx_os_pipe_pair_async(
-					    context, &reader, &writer, &error),
-			error);
+			return Failure(HX_OS_BUSY);
+		hx_os_error error = {};
+		auto status = hx_os_pipe_pair_async(
+			context, &reader, &writer, &error);
+		return detail::Status(status, error);
 	}
-	IoRequest read(IoLoop &loop, void *data, size_t bytes,
-		std::function<void(const hx_os_completion &)> callback,
-		hx_os_deadline deadline = HX_OS_DEADLINE_INFINITE) const
+	template <typename F>
+	Result<IoRequest> read(IoLoop &loop, void *data, size_t bytes,
+		F &&callback, hx_os_deadline deadline = HX_OS_DEADLINE_INFINITE)
+		const noexcept
 	{
 		return submit(loop, HX_OS_PIPE_READ, data, bytes,
-			std::move(callback), deadline);
+			std::forward<F>(callback), deadline);
 	}
-	IoRequest write(IoLoop &loop, const void *data, size_t bytes,
-		std::function<void(const hx_os_completion &)> callback,
-		hx_os_deadline deadline = HX_OS_DEADLINE_INFINITE) const
+	template <typename F>
+	Result<IoRequest> write(IoLoop &loop, const void *data, size_t bytes,
+		F &&callback, hx_os_deadline deadline = HX_OS_DEADLINE_INFINITE)
+		const noexcept
 	{
 		return submit(loop, HX_OS_PIPE_WRITE, const_cast<void *>(data),
-			bytes, std::move(callback), deadline);
+			bytes, std::forward<F>(callback), deadline);
 	}
-	IoRequest write(IoLoop &loop, const std::string &text,
-		std::function<void(const hx_os_completion &)> callback,
-		hx_os_deadline deadline = HX_OS_DEADLINE_INFINITE) const
+	template <typename F>
+	Result<IoRequest> write(IoLoop &loop, StringView text, F &&callback,
+		hx_os_deadline deadline =
+			HX_OS_DEADLINE_INFINITE) const noexcept
 	{
 		return write(loop, text.data(), text.size(),
-			std::move(callback), deadline);
+			std::forward<F>(callback), deadline);
 	}
-	hx_os_status closeUntil(
-		hx_os_deadline deadline, hx_os_error *error = NULL) noexcept
+	Result<void> closeUntil(hx_os_deadline deadline) noexcept
 	{
-		return hx_os_pipe_close_until(m_owner_, deadline, error);
+		hx_os_error error = {};
+		auto status =
+			hx_os_pipe_close_until(m_owner_, deadline, &error);
+		return detail::Status(status, error);
 	}
 	hx_os_pipe *nativeHandle() const noexcept
 	{
@@ -184,40 +183,57 @@ public:
 
 private:
 	hx_os_pipe **m_owner_;
-	IoRequest submit(IoLoop &loop, int kind, void *data, size_t bytes,
-		std::function<void(const hx_os_completion &)> function,
-		hx_os_deadline deadline) const
+	template <typename F>
+	static void HX_OS_CALL completed(hx_os_request *,
+		const hx_os_completion *completion, void *user) noexcept
 	{
-		auto callback = std::make_shared<detail::IoCallback>(
-			std::move(function));
-		std::unique_ptr<std::shared_ptr<detail::IoCallback>> user(
-			new std::shared_ptr<detail::IoCallback>(callback));
-		hx_os_pipe_operation op;
-		(void)hx_os_pipe_operation_init(&op, sizeof(op), kind);
-		op.pipe = *m_owner_;
-		op.data = data;
-		op.bytes = bytes;
-		op.deadline = deadline;
+		auto *state = static_cast<detail::CallbackModel<F> *>(
+			static_cast<detail::CallbackState *>(user));
+		state->record(
+			detail::InvokeCallback(state->function(), *completion));
+		detail::callback_cleanup(state);
+	}
+	template <typename F>
+	Result<IoRequest> submit(IoLoop &loop, int kind, void *data,
+		size_t bytes, F &&function,
+		hx_os_deadline deadline) const noexcept
+	{
+		typedef typename std::decay<F>::type Function;
+		auto callback = detail::CallbackOwner::create(
+			loop.context(), std::forward<F>(function));
+		if (!callback)
+			return Failure(callback.error());
+		auto *state = callback.value().nativeLease();
+		hx_os_pipe_operation operation;
+		(void)hx_os_pipe_operation_init(
+			&operation, sizeof(operation), kind);
+		operation.pipe = *m_owner_;
+		operation.data = data;
+		operation.bytes = bytes;
+		operation.deadline = deadline;
 		hx_os_request *request = NULL;
-		hx_os_error error;
-		detail::CheckStatus(hx_os_loop_submit_pipe(loop.nativeHandle(),
-					    &op, detail::io_completed,
-					    user.get(), &request, &error),
-			error);
-		(void)user.release();
-		return IoRequest(request, std::move(callback));
+		hx_os_error error = {};
+		auto status =
+			hx_os_loop_submit_pipe(loop.nativeHandle(), &operation,
+				completed<Function>, state, &request, &error);
+		if (status != HX_OS_OK) {
+			state->release();
+			return Failure(status, error);
+		}
+		return IoRequest(request, std::move(callback.value()));
 	}
 };
-
 class Pipes {
 public:
-	static std::pair<File, File> anonymous(hx_os_context *context = NULL)
+	static Result<std::pair<File, File>> anonymous(
+		hx_os_context *context = NULL) noexcept
 	{
 		hx_os_file *reader = NULL, *writer = NULL;
-		hx_os_error error;
-		detail::CheckStatus(hx_os_pipe_pair_anonymous(
-					    context, &reader, &writer, &error),
-			error);
+		hx_os_error error = {};
+		auto status = hx_os_pipe_pair_anonymous(
+			context, &reader, &writer, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
 		return std::make_pair(File::adopt(reader), File::adopt(writer));
 	}
 };

@@ -1,57 +1,65 @@
 #ifndef HX_C_PLATFORM_CPP_THREAD_HPP
 #define HX_C_PLATFORM_CPP_THREAD_HPP
-
 #include <hx_os_thread.h>
 #include <hx/Status.hpp>
-#include <memory>
-
 namespace hx {
 
 class Semaphore {
 public:
-	explicit Semaphore(uint32_t initial = 0, uint32_t maximum = 1,
-		hx_os_context *context = NULL)
-	    : m_handle_(NULL, hx_os_semaphore_destroy)
+	Semaphore() noexcept
+	    : m_handle_(NULL)
 	{
-		hx_os_semaphore *handle = NULL;
-		hx_os_error error;
-		detail::CheckStatus(hx_os_semaphore_create(context, initial,
-					    maximum, &handle, &error),
-			error);
-		m_handle_.reset(handle);
 	}
-	Semaphore(Semaphore &&) noexcept = default;
-	Semaphore &operator=(Semaphore &&) noexcept = default;
+	static Result<Semaphore> create(uint32_t initial = 0,
+		uint32_t maximum = 1, hx_os_context *context = NULL) noexcept
+	{
+		Semaphore result;
+		hx_os_error error = {};
+		auto status = hx_os_semaphore_create(
+			context, initial, maximum, &result.m_handle_, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return result;
+	}
 	Semaphore(const Semaphore &) = delete;
 	Semaphore &operator=(const Semaphore &) = delete;
-	void post(uint32_t count = 1)
+	Semaphore(Semaphore &&other) noexcept
+	    : m_handle_(other.m_handle_)
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_semaphore_post(m_handle_.get(), count, &error),
-			error);
+		other.m_handle_ = NULL;
 	}
-	hx_os_status waitUntil(
-		hx_os_deadline deadline, hx_os_error *error = NULL) noexcept
+	Semaphore &operator=(Semaphore &&other) noexcept
 	{
-		return hx_os_semaphore_wait_until(
-			m_handle_.get(), deadline, error);
+		std::swap(m_handle_, other.m_handle_);
+		return *this;
+	}
+	~Semaphore() noexcept
+	{
+		hx_os_semaphore_destroy(m_handle_);
+	}
+	Result<void> post(uint32_t count = 1) noexcept
+	{
+		hx_os_error error = {};
+		auto status = hx_os_semaphore_post(m_handle_, count, &error);
+		return detail::Status(status, error);
+	}
+	Result<void> waitUntil(hx_os_deadline deadline) noexcept
+	{
+		hx_os_error error = {};
+		auto status =
+			hx_os_semaphore_wait_until(m_handle_, deadline, &error);
+		return detail::Status(status, error);
 	}
 	hx_os_semaphore *nativeHandle() const noexcept
 	{
-		return m_handle_.get();
+		return m_handle_;
 	}
 
 private:
-	std::unique_ptr<hx_os_semaphore, decltype(&hx_os_semaphore_destroy)>
-		m_handle_;
+	hx_os_semaphore *m_handle_;
 };
-
-/*
- * Non-owning facade over a host-owned pointer variable, like ThreadPool.
- * The pointer variable and borrowed callback data outlive unfinished work.
- * closeUntil joins then destroys; failure retains the original owner.
- * Facade destruction does not wait, detach or discard that owner.
+/* Host-owned pointer and borrowed data outlive unfinished work. Destruction
+ * of the facade never waits, detaches or discards a timed-out owner.
  */
 class Thread {
 public:
@@ -59,68 +67,70 @@ public:
 	    : m_owner_(&owner)
 	{
 	}
-	static Thread create(hx_os_thread *&owner, hx_os_thread_fn function,
-		void *user = NULL, size_t stackSize = 0,
-		hx_os_context *context = NULL)
+	static Result<Thread> create(hx_os_thread *&owner,
+		hx_os_thread_fn function, void *user = NULL,
+		size_t stackSize = 0, hx_os_context *context = NULL) noexcept
 	{
 		if (owner)
-			throw StatusError(HX_OS_BUSY);
+			return Failure(HX_OS_BUSY);
 		hx_os_thread_options options = HX_OS_THREAD_OPTIONS_INIT;
 		options.stack_size = stackSize;
-		hx_os_error error;
-		hx_os_status status = stackSize
+		hx_os_error error = {};
+		auto status = stackSize
 			? hx_os_thread_create_with_options(context, &options,
 				  function, user, &owner, &error)
 			: hx_os_thread_create(
 				  context, function, user, &owner, &error);
-		detail::CheckStatus(status, error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
 		return Thread(owner);
 	}
-	static void setCurrentName(const char *name)
+	static Result<void> setCurrentName(const char *name) noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_thread_set_current_name(name, &error), error);
+		hx_os_error error = {};
+		auto status = hx_os_thread_set_current_name(name, &error);
+		return detail::Status(status, error);
 	}
-	void setName(const char *name)
+	Result<void> setName(const char *name) noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_thread_set_name(*m_owner_, name, &error), error);
+		hx_os_error error = {};
+		auto status = hx_os_thread_set_name(*m_owner_, name, &error);
+		return detail::Status(status, error);
 	}
-	void setPriority(int level)
+	Result<void> setPriority(int level) noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_thread_set_priority(*m_owner_, level, &error),
-			error);
+		hx_os_error error = {};
+		auto status =
+			hx_os_thread_set_priority(*m_owner_, level, &error);
+		return detail::Status(status, error);
 	}
-	void setAffinity(uint64_t mask)
+	Result<void> setAffinity(uint64_t mask) noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_thread_set_affinity(*m_owner_, mask, &error),
-			error);
+		hx_os_error error = {};
+		auto status =
+			hx_os_thread_set_affinity(*m_owner_, mask, &error);
+		return detail::Status(status, error);
 	}
-	hx_os_status joinUntil(hx_os_deadline deadline, void **result = NULL,
-		hx_os_error *error = NULL) const noexcept
+	Result<void *> joinUntil(hx_os_deadline deadline) const noexcept
 	{
-		return hx_os_thread_join_until(
-			*m_owner_, deadline, result, error);
+		void *value = NULL;
+		hx_os_error error = {};
+		auto status = hx_os_thread_join_until(
+			*m_owner_, deadline, &value, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return value;
 	}
-	hx_os_status closeUntil(
-		hx_os_deadline deadline, hx_os_error *error = NULL) noexcept
+	Result<void> closeUntil(hx_os_deadline deadline) noexcept
 	{
-		hx_os_status status;
-		if (!*m_owner_) {
-			hx_os_error_clear(error);
-			return HX_OS_OK;
-		}
-		status = hx_os_thread_join_until(
-			*m_owner_, deadline, NULL, error);
-		return status == HX_OS_OK
-			? hx_os_thread_destroy(m_owner_, error)
-			: status;
+		if (!*m_owner_)
+			return Result<void>();
+		hx_os_error error = {};
+		auto status = hx_os_thread_join_until(
+			*m_owner_, deadline, NULL, &error);
+		if (status == HX_OS_OK)
+			status = hx_os_thread_destroy(m_owner_, &error);
+		return detail::Status(status, error);
 	}
 	hx_os_thread *nativeHandle() const noexcept
 	{

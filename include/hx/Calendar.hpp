@@ -1,43 +1,41 @@
 #ifndef HX_C_PLATFORM_CPP_CALENDAR_HPP
 #define HX_C_PLATFORM_CPP_CALENDAR_HPP
 #include <hx_os_calendar.h>
-#include <hx/Status.hpp>
-#include <memory>
-#include <utility>
+#include <hx/Values.hpp>
 namespace hx {
 class Calendar {
 public:
-	static std::string utc(int64_t milliseconds, const char *spec = NULL)
+	static Result<String> utc(int64_t milliseconds, const char *spec = NULL,
+		hx_os_context *context = NULL) noexcept
 	{
-		hx_string text = HX_STRING_INIT;
-		std::unique_ptr<hx_string, decltype(&hx_string_destroy)>
-			cleanup(&text, hx_string_destroy);
-		hx_os_error error;
-		detail::CheckStatus(hx_os_wall_time_format_utc_string(
-					    milliseconds, spec, &text, &error),
-			error);
-		return std::string(hx_string_c_str(&text), text.size);
+		return detail::StringQuery(
+			[=](hx_string *out, hx_os_error *error) noexcept {
+				return hx_os_wall_time_format_utc_string(
+					milliseconds, spec, out, error);
+			},
+			context);
 	}
-	static std::string filename(int64_t milliseconds,
-		const char *extension = NULL, const char *pattern = NULL)
+	static Result<String> filename(int64_t milliseconds,
+		const char *extension = NULL, const char *pattern = NULL,
+		hx_os_context *context = NULL) noexcept
 	{
-		hx_string text = HX_STRING_INIT;
-		std::unique_ptr<hx_string, decltype(&hx_string_destroy)>
-			cleanup(&text, hx_string_destroy);
-		hx_os_error error;
-		detail::CheckStatus(hx_os_filename_format_string(milliseconds,
-					    pattern, extension, &text, &error),
-			error);
-		return std::string(hx_string_c_str(&text), text.size);
+		return detail::StringQuery(
+			[=](hx_string *out, hx_os_error *error) noexcept {
+				return hx_os_filename_format_string(
+					milliseconds, pattern, extension, out,
+					error);
+			},
+			context);
 	}
-	/* Offset east of UTC in minutes; DST 0/1/-1 (unknown). */
-	static std::pair<int, int> localOffset()
+	/* Offset east of UTC in minutes; DST 0/1/-1. */
+	static Result<std::pair<int, int>> localOffset() noexcept
 	{
-		int minutes, dst;
-		hx_os_error error;
-		detail::CheckStatus(hx_os_wall_time_local_offset_minutes(
-					    &minutes, &dst, &error),
-			error);
+		int minutes = 0, dst = 0;
+		hx_os_error error = {};
+		auto status = hx_os_wall_time_local_offset_minutes(
+			&minutes, &dst, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
 		return std::make_pair(minutes, dst);
 	}
 };

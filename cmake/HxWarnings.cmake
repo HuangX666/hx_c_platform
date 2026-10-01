@@ -7,11 +7,13 @@
 include_guard(GLOBAL)
 include(CheckCCompilerFlag)
 include(CheckCXXCompilerFlag)
+include("${CMAKE_CURRENT_LIST_DIR}/HxNoExceptions.cmake")
 
 # Configure compiler warnings and the default warnings-as-errors policy.
 # The target must already exist. An explicit CMAKE_COMPILE_WARNING_AS_ERROR
 # value overrides the default; return-type errors retain the OBS flag policy.
 function(hx_apply_warnings target)
+	hx_disable_exceptions(${target})
 	if(MSVC)
 		target_compile_definitions(${target} PRIVATE
 			_CRT_SECURE_NO_WARNINGS)

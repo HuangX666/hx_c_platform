@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 project(hx_platform_consumer LANGUAGES C)
 option(HX_CONSUMER_CPP "Also validate the optional C++ interface" ON)
 find_package(hx_c_platform 0.1 CONFIG REQUIRED)
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/HxNoExceptions.cmake")
 enable_testing()
 foreach(example IN ITEMS hello configuration containers settings
 	profile_intervals atomic_publication common_tasks)
@@ -21,6 +22,7 @@ if(HX_CONSUMER_CPP)
 	add_executable(consumer_utilities ../test_cpp_utilities.cpp)
 	add_executable(consumer_tasks ../../examples/thread_pool.cpp)
 	foreach(target IN ITEMS consumer_cpp consumer_tasks consumer_utilities)
+		hx_disable_exceptions(${target})
 		target_link_libraries(${target} PRIVATE hx_c_platform::cpp)
 		set_target_properties(${target} PROPERTIES
 			CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES

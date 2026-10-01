@@ -1,116 +1,134 @@
 #ifndef HX_C_PLATFORM_CPP_STRINGS_HPP
 #define HX_C_PLATFORM_CPP_STRINGS_HPP
-#include <hx_string.h>
-#include <hx/Status.hpp>
-#include <memory>
-#include <vector>
+#include <hx/Values.hpp>
 namespace hx {
-class Strings {
-	class Value {
-	public:
-		explicit Value(const std::string &input = std::string())
-		    : value{}
-		{
-			hx_os_error error;
-			hx_string_view view = {input.data(), input.size()};
-			detail::CheckStatus(
-				hx_string_assign(&value, view, &error), error);
-		}
-		~Value()
-		{
-			hx_string_destroy(&value);
-		}
-		Value(const Value &) = delete;
-		Value &operator=(const Value &) = delete;
-		std::string string() const
-		{
-			return std::string(hx_string_c_str(&value), value.size);
-		}
-		hx_string value;
-	};
-	static hx_string_view view(const std::string &text)
+
+class StringParts {
+public:
+	StringParts() noexcept
+	    : m_parts_(NULL)
 	{
-		hx_string_view result = {text.data(), text.size()};
+	}
+	StringParts(const StringParts &) = delete;
+	StringParts &operator=(const StringParts &) = delete;
+	StringParts(StringParts &&other) noexcept
+	    : m_parts_(other.m_parts_)
+	{
+		other.m_parts_ = NULL;
+	}
+	StringParts &operator=(StringParts &&other) noexcept
+	{
+		std::swap(m_parts_, other.m_parts_);
+		return *this;
+	}
+	~StringParts() noexcept
+	{
+		hx_string_parts_destroy(&m_parts_);
+	}
+	static StringParts adopt(hx_string_parts *parts) noexcept
+	{
+		StringParts value;
+		value.m_parts_ = parts;
+		return value;
+	}
+	size_t size() const noexcept
+	{
+		return hx_string_parts_count(m_parts_);
+	}
+	/* Returned view borrows this parts object, not the original input
+	 * string. */
+	Result<StringView> at(size_t index) const noexcept
+	{
+		hx_string_view value = {};
+		auto status = hx_string_parts_at(m_parts_, index, &value);
+		if (status != HX_OS_OK)
+			return Failure(status);
+		return StringView(value);
+	}
+
+private:
+	hx_string_parts *m_parts_;
+};
+class Strings {
+	typedef hx_os_status(HX_OS_CALL *Mutation)(hx_string *, hx_os_error *);
+	static Result<String> transform(StringView input, Mutation function,
+		hx_os_context *context) noexcept
+	{
+		auto result = String::copy(input, context);
+		if (!result)
+			return Failure(result.error());
+		hx_os_error error = {};
+		auto status = function(result.value().native(), &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
 		return result;
 	}
 
 public:
-	static std::string trim(const std::string &input)
+	static Result<String> trim(
+		StringView input, hx_os_context *context = NULL) noexcept
 	{
-		Value value(input);
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_string_trim_ascii(&value.value, &error), error);
-		return value.string();
+		return transform(input, hx_string_trim_ascii, context);
 	}
-	static std::string lowerAscii(const std::string &input)
+	static Result<String> lowerAscii(
+		StringView input, hx_os_context *context = NULL) noexcept
 	{
-		Value value(input);
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_string_lower_ascii(&value.value, &error), error);
-		return value.string();
+		return transform(input, hx_string_lower_ascii, context);
 	}
-	static std::string upperAscii(const std::string &input)
+	static Result<String> upperAscii(
+		StringView input, hx_os_context *context = NULL) noexcept
 	{
-		Value value(input);
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_string_upper_ascii(&value.value, &error), error);
-		return value.string();
+		return transform(input, hx_string_upper_ascii, context);
 	}
-	static std::string replace(const std::string &input,
-		const std::string &needle, const std::string &replacement)
+	static Result<String> replace(StringView input, StringView needle,
+		StringView replacement, hx_os_context *context = NULL) noexcept
 	{
-		Value value(input);
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_string_replace_all(&value.value, view(needle),
-				view(replacement), NULL, &error),
-			error);
-		return value.string();
-	}
-	static std::vector<std::string> split(const std::string &input,
-		const std::string &separator, bool keepEmpty = true,
-		size_t maxParts = 4096)
-	{
-		Value value(input);
-		hx_string_parts *parts = NULL;
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_string_split_ex(&value.value, view(separator),
-				maxParts, keepEmpty ? 1 : 0, &parts, &error),
-			error);
-		struct Guard {
-			hx_string_parts *parts;
-			~Guard()
-			{
-				hx_string_parts_destroy(&parts);
-			}
-		} guard = {parts};
-		std::vector<std::string> result;
-		result.reserve(hx_string_parts_count(parts));
-		for (size_t i = 0; i < hx_string_parts_count(parts); ++i) {
-			hx_string_view piece;
-			(void)hx_string_parts_at(parts, i, &piece);
-			result.emplace_back(piece.data, piece.size);
-		}
+		auto result = String::copy(input, context);
+		if (!result)
+			return Failure(result.error());
+		hx_os_error error = {};
+		auto status = hx_string_replace_all(result.value().native(),
+			needle.native(), replacement.native(), NULL, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
 		return result;
 	}
-	static std::string join(const std::vector<std::string> &parts,
-		const std::string &separator)
+	static Result<StringParts> split(StringView input, StringView separator,
+		bool keepEmpty = true, size_t maxParts = 4096,
+		hx_os_context *context = NULL) noexcept
 	{
-		std::vector<hx_string_view> views;
-		views.reserve(parts.size());
-		for (const auto &part : parts)
-			views.push_back(view(part));
-		Value value;
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_string_join(&value.value, views.data(), views.size(),
-				view(separator), &error),
-			error);
-		return value.string();
+		auto text = String::copy(input, context);
+		if (!text)
+			return Failure(text.error());
+		hx_string_parts *parts = NULL;
+		hx_os_error error = {};
+		auto status = hx_string_split_ex(text.value().native(),
+			separator.native(), maxParts, keepEmpty ? 1 : 0, &parts,
+			&error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return StringParts::adopt(parts);
+	}
+	static Result<String> join(const StringView *parts, size_t count,
+		StringView separator, hx_os_context *context = NULL) noexcept
+	{
+		if ((!parts && count) ||
+			count > SIZE_MAX / sizeof(hx_string_view))
+			return Failure(HX_OS_INVALID);
+		auto storage = Buffer::allocate(
+			count * sizeof(hx_string_view), context);
+		if (!storage)
+			return Failure(storage.error());
+		auto views = reinterpret_cast<hx_string_view *>(
+			storage.value().data());
+		for (size_t i = 0; i < count; ++i)
+			new (&views[i]) hx_string_view(parts[i].native());
+		return detail::StringQuery(
+			[&](hx_string *out, hx_os_error *error) noexcept {
+				return hx_string_join(out, views, count,
+					separator.native(), error);
+			},
+			context);
 	}
 };
 } // namespace hx

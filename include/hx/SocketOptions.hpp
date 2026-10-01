@@ -1,72 +1,71 @@
 #ifndef HX_C_PLATFORM_CPP_SOCKET_OPTIONS_HPP
 #define HX_C_PLATFORM_CPP_SOCKET_OPTIONS_HPP
-
 #include <hx_os_net.h>
 #include <hx/Status.hpp>
-#include <type_traits>
-
 namespace hx {
-/* Borrowed view. It never changes ownership or closes the socket. */
+
+/* Borrowed socket; this facade never closes it. */
 class SocketOptions {
 public:
 	explicit SocketOptions(hx_os_socket *socket) noexcept
 	    : m_socket_(socket)
 	{
 	}
-	void noDelay(bool enabled = true) const
+	Result<void> noDelay(bool enabled = true) const noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_socket_set_nodelay(m_socket_, enabled, &error),
-			error);
+		hx_os_error error = {};
+		auto status =
+			hx_os_socket_set_nodelay(m_socket_, enabled, &error);
+		return detail::Status(status, error);
 	}
-	void keepAlive(bool enabled = true) const
+	Result<void> keepAlive(bool enabled = true) const noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_socket_set_keepalive(m_socket_, enabled, &error),
-			error);
+		hx_os_error error = {};
+		auto status =
+			hx_os_socket_set_keepalive(m_socket_, enabled, &error);
+		return detail::Status(status, error);
 	}
-	void reuseAddress(bool enabled = true) const
+	Result<void> reuseAddress(bool enabled = true) const noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_socket_set_reuseaddr(m_socket_, enabled, &error),
-			error);
+		hx_os_error error = {};
+		auto status =
+			hx_os_socket_set_reuseaddr(m_socket_, enabled, &error);
+		return detail::Status(status, error);
 	}
-	hx_os_address peerAddress() const
+	Result<hx_os_address> peerAddress() const noexcept
 	{
-		hx_os_address address;
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_socket_peer_address(m_socket_, &address, &error),
-			error);
-		return address;
-	}
-	template <typename Value> Value get(int level, int name) const
-	{
-		static_assert(std::is_trivially_copyable<Value>::value,
-			"Native option values must be trivially copyable");
-		Value value{};
-		size_t bytes = sizeof(value);
-		hx_os_error error;
-		detail::CheckStatus(hx_os_socket_option_get(m_socket_, level,
-					    name, &value, &bytes, &error),
-			error);
-		if (bytes != sizeof(value))
-			throw StatusError(HX_OS_RANGE);
+		hx_os_address value = {};
+		hx_os_error error = {};
+		auto status =
+			hx_os_socket_peer_address(m_socket_, &value, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
 		return value;
 	}
-	template <typename Value>
-	void set(int level, int name, const Value &value) const
+	template <typename T> Result<T> get(int level, int name) const noexcept
 	{
-		static_assert(std::is_trivially_copyable<Value>::value,
-			"Native option values must be trivially copyable");
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_socket_option_set(m_socket_, level, name, &value,
-				sizeof(value), &error),
-			error);
+		static_assert(std::is_trivially_copyable<T>::value,
+			"Use a native POD value");
+		T value{};
+		size_t bytes = sizeof(value);
+		hx_os_error error = {};
+		auto status = hx_os_socket_option_get(
+			m_socket_, level, name, &value, &bytes, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		if (bytes != sizeof(value))
+			return Failure(HX_OS_RANGE);
+		return value;
+	}
+	template <typename T>
+	Result<void> set(int level, int name, const T &value) const noexcept
+	{
+		static_assert(std::is_trivially_copyable<T>::value,
+			"Use a native POD value");
+		hx_os_error error = {};
+		auto status = hx_os_socket_option_set(
+			m_socket_, level, name, &value, sizeof(value), &error);
+		return detail::Status(status, error);
 	}
 
 private:

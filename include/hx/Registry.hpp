@@ -1,28 +1,32 @@
 #ifndef HX_C_PLATFORM_CPP_REGISTRY_HPP
 #define HX_C_PLATFORM_CPP_REGISTRY_HPP
 #include <hx_os_registry.h>
-#include <hx/Status.hpp>
-#include <memory>
-#include <utility>
+#include <hx/Values.hpp>
 namespace hx {
+
 class Registry {
 public:
-	Registry(int root, const char *path,
-		unsigned flags = HX_OS_REGISTRY_READ,
-		hx_os_context *context = NULL)
+	Registry() noexcept
 	    : m_key_(NULL)
 	{
-		hx_os_error error;
-		detail::CheckStatus(hx_os_registry_open(context, root, path,
-					    flags, &m_key_, &error),
-			error);
 	}
-	static Registry user(const char *path,
+	static Result<Registry> open(int root, const char *path,
 		unsigned flags = HX_OS_REGISTRY_READ,
-		hx_os_context *context = NULL)
+		hx_os_context *context = NULL) noexcept
 	{
-		return Registry(
-			HX_OS_REGISTRY_CURRENT_USER, path, flags, context);
+		Registry result;
+		hx_os_error error = {};
+		auto status = hx_os_registry_open(
+			context, root, path, flags, &result.m_key_, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return result;
+	}
+	static Result<Registry> user(const char *path,
+		unsigned flags = HX_OS_REGISTRY_READ,
+		hx_os_context *context = NULL) noexcept
+	{
+		return open(HX_OS_REGISTRY_CURRENT_USER, path, flags, context);
 	}
 	Registry(const Registry &) = delete;
 	Registry &operator=(const Registry &) = delete;
@@ -33,56 +37,56 @@ public:
 	}
 	Registry &operator=(Registry &&other) noexcept
 	{
-		if (this != &other) {
-			(void)hx_os_registry_close(&m_key_, NULL);
-			m_key_ = other.m_key_;
-			other.m_key_ = NULL;
-		}
+		std::swap(m_key_, other.m_key_);
 		return *this;
 	}
-	~Registry()
+	~Registry() noexcept
 	{
 		(void)hx_os_registry_close(&m_key_, NULL);
 	}
-	std::string readString(const char *name = NULL) const
+	Result<String> readString(const char *name = NULL,
+		hx_os_context *context = NULL) const noexcept
 	{
-		hx_string text = HX_STRING_INIT;
-		std::unique_ptr<hx_string, decltype(&hx_string_destroy)>
-			cleanup(&text, hx_string_destroy);
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_registry_read_string(m_key_, name, &text, &error),
-			error);
-		return std::string(hx_string_c_str(&text), text.size);
+		if (!m_key_)
+			return Failure(HX_OS_CLOSED);
+		return detail::StringQuery(
+			[=](hx_string *out, hx_os_error *error) noexcept {
+				return hx_os_registry_read_string(
+					m_key_, name, out, error);
+			},
+			context);
 	}
-	uint32_t readU32(const char *name = NULL) const
+	Result<uint32_t> readU32(const char *name = NULL) const noexcept
 	{
-		uint32_t value;
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_registry_read_u32(m_key_, name, &value, &error),
-			error);
+		if (!m_key_)
+			return Failure(HX_OS_CLOSED);
+		uint32_t value = 0;
+		hx_os_error error = {};
+		auto status =
+			hx_os_registry_read_u32(m_key_, name, &value, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
 		return value;
 	}
-	void writeString(const char *name, const char *value)
+	Result<void> writeString(const char *name, const char *value) noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(hx_os_registry_write_string(
-					    m_key_, name, value, &error),
-			error);
+		hx_os_error error = {};
+		auto status = hx_os_registry_write_string(
+			m_key_, name, value, &error);
+		return detail::Status(status, error);
 	}
-	void writeU32(const char *name, uint32_t value)
+	Result<void> writeU32(const char *name, uint32_t value) noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_registry_write_u32(m_key_, name, value, &error),
-			error);
+		hx_os_error error = {};
+		auto status =
+			hx_os_registry_write_u32(m_key_, name, value, &error);
+		return detail::Status(status, error);
 	}
-	void close()
+	Result<void> close() noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_registry_close(&m_key_, &error), error);
+		hx_os_error error = {};
+		auto status = hx_os_registry_close(&m_key_, &error);
+		return detail::Status(status, error);
 	}
 
 private:

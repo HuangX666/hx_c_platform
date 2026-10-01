@@ -1,64 +1,52 @@
 #ifndef HX_C_PLATFORM_CPP_PATHS_HPP
 #define HX_C_PLATFORM_CPP_PATHS_HPP
-
 #include <hx_os_paths.h>
-#include <hx/Status.hpp>
-#include <memory>
-#include <string>
-
+#include <hx/Values.hpp>
 namespace hx {
 class Paths {
 public:
-	static std::string home()
+	static Result<String> home(hx_os_context *context = NULL) noexcept
 	{
-		return query(hx_os_path_home_string);
+		return detail::StringQuery(hx_os_path_home_string, context);
 	}
-	static std::string configHome()
+	static Result<String> configHome(hx_os_context *context = NULL) noexcept
 	{
-		return query(hx_os_path_config_home_string);
+		return detail::StringQuery(
+			hx_os_path_config_home_string, context);
 	}
-	static std::string configFile(const char *application, const char *name)
+	static Result<String> dataHome(hx_os_context *context = NULL) noexcept
 	{
-		hx_string text = HX_STRING_INIT;
-		std::unique_ptr<hx_string, decltype(&hx_string_destroy)>
-			cleanup(&text, hx_string_destroy);
-		hx_os_error error;
-		detail::CheckStatus(hx_os_path_config_file(
-					    application, name, &text, &error),
-			error);
-		return std::string(hx_string_c_str(&text), text.size);
+		return detail::StringQuery(
+			hx_os_path_data_home_string, context);
 	}
-	static std::string dataHome()
+	static Result<String> programData(
+		hx_os_context *context = NULL) noexcept
 	{
-		return query(hx_os_path_data_home_string);
+		return detail::StringQuery(
+			hx_os_path_program_data_string, context);
 	}
-	static std::string programData()
+	static Result<String> temp(hx_os_context *context = NULL) noexcept
 	{
-		return query(hx_os_path_program_data_string);
+		return detail::StringQuery(hx_os_path_temp_string, context);
 	}
-	static std::string temp()
+	static Result<String> executable(hx_os_context *context = NULL) noexcept
 	{
-		return query(hx_os_path_temp_string);
+		return detail::StringQuery(
+			hx_os_path_executable_string, context);
 	}
-	static std::string executable()
+	static Result<String> module(hx_os_context *context = NULL) noexcept
 	{
-		return query(hx_os_path_executable_string);
+		return detail::StringQuery(hx_os_path_module_string, context);
 	}
-	static std::string module()
+	static Result<String> configFile(const char *application,
+		const char *name, hx_os_context *context = NULL) noexcept
 	{
-		return query(hx_os_path_module_string);
-	}
-
-private:
-	static std::string query(
-		hx_os_status(HX_OS_CALL *function)(hx_string *, hx_os_error *))
-	{
-		hx_string text = HX_STRING_INIT;
-		std::unique_ptr<hx_string, decltype(&hx_string_destroy)>
-			cleanup(&text, hx_string_destroy);
-		hx_os_error error;
-		detail::CheckStatus(function(&text, &error), error);
-		return std::string(hx_string_c_str(&text), text.size);
+		return detail::StringQuery(
+			[=](hx_string *out, hx_os_error *error) noexcept {
+				return hx_os_path_config_file(
+					application, name, out, error);
+			},
+			context);
 	}
 };
 } // namespace hx

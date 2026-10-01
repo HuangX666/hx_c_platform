@@ -3,18 +3,22 @@
 #include <hx_os_power.h>
 #include <hx/Status.hpp>
 namespace hx {
-/* Synchronous RAII. Explicit close reports cleanup errors; destructors
- * release only their own native requests without changing another token.
- */
 class SleepInhibit {
 public:
-	explicit SleepInhibit(const char *reason, hx_os_context *context = NULL)
+	SleepInhibit() noexcept
 	    : m_handle_(NULL)
 	{
-		hx_os_error error;
-		detail::CheckStatus(hx_os_sleep_inhibit_create(context, reason,
-					    &m_handle_, &error),
-			error);
+	}
+	static Result<SleepInhibit> create(
+		const char *reason, hx_os_context *context = NULL) noexcept
+	{
+		SleepInhibit result;
+		hx_os_error error = {};
+		auto status = hx_os_sleep_inhibit_create(
+			context, reason, &result.m_handle_, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return result;
 	}
 	SleepInhibit(const SleepInhibit &) = delete;
 	SleepInhibit &operator=(const SleepInhibit &) = delete;
@@ -25,33 +29,29 @@ public:
 	}
 	SleepInhibit &operator=(SleepInhibit &&other) noexcept
 	{
-		if (this != &other) {
-			(void)hx_os_sleep_inhibit_destroy(&m_handle_, NULL);
-			m_handle_ = other.m_handle_;
-			other.m_handle_ = NULL;
-		}
+		std::swap(m_handle_, other.m_handle_);
 		return *this;
 	}
-	~SleepInhibit()
+	~SleepInhibit() noexcept
 	{
 		(void)hx_os_sleep_inhibit_destroy(&m_handle_, NULL);
 	}
-	void setActive(bool active)
+	Result<void> close() noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(hx_os_sleep_inhibit_set_active(
-					    m_handle_, active ? 1 : 0, &error),
-			error);
+		hx_os_error error = {};
+		auto status = hx_os_sleep_inhibit_destroy(&m_handle_, &error);
+		return detail::Status(status, error);
+	}
+	Result<void> setActive(bool active) noexcept
+	{
+		hx_os_error error = {};
+		auto status = hx_os_sleep_inhibit_set_active(
+			m_handle_, active ? 1 : 0, &error);
+		return detail::Status(status, error);
 	}
 	bool active() const noexcept
 	{
 		return hx_os_sleep_inhibit_active(m_handle_);
-	}
-	void close()
-	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_sleep_inhibit_destroy(&m_handle_, &error), error);
 	}
 
 private:
@@ -59,14 +59,20 @@ private:
 };
 class PerformanceRequest {
 public:
-	explicit PerformanceRequest(
-		const char *reason, hx_os_context *context = NULL)
+	PerformanceRequest() noexcept
 	    : m_handle_(NULL)
 	{
-		hx_os_error error;
-		detail::CheckStatus(hx_os_performance_request(context, reason,
-					    &m_handle_, &error),
-			error);
+	}
+	static Result<PerformanceRequest> create(
+		const char *reason, hx_os_context *context = NULL) noexcept
+	{
+		PerformanceRequest result;
+		hx_os_error error = {};
+		auto status = hx_os_performance_request(
+			context, reason, &result.m_handle_, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return result;
 	}
 	PerformanceRequest(const PerformanceRequest &) = delete;
 	PerformanceRequest &operator=(const PerformanceRequest &) = delete;
@@ -77,22 +83,18 @@ public:
 	}
 	PerformanceRequest &operator=(PerformanceRequest &&other) noexcept
 	{
-		if (this != &other) {
-			(void)hx_os_performance_release(&m_handle_, NULL);
-			m_handle_ = other.m_handle_;
-			other.m_handle_ = NULL;
-		}
+		std::swap(m_handle_, other.m_handle_);
 		return *this;
 	}
-	~PerformanceRequest()
+	~PerformanceRequest() noexcept
 	{
 		(void)hx_os_performance_release(&m_handle_, NULL);
 	}
-	void close()
+	Result<void> close() noexcept
 	{
-		hx_os_error error;
-		detail::CheckStatus(
-			hx_os_performance_release(&m_handle_, &error), error);
+		hx_os_error error = {};
+		auto status = hx_os_performance_release(&m_handle_, &error);
+		return detail::Status(status, error);
 	}
 
 private:
