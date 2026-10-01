@@ -373,6 +373,7 @@ first-party warning policy. C++ is not required to build the library itself.
 - [C containers and ownership](docs/CONTAINERS.md)
 - [C++11 task pool and shutdown](docs/CPP_POOL.md)
 - [Verification matrix and remaining target checks](docs/VALIDATION.md)
+- [Performance and memory audit](docs/BUG_MEMORY_LEAK_AUDIT.md)
 - [Future hx_c_log migration](docs/MIGRATION.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 

@@ -351,6 +351,7 @@ C++ 封装按项目的 C++ 类名和方法名规范命名。
 - [C 容器及所有权](docs/CONTAINERS.zh-CN.md)
 - [C++11 线程池与关闭](docs/CPP_POOL.zh-CN.md)
 - [验证矩阵和待目标环境检查](docs/VALIDATION.zh-CN.md)
+- [性能与内存审查](docs/BUG_MEMORY_LEAK_AUDIT.zh-CN.md)
 - [后续 hx_c_log 迁移方案](docs/MIGRATION.zh-CN.md)
 - [第三方声明](THIRD_PARTY_NOTICES.zh-CN.md)
 
