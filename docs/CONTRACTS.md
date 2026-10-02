@@ -4,6 +4,8 @@
 
 ## Shared rules
 
+[Variant values](VARIANT.md) follow these ownership/error rules without requiring a global setup. They are independent of the immutable configuration tree and mutable settings. Clear releases the active value while keeping a context lease; destroy releases that lease. Custom descriptors/code/user state are borrowed until all associated objects retire; there is no global registration or automatic plugin pinning.
+
 A status is not a Boolean. OK means the stated operation completed; EOF, NEED_INPUT and OUTPUT_FULL are distinct non-error flow states. Negative values report failure, timeout, cancellation, temporary blocking or capacity limits. Inspect the byte count after partial I/O. An optional caller-owned error record holds the normalized status, native domain/code and secondary cause code. There is no mutable thread-global "last library error" and no logging callback. Native messages are formatted as UTF-8 into caller storage.
 
 Unless explicitly stated otherwise, pointer inputs are borrowed for the call, output objects have one owner, and destruction requires external exclusion of new users. A failed constructor publishes no object. Never release an object with free(), another library instance or another pool. NULL cleanup is accepted where documented; a disabled constructor returns NOT_SUPPORTED.

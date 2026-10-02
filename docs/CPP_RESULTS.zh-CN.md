@@ -6,6 +6,8 @@
 
 ## 读取与传递结果
 
+[Variant 便利层](VARIANT.zh-CN.md#cpp) 沿用同一规则：set/emplace/visit 返回 Result<void>，clone 返回 Result<Variant>，标量 get 返回副本，自定义 get 返回受检查的借用引用。字符串拥有字节，通过 StringView 读取。复制通过可失败的 clone 显式进行；自定义类型的普通 C++ 构造/析构必须符合 noexcept 契约。
+
 ~~~cpp
 #include <hx/Files.hpp>
 

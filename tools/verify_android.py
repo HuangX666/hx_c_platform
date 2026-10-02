@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SUITES = (
     "android_baseline", "string_tools", "lexer", "wide_wait",
     "catalog_filename", "procedure", "atomic", "cpp_utilities",
-    "cpp_pool", "cpp_extensions", "convenience",
+    "cpp_pool", "cpp_extensions", "convenience", "variant", "cpp_variant",
 )
 
 

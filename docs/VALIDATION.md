@@ -4,9 +4,41 @@ Entries below describe the versions tested at the time. Historical C++ exception
 
 [简体中文](VALIDATION.zh-CN.md) · [README](../README.md)
 
-This records development validation through 2026-10-01. A design, implemented adapter, successful compile and successful target run are different states. Local tests do not certify every operating-system release, filesystem, CPU, libc or network provider.
+This records development validation through 2026-10-03. A design, implemented adapter, successful compile and successful target run are different states. Local tests do not certify every operating-system release, filesystem, CPU, libc or network provider.
 
-The documentation entry below records the current presentation change. The common-call refinement, Result migration, earlier Final delivery matrix and batch checkpoints describe their original versions.
+The variant entry records the current addition. The onboarding documentation, common-call refinement, Result migration, earlier Final delivery matrix and batch checkpoints describe their original versions.
+
+## Variant values (2026-10-03)
+
+The new hx_variant C99 module and exception-free hx::Variant / hx::TypedVariant C++11 facades hold native scalars, owned UTF-8 strings, borrowed pointers and custom structures. The module is independent of CONFIG/SETTINGS/CONTAINERS; the container preset uses existing copy/drop hooks. Existing C public layouts/valid calls are unchanged, exports are additive, and no third-party source/dependency is changed.
+
+| Configuration | Evidence for this change |
+| --- | --- |
+| Windows MSVC 19.40 x64 shared Release | Full CTest 88/88 |
+| WSL Ubuntu GCC 15.2 x86_64 shared Release | Full CTest 90/90 |
+| Windows minimal shared, VARIANT OFF | Full CTest 55/55; affected tests rerun after final header checks |
+| WSL minimal shared, only VARIANT re-enabled | Full CTest 60/60; CONFIG, SETTINGS and CONTAINERS remain OFF |
+| MSVC 19.29 x86 static Debug | C99/C++11 headers compile, 4/4 variant tests/examples run |
+| WSL ASan + UBSan with leak detection | 6/6 affected value/container/data tests/examples; no reported defects |
+| Installed shared consumers, Windows x64 and WSL | Each 13/13 C/C++ and 8/8 pure C programs |
+| Installed static consumers, Windows x86 and WSL | Each 13/13 C/C++ and 8/8 pure C programs |
+| Old-header consumers with current shared library | Windows/WSL each 10/10 |
+| Public exports vs declarations | Windows/WSL each 686 HX functions match, including variant exports |
+| New bilingual documentation programs | Windows/WSL each 7/7 compiled/run with matching displayed output |
+| C++ invalid alternatives / qualified types / fallible implicit copying | Three cases rejected with their intended compile-time diagnostics on WSL |
+| Android API 21 ARM64/ARMv7, full and minimal shared | Four cross-builds; standalone C99/C++11 headers included |
+| ARM64 on API 34 x86_64 emulator, native-bridge translation | Both profiles pass 13/13 selected suites plus portable benchmark |
+| ARMv7 runtime | Explicitly skipped; the selected emulator lacks this ABI |
+
+Failure injection covers raw object allocation, nested string copying and container insertion. Failed replacements retain the old value, failed getters retain outputs, callback native errors survive normalization, completed objects are dropped once, all tracked allocator blocks/context leases retire. Tests include aliasing nested values, move/swap across allocators, borrowed views, over-alignment, construction-only objects and C/C++ type identities across translation units. Compiler exceptions are disabled; no exception syntax or new background work is introduced.
+
+The measured MSVC value layout is 48 bytes/alignment 8 on x64 and 24 bytes/alignment 8 on x86; the descriptor is respectively 48/24 bytes. The C++ owner adds no storage. Repeated scalar set/emplace requests zero allocations; custom objects allocate separately and may allocate more in their copy callback. Containers do not include those nested allocations in max_bytes. No global type registry, per-value mutex, implicit conversion or automatic serialization is added.
+
+Portable Release observations, 100,000 iterations per set/get pair: Windows integer 7.68 ns and ordinary custom object 83.80 ns; WSL integer 8.00 ns and custom object 36.57 ns. These are single local observations under the current load, not a throughput improvement, universal performance guarantee or std::variant comparison. Re-run on target hardware before capacity/performance decisions.
+
+Paired code/commands, local links/selected explicit anchors, Markdown fences, UTF-8 without BOM and LF pass checking. The two new variant Mermaid diagrams render successfully. The unchanged previous homepage diagrams also render. Markdown prose retains natural paragraph lines; C/C++ source follows the project's tab/width rules.
+
+This change adds no internal concurrent activity: mutation and destruction require caller serialization; callback/custom state must be independently safe. TSan was not rerun for this change, and previous TSan records below remain historical. macOS, Win7, Android 5.0/API 21 runtime, musl and physical embedded/Android ARM boards remain pending. Emulator translation and cross-builds are explicitly separate from native target acceptance.
 
 ## Onboarding documentation (2026-10-01)
 

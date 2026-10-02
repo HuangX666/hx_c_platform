@@ -19,6 +19,7 @@ option(HX_OS_ENABLE_MEMORY_POOLS "Build memory pools and arena" ON)
 option(HX_OS_ENABLE_ICONV "Build legacy text encoding adapter" OFF)
 option(HX_OS_ENABLE_CONFIG "Build configuration file parsers" ON)
 option(HX_OS_ENABLE_CONTAINERS "Build generic C containers" ON)
+option(HX_OS_ENABLE_VARIANT "Build owned variant values and custom types" ON)
 option(HX_OS_ENABLE_SYSINFO "Build native system information" ON)
 option(HX_OS_ENABLE_LIBRARY "Build native dynamic library loading" ON)
 option(HX_OS_ENABLE_FILE_UTILS "Build file and path conveniences" ON)
@@ -218,7 +219,7 @@ add_library(hx_c_platform
 	src/convenience.c src/lexer.c src/wide.c src/wait.c src/string.c
 	src/string_utils.c src/file.c src/text.c src/optional.c
 	src/config.c src/config_values.c
-	src/containers.c
+	src/containers.c src/variant.c
 	src/sysinfo.c src/library.c src/path.c src/env.c src/paths.c
 	src/thread_extra.c src/pipe.c src/file_at.c src/net_options.c
 	src/file_info.c src/bom.c src/number.c src/config_serialize.c

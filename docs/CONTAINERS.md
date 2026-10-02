@@ -6,6 +6,8 @@ Include `hx_container.h`, or the C umbrella `hx_os.h`. The implementation is C99
 
 ## Available containers
 
+For mixed values, use the independent [variant module](VARIANT.md): it can own numbers, strings and custom structures. hx_variant_container_options_init supplies deep-copy/drop operations for vector, queue/deque and map values. Owning hx_variant values support byte relocation; live hx::Variant C++ objects must not be stored through a raw byte-copy container API. The variant's nested allocations remain outside max_bytes.
+
 | Container | Representation and operations |
 |---|---|
 | vector | Contiguous array; indexed access O(1), amortized append O(1) |

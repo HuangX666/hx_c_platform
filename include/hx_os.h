@@ -42,5 +42,6 @@
 #include "hx_string.h"
 #include "hx_config.h"
 #include "hx_container.h"
+#include "hx_variant.h"
 
 #endif

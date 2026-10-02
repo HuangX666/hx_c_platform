@@ -6,6 +6,8 @@
 
 ## 已提供的容器
 
+需要混合类型时，使用独立的 [variant 模块](VARIANT.zh-CN.md)，可以拥有数字、字符串和自定义结构体。hx_variant_container_options_init 为 vector、queue/deque 和 map 的值提供深复制/清理。owning hx_variant 可以搬移字节；不能把活跃的 hx::Variant C++ 对象交给按字节复制的容器。variant 内部的分配仍不计入 max_bytes。
+
 | 容器 | 实现和操作 |
 |---|---|
 | vector | 连续数组；下标访问 O(1)，尾部追加均摊 O(1) |

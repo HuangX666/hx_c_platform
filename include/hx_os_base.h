@@ -207,6 +207,7 @@ HX_OS_API const char *HX_OS_CALL hx_os_cpu_name(void);
 #define HX_OS_CAP_PRECISE_WAIT (UINT64_C(1) << 48)
 #define HX_OS_CAP_LEXER (UINT64_C(1) << 49)
 #define HX_OS_CAP_PROCEDURES (UINT64_C(1) << 50)
+#define HX_OS_CAP_VARIANT (UINT64_C(1) << 51)
 /* required includes NUL. These queries do not need initialization. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_version_string(
 	char *buffer, size_t capacity, size_t *required);

@@ -1,6 +1,6 @@
 # hx_c_platform
 
-[![CI 配置][ci-badge]](.github/workflows/build.yml) [![C99 核心][c-badge]](CMakeLists.txt) [![C++11 封装][cpp-badge]](docs/CPP_POOL.zh-CN.md) [![仅 C++ 封装为 header-only][header-badge]](docs/CPP_POOL.zh-CN.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![自有代码许可证待定][license-badge]](THIRD_PARTY_NOTICES.zh-CN.md) [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md) [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md) [![本地 Windows 84/84、Linux 86/86 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md) [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md) [![Android API 21 ARM 交叉编译通过][android-badge]](docs/ANDROID.zh-CN.md)
+[![CI 配置][ci-badge]](.github/workflows/build.yml) [![C99 核心][c-badge]](CMakeLists.txt) [![C++11 封装][cpp-badge]](docs/CPP_POOL.zh-CN.md) [![仅 C++ 封装为 header-only][header-badge]](docs/CPP_POOL.zh-CN.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![自有代码许可证待定][license-badge]](THIRD_PARTY_NOTICES.zh-CN.md) [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md) [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md) [![本地 Windows 88/88、Linux 90/90 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md) [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md) [![Android API 21 ARM 交叉编译通过][android-badge]](docs/ANDROID.zh-CN.md)
 
 [English](README.md) · [常用任务教程](docs/USAGE.zh-CN.md) · [详细参考](docs/REFERENCE.zh-CN.md)
 
@@ -16,7 +16,7 @@
 
 ## 1. 这个库能帮你做什么
 
-`hx_c_platform` 给 C/C++ 项目提供一套常用工具：读写文件、处理 UTF-8 字符串、读取配置、使用容器、创建线程和提交后台任务。你调用同一个函数，库负责处理 Windows、Linux 等系统的差异。
+`hx_c_platform` 给 C/C++ 项目提供一套常用工具：读写文件、处理 UTF-8 字符串、读取配置、使用容器和 variant、创建线程和提交后台任务。你调用同一个函数，库负责处理 Windows、Linux 等系统的差异。
 
 核心用 C99 实现；C++11 开发者可以选择更方便的 C++ 接口。普通使用不需要创建全局运行环境，也不依赖 Qt 或 OBS。当前版本为 0.1.0。
 
@@ -256,6 +256,43 @@ else
 
 `submit` 成功表示任务被接受；`getUntil` 等待计算结果，本例最多等待 2 秒。正常输出：`Answer: 42`。`noexcept` 表示任务不使用异常机制。用完必须显式关闭线程池；等待或关闭超时后，要保留对象再处理，不能当作已经释放。
 
+### 4.7 同一个变量保存不同类型：C / C++
+
+任务：先保存整数 42，再改为字符串 hello。C 包含 `<hx_variant.h>` 和 `<stdio.h>`，把下面片段放入 main()：
+
+```c
+hx_variant value = HX_VARIANT_INIT;
+hx_string_view text;
+hx_os_status status = hx_variant_set_i32(&value, 42, NULL);
+if (status == HX_OS_OK)
+	status = hx_variant_set_cstr(&value, "hello", NULL);
+if (status == HX_OS_OK)
+	status = hx_variant_get_string_view(&value, &text, NULL);
+if (status == HX_OS_OK)
+	printf("String: %.*s\n", (int)text.size, text.data);
+hx_variant_destroy(&value);
+if (status != HX_OS_OK)
+	return 1;
+```
+
+输出：`String: hello`。variant 每次只保存一个值，设置字符串会替换整数；字符串内容由 variant 持有，最后的 destroy 负责释放。
+
+C++ 也可以直接保存你定义的结构体。包含 `<hx/Variant.hpp>` 和 `<cstdio>`，下面放入 main()：
+
+```cpp
+struct Point { double x; double y; };
+hx::Variant value;
+if (!value.set(Point{2, 5}))
+	return 1;
+auto position = value.get<Point>();
+if (!position)
+	return 1;
+std::printf("Point: %.1f, %.1f\n", position.value().x,
+	position.value().y);
+```
+
+输出：`Point: 2.0, 5.0`。set 保存独立副本，get<Point> 检查类型并返回结构体引用，离开作用域时自动释放。C 自定义结构体、复制、访问器和容器混合值的完整示例见[variant 教程](docs/VARIANT.zh-CN.md)。
+
 <a id="section-5"></a>
 
 ## 5. 先记住的几条规则
@@ -273,10 +310,11 @@ else
 
 | 想做什么 | 先看哪里 |
 | --- | --- |
-| 完整复制、编译和运行上面六种任务 | [常用任务教程](docs/USAGE.zh-CN.md) |
+| 完整复制、编译和运行上面七种任务 | [常用任务教程](docs/USAGE.zh-CN.md) |
 | 找完整功能、接口限制、构建开关 | [详细参考](docs/REFERENCE.zh-CN.md) |
 | 更多编码、翻译、目录遍历、词法工具 | [常用工具说明](docs/COMMON_UTILITIES.zh-CN.md) |
 | JSON/YAML/XML/INI/TOML/ENV/properties | [配置格式说明](docs/CONFIGURATION.zh-CN.md) |
+| 不同类型的值和自定义结构体 | [variant 说明](docs/VARIANT.zh-CN.md) |
 | 其他容器及元素复制/释放 | [C 容器说明](docs/CONTAINERS.zh-CN.md) |
 | 任务取消、关闭重试和 C++ 结果 | [线程池](docs/CPP_POOL.zh-CN.md) · [Result](docs/CPP_RESULTS.zh-CN.md) |
 | 网络、进程、管道、监听、映射及系统信息 | [平台工具](docs/PLATFORM_UTILITIES.zh-CN.md) |
@@ -286,7 +324,7 @@ else
 
 ## 7. 构建、验证与项目许可
 
-开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。当前代码的本地全量测试记录为 Windows 84/84、WSL Linux 86/86；具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
+开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。当前代码的本地全量测试记录为 Windows 88/88、WSL Linux 90/90；具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
 
 自有代码的发布许可证尚未确定，第三方许可证见[许可说明](THIRD_PARTY_NOTICES.zh-CN.md)。协程和 hx_c_log 接入属于后续工作。
 
@@ -299,6 +337,6 @@ else
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%2084%2F84%20Linux%2086%2F86-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%2088%2F88%20Linux%2090%2F90-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

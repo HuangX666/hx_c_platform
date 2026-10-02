@@ -10,7 +10,8 @@
 - [6. 修改内存中的设置](#settings)
 - [7. 使用 C vector 和 queue](#containers)
 - [8. 提交 C++ 线程池任务](#thread-pool)
-- [9. 初次使用常见问题](#questions)
+- [9. 同一个变量保存不同类型](#variant)
+- [10. 初次使用常见问题](#questions)
 
 <a id="using-guide"></a>
 
@@ -52,6 +53,8 @@ Hello, hx_c_platform!
 ```json
 {"port": 8080}
 ```
+
+<a id="c-project"></a>
 
 ### 2.2 编译 C 程序
 
@@ -578,31 +581,147 @@ Answer: 42
 
 C 程序可使用底层 C 线程池；创建、提交、等待和关闭的示例见[详细参考中的 C 线程池](REFERENCE.zh-CN.md#section-15)。
 
+<a id="variant"></a>
+
+## 9. 同一个变量保存不同类型
+
+variant 每次保存一个值，但可以改变值的类型；修改时自动释放旧内容。C 示例先存整数 42，再存 hello，最后存坐标 Point(2, 5)。不需要输入文件，采用第 2 节的 C 构建配置：
+
+```c
+#include <hx_variant.h>
+#include <stdio.h>
+
+typedef struct point {
+	double x;
+	double y;
+} point;
+HX_VARIANT_DEFINE_TRIVIAL_TYPE(point_type, point);
+
+int main(void)
+{
+	hx_variant value = HX_VARIANT_INIT;
+	point position = {2, 5};
+	const void *object = NULL;
+	hx_string_view text;
+	int32_t count;
+	hx_os_status status;
+	if (!(hx_os_capabilities() & HX_OS_CAP_VARIANT)) {
+		puts("Variant support is disabled");
+		return 0;
+	}
+	status = hx_variant_set_i32(&value, 42, NULL);
+	if (status != HX_OS_OK)
+		goto failed;
+	status = hx_variant_get_i32(&value, &count, NULL);
+	if (status != HX_OS_OK)
+		goto failed;
+	printf("Integer: %d\n", (int)count);
+
+	status = hx_variant_set_cstr(&value, "hello", NULL);
+	if (status != HX_OS_OK)
+		goto failed;
+	status = hx_variant_get_string_view(&value, &text, NULL);
+	if (status != HX_OS_OK)
+		goto failed;
+	printf("String: %.*s\n", (int)text.size, text.data);
+
+	status = hx_variant_set_custom(&value, &point_type, &position, NULL);
+	if (status != HX_OS_OK)
+		goto failed;
+	status = hx_variant_get_custom(&value, &point_type, &object, NULL);
+	if (status != HX_OS_OK)
+		goto failed;
+	printf("Point: %.1f, %.1f\n", ((const point *)object)->x,
+		((const point *)object)->y);
+	hx_variant_destroy(&value);
+	return 0;
+failed:
+	fprintf(stderr, "Variant failed: %s\n", hx_os_status_name(status));
+	hx_variant_destroy(&value);
+	return 1;
+}
+```
+
+C++11 可在类型列表中指定整数、浮点、字符串和自定义 Point。采用第 2 节的 C++ 构建配置，关闭异常：
+
+```cpp
+#include <hx/Variant.hpp>
+#include <cstdio>
+
+struct Point {
+	double x;
+	double y;
+};
+
+int main()
+{
+	if (!(hx_os_capabilities() & HX_OS_CAP_VARIANT)) {
+		std::puts("Variant support is disabled");
+		return 0;
+	}
+	hx::TypedVariant<int32_t, double, hx::StringView, Point> value;
+	if (!value.set(int32_t(42)))
+		return 1;
+	auto count = value.get<int32_t>();
+	if (!count)
+		return 1;
+	std::printf("Integer: %d\n", static_cast<int>(count.value()));
+
+	if (!value.set("hello"))
+		return 1;
+	auto text = value.get<hx::StringView>();
+	if (!text)
+		return 1;
+	std::printf("String: %.*s\n", static_cast<int>(text.value().size()),
+		text.value().data());
+
+	if (!value.set(Point{2, 5}))
+		return 1;
+	auto position = value.get<Point>();
+	if (!position)
+		return 1;
+	std::printf(
+		"Point: %.1f, %.1f\n", position.value().x, position.value().y);
+}
+```
+
+两份程序输出相同：
+
+```text
+Integer: 42
+String: hello
+Point: 2.0, 5.0
+```
+
+C 用 point_type 告诉库怎样复制这个普通结构体，C++ 由类型自动生成描述。set 拥有副本；读取时先检查结果，再使用数字、字符串视图或结构体引用。改为其他类型时旧值自动释放，C 在末尾 destroy，C++ 离开作用域自动清理。
+
+读取错误类型明确失败，例如保存 Point 后不能 get<int32_t>。结构体里含 hx_string/堆资源时需要深复制和清理；完整回调、emplace/visit、混合 vector 和分配器说明见[variant 专题](VARIANT.zh-CN.md)。
+
 <a id="questions"></a>
 
-## 9. 初次使用常见问题
+## 10. 初次使用常见问题
 
-### 9.1 为什么有 HX_OS_OK、Result 和 value？
+### 10.1 为什么有 HX_OS_OK、Result 和 value？
 
 文件不存在、配置错误或分配失败都可能发生。C 函数用状态码报告；`HX_OS_OK` 表示成功。C++ 把值和错误放到 Result 里，`if (!result)` 检查失败，成功后 `result.value()` 读取值。不要把失败直接当成空字符串或 0；需要原生错误详情时可传入错误记录，见[错误参考](REFERENCE.zh-CN.md#section-6)。
 
-### 9.2 NULL 是不是同一种含义？
+### 10.2 NULL 是不是同一种含义？
 
 看它所在的参数：分配器/选项位置的 NULL 使用默认行为，输出错误记录位置的 NULL 表示不额外接收详情。必填的对象或输出位置不能随意用 NULL。本教程不要求创建自定义分配器；需要它时再看 context 的详细说明。
 
-### 9.3 为什么 C 要释放，C++ 有时也要关闭？
+### 10.3 为什么 C 要释放，C++ 有时也要关闭？
 
 C 没有自动析构，所以字符串、文档、容器用完需调用对应释放函数。C++ 的字符串和只读文档可以在离开作用域时释放；线程池等对象可能还有后台工作，使用显式关闭保留超时重试的机会。对象还活着时，不要先释放它借用的数据或卸载它要调用的代码。
 
-### 9.4 中文内容为什么在 Windows 终端显示不对？
+### 10.4 中文内容为什么在 Windows 终端显示不对？
 
 库的路径和字符串采用 UTF-8，文件读取和终端显示是两件事。终端也要按 UTF-8 解码输出字节。这里用 ASCII 输出验证调用流程；中文路径/内容的文件处理仍由库按 UTF-8 适配。库不会为了打印示例擅自修改整个进程的字符编码或 locale。
 
-### 9.5 关闭了可选模块，为什么示例失败？
+### 10.5 关闭了可选模块，为什么示例失败？
 
-本教程使用默认模块配置。JSON 需要 CONFIG，容器需要 CONTAINERS，设置需要 SETTINGS，线程池需要 THREAD_POOL。关闭模块或遇到目标不支持的能力时，接口明确返回不支持，不会用成功伪装。开关、可选解析器、编码依赖和最小嵌入式配置见[构建参考](REFERENCE.zh-CN.md#section-27)。
+本教程使用默认模块配置。JSON 需要 CONFIG，容器需要 CONTAINERS，variant 需要 VARIANT，设置需要 SETTINGS，线程池需要 THREAD_POOL。关闭模块或遇到目标不支持的能力时，接口明确返回不支持，不会用成功伪装。开关、可选解析器、编码依赖和最小嵌入式配置见[构建参考](REFERENCE.zh-CN.md#section-27)。
 
-### 9.6 我想使用其他功能
+### 10.6 我想使用其他功能
 
 | 想做什么 | 文档 |
 | --- | --- |

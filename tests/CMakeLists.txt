@@ -37,7 +37,7 @@ set(hx_test_suites data options lifecycle config containers sysinfo file_utils
 	registry power obfuscate calendar text_lookup bitstream calldata signal
 	settings settings_concurrency settings_config profiler atomic
 	string_tools lexer wide_wait catalog_filename procedure
-	android_baseline convenience)
+	android_baseline convenience variant)
 if(HX_OS_ENABLE_THREAD_POOL)
 	list(APPEND hx_test_suites pool)
 endif()
@@ -54,6 +54,8 @@ foreach(suite IN LISTS hx_test_suites)
 	add_test(NAME ${suite} COMMAND hx_os_test_${suite})
 	set_tests_properties(${suite} PROPERTIES TIMEOUT 20)
 endforeach()
+
+target_sources(hx_os_test_variant PRIVATE variant_fixture.c)
 
 if(WIN32)
 	target_link_libraries(hx_os_test_file_extra PRIVATE shell32)
@@ -130,6 +132,15 @@ set_target_properties(hx_os_header_c PROPERTIES
 hx_apply_warnings(hx_os_header_c)
 
 if(CMAKE_CXX_COMPILER_LOADED)
+	add_executable(hx_os_test_cpp_variant test_cpp_variant.cpp
+		cpp_variant_fixture.cpp)
+	target_link_libraries(hx_os_test_cpp_variant PRIVATE hx_c_platform::cpp)
+	set_target_properties(hx_os_test_cpp_variant PROPERTIES
+		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+	hx_apply_warnings(hx_os_test_cpp_variant)
+	add_test(NAME cpp_variant COMMAND hx_os_test_cpp_variant)
+	set_tests_properties(cpp_variant PROPERTIES TIMEOUT 20)
 	add_executable(hx_os_test_cpp_utilities test_cpp_utilities.cpp)
 	target_link_libraries(hx_os_test_cpp_utilities PRIVATE
 		hx_c_platform::cpp)

@@ -35,7 +35,7 @@ adb devices -l
 python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --serial DEVICE_SERIAL
 ~~~
 
-可用 --adb 指定 adb 绝对路径。脚本核对目标 ABI/API，在新建的 /data/local/tmp/hx_c_platform-随机值 目录上传本次构建的文件，仅为本次进程设置 LD_LIBRARY_PATH，运行以下 11 组：
+可用 --adb 指定 adb 绝对路径。脚本核对目标 ABI/API，在新建的 /data/local/tmp/hx_c_platform-随机值 目录上传本次构建的文件，仅为本次进程设置 LD_LIBRARY_PATH，运行以下 13 组：
 
 | 测试 | 重点 |
 | --- | --- |
@@ -50,6 +50,8 @@ python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --ser
 | cpp_pool | 类型化结果、取消、容量、准备/关闭竞争与清理 |
 | cpp_extensions | 设置快照、信号结果、捕获退役、位流与平台扩展 |
 | convenience | 原地字符串、并发更新期间持有设置字符串、连续设置失败、翻译借用视图和有界目录遍历 |
+| variant | 精确类型、UTF-8/NUL、自定义复制/清理、对齐、所有权/context 回收和容器失败路径 |
+| cpp_variant | 无异常 C++11 set/get/emplace/clone/visit、类型列表、只构造对象和分配失败 |
 
 另运行 hx_os_portable_baseline，记录原子、ASCII、宽位換算、命名过程、精细等待观察值，没有固定时间阈值。ADB 只负责部署和控制。记录 NDK、源码版本及是否有未提交修改、ABI/API、设备型号/指纹/API、模拟器标记和每项输出。清理只移除确切上传文件，不递归删除目录；失败夹保留排查。ADB 超时可能留下目标进程，保留目录并报告，不强杀。性能采样需记录负载、温度、调频状态并重复多轮。
 
@@ -72,6 +74,10 @@ python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --ser
 | /proc、CPU 拓扑、进程/网络访问 | 明确报告权限/原生失败，不伪造指标或成功 |
 
 模块位表示编译了功能族，不保证所有平台扩展可用。API 21 构建在新设备上也不会自动获得进程能力，需要更高最低 API 的构建。没有 JNI/Java 依赖、 APK、Manifest 权限、资产系统或 UI 自动化，这些由消费者处理。独立验证程序使用 c++_static，消费者沿用自己 NDK 工程的 STL 选择。
+
+## variant 验证（2026-10-03）
+
+当前集合为 13 组，增加 variant/cpp_variant；portable 基准增加整数和自定义结构体 set/get 时间观察。API 21 ARM64/ARMv7 完整及最小共享库构建包含该模块、模块关闭测试和公共头 C99/C++11 独立编译。实际运行与待验证目标分别记录在 [VALIDATION.zh-CN.md](VALIDATION.zh-CN.md)。下面的此前记录描述原版本和当时的测试集合。
 
 ## 常用接口验证（2026-10-01）
 

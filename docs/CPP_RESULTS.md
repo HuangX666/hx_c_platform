@@ -6,6 +6,8 @@ All fallible first-party C++ entry points use `hx::Result<T>` or `hx::Result<voi
 
 ## Reading and propagating a result
 
+The [Variant facade](VARIANT.md#cpp) follows the same result rules: set/emplace/visit return Result<void>, clone returns Result<Variant>, scalar get returns a copy and custom get returns a checked borrowed reference. Strings are stored as owned bytes and read through StringView. Copy construction is explicit/fallible through clone; a custom type's ordinary C++ constructor/destructor must meet the noexcept contract.
+
 ~~~cpp
 #include <hx/Files.hpp>
 

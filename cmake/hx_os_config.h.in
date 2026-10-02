@@ -61,5 +61,6 @@
 #cmakedefine01 HX_OS_HAVE_TOMLC
 #cmakedefine01 HX_OS_HAVE_LOCAL_STRTOD
 #cmakedefine01 HX_OS_ENABLE_CONTAINERS
+#cmakedefine01 HX_OS_ENABLE_VARIANT
 
 #endif

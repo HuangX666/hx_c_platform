@@ -10,7 +10,8 @@
 - [6. Change settings in memory](#settings)
 - [7. Use C vector and queue](#containers)
 - [8. Submit a C++ pool task](#thread-pool)
-- [9. First-use questions](#questions)
+- [9. Store different types in one value](#variant)
+- [10. First-use questions](#questions)
 
 <a id="using-guide"></a>
 
@@ -52,6 +53,8 @@ Save `config.json` as UTF-8:
 ```json
 {"port": 8080}
 ```
+
+<a id="c-project"></a>
 
 ### 2.2 Build a C program
 
@@ -578,31 +581,147 @@ This complete program is a standalone command-line demonstration; failed close r
 
 C programs can use the underlying C pool. See the [C pool reference](REFERENCE.md#section-15) for creation, submission, waiting and closing.
 
+<a id="variant"></a>
+
+## 9. Store different types in one value
+
+A variant holds one value at a time but can change that value's type. Replacement releases the old contents. The C example stores 42, then hello, then Point(2, 5). No input files are needed; use the C build configuration from section 2:
+
+```c
+#include <hx_variant.h>
+#include <stdio.h>
+
+typedef struct point {
+	double x;
+	double y;
+} point;
+HX_VARIANT_DEFINE_TRIVIAL_TYPE(point_type, point);
+
+int main(void)
+{
+	hx_variant value = HX_VARIANT_INIT;
+	point position = {2, 5};
+	const void *object = NULL;
+	hx_string_view text;
+	int32_t count;
+	hx_os_status status;
+	if (!(hx_os_capabilities() & HX_OS_CAP_VARIANT)) {
+		puts("Variant support is disabled");
+		return 0;
+	}
+	status = hx_variant_set_i32(&value, 42, NULL);
+	if (status != HX_OS_OK)
+		goto failed;
+	status = hx_variant_get_i32(&value, &count, NULL);
+	if (status != HX_OS_OK)
+		goto failed;
+	printf("Integer: %d\n", (int)count);
+
+	status = hx_variant_set_cstr(&value, "hello", NULL);
+	if (status != HX_OS_OK)
+		goto failed;
+	status = hx_variant_get_string_view(&value, &text, NULL);
+	if (status != HX_OS_OK)
+		goto failed;
+	printf("String: %.*s\n", (int)text.size, text.data);
+
+	status = hx_variant_set_custom(&value, &point_type, &position, NULL);
+	if (status != HX_OS_OK)
+		goto failed;
+	status = hx_variant_get_custom(&value, &point_type, &object, NULL);
+	if (status != HX_OS_OK)
+		goto failed;
+	printf("Point: %.1f, %.1f\n", ((const point *)object)->x,
+		((const point *)object)->y);
+	hx_variant_destroy(&value);
+	return 0;
+failed:
+	fprintf(stderr, "Variant failed: %s\n", hx_os_status_name(status));
+	hx_variant_destroy(&value);
+	return 1;
+}
+```
+
+The C++11 version declares integer, floating-point, string and Point alternatives. Use section 2's C++ configuration with exceptions disabled:
+
+```cpp
+#include <hx/Variant.hpp>
+#include <cstdio>
+
+struct Point {
+	double x;
+	double y;
+};
+
+int main()
+{
+	if (!(hx_os_capabilities() & HX_OS_CAP_VARIANT)) {
+		std::puts("Variant support is disabled");
+		return 0;
+	}
+	hx::TypedVariant<int32_t, double, hx::StringView, Point> value;
+	if (!value.set(int32_t(42)))
+		return 1;
+	auto count = value.get<int32_t>();
+	if (!count)
+		return 1;
+	std::printf("Integer: %d\n", static_cast<int>(count.value()));
+
+	if (!value.set("hello"))
+		return 1;
+	auto text = value.get<hx::StringView>();
+	if (!text)
+		return 1;
+	std::printf("String: %.*s\n", static_cast<int>(text.value().size()),
+		text.value().data());
+
+	if (!value.set(Point{2, 5}))
+		return 1;
+	auto position = value.get<Point>();
+	if (!position)
+		return 1;
+	std::printf(
+		"Point: %.1f, %.1f\n", position.value().x, position.value().y);
+}
+```
+
+Both programs print:
+
+```text
+Integer: 42
+String: hello
+Point: 2.0, 5.0
+```
+
+C declares point_type to describe copying the ordinary structure; C++ supplies it from the type. Set owns a copy. Check results before using a number, string view or structure reference. Replacement releases the former value; C destroys the final owner, and C++ releases it on scope exit.
+
+Reading the wrong type fails explicitly: a Point is not readable with get<int32_t>. Structures with hx_string/heap resources need proper copy/drop operations. Find callbacks, emplace/visit, mixed vector and allocator details in the [variant guide](VARIANT.md).
+
 <a id="questions"></a>
 
-## 9. First-use questions
+## 10. First-use questions
 
-### 9.1 Why HX_OS_OK, Result and value?
+### 10.1 Why HX_OS_OK, Result and value?
 
 Files can be absent, configuration invalid and allocation unsuccessful. C reports a status; `HX_OS_OK` means success. C++ stores the value/error in Result: `if (!result)` checks failure and `result.value()` accesses successful data. Do not silently turn failure into an empty string or zero. Use an error record for native details; see [errors](REFERENCE.md#section-6).
 
-### 9.2 Does NULL always mean the same thing?
+### 10.2 Does NULL always mean the same thing?
 
 Its position matters. NULL at an allocator/options parameter selects defaults; at an error-record output it declines extra details. Required objects/output pointers cannot arbitrarily be NULL. These tutorials need no custom allocator; consult context details when required.
 
-### 9.3 Why release C resources, and explicitly close some C++ objects?
+### 10.3 Why release C resources, and explicitly close some C++ objects?
 
 C has no automatic destructor, so release its strings, documents and containers. C++ strings/read-only documents can release at scope exit. Pools and other owners may have background work, so explicit close preserves retry after timeout. Keep borrowed data and code alive while resources still use them.
 
-### 9.4 Why can Chinese text look wrong in a Windows terminal?
+### 10.4 Why can Chinese text look wrong in a Windows terminal?
 
 Library paths/strings use UTF-8. File reading and terminal display are separate: the terminal also needs to decode UTF-8 output bytes. These examples use ASCII output to check the call sequence. Unicode file paths/content still use the library's UTF-8 adaptation. The library does not change process-wide character encoding or locale just to print an example.
 
-### 9.5 Why does a task fail after disabling modules?
+### 10.5 Why does a task fail after disabling modules?
 
-Tutorials use default modules. JSON needs CONFIG; containers need CONTAINERS; settings need SETTINGS; pools need THREAD_POOL. Disabled/unsupported features return a clear unsupported result rather than fake success. See [build options](REFERENCE.md#section-27) for switches, optional parser/encoding dependencies and minimal embedded builds.
+Tutorials use default modules. JSON needs CONFIG; containers need CONTAINERS; variant needs VARIANT; settings need SETTINGS; pools need THREAD_POOL. Disabled/unsupported features return a clear unsupported result rather than fake success. See [build options](REFERENCE.md#section-27) for switches, optional parser/encoding dependencies and minimal embedded builds.
 
-### 9.6 I need another feature
+### 10.6 I need another feature
 
 | Task | Document |
 | --- | --- |

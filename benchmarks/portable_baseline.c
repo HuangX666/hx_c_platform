@@ -39,6 +39,11 @@ static hx_os_status HX_OS_CALL count_call(
 	++*count;
 	return HX_OS_OK;
 }
+typedef struct hx_bench_point {
+	double x;
+	double y;
+} hx_bench_point;
+HX_VARIANT_DEFINE_TRIVIAL_TYPE(hx_bench_point_type, hx_bench_point);
 int main(void)
 {
 	const size_t iterations = 100000;
@@ -66,6 +71,35 @@ int main(void)
 	}
 	report("ascii_case_pair", start, iterations);
 	hx_string_destroy(&text);
+	if (caps & HX_OS_CAP_VARIANT) {
+		hx_variant variant = HX_VARIANT_INIT;
+		hx_bench_point point = {2, 5};
+		int32_t integer;
+		const void *object;
+		start = now();
+		for (i = 0; i < iterations; ++i) {
+			if (hx_variant_set_i32(&variant, (int32_t)i, NULL) !=
+					HX_OS_OK ||
+				hx_variant_get_i32(&variant, &integer, NULL) !=
+					HX_OS_OK)
+				return 1;
+			value ^= (uint64_t)integer;
+		}
+		report("variant_i32_set_get", start, iterations);
+		start = now();
+		for (i = 0; i < iterations; ++i) {
+			if (hx_variant_set_custom(&variant,
+				    &hx_bench_point_type, &point,
+				    NULL) != HX_OS_OK ||
+				hx_variant_get_custom(&variant,
+					&hx_bench_point_type, &object,
+					NULL) != HX_OS_OK)
+				return 1;
+			value ^= (uint64_t)((const hx_bench_point *)object)->x;
+		}
+		report("variant_custom_set_get", start, iterations);
+		hx_variant_destroy(&variant);
+	}
 	if (caps & HX_OS_CAP_WIDE_MATH) {
 		start = now();
 		for (i = 0; i < iterations; ++i) {

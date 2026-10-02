@@ -15,7 +15,7 @@ This reference covers platform differences, interface limits, resource managemen
 - [9. Environment, special paths and process identity](#section-9)
 - [10. Configuration parsing and serialization](#section-10)
 - [11. Mutable settings, defaults and snapshots](#section-11)
-- [12. C containers and element ownership](#section-12)
+- [12. C containers, variant values and ownership](#section-12)
 - [13. Clocks, deadlines and precise waits](#section-13)
 - [14. Threads, synchronization and thread-local storage](#section-14)
 - [15. C thread pools and delayed tasks](#section-15)
@@ -71,7 +71,7 @@ The library builds, tests, installs and runs independently of hx_c_log. It does 
 
 The C core is a compiled library, **not header-only**. Only the optional C++ facade is header-only. C++11 is verified; a C++14/17/20 matrix is not claimed. CMake **3.16** is the baseline; compiler/SDK support must be checked separately from operating system API compatibility, especially for a Win7 deployment.
 
-Badges describe local evidence through **2026-10-01**: 84 Windows and 86 Linux CTest entries, not individual assertions. Linux adds two native RNG failure tests. GitHub Actions is configured; no remote CI pass is claimed. Android's eleven-suite subset is not the entire desktop suite. See [validation](VALIDATION.md).
+Badges describe local evidence through **2026-10-03**: 88 Windows and 90 Linux CTest entries, not individual assertions. Linux adds two native RNG failure tests. GitHub Actions is configured; no remote CI pass is claimed. Android's thirteen-suite subset is not the entire desktop suite. See [validation](VALIDATION.md).
 
 <a id="section-3"></a>
 
@@ -749,7 +749,7 @@ The update cursor commits and notifies for every successful setter. If setting t
 
 <a id="section-12"></a>
 
-## 12. C containers and element ownership
+## 12. C containers, variant values and ownership
 
 The optional container module provides vector, deque, queue, stack, list, max-heap, ordered/hash map and set. It is a C facility with byte-sized elements and callbacks, not a C++ template emulation layer.
 
@@ -789,6 +789,14 @@ int main(void)
 Initialize `hx_os_container_options` with the element size, then set count, byte and alignment limits. Use copy/drop callbacks for owned elements; the string preset performs deep copies. Normal insertion copies; `_take` operations transfer only on success. Pop/erase ownership depends on whether an output receives the element. Follow the documented operation contract.
 
 Ordered maps use O(log n) operations; hash keys use exact bytes and hash iteration preserves insertion order. A private unchanged uthash 2.4.0 header supports hash storage. Views/iterators cannot survive arbitrary mutation, and containers do not add implicit application-level synchronization. See [container contracts](CONTAINERS.md) and [queue example](../examples/containers.c).
+
+### 12.3 Variant values and custom structures
+
+`hx_variant` holds one active number, owned UTF-8 string, borrowed pointer or custom structure. Native scalars are inline; custom structures use separately aligned storage. Getters check the exact type, replacement releases the former value, and failed copy/construct preserves it. Initialize once, use copy/move for ownership and destroy the final value.
+
+C++11 Variant/TypedVariant expose set/get<T>/emplace/clone/visit using Result and no exceptions. hx_variant_container_options_init provides deep-copy/drop operations for existing C vector/queue/map. VARIANT is independent of CONFIG, SETTINGS and CONTAINERS; container combinations require CONTAINERS. Nested value allocations remain outside container max_bytes.
+
+Full examples, custom copy/drop callbacks, costs, allocator and plugin lifetimes: [VARIANT.md](VARIANT.md). Buildable sources: [variant.c](../examples/variant.c), [variant.cpp](../examples/variant.cpp).
 
 <a id="section-13"></a>
 
@@ -1563,6 +1571,7 @@ All new native/common modules default to ON; optional third-party encoding and p
 | `HX_OS_ENABLE_ICONV` | OFF | Build legacy text encoding adapter |
 | `HX_OS_ENABLE_CONFIG` | ON | Build configuration file parsers |
 | `HX_OS_ENABLE_CONTAINERS` | ON | Build generic C containers |
+| `HX_OS_ENABLE_VARIANT` | ON | Build owned variant values and custom structures |
 | `HX_OS_ENABLE_SYSINFO` | ON | Build native system information |
 | `HX_OS_ENABLE_LIBRARY` | ON | Build native dynamic library loading |
 | `HX_OS_ENABLE_FILE_UTILS` | ON | Build file and path conveniences |
@@ -1650,7 +1659,7 @@ python tools/verify_android.py --ndk /absolute/path/to/ndk \
 
 Defaults cross-build both ARM ABIs for API 21/28; `--serial` explicitly selects runtime validation. `--abi x86_64` supports compatible emulators. An empty adb list can mean an installed AVD is stopped; check `emulator -list-avds` before concluding no emulator exists.
 
-The current common-call changes compile API 21 ARM64/ARMv7 in full and minimal shared configurations. Each ARM64 configuration passes the eleven-suite Android subset on an Android 14/API 34 x86_64 emulator through translation; ARMv7 runtime is unavailable. Earlier API 28/static/x86_64 runs are historical records. An API 21 build is not an Android 5.0 runtime pass. Physical ARM performance, application sandboxes and old OS releases remain target-specific work. Process support below API 28 and finite native join have explicit capability limits. See [ANDROID.md](ANDROID.md).
+The current variant addition compiles API 21 ARM64/ARMv7 in full and minimal shared configurations. Each ARM64 configuration passes the thirteen-suite Android subset on an Android 14/API 34 x86_64 emulator through translation; ARMv7 runtime is unavailable. Earlier API 28/static/x86_64 runs are historical records. An API 21 build is not an Android 5.0 runtime pass. Physical ARM performance, application sandboxes and old OS releases remain target-specific work. Process support below API 28 and finite native join have explicit capability limits. See [ANDROID.md](ANDROID.md).
 
 ### 28.2 A small C-only board configuration
 
@@ -1713,7 +1722,7 @@ python tools/verify_install.py build --config Release
 python tools/verify_abi.py build-shared --config Release
 ```
 
-The first command installs to an isolated prefix under the build directory, then runs eleven C/C++ consumers and seven consumers in a C-only project when the default facilities are available. The ABI command requires a prepared shared build and the repository baseline history. These are native-host checks, not cross-target emulators.
+The first command installs to an isolated prefix under the build directory, then runs thirteen C/C++ consumers and eight consumers in a C-only project when the default facilities are available. The ABI command requires a prepared shared build and the repository baseline history. These are native-host checks, not cross-target emulators.
 
 For GCC/Clang memory checking, configure a separate build:
 
@@ -1740,7 +1749,7 @@ Use a different directory with `HX_OS_SANITIZER=thread` for TSan; do not combine
 | ARM Linux | ARMv7/AArch64 cross-build and QEMU-compatible subset |
 | Android | API 21/28 two-ARM-ABI matrix and minimal builds |
 
-The workflow file is [build.yml](../.github/workflows/build.yml). Configuration does not mean a remote job has passed. Current full CTest results are Windows 84/84 and WSL Linux 86/86. This common-call change passed 11 affected ASan/UBSan/LSan tests and six TSan tests. Earlier full sanitizer runs and the 1,001-round lifecycle audit belong to their recorded versions; the audit observed zero tracked live bytes after cleanup. See [validation](VALIDATION.md).
+The workflow file is [build.yml](../.github/workflows/build.yml). Configuration does not mean a remote job has passed. Current full CTest results are Windows 88/88 and WSL Linux 90/90. The variant change passed six affected ASan/UBSan/LSan tests; previous common-call TSan evidence remains in its dated record. Earlier full sanitizer runs and the 1,001-round lifecycle audit belong to their recorded versions; the audit observed zero tracked live bytes after cleanup. See [validation](VALIDATION.md).
 
 ### 30.3 Measure actual cost
 
@@ -1767,6 +1776,7 @@ Future work includes native target validation and measured improvements. Corouti
 | Core behavior and lifetime | [CONTRACTS.md](CONTRACTS.md) |
 | Configuration profiles | [CONFIGURATION.md](CONFIGURATION.md) |
 | C containers and element ownership | [CONTAINERS.md](CONTAINERS.md) |
+| Variant values and custom structures | [VARIANT.md](VARIANT.md) |
 | C++ Result and migration | [CPP_RESULTS.md](CPP_RESULTS.md) |
 | C++ task pool | [CPP_POOL.md](CPP_POOL.md) |
 | Platform utilities | [PLATFORM_UTILITIES.md](PLATFORM_UTILITIES.md) |
@@ -1791,6 +1801,6 @@ Future work includes native target validation and measured improvements. Corouti
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%2084%2F84%20Linux%2086%2F86-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%2088%2F88%20Linux%2090%2F90-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

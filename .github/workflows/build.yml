@@ -179,3 +179,15 @@ jobs:
           -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release
       - run: cmake --build build --parallel 4
       - run: ctest --test-dir build --output-on-failure
+
+  independent_variant:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - run: >-
+          cmake -S . -B build -C cmake/minimal.cmake
+          -DHX_OS_ENABLE_VARIANT=ON -DHX_OS_BUILD_TESTS=ON
+          -DHX_OS_BUILD_EXAMPLES=ON -DBUILD_SHARED_LIBS=ON
+          -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build build --parallel 4
+      - run: ctest --test-dir build --output-on-failure

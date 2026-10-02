@@ -1,6 +1,6 @@
 # hx_c_platform
 
-[![CI configuration][ci-badge]](.github/workflows/build.yml) [![C99 core][c-badge]](CMakeLists.txt) [![C++11 facade][cpp-badge]](docs/CPP_POOL.md) [![Header-only C++ facade][header-badge]](docs/CPP_POOL.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![First-party license pending][license-badge]](THIRD_PARTY_NOTICES.md) [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md) [![macOS validation pending][macos-badge]](docs/VALIDATION.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.md) [![Windows 84/84 and Linux 86/86 local suites passed][tests-badge]](docs/VALIDATION.md) [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md) [![Android API 21 ARM cross-build passed][android-badge]](docs/ANDROID.md)
+[![CI configuration][ci-badge]](.github/workflows/build.yml) [![C99 core][c-badge]](CMakeLists.txt) [![C++11 facade][cpp-badge]](docs/CPP_POOL.md) [![Header-only C++ facade][header-badge]](docs/CPP_POOL.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![First-party license pending][license-badge]](THIRD_PARTY_NOTICES.md) [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md) [![macOS validation pending][macos-badge]](docs/VALIDATION.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.md) [![Windows 88/88 and Linux 90/90 local suites passed][tests-badge]](docs/VALIDATION.md) [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md) [![Android API 21 ARM cross-build passed][android-badge]](docs/ANDROID.md)
 
 [简体中文](README.zh-CN.md) · [Task tutorials](docs/USAGE.md) · [Detailed reference](docs/REFERENCE.md)
 
@@ -16,7 +16,7 @@
 
 ## 1. What the library helps you do
 
-`hx_c_platform` gives C/C++ projects common tools for files, UTF-8 strings, configuration, containers, threads and background tasks. You call one interface; the library handles differences between Windows, Linux and other adapted systems.
+`hx_c_platform` gives C/C++ projects common tools for files, UTF-8 strings, configuration, containers, variant values, threads and background tasks. You call one interface; the library handles differences between Windows, Linux and other adapted systems.
 
 The core uses C99. C++11 developers can choose the optional C++ interface. Ordinary use needs no global runtime setup, Qt or OBS dependency. The current version is 0.1.0.
 
@@ -256,6 +256,43 @@ else
 
 Successful `submit` means the pool accepted the task. `getUntil` waits for its result, with a two-second waiting budget here. Normal output: `Answer: 42`. `noexcept` declares the task's no-exception contract. Explicitly shut down the pool after use. A wait/close timeout retains ownership for further handling.
 
+### 4.7 Store different types in one value: C / C++
+
+Store integer 42, then replace it with hello. Include `<hx_variant.h>` and `<stdio.h>` and put this C excerpt in main():
+
+```c
+hx_variant value = HX_VARIANT_INIT;
+hx_string_view text;
+hx_os_status status = hx_variant_set_i32(&value, 42, NULL);
+if (status == HX_OS_OK)
+	status = hx_variant_set_cstr(&value, "hello", NULL);
+if (status == HX_OS_OK)
+	status = hx_variant_get_string_view(&value, &text, NULL);
+if (status == HX_OS_OK)
+	printf("String: %.*s\n", (int)text.size, text.data);
+hx_variant_destroy(&value);
+if (status != HX_OS_OK)
+	return 1;
+```
+
+Output: `String: hello`. A variant holds one active value; setting the string replaces the integer. It owns the text and destroy releases it.
+
+C++ can store your own structure directly. Include `<hx/Variant.hpp>` and `<cstdio>` and put this excerpt in main():
+
+```cpp
+struct Point { double x; double y; };
+hx::Variant value;
+if (!value.set(Point{2, 5}))
+	return 1;
+auto position = value.get<Point>();
+if (!position)
+	return 1;
+std::printf("Point: %.1f, %.1f\n", position.value().x,
+	position.value().y);
+```
+
+Output: `Point: 2.0, 5.0`. set stores an independent copy; get<Point> checks its type and returns a structure reference. Destruction releases it automatically. See the [variant tutorial](docs/VARIANT.md) for complete C structure, copy, visitor and mixed-container examples.
+
 <a id="section-5"></a>
 
 ## 5. A few rules to remember
@@ -273,10 +310,11 @@ The meaning of `NULL` depends on its position: allocator/options parameters sele
 
 | What you need | Where to start |
 | --- | --- |
-| Complete programs for the six tasks above | [Task tutorials](docs/USAGE.md) |
+| Complete programs for the seven tasks above | [Task tutorials](docs/USAGE.md) |
 | Full feature list, limits and build switches | [Detailed reference](docs/REFERENCE.md) |
 | Encoding, translation, directory visits and lexing | [Common utilities](docs/COMMON_UTILITIES.md) |
 | JSON/YAML/XML/INI/TOML/ENV/properties | [Configuration formats](docs/CONFIGURATION.md) |
+| Different value types and custom structures | [Variant](docs/VARIANT.md) |
 | Other containers and element copy/release | [C containers](docs/CONTAINERS.md) |
 | Cancellation, close retries and C++ results | [Thread pool](docs/CPP_POOL.md) · [Result](docs/CPP_RESULTS.md) |
 | Network, processes, pipes, watches, mappings and system info | [Platform utilities](docs/PLATFORM_UTILITIES.md) |
@@ -286,7 +324,7 @@ The meaning of `NULL` depends on its position: allocator/options parameters sele
 
 ## 7. Builds, validation and licensing
 
-See the [build reference](docs/REFERENCE.md#section-27) for development builds, tests, static/shared installation and optional dependencies. The code's local full-suite record is Windows 84/84 and WSL Linux 86/86; [validation records](docs/VALIDATION.md) identify exact configurations and pending targets. Documentation-example checks are separate from target-platform validation.
+See the [build reference](docs/REFERENCE.md#section-27) for development builds, tests, static/shared installation and optional dependencies. The code's local full-suite record is Windows 88/88 and WSL Linux 90/90; [validation records](docs/VALIDATION.md) identify exact configurations and pending targets. Documentation-example checks are separate from target-platform validation.
 
 The first-party distribution license is pending; see [third-party licensing](THIRD_PARTY_NOTICES.md). Coroutines and hx_c_log integration remain future work.
 
@@ -299,6 +337,6 @@ The first-party distribution license is pending; see [third-party licensing](THI
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%2084%2F84%20Linux%2086%2F86-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%2088%2F88%20Linux%2090%2F90-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android
