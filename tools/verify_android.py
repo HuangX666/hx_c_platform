@@ -16,6 +16,7 @@ SUITES = (
     "cpp_pool", "cpp_extensions", "convenience", "variant", "cpp_variant",
     "file_search", "containers", "stl", "coroutine", "coroutine_io",
     "cpp_coroutine", "cpp_coroutine20",
+    "coroutine_sync", "cpp_go11", "cpp_go20", "format", "cpp_format",
 )
 
 

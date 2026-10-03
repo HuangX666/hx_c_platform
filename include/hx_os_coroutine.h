@@ -3,6 +3,7 @@
 
 #include "hx_container.h"
 #include "hx_os_loop.h"
+#include "hx_os_thread.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -12,6 +13,14 @@ typedef struct hx_os_coro_runtime hx_os_coro_runtime;
 typedef struct hx_os_coro hx_os_coro;
 typedef struct hx_os_coro_channel hx_os_coro_channel;
 typedef struct hx_os_coro_stream hx_os_coro_stream;
+typedef struct hx_os_coro_local_key hx_os_coro_local_key;
+typedef struct hx_os_coro_binding hx_os_coro_binding;
+typedef struct hx_os_coro_sync hx_os_coro_sync;
+typedef hx_os_coro_sync hx_os_coro_mutex;
+typedef hx_os_coro_sync hx_os_coro_semaphore;
+typedef hx_os_coro_sync hx_os_coro_event;
+typedef hx_os_coro_sync hx_os_coro_rwlock;
+typedef hx_os_coro_sync hx_os_coro_condition;
 
 enum { HX_OS_CORO_STACKFUL, HX_OS_CORO_STACKLESS };
 typedef hx_os_status(HX_OS_CALL *hx_os_coro_fn)(
@@ -70,6 +79,43 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_go_prepared(
 	hx_os_coro_runtime *runtime, int kind, hx_os_coro_prepare_fn prepare,
 	void *factory, hx_os_coro_fn function, hx_os_coro_cleanup_fn cleanup,
 	hx_os_coro **out, hx_os_error *error);
+/* Runtime-owned tasks need no caller handle. Admission failures and terminal
+ * non-OK results are counted; the first native error is retained. This bounded
+ * report has no implicit logging/callback. Existing go/Task calls keep their
+ * explicit result handles and are not double-counted.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_spawn(hx_os_coro_runtime *runtime,
+	int kind, hx_os_coro_fn function, void *user,
+	hx_os_coro_cleanup_fn cleanup, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_spawn_prepared(
+	hx_os_coro_runtime *runtime, int kind, hx_os_coro_prepare_fn prepare,
+	void *factory, hx_os_coro_fn function, hx_os_coro_cleanup_fn cleanup,
+	hx_os_error *error);
+typedef struct hx_os_coro_errors {
+	hx_os_error first;
+	uint64_t count;
+} hx_os_coro_errors;
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_errors_read(
+	hx_os_coro_runtime *runtime, int clear, hx_os_coro_errors *out,
+	hx_os_error *error);
+/* Wait for an idle observation without stopping workers or rejecting future
+ * submissions. Hosts must stop their producers for a stable barrier.
+ * Scheduler/dispatcher callers return DEADLOCK. Timeout preserves resources.
+ * Work failures are read separately, so teardown success stays unambiguous.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_runtime_wait_until(
+	hx_os_coro_runtime *runtime, hx_os_deadline deadline,
+	hx_os_error *error);
+HX_OS_API hx_os_coro_runtime *HX_OS_CALL hx_os_coro_current_runtime(void);
+/* Optional native-thread scope for implicit go calls. No global scheduler is
+ * created. Bindings retain their runtime and must close on their creating
+ * thread in LIFO order. Coroutine bodies already inherit their own runtime.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_binding_create(
+	hx_os_coro_runtime *runtime, hx_os_coro_binding **out,
+	hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_binding_close(
+	hx_os_coro_binding **binding, hx_os_error *error);
 HX_OS_API hx_os_context *HX_OS_CALL hx_os_coro_runtime_context(
 	const hx_os_coro_runtime *runtime);
 HX_OS_API hx_os_coro *HX_OS_CALL hx_os_coro_current(void);
@@ -115,7 +161,89 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_runtime_drain_until(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_runtime_destroy(
 	hx_os_coro_runtime **runtime, hx_os_error *error);
 
-/* Channels belong to one runtime and cross its workers. Zero capacity means
+/* Execution-local values survive yield and differ between coroutines sharing
+ * a worker. Set takes value ownership only on success; replacement/clear/exit
+ * runs cleanup once without scheduler locks. NULL clears the value. Keys are
+ * refcounted; stored values retain their key and borrowed cleanup user state.
+ * At most 64 local slots per coroutine, including internal profiler slots.
+ * Cleanup must not yield or mutate locals. Native threads have no such slots.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_local_key_create(
+	hx_os_context *context, hx_os_tls_destructor cleanup, void *user,
+	hx_os_coro_local_key **out, hx_os_error *error);
+HX_OS_API void HX_OS_CALL hx_os_coro_local_key_retain(
+	hx_os_coro_local_key *key);
+HX_OS_API void HX_OS_CALL hx_os_coro_local_key_release(
+	hx_os_coro_local_key *key);
+HX_OS_API void *HX_OS_CALL hx_os_coro_local_get(hx_os_coro_local_key *key);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_local_set(
+	hx_os_coro_local_key *key, void *value, hx_os_error *error);
+
+/* Synchronization belongs to one runtime. Coroutine waits suspend; native
+ * callers block. NOW polls (WOULD_BLOCK), finite expiry is TIMEOUT. Handles
+ * are refcounted; active waits retain them. No user callback runs under locks.
+ * Mutexes are non-recursive and ownership checked. RW read-unlock requires a
+ * read share held by the caller. Never finish a task while owning a lock.
+ * Close rejects new acquisitions and wakes waiters; existing owners can unlock.
+ */
+HX_OS_API void HX_OS_CALL hx_os_coro_sync_retain(hx_os_coro_sync *sync);
+HX_OS_API void HX_OS_CALL hx_os_coro_sync_release(hx_os_coro_sync *sync);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_sync_close(
+	hx_os_coro_sync *sync, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_mutex_create(
+	hx_os_coro_runtime *runtime, hx_os_coro_mutex **out,
+	hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_mutex_lock_until(
+	hx_os_coro_mutex *mutex, hx_os_deadline deadline, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_mutex_unlock(
+	hx_os_coro_mutex *mutex, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_semaphore_create(
+	hx_os_coro_runtime *runtime, size_t initial, size_t maximum,
+	hx_os_coro_semaphore **out, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_semaphore_wait_until(
+	hx_os_coro_semaphore *semaphore, hx_os_deadline deadline,
+	hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_semaphore_post(
+	hx_os_coro_semaphore *semaphore, size_t count, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_event_create(
+	hx_os_coro_runtime *runtime, int manual_reset, int initially_set,
+	hx_os_coro_event **out, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_event_wait_until(
+	hx_os_coro_event *event, hx_os_deadline deadline, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_event_set(
+	hx_os_coro_event *event, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_event_reset(
+	hx_os_coro_event *event, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_rwlock_create(
+	hx_os_coro_runtime *runtime, hx_os_coro_rwlock **out,
+	hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_rwlock_read_until(
+	hx_os_coro_rwlock *lock, hx_os_deadline deadline, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_rwlock_write_until(
+	hx_os_coro_rwlock *lock, hx_os_deadline deadline, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_rwlock_read_unlock(
+	hx_os_coro_rwlock *lock, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_rwlock_write_unlock(
+	hx_os_coro_rwlock *lock, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_condition_create(
+	hx_os_coro_runtime *runtime, hx_os_coro_condition **out,
+	hx_os_error *error);
+/* Atomically releases the owned mutex before waiting, and reacquires it even
+ * on timeout/cancellation/close. Reacquisition can exceed the deadline. Always
+ * recheck the application predicate while holding the mutex. In a stackless
+ * callback repeat this call after WOULD_BLOCK until a terminal result arrives.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_condition_wait_until(
+	hx_os_coro_condition *condition, hx_os_coro_mutex *mutex,
+	hx_os_deadline deadline, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_condition_notify_one(
+	hx_os_coro_condition *condition, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_condition_notify_all(
+	hx_os_coro_condition *condition, hx_os_error *error);
+
+/* Channels belong to one runtime and cross its workers. Native host threads
+ * can send/receive with the same deadlines; they block rather than suspend.
+ * Cross-runtime coroutine operations remain unsupported. Zero capacity means
  * rendezvous. Values use the C container's relocatable copy/drop contract;
  * callbacks may not suspend or reenter this channel. receive initializes an
  * external output value and transfers its release obligation. close rejects
@@ -137,6 +265,14 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_channel_send_until(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_channel_receive_until(
 	hx_os_coro_channel *channel, void *out, hx_os_deadline deadline,
 	hx_os_error *error);
+/* Auxiliary owned-value storage shares the runtime's channel byte budget.
+ * It retains the runtime, not the channel, so buffered objects cannot create
+ * a channel/value ownership cycle. Free only with the paired function.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_value_alloc(
+	hx_os_coro_channel *channel, size_t bytes, size_t alignment, void **out,
+	hx_os_error *error);
+HX_OS_API void HX_OS_CALL hx_os_coro_value_free(void *memory);
 /* Wait on several sends/receives; exactly one commits. Case metadata and sent
  * values are copied; receive output storage stays live through completion.
  * The selected index is valid on a selected OK/EOF/CLOSED branch.

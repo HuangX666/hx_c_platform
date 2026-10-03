@@ -16,7 +16,7 @@ def main():
     for header in (root / "include").glob("*.h"):
         source = header.read_text(encoding="utf-8")
         expected.update(re.findall(
-            r"HX_OS_CALL\s+(hx_(?:os_|string_|settings_|variant_)\w+)\s*\(",
+            r"HX_OS_CALL\s+(hx_\w+)\s*\(",
             source,
         ))
         for name in re.findall(

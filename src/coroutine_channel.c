@@ -1,6 +1,12 @@
 #include "coroutine_private.h"
 #include "containers_private.h"
 
+#if defined(_MSC_VER)
+static __declspec(thread) int hx_os_coro_channel_callback;
+#else
+static __thread int hx_os_coro_channel_callback;
+#endif
+
 struct hx_os_coro_waiter {
 	hx_os_coro_channel *channel;
 	hx_os_coro *coroutine;
@@ -12,6 +18,8 @@ struct hx_os_coro_waiter {
 	int operation;
 	int linked;
 	int constructed;
+	int native_done;
+	hx_os_status native_status;
 };
 
 struct hx_os_coro_channel {
@@ -31,7 +39,7 @@ struct hx_os_coro_channel {
 	int closed;
 };
 
-static void *hx_os_coro_channel_alloc(hx_os_coro_runtime *runtime, size_t bytes,
+void *hx_os_i_coro_sync_alloc(hx_os_coro_runtime *runtime, size_t bytes,
 	size_t alignment, hx_os_error *error)
 {
 	size_t cost = hx_os_i_allocation_cost(bytes, alignment);
@@ -56,7 +64,7 @@ static void *hx_os_coro_channel_alloc(hx_os_coro_runtime *runtime, size_t bytes,
 	return memory;
 }
 
-static void hx_os_coro_channel_free(hx_os_coro_runtime *runtime, void *memory)
+void hx_os_i_coro_sync_free(hx_os_coro_runtime *runtime, void *memory)
 {
 	size_t bytes;
 	if (!memory)
@@ -66,6 +74,54 @@ static void hx_os_coro_channel_free(hx_os_coro_runtime *runtime, void *memory)
 	(void)hx_os_mutex_lock(runtime->mutex, NULL);
 	runtime->channel_bytes -= bytes;
 	(void)hx_os_mutex_unlock(runtime->mutex, NULL);
+}
+
+typedef struct hx_os_coro_value_header {
+	hx_os_coro_runtime *runtime;
+	void *allocation;
+} hx_os_coro_value_header;
+
+hx_os_status hx_os_coro_value_alloc(hx_os_coro_channel *channel, size_t bytes,
+	size_t alignment, void **out, hx_os_error *error)
+{
+	hx_os_coro_value_header *header;
+	size_t padding = sizeof(*header), total;
+	void *allocation;
+	hx_os_error detail;
+	if (out)
+		*out = NULL;
+	if (!channel || !out || !hx_os_i_alignment_valid(alignment))
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (alignment > padding)
+		padding = alignment;
+	if (!hx_os_i_add_size(padding, bytes, &total))
+		return hx_os_i_error(error, HX_OS_LIMIT, 0, 0);
+	hx_os_error_clear(&detail);
+	allocation = hx_os_i_coro_sync_alloc(
+		channel->runtime, total, alignment, &detail);
+	if (!allocation) {
+		if (error)
+			*error = detail;
+		return detail.status;
+	}
+	*out = (unsigned char *)allocation + padding;
+	header = (hx_os_coro_value_header *)*out - 1;
+	header->allocation = allocation;
+	header->runtime = channel->runtime;
+	hx_os_i_coro_runtime_retain(channel->runtime);
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+}
+
+void hx_os_coro_value_free(void *memory)
+{
+	hx_os_coro_value_header *header;
+	hx_os_coro_runtime *runtime;
+	if (!memory)
+		return;
+	header = (hx_os_coro_value_header *)memory - 1;
+	runtime = header->runtime;
+	hx_os_i_coro_sync_free(runtime, header->allocation);
+	hx_os_i_coro_runtime_release(runtime);
 }
 
 hx_os_status hx_os_coro_channel_create(hx_os_coro_runtime *runtime,
@@ -107,14 +163,14 @@ hx_os_status hx_os_coro_channel_create(hx_os_coro_runtime *runtime,
 		return hx_os_i_error(error, status, 0, 0);
 	hx_os_error_clear(&detail);
 	channel =
-		hx_os_coro_channel_alloc(runtime, sizeof(*channel), 0, &detail);
+		hx_os_i_coro_sync_alloc(runtime, sizeof(*channel), 0, &detail);
 	if (channel) {
 		memset(channel, 0, sizeof(*channel));
 		channel->runtime = runtime;
 		channel->values = *values;
 		channel->capacity = capacity;
 		if (bytes)
-			channel->buffer = hx_os_coro_channel_alloc(runtime,
+			channel->buffer = hx_os_i_coro_sync_alloc(runtime,
 				bytes, values->element_alignment, &detail);
 	}
 	if (!channel || (bytes && !channel->buffer)) {
@@ -138,8 +194,8 @@ hx_os_status hx_os_coro_channel_create(hx_os_coro_runtime *runtime,
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 fail:
 	if (channel)
-		hx_os_coro_channel_free(runtime, channel->buffer);
-	hx_os_coro_channel_free(runtime, channel);
+		hx_os_i_coro_sync_free(runtime, channel->buffer);
+	hx_os_i_coro_sync_free(runtime, channel);
 	(void)hx_os_mutex_lock(runtime->mutex, NULL);
 	--runtime->channel_count;
 	(void)hx_os_mutex_unlock(runtime->mutex, NULL);
@@ -176,6 +232,7 @@ void hx_os_coro_channel_release(hx_os_coro_channel *channel)
 	current = hx_os_coro_current();
 	if (current)
 		++current->preparing;
+	++hx_os_coro_channel_callback;
 	if (channel->values.drop)
 		for (i = 0; i < channel->count; ++i) {
 			size_t index = (channel->head + i) % channel->capacity;
@@ -185,8 +242,9 @@ void hx_os_coro_channel_release(hx_os_coro_channel *channel)
 		}
 	if (current)
 		--current->preparing;
-	hx_os_coro_channel_free(runtime, channel->buffer);
-	hx_os_coro_channel_free(runtime, channel);
+	--hx_os_coro_channel_callback;
+	hx_os_i_coro_sync_free(runtime, channel->buffer);
+	hx_os_i_coro_sync_free(runtime, channel);
 	hx_os_i_coro_runtime_release(runtime);
 }
 
@@ -231,10 +289,10 @@ void hx_os_i_coro_channel_dispose_wait(hx_os_coro *coroutine)
 		if (cases[i].constructed && channel->values.drop)
 			channel->values.drop(
 				cases[i].payload, channel->values.user);
-		hx_os_coro_channel_free(coroutine->runtime, cases[i].payload);
+		hx_os_i_coro_sync_free(coroutine->runtime, cases[i].payload);
 		hx_os_coro_channel_release(channel);
 	}
-	hx_os_coro_channel_free(coroutine->runtime, cases);
+	hx_os_i_coro_sync_free(coroutine->runtime, cases);
 	--coroutine->preparing;
 }
 
@@ -242,6 +300,13 @@ static void hx_os_coro_channel_complete(
 	hx_os_coro_waiter *waiter, hx_os_status status)
 {
 	hx_os_error error;
+	if (!waiter->coroutine) {
+		hx_os_coro_channel_detach(waiter);
+		waiter->native_done = 1;
+		waiter->native_status = status;
+		hx_os_condition_notify_all(waiter->channel->runtime->condition);
+		return;
+	}
 	(void)hx_os_i_error(&error, status, 0, 0);
 	waiter->coroutine->selected = waiter->index;
 	hx_os_i_coro_finish_wait(waiter->coroutine, &error);
@@ -250,7 +315,7 @@ static void hx_os_coro_channel_complete(
 static hx_os_coro_waiter *hx_os_coro_channel_peer(
 	hx_os_coro_waiter *first, hx_os_coro *self)
 {
-	while (first && first->coroutine == self)
+	while (first && self && first->coroutine == self)
 		first = first->next;
 	return first;
 }
@@ -328,7 +393,7 @@ hx_os_status hx_os_coro_channel_close(
 	hx_os_coro *current = hx_os_coro_current();
 	if (!channel)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
-	if (current && current->preparing)
+	if ((current && current->preparing) || hx_os_coro_channel_callback)
 		return hx_os_i_error(error, HX_OS_BUSY, 0, 0);
 	(void)hx_os_mutex_lock(channel->runtime->mutex, NULL);
 	channel->closed = 1;
@@ -344,7 +409,7 @@ static hx_os_status hx_os_coro_channel_prepare(hx_os_coro *coroutine,
 	const hx_os_coro_case *input, size_t count, hx_os_error *error)
 {
 	size_t i;
-	hx_os_coro_waiter *cases = hx_os_coro_channel_alloc(
+	hx_os_coro_waiter *cases = hx_os_i_coro_sync_alloc(
 		coroutine->runtime, count * sizeof(*cases), 0, error);
 	if (!cases)
 		return error->status;
@@ -364,7 +429,7 @@ static hx_os_status hx_os_coro_channel_prepare(hx_os_coro *coroutine,
 			if (channel->values.drop && !channel->values.copy)
 				return hx_os_i_error(
 					error, HX_OS_NOT_SUPPORTED, 0, 0);
-			cases[i].payload = hx_os_coro_channel_alloc(
+			cases[i].payload = hx_os_i_coro_sync_alloc(
 				coroutine->runtime,
 				channel->values.element_size,
 				channel->values.element_alignment, error);
@@ -484,10 +549,112 @@ rejected:
 	return status;
 }
 
+static hx_os_status hx_os_coro_channel_native(hx_os_coro_channel *channel,
+	void *value, int operation, hx_os_deadline deadline, hx_os_error *error)
+{
+	hx_os_coro_runtime *runtime;
+	hx_os_coro_waiter *waiter;
+	hx_os_error detail;
+	hx_os_status status = HX_OS_OK;
+	if (!channel || !value)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (hx_os_coro_channel_callback)
+		return hx_os_i_error(error, HX_OS_BUSY, 0, 0);
+	if (deadline != HX_OS_DEADLINE_NOW &&
+		(hx_os_i_coro_worker_inside() || hx_os_i_coro_io_inside()))
+		return hx_os_i_error(error, HX_OS_DEADLOCK, 0, 0);
+	runtime = channel->runtime;
+	hx_os_coro_channel_retain(channel);
+	hx_os_error_clear(&detail);
+	waiter = hx_os_i_coro_sync_alloc(runtime, sizeof(*waiter), 0, &detail);
+	if (!waiter) {
+		status = detail.status;
+		goto released;
+	}
+	memset(waiter, 0, sizeof(*waiter));
+	waiter->channel = channel;
+	waiter->operation = operation;
+	waiter->output = value;
+	if (operation == HX_OS_CORO_SEND) {
+		if (channel->values.drop && !channel->values.copy) {
+			status = HX_OS_NOT_SUPPORTED;
+			goto done;
+		}
+		waiter->payload = hx_os_i_coro_sync_alloc(runtime,
+			channel->values.element_size,
+			channel->values.element_alignment, &detail);
+		if (!waiter->payload) {
+			status = detail.status;
+			goto done;
+		}
+		++hx_os_coro_channel_callback;
+		if (channel->values.copy)
+			status = channel->values.copy(
+				waiter->payload, value, channel->values.user);
+		else
+			memcpy(waiter->payload, value,
+				channel->values.element_size);
+		--hx_os_coro_channel_callback;
+		if (status != HX_OS_OK)
+			goto done;
+		waiter->constructed = 1;
+	}
+	(void)hx_os_mutex_lock(runtime->mutex, NULL);
+	if (runtime->closing == 2 || runtime->closed)
+		status = HX_OS_CLOSED;
+	else if (!hx_os_coro_channel_attempt(waiter)) {
+		hx_os_coro_waiter **first = operation == HX_OS_CORO_SEND
+			? &channel->send_first
+			: &channel->receive_first;
+		hx_os_coro_waiter **last = operation == HX_OS_CORO_SEND
+			? &channel->send_last
+			: &channel->receive_last;
+		waiter->previous = *last;
+		if (*last)
+			(*last)->next = waiter;
+		else
+			*first = waiter;
+		*last = waiter;
+		waiter->linked = 1;
+		while (!waiter->native_done && status == HX_OS_OK &&
+			runtime->closing != 2 && !runtime->closed)
+			status = hx_os_condition_wait_until(runtime->condition,
+				runtime->mutex, deadline, &detail);
+		if (waiter->native_done)
+			status = waiter->native_status;
+		else if (runtime->closing == 2 || runtime->closed)
+			status = HX_OS_CLOSED;
+		else if (status == HX_OS_TIMEOUT &&
+			deadline == HX_OS_DEADLINE_NOW)
+			status = HX_OS_WOULD_BLOCK;
+	}
+	else
+		status = waiter->native_status;
+	hx_os_coro_channel_detach(waiter);
+	(void)hx_os_mutex_unlock(runtime->mutex, NULL);
+done:
+	++hx_os_coro_channel_callback;
+	if (waiter->constructed && channel->values.drop)
+		channel->values.drop(waiter->payload, channel->values.user);
+	--hx_os_coro_channel_callback;
+	hx_os_i_coro_sync_free(runtime, waiter->payload);
+	hx_os_i_coro_sync_free(runtime, waiter);
+released:
+	hx_os_coro_channel_release(channel);
+	if (error) {
+		*error = detail;
+		error->status = status;
+	}
+	return status;
+}
+
 hx_os_status hx_os_coro_channel_send_until(hx_os_coro_channel *channel,
 	const void *value, hx_os_deadline deadline, hx_os_error *error)
 {
 	hx_os_coro_case selected = {channel, (void *)value, HX_OS_CORO_SEND};
+	if (!hx_os_coro_current())
+		return hx_os_coro_channel_native(channel, (void *)value,
+			HX_OS_CORO_SEND, deadline, error);
 	return hx_os_coro_select(&selected, 1, deadline, NULL, error);
 }
 
@@ -495,5 +662,8 @@ hx_os_status hx_os_coro_channel_receive_until(hx_os_coro_channel *channel,
 	void *out, hx_os_deadline deadline, hx_os_error *error)
 {
 	hx_os_coro_case selected = {channel, out, HX_OS_CORO_RECEIVE};
+	if (!hx_os_coro_current())
+		return hx_os_coro_channel_native(
+			channel, out, HX_OS_CORO_RECEIVE, deadline, error);
 	return hx_os_coro_select(&selected, 1, deadline, NULL, error);
 }

@@ -38,7 +38,7 @@ set(hx_test_suites data options lifecycle config containers sysinfo file_utils
 	settings settings_concurrency settings_config profiler atomic
 	string_tools lexer wide_wait catalog_filename procedure
 	android_baseline convenience variant file_search stl
-	coroutine coroutine_io)
+	coroutine coroutine_io coroutine_sync format)
 if(HX_OS_ENABLE_THREAD_POOL)
 	list(APPEND hx_test_suites pool)
 endif()
@@ -57,6 +57,22 @@ foreach(suite IN LISTS hx_test_suites)
 endforeach()
 
 target_sources(hx_os_test_variant PRIVATE variant_fixture.c)
+if(HX_OS_TEST_FORMAT_SYNTAX)
+	add_executable(hx_os_test_format_generated test_format_generated.c)
+	add_library(hx_os_format_definitions INTERFACE)
+	target_compile_definitions(hx_os_format_definitions INTERFACE
+		HX_TEST_FORMAT_NUMBER=double)
+	target_link_libraries(hx_os_test_format_generated PRIVATE
+		hx_c_platform hx_os_format_definitions)
+	set_target_properties(hx_os_test_format_generated PROPERTIES
+		C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+	hx_apply_warnings(hx_os_test_format_generated)
+	hx_enable_format_syntax(hx_os_test_format_generated
+		SOURCES test_format_generated.c)
+	add_test(NAME format_generated COMMAND hx_os_test_format_generated)
+	set_tests_properties(format_generated PROPERTIES TIMEOUT 20)
+endif()
 if(NOT WIN32)
 	target_link_libraries(hx_os_test_coroutine PRIVATE m)
 endif()
@@ -75,6 +91,27 @@ if(HX_OS_ENABLE_CALENDAR)
 endif()
 set_tests_properties(local PROPERTIES SKIP_RETURN_CODE 77)
 find_package(Python3 QUIET COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND AND HX_OS_ENABLE_FORMAT
+		AND NOT CMAKE_CROSSCOMPILING)
+	set(format_checks --executable $<TARGET_FILE:hx_os_test_format>)
+	if(HX_OS_TEST_FORMAT_SYNTAX)
+		get_target_property(format_clang hx_os_test_format_generated
+			HX_FORMAT_CLANG)
+		set(format_dir "${CMAKE_CURRENT_BINARY_DIR}/hx-format")
+		set(format_target "${format_dir}/hx_os_test_format_generated")
+		set(format_config "$<IF:$<BOOL:$<CONFIG>>,$<CONFIG>,default>")
+		set(format_script "${PROJECT_SOURCE_DIR}/tools")
+		list(APPEND format_checks
+			--script "${format_script}/hx_format_codegen.py"
+			--clang "${format_clang}"
+			--config "${format_target}/${format_config}/flags-C.cfg"
+			--directory "${CMAKE_CURRENT_BINARY_DIR}/format-checks")
+	endif()
+	add_test(NAME format_build_tool COMMAND "${Python3_EXECUTABLE}"
+		"${CMAKE_CURRENT_SOURCE_DIR}/test_format_codegen.py"
+		${format_checks})
+	set_tests_properties(format_build_tool PROPERTIES TIMEOUT 120)
+endif()
 if(Python3_Interpreter_FOUND)
 	file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/obfuscated-input.txt"
 		"generated 中文😀")
@@ -136,6 +173,35 @@ set_target_properties(hx_os_header_c PROPERTIES
 hx_apply_warnings(hx_os_header_c)
 
 if(CMAKE_CXX_COMPILER_LOADED)
+	foreach(standard IN ITEMS 11 20)
+		if(standard EQUAL 20 AND NOT HX_OS_HAVE_CPP20_COROUTINES)
+			continue()
+		endif()
+		add_executable(hx_os_test_cpp_go${standard} test_cpp_go.cpp)
+		target_link_libraries(hx_os_test_cpp_go${standard} PRIVATE
+			hx_c_platform::cpp)
+		set_target_properties(hx_os_test_cpp_go${standard} PROPERTIES
+			CXX_STANDARD ${standard} CXX_STANDARD_REQUIRED YES
+			CXX_EXTENSIONS NO
+			RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+		if(standard EQUAL 20)
+			target_compile_definitions(hx_os_test_cpp_go${standard}
+				PRIVATE
+				HX_TEST_CPP20=1)
+		endif()
+		hx_apply_warnings(hx_os_test_cpp_go${standard})
+		add_test(NAME cpp_go${standard}
+			COMMAND hx_os_test_cpp_go${standard})
+		set_tests_properties(cpp_go${standard} PROPERTIES TIMEOUT 20)
+	endforeach()
+	add_executable(hx_os_test_cpp_format test_cpp_format.cpp)
+	target_link_libraries(hx_os_test_cpp_format PRIVATE hx_c_platform::cpp)
+	set_target_properties(hx_os_test_cpp_format PROPERTIES
+		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+	hx_apply_warnings(hx_os_test_cpp_format)
+	add_test(NAME cpp_format COMMAND hx_os_test_cpp_format)
+	set_tests_properties(cpp_format PROPERTIES TIMEOUT 20)
 	add_executable(hx_os_test_cpp_coroutine test_cpp_coroutine.cpp)
 	target_link_libraries(hx_os_test_cpp_coroutine PRIVATE
 		hx_c_platform::cpp)

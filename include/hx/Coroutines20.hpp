@@ -1,6 +1,7 @@
 #ifndef HX_C_PLATFORM_CPP_COROUTINES20_HPP
 #define HX_C_PLATFORM_CPP_COROUTINES20_HPP
 #include <hx/Coroutines.hpp>
+#include <hx/CoroutineSync.hpp>
 #include <coroutine>
 #include <cstddef>
 
@@ -43,6 +44,62 @@ struct Sleep {
 		return coro::sleepUntil(deadline);
 	}
 };
+
+template <typename Owner, typename T,
+	Result<T> (Owner::*Method)(hx_os_deadline) const noexcept>
+struct SyncWait {
+	Owner owner;
+	hx_os_deadline deadline;
+	Result<T> operator()() noexcept
+	{
+		return (owner.*Method)(deadline);
+	}
+};
+inline auto acquire(
+	Mutex mutex, hx_os_deadline deadline = HX_OS_DEADLINE_INFINITE) noexcept
+{
+	using Poll = SyncWait<Mutex, Lock, &Mutex::acquireUntil>;
+	return Awaiter<Poll>(Poll{std::move(mutex), deadline});
+}
+inline auto wait(
+	Event event, hx_os_deadline deadline = HX_OS_DEADLINE_INFINITE) noexcept
+{
+	using Poll = SyncWait<Event, void, &Event::waitUntil>;
+	return Awaiter<Poll>(Poll{std::move(event), deadline});
+}
+inline auto wait(Semaphore semaphore,
+	hx_os_deadline deadline = HX_OS_DEADLINE_INFINITE) noexcept
+{
+	using Poll = SyncWait<Semaphore, void, &Semaphore::waitUntil>;
+	return Awaiter<Poll>(Poll{std::move(semaphore), deadline});
+}
+inline auto readLock(
+	RwLock lock, hx_os_deadline deadline = HX_OS_DEADLINE_INFINITE) noexcept
+{
+	using Poll = SyncWait<RwLock, Lock, &RwLock::readUntil>;
+	return Awaiter<Poll>(Poll{std::move(lock), deadline});
+}
+inline auto writeLock(
+	RwLock lock, hx_os_deadline deadline = HX_OS_DEADLINE_INFINITE) noexcept
+{
+	using Poll = SyncWait<RwLock, Lock, &RwLock::writeUntil>;
+	return Awaiter<Poll>(Poll{std::move(lock), deadline});
+}
+struct ConditionWait {
+	Condition condition;
+	const Lock *lock;
+	hx_os_deadline deadline;
+	Result<void> operator()() noexcept
+	{
+		return condition.waitUntil(*lock, deadline);
+	}
+};
+inline auto wait(Condition condition, const Lock &lock,
+	hx_os_deadline deadline = HX_OS_DEADLINE_INFINITE) noexcept
+{
+	return Awaiter<ConditionWait>(
+		ConditionWait{std::move(condition), &lock, deadline});
+}
 struct Select {
 	const hx_os_coro_case *cases;
 	size_t count;
@@ -82,15 +139,10 @@ inline Awaiter<Yield> yield() noexcept
 template <typename T> struct Receive {
 	Channel<T> channel;
 	hx_os_deadline deadline;
-	T value;
+	typename Channel<T>::ReceiveStorage value;
 	Result<T> operator()() noexcept
 	{
-		hx_os_error error = {};
-		auto status = hx_os_coro_channel_receive_until(
-			channel.nativeHandle(), &value, deadline, &error);
-		if (status != HX_OS_OK)
-			return Failure(status, error);
-		return std::move(value);
+		return channel.receiveInto(value, deadline);
 	}
 };
 template <typename T> struct Send {
@@ -99,7 +151,7 @@ template <typename T> struct Send {
 	T value;
 	Result<void> operator()() noexcept
 	{
-		return channel.send(value, deadline);
+		return channel.send(std::move(value), deadline);
 	}
 };
 template <typename T>
@@ -246,10 +298,18 @@ public:
 		static void *operator new(size_t bytes) noexcept
 		{
 			void *memory = NULL;
-			constexpr size_t alignment = alignof(promise_type) >
-					alignof(std::max_align_t)
+			/* MSVC's max_align_t is 8 on x64, but coroutine frames
+			 * can use aligned SSE stores under ordinary new's ABI.
+			 */
+			constexpr size_t baseAlignment =
+				alignof(std::max_align_t) >
+					__STDCPP_DEFAULT_NEW_ALIGNMENT__
+				? alignof(std::max_align_t)
+				: __STDCPP_DEFAULT_NEW_ALIGNMENT__;
+			constexpr size_t alignment =
+				alignof(promise_type) > baseAlignment
 				? alignof(promise_type)
-				: alignof(std::max_align_t);
+				: baseAlignment;
 			(void)hx_os_memory_alloc(
 				NULL, bytes, alignment, &memory, NULL);
 			return memory;
@@ -381,6 +441,11 @@ template <typename T> struct FrameFactory {
 	{
 		auto *factory = static_cast<FrameFactory *>(user);
 		void *memory = NULL;
+		if (!factory->routine->valid()) {
+			if (error)
+				*error = Failure(HX_OS_NO_MEMORY).detail;
+			return HX_OS_NO_MEMORY;
+		}
 		auto status = hx_os_memory_alloc(factory->context,
 			sizeof(FrameJob<T>), alignof(FrameJob<T>), &memory,
 			error);
@@ -414,6 +479,52 @@ Result<Task<T>> Runtime::go(Routine<T> &&routine) const noexcept
 		return Failure(status, error);
 	}
 	return Task<T>(task, factory.state);
+}
+template <typename T>
+Result<void> Runtime::spawn(Routine<T> &&routine) const noexcept
+{
+	impl::FrameFactory<T> factory{
+		hx_os_coro_runtime_context(*m_owner_), &routine, NULL};
+	hx_os_error error = {};
+	auto status = hx_os_coro_spawn_prepared(*m_owner_, HX_OS_CORO_STACKLESS,
+		impl::FrameFactory<T>::prepare, &factory,
+		impl::FrameJob<T>::execute, impl::FrameJob<T>::cleanup, &error);
+	if (factory.state)
+		factory.state->release();
+	return detail::Status(status, error);
+}
+inline Result<void> Group::spawn(Routine<void> &&routine) noexcept
+{
+	if (m_busy_)
+		return record(Failure(HX_OS_BUSY));
+	if (m_count_ >= m_capacity_)
+		return record(Failure(HX_OS_LIMIT));
+	m_busy_ = true;
+	void *memory = NULL;
+	hx_os_error error = {};
+	auto status = hx_os_memory_alloc(
+		hx_os_coro_runtime_context(m_runtime_.nativeHandle()),
+		sizeof(Entry), alignof(Entry), &memory, &error);
+	if (status != HX_OS_OK) {
+		m_busy_ = false;
+		return record(Failure(status, error));
+	}
+	auto submitted = m_runtime_.go(std::move(routine));
+	if (!submitted) {
+		hx_os_memory_free(memory);
+		m_busy_ = false;
+		return record(Failure(submitted.error()));
+	}
+	auto *entry = new (memory) Entry;
+	entry->task = std::move(submitted.value());
+	if (m_last_)
+		m_last_->next = entry;
+	else
+		m_first_ = entry;
+	m_last_ = entry;
+	++m_count_;
+	m_busy_ = false;
+	return Result<void>();
 }
 } // namespace coro
 } // namespace hx

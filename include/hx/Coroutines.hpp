@@ -115,7 +115,12 @@ struct Factory : detail::Factory<false, F, A...> {
 		void *user, void **out, hx_os_error *error) noexcept
 	{
 		auto *factory = static_cast<Factory *>(user);
-		auto status = Base::prepare(static_cast<Base *>(factory), out);
+		typedef typename std::decay<F>::type Function;
+		auto status = sizeof(Work) > 1024 * 1024 ? HX_OS_LIMIT
+			: detail::NullCallable(std::get<0>(factory->arguments),
+				  std::is_pointer<Function>())
+			? HX_OS_INVALID
+			: Base::prepare(static_cast<Base *>(factory), out);
 		if (error)
 			error->status = status;
 		return status;
@@ -193,6 +198,64 @@ public:
 	}
 	template <typename T>
 	Result<Task<T>> go(Routine<T> &&routine) const noexcept;
+	template <typename F, typename... A>
+	auto submit(F &&function, A &&...arguments) const noexcept
+		-> decltype(go(std::forward<F>(function),
+			std::forward<A>(arguments)...))
+	{
+		return go(std::forward<F>(function),
+			std::forward<A>(arguments)...);
+	}
+	/* Ordinary tasks are owned by the runtime. Call errors()/waitUntil() at
+	 * a business boundary instead of retaining one Task per submission.
+	 */
+	template <typename F, typename... A,
+		typename std::enable_if<
+			!impl::IsRoutine<typename std::decay<F>::type>::value,
+			int>::type = 0>
+	Result<void> spawn(F &&function, A &&...arguments) const noexcept
+	{
+		typedef impl::Factory<F, A...> Factory;
+		typedef typename Factory::Work Work;
+		static_assert(!impl::IsRoutine<typename Work::Raw>::value,
+			"Submit C++20 frames as spawn(function(args...))");
+		Factory factory(hx_os_coro_runtime_context(*m_owner_),
+			std::forward<F>(function),
+			std::forward<A>(arguments)...);
+		hx_os_error error = {};
+		auto status = hx_os_coro_spawn_prepared(*m_owner_,
+			HX_OS_CORO_STACKFUL, Factory::prepare, &factory,
+			Factory::execute, Work::cleanup, &error);
+		if (factory.state)
+			factory.state->release();
+		return detail::Status(status, error);
+	}
+	template <typename T>
+	Result<void> spawn(Routine<T> &&routine) const noexcept;
+	Result<hx_os_coro_errors> errors(bool clear = false) const noexcept
+	{
+		hx_os_coro_errors result = {};
+		hx_os_error error = {};
+		auto status = hx_os_coro_errors_read(
+			*m_owner_, clear, &result, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return result;
+	}
+	Result<void> waitUntil(hx_os_deadline deadline) const noexcept
+	{
+		hx_os_error error = {};
+		auto status = hx_os_coro_runtime_wait_until(
+			*m_owner_, deadline, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		auto report = errors();
+		if (!report)
+			return Failure(report.error());
+		return report.value().count
+			? Result<void>(Failure(report.value().first))
+			: Result<void>();
+	}
 	Result<void> closeUntil(hx_os_deadline deadline) const noexcept
 	{
 		hx_os_error error = {};
@@ -223,6 +286,140 @@ public:
 
 private:
 	hx_os_coro_runtime **m_owner_;
+};
+
+/* Optional bounded batch. One caller serializes submissions/waits. Dropping
+ * the group releases handles, never cancels/joins worker threads. Captured
+ * references still need their application lifetime, as for an ordinary Task.
+ */
+class Group {
+	struct Entry {
+		Entry *next;
+		Task<void> task;
+		Entry() noexcept
+		    : next(NULL)
+		{
+		}
+	};
+
+public:
+	Result<void> spawn(Routine<void> &&routine) noexcept;
+	explicit Group(const Runtime &runtime, size_t capacity = 1024) noexcept
+	    : m_runtime_(runtime)
+	    , m_first_(NULL)
+	    , m_last_(NULL)
+	    , m_error_{}
+	    , m_count_(0)
+	    , m_capacity_(capacity)
+	    , m_busy_(false)
+	{
+	}
+	Group(const Group &) = delete;
+	Group &operator=(const Group &) = delete;
+	~Group() noexcept
+	{
+		while (m_first_)
+			pop();
+	}
+	template <typename F, typename... A>
+	Result<void> spawn(F &&function, A &&...arguments) noexcept
+	{
+		typedef typename detail::ReturnType<false, F, A...>::type Value;
+		static_assert(std::is_void<Value>::value,
+			"Groups collect void/Result<void>; use Task<T> for "
+			"values");
+		if (m_busy_)
+			return record(Failure(HX_OS_BUSY));
+		if (m_count_ >= m_capacity_)
+			return record(Failure(HX_OS_LIMIT));
+		m_busy_ = true;
+		void *memory = NULL;
+		hx_os_error error = {};
+		auto status = hx_os_memory_alloc(
+			hx_os_coro_runtime_context(m_runtime_.nativeHandle()),
+			sizeof(Entry), alignof(Entry), &memory, &error);
+		if (status != HX_OS_OK) {
+			m_busy_ = false;
+			return record(Failure(status, error));
+		}
+		auto submitted = m_runtime_.go(std::forward<F>(function),
+			std::forward<A>(arguments)...);
+		if (!submitted) {
+			hx_os_memory_free(memory);
+			m_busy_ = false;
+			return record(Failure(submitted.error()));
+		}
+		auto *entry = new (memory) Entry;
+		entry->task = std::move(submitted.value());
+		if (m_last_)
+			m_last_->next = entry;
+		else
+			m_first_ = entry;
+		m_last_ = entry;
+		++m_count_;
+		m_busy_ = false;
+		return Result<void>();
+	}
+	template <typename F, typename... A>
+	Result<void> go(F &&function, A &&...arguments) noexcept
+	{
+		return spawn(std::forward<F>(function),
+			std::forward<A>(arguments)...);
+	}
+	Result<void> waitUntil(hx_os_deadline deadline) noexcept
+	{
+		if (m_busy_)
+			return Failure(HX_OS_BUSY);
+		m_busy_ = true;
+		while (m_first_) {
+			auto result = m_first_->task.getUntil(deadline);
+			if (m_first_->task.nativeHandle()) {
+				m_busy_ = false;
+				return result;
+			}
+			if (!result)
+				(void)record(Failure(result.error()));
+			pop();
+		}
+		m_busy_ = false;
+		return m_error_.status == HX_OS_OK
+			? Result<void>()
+			: Result<void>(Failure(m_error_));
+	}
+	void cancel() noexcept
+	{
+		for (Entry *entry = m_first_; entry; entry = entry->next)
+			entry->task.cancel();
+	}
+	const hx_os_error &error() const noexcept
+	{
+		return m_error_;
+	}
+
+private:
+	Runtime m_runtime_;
+	Entry *m_first_;
+	Entry *m_last_;
+	hx_os_error m_error_;
+	size_t m_count_;
+	size_t m_capacity_;
+	bool m_busy_;
+	Result<void> record(Failure failure) noexcept
+	{
+		if (m_error_.status == HX_OS_OK)
+			m_error_ = failure.detail;
+		return failure;
+	}
+	void pop() noexcept
+	{
+		Entry *entry = m_first_;
+		m_first_ = entry->next;
+		if (!m_first_)
+			m_last_ = NULL;
+		--m_count_;
+		entry->~Entry();
+		hx_os_memory_free(entry);
+	}
 };
 
 inline bool stopRequested() noexcept
@@ -260,16 +457,126 @@ inline Result<void> sleepFor(std::chrono::milliseconds duration) noexcept
 				  static_cast<uint64_t>(duration.count())));
 }
 
-/* Trivial values cross the channel by value. Owning C values can instead use
- * the C copy/drop callbacks; C++ objects with internal self-pointers cannot be
- * relocated as raw C storage. */
+inline Result<void> sleepMs(uint64_t milliseconds) noexcept
+{
+	hx_os_error error = {};
+	auto status = hx_os_coro_sleep_ms(milliseconds, &error);
+	return detail::Status(status, error);
+}
+
+namespace impl {
+template <typename T, bool Plain = std::is_trivially_copyable<T>::value>
+struct ChannelValues;
+
+template <typename T> struct ChannelValues<T, true> {
+	typedef T Slot;
+	static void options(hx_os_container_options &value) noexcept
+	{
+		hx_os_container_options_init(&value, sizeof(T));
+		value.element_alignment = alignof(T);
+	}
+	template <typename U>
+	static Result<void> send(hx_os_coro_channel *channel, U &&value,
+		hx_os_deadline deadline) noexcept
+	{
+		hx_os_error error = {};
+		auto status = hx_os_coro_channel_send_until(
+			channel, &value, deadline, &error);
+		return detail::Status(status, error);
+	}
+	static Result<T> take(Slot &value) noexcept
+	{
+		return std::move(value);
+	}
+};
+
+template <typename T> struct ChannelValues<T, false> {
+	struct Box {
+		T value;
+		hx_os_atomic references;
+		template <typename U>
+		explicit Box(U &&input) noexcept
+		    : value(std::forward<U>(input))
+		    , references{1}
+		{
+		}
+	};
+	typedef Box *Slot;
+	static void release(Box *value) noexcept
+	{
+		if (hx_os_atomic_fetch_sub(
+			    &value->references, 1, HX_OS_ACQ_REL) != 1)
+			return;
+		value->~Box();
+		hx_os_coro_value_free(value);
+	}
+	static hx_os_status HX_OS_CALL copy(
+		void *out, const void *in, void *) noexcept
+	{
+		Box *value = *static_cast<Box *const *>(in);
+		(void)hx_os_atomic_fetch_add(
+			&value->references, 1, HX_OS_RELAXED);
+		*static_cast<Box **>(out) = value;
+		return HX_OS_OK;
+	}
+	static void HX_OS_CALL drop(void *value, void *) noexcept
+	{
+		release(*static_cast<Box **>(value));
+	}
+	static void options(hx_os_container_options &value) noexcept
+	{
+		hx_os_container_options_init(&value, sizeof(Box *));
+		value.copy = copy;
+		value.drop = drop;
+	}
+	template <typename U>
+	static Result<void> send(hx_os_coro_channel *channel, U &&value,
+		hx_os_deadline deadline) noexcept
+	{
+		static_assert(std::is_nothrow_constructible<T, U &&>::value,
+			"Channel copy/move must be noexcept; move owning "
+			"values");
+		hx_os_error error = {};
+		/* A stackless retry consumes the existing prepared value. */
+		if (hx_os_coro_wait_pending()) {
+			auto status = hx_os_coro_channel_send_until(
+				channel, NULL, deadline, &error);
+			return detail::Status(status, error);
+		}
+		void *memory = NULL;
+		auto status = hx_os_coro_value_alloc(
+			channel, sizeof(Box), alignof(Box), &memory, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		Box *box = new (memory) Box(std::forward<U>(value));
+		status = hx_os_coro_channel_send_until(
+			channel, &box, deadline, &error);
+		release(box);
+		return detail::Status(status, error);
+	}
+	static Result<T> take(Slot &slot) noexcept
+	{
+		Box *box = slot;
+		slot = NULL;
+		Result<T> result(std::move(box->value));
+		release(box);
+		return result;
+	}
+};
+} // namespace impl
+
+/* Nontrivial values use a stable budgeted box and proper C++ construction.
+ * Moves may consume the source once box allocation succeeds, including a
+ * subsequent timeout/closed send. Lvalue copies must themselves be noexcept.
+ */
 template <typename T> class Channel {
-	static_assert(std::is_trivially_copyable<T>::value,
-		"Channel<T> requires a trivially copyable value");
-	static_assert(std::is_nothrow_default_constructible<T>::value,
+	static_assert(!std::is_trivially_copyable<T>::value ||
+			std::is_nothrow_default_constructible<T>::value,
 		"Channel<T> receives into nonthrowing default storage");
+	typedef impl::ChannelValues<T> Values;
 
 public:
+	typedef typename Values::Slot ReceiveStorage;
 	Channel() noexcept
 	    : m_channel_(NULL)
 	{
@@ -297,8 +604,7 @@ public:
 		const Runtime &runtime, size_t capacity = 0) noexcept
 	{
 		hx_os_container_options options;
-		hx_os_container_options_init(&options, sizeof(T));
-		options.element_alignment = alignof(T);
+		Values::options(options);
 		Channel value;
 		hx_os_error error = {};
 		auto status = hx_os_coro_channel_create(runtime.nativeHandle(),
@@ -315,24 +621,54 @@ public:
 		hx_os_deadline deadline =
 			HX_OS_DEADLINE_INFINITE) const noexcept
 	{
-		hx_os_error error = {};
-		auto status = hx_os_coro_channel_send_until(
-			m_channel_, &value, deadline, &error);
-		return detail::Status(status, error);
+		return Values::send(m_channel_, value, deadline);
+	}
+	Result<void> send(T &&value,
+		hx_os_deadline deadline =
+			HX_OS_DEADLINE_INFINITE) const noexcept
+	{
+		return Values::send(m_channel_, std::move(value), deadline);
 	}
 	Result<T> receive(hx_os_deadline deadline =
 				  HX_OS_DEADLINE_INFINITE) const noexcept
 	{
-		T value;
-		if (hx_os_coro_kind(hx_os_coro_current()) !=
-			HX_OS_CORO_STACKFUL)
+		ReceiveStorage value = {};
+		if (hx_os_coro_current() &&
+			hx_os_coro_kind(hx_os_coro_current()) !=
+				HX_OS_CORO_STACKFUL)
 			return Failure(HX_OS_INVALID);
+		return receiveInto(value, deadline);
+	}
+	/* Persistent storage is required across stackless WOULD_BLOCK returns.
+	 */
+	Result<T> receiveInto(ReceiveStorage &value,
+		hx_os_deadline deadline =
+			HX_OS_DEADLINE_INFINITE) const noexcept
+	{
 		hx_os_error error = {};
 		auto status = hx_os_coro_channel_receive_until(
 			m_channel_, &value, deadline, &error);
 		if (status != HX_OS_OK)
 			return Failure(status, error);
-		return value;
+		return Values::take(value);
+	}
+	Result<void> operator<<(const T &value) const noexcept
+	{
+		return send(value);
+	}
+	Result<void> operator<<(T &&value) const noexcept
+	{
+		return send(std::move(value));
+	}
+	Result<void> operator>>(T &value) const noexcept
+	{
+		static_assert(std::is_nothrow_move_assignable<T>::value,
+			"Channel output assignment must be noexcept");
+		auto received = receive();
+		if (!received)
+			return Failure(received.error());
+		value = std::move(received.value());
+		return Result<void>();
 	}
 	Result<void> close() const noexcept
 	{

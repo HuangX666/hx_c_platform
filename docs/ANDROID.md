@@ -35,7 +35,7 @@ adb devices -l
 python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --serial DEVICE_SERIAL
 ~~~
 
-Pass --adb for an absolute adb path. The runner checks ABI/API, uploads only its artifacts into a fresh /data/local/tmp/hx_c_platform-UUID directory, sets that process's LD_LIBRARY_PATH, and executes twenty suites:
+Pass --adb for an absolute adb path. The runner checks ABI/API, uploads only its artifacts into a fresh /data/local/tmp/hx_c_platform-UUID directory, sets that process's LD_LIBRARY_PATH, and executes twenty-five suites:
 
 | Suite | Coverage |
 | --- | --- |
@@ -56,6 +56,8 @@ Pass --adb for an absolute adb path. The runner checks ABI/API, uploads only its
 | containers / stl | RB/AVL/duplicate invariants, traversal, sorting, filtering, splice and set operations |
 | coroutine / coroutine_io | Stackful/stackless scheduling, floating-point state, channel/select, prepare rollback, close retry, TCP/DNS/pipes and cancellation |
 | cpp_coroutine / cpp_coroutine20 | Exception-free C++11 go, C++20 frames/locals, waits and cancellation cleanup |
+| coroutine_sync / cpp_go11 / cpp_go20 | Runtime-owned tasks, errors, owned channel values, cooperative locks, condition cancellation and local cleanup |
+| format / cpp_format | Typed UTF-8 formatting, custom values, failed-output retention and allocator cleanup |
 
 hx_os_portable_baseline also records atomic, ASCII, wide conversion, named-call and precise-wait observations without fixed timing thresholds. Logs include NDK, source revision/dirty status, ABI/API, device model, fingerprint, runtime API, emulator marker and command output. Cleanup removes only explicitly uploaded files, never recursively deleting test directories. Failed fixtures remain. An adb timeout may leave the target process running; preserve/report its directory without killing it. Record load/temperature/ frequency conditions and collect repeated performance samples.
 
@@ -121,3 +123,7 @@ See [validation](VALIDATION.md) for minimal/static and host results. The existin
 ARM64 shared execution initially could not locate the library through LD_LIBRARY_PATH. Executable-relative RUNPATH fixed both shared configurations and minimal. RUNPATH is supported since API 24; see the [Android linker documentation](https://android.googlesource.com/platform/bionic/+/refs/heads/android15-tests-release/android-changes-for-ndk-developers.md). ARM64 results include translation/virtualization and are not hardware performance evidence. The AVD offers no ARMv7 ABI, so deployment explicitly skips it. Building with minimum API 21 is not an Android 5.0 runtime test. Old OS releases, ARMv7, physical ARM and application sandbox permissions still require matching environments.
 
 Reports: build-android-emulator/report.json, build-android/report.json, build-android/report-minimal.json and build-android-static/report.json; run-*.log files under each configuration contain actual program output. CI contains the pinned-NDK matrix and API 21 minimal builds; no remote run is claimed.
+
+## 2026-10-03 additions
+
+The host-only automatic C syntax generator is tested separately on Windows/MSVC and WSL/GCC, including installed consumers. Android target tests exercise the generated-independent C99 engine and exception-free C++ wrappers. A cross build of the core does not validate arbitrary generated application sources against a particular Android sysroot. The current coroutine/format additions and actual ABI/runtime evidence are recorded in [validation](VALIDATION.md).

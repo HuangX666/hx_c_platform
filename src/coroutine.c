@@ -3,17 +3,30 @@
 #if defined(_MSC_VER)
 static __declspec(thread) hx_os_coro *hx_os_coro_active;
 static __declspec(thread) hx_os_coro_worker *hx_os_coro_worker_active;
+static __declspec(thread) hx_os_coro_binding *hx_os_coro_bound;
 #else
 static __thread hx_os_coro *hx_os_coro_active;
 static __thread hx_os_coro_worker *hx_os_coro_worker_active;
+static __thread hx_os_coro_binding *hx_os_coro_bound;
 #endif
 
-#if HX_OS_ENABLE_PROFILER
 struct hx_os_coro_local {
 	hx_os_coro_local *next;
 	void *key;
 	void *value;
 	hx_os_tls_destructor cleanup;
+};
+
+struct hx_os_coro_local_key {
+	hx_os_atomic references;
+	hx_os_tls_destructor cleanup;
+	void *user;
+};
+
+struct hx_os_coro_binding {
+	hx_os_coro_runtime *runtime;
+	hx_os_coro_binding *previous;
+	uint64_t thread;
 };
 
 void *hx_os_i_coro_local_get(void *key)
@@ -77,7 +90,9 @@ void hx_os_i_coro_local_clear(void *key)
 		if ((*cursor)->key == key) {
 			hx_os_coro_local *local = *cursor;
 			*cursor = local->next;
+			++hx_os_coro_active->preparing;
 			local->cleanup(local->value, local->key);
+			--hx_os_coro_active->preparing;
 			hx_os_memory_free(local);
 			return;
 		}
@@ -92,7 +107,81 @@ static void hx_os_coro_locals_destroy(hx_os_coro *coroutine)
 		hx_os_memory_free(local);
 	}
 }
-#endif
+hx_os_status hx_os_coro_local_key_create(hx_os_context *context,
+	hx_os_tls_destructor cleanup, void *user, hx_os_coro_local_key **out,
+	hx_os_error *error)
+{
+	hx_os_coro_local_key *key;
+	if (!out)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	*out = NULL;
+	key = hx_os_i_zero(context, sizeof(*key));
+	if (!key)
+		return hx_os_i_error(error, HX_OS_NO_MEMORY, 0, 0);
+	hx_os_atomic_store(&key->references, 1, HX_OS_RELAXED);
+	key->cleanup = cleanup;
+	key->user = user;
+	*out = key;
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+}
+void hx_os_coro_local_key_retain(hx_os_coro_local_key *key)
+{
+	if (key)
+		(void)hx_os_atomic_fetch_add(
+			&key->references, 1, HX_OS_RELAXED);
+}
+void hx_os_coro_local_key_release(hx_os_coro_local_key *key)
+{
+	if (key &&
+		hx_os_atomic_fetch_sub(&key->references, 1, HX_OS_ACQ_REL) == 1)
+		hx_os_memory_free(key);
+}
+static void hx_os_coro_local_drop(void *value, void *user)
+{
+	hx_os_coro_local_key *key = user;
+	if (key->cleanup)
+		key->cleanup(value, key->user);
+	hx_os_coro_local_key_release(key);
+}
+void *hx_os_coro_local_get(hx_os_coro_local_key *key)
+{
+	return key ? hx_os_i_coro_local_get(key) : NULL;
+}
+hx_os_status hx_os_coro_local_set(
+	hx_os_coro_local_key *key, void *value, hx_os_error *error)
+{
+	hx_os_coro *self = hx_os_coro_active;
+	hx_os_coro_local *local;
+	hx_os_status status;
+	if (!key || !self)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (self->preparing)
+		return hx_os_i_error(error, HX_OS_BUSY, 0, 0);
+	if (!value) {
+		hx_os_i_coro_local_clear(key);
+		return hx_os_i_error(error, HX_OS_OK, 0, 0);
+	}
+	for (local = self->locals; local; local = local->next)
+		if (local->key == key) {
+			void *previous = local->value;
+			if (previous == value)
+				return hx_os_i_error(error, HX_OS_OK, 0, 0);
+			local->value = value;
+			++self->preparing;
+			if (key->cleanup)
+				key->cleanup(previous, key->user);
+			--self->preparing;
+			return hx_os_i_error(error, HX_OS_OK, 0, 0);
+		}
+	hx_os_coro_local_key_retain(key);
+	++self->preparing;
+	status = hx_os_i_coro_local_set(
+		key, value, hx_os_coro_local_drop, error);
+	--self->preparing;
+	if (status != HX_OS_OK)
+		hx_os_coro_local_key_release(key);
+	return status;
+}
 
 #if HX_OS_ENABLE_SIGNALS || HX_OS_ENABLE_PROCEDURES
 void *hx_os_i_signal_exchange_execution(void *value);
@@ -155,6 +244,106 @@ hx_os_context *hx_os_coro_runtime_context(const hx_os_coro_runtime *runtime)
 hx_os_coro *hx_os_coro_current(void)
 {
 	return hx_os_coro_active;
+}
+
+hx_os_coro_runtime *hx_os_coro_current_runtime(void)
+{
+	return hx_os_coro_active   ? hx_os_coro_active->runtime
+		: hx_os_coro_bound ? hx_os_coro_bound->runtime
+				   : NULL;
+}
+
+hx_os_status hx_os_coro_binding_create(hx_os_coro_runtime *runtime,
+	hx_os_coro_binding **out, hx_os_error *error)
+{
+	hx_os_coro_binding *binding;
+	if (out)
+		*out = NULL;
+	if (!runtime || !out)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (hx_os_coro_worker_active || hx_os_i_coro_io_inside())
+		return hx_os_i_error(error, HX_OS_DEADLOCK, 0, 0);
+	binding = hx_os_i_alloc(runtime->context, sizeof(*binding), 0);
+	if (!binding)
+		return hx_os_i_error(error, HX_OS_NO_MEMORY, 0, 0);
+	(void)hx_os_mutex_lock(runtime->mutex, NULL);
+	if (runtime->closing) {
+		(void)hx_os_mutex_unlock(runtime->mutex, NULL);
+		hx_os_memory_free(binding);
+		return hx_os_i_error(error, HX_OS_CLOSED, 0, 0);
+	}
+	hx_os_i_coro_runtime_retain(runtime);
+	(void)hx_os_mutex_unlock(runtime->mutex, NULL);
+	binding->runtime = runtime;
+	binding->previous = hx_os_coro_bound;
+	binding->thread = hx_os_thread_id();
+	hx_os_coro_bound = binding;
+	*out = binding;
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+}
+
+hx_os_status hx_os_coro_binding_close(
+	hx_os_coro_binding **binding, hx_os_error *error)
+{
+	hx_os_coro_binding *value;
+	hx_os_coro_runtime *runtime;
+	if (!binding)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	value = *binding;
+	if (!value)
+		return hx_os_i_error(error, HX_OS_OK, 0, 0);
+	if (value != hx_os_coro_bound || value->thread != hx_os_thread_id())
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	hx_os_coro_bound = value->previous;
+	runtime = value->runtime;
+	*binding = NULL;
+	hx_os_memory_free(value);
+	hx_os_i_coro_runtime_release(runtime);
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+}
+int hx_os_i_coro_worker_inside(void)
+{
+	return hx_os_coro_worker_active != NULL;
+}
+
+static void hx_os_coro_record_error(
+	hx_os_coro_runtime *runtime, const hx_os_error *error)
+{
+	if (error->status == HX_OS_OK)
+		return;
+	if (!runtime->errors.count)
+		runtime->errors.first = *error;
+	if (runtime->errors.count != UINT64_MAX)
+		++runtime->errors.count;
+}
+
+hx_os_status hx_os_coro_errors_read(hx_os_coro_runtime *runtime, int clear,
+	hx_os_coro_errors *out, hx_os_error *error)
+{
+	if (!runtime || !out)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	(void)hx_os_mutex_lock(runtime->mutex, NULL);
+	*out = runtime->errors;
+	if (clear)
+		memset(&runtime->errors, 0, sizeof(runtime->errors));
+	(void)hx_os_mutex_unlock(runtime->mutex, NULL);
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+}
+
+hx_os_status hx_os_coro_runtime_wait_until(hx_os_coro_runtime *runtime,
+	hx_os_deadline deadline, hx_os_error *error)
+{
+	hx_os_status status = HX_OS_OK;
+	if (!runtime)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (hx_os_coro_worker_active || hx_os_i_coro_io_inside())
+		return hx_os_i_error(error, HX_OS_DEADLOCK, 0, 0);
+	(void)hx_os_mutex_lock(runtime->mutex, NULL);
+	while (status == HX_OS_OK && (runtime->active || runtime->preparing))
+		status = hx_os_condition_wait_until(
+			runtime->condition, runtime->mutex, deadline, error);
+	(void)hx_os_mutex_unlock(runtime->mutex, NULL);
+	return status == HX_OS_OK ? hx_os_i_error(error, status, 0, 0) : status;
 }
 
 int hx_os_coro_kind(const hx_os_coro *coroutine)
@@ -289,9 +478,13 @@ void hx_os_i_coro_enqueue(hx_os_coro *coroutine)
 
 void hx_os_i_coro_finish_wait(hx_os_coro *coroutine, const hx_os_error *result)
 {
+	hx_os_error completed = *result;
 	if (coroutine->wait_kind == HX_OS_CO_WAIT_NONE || coroutine->wait_done)
 		return;
 	hx_os_coro_timer_remove(coroutine);
+	if (coroutine->wait_kind == HX_OS_CO_WAIT_SYNC &&
+		!hx_os_i_coro_sync_finish(coroutine, &completed))
+		return;
 	if (coroutine->target) {
 		if (coroutine->join_previous)
 			coroutine->join_previous->join_next =
@@ -305,7 +498,7 @@ void hx_os_i_coro_finish_wait(hx_os_coro *coroutine, const hx_os_error *result)
 	}
 	if (coroutine->wait_kind == HX_OS_CO_WAIT_CHANNEL)
 		hx_os_i_coro_channel_unlink(coroutine);
-	coroutine->wait_result = *result;
+	coroutine->wait_result = completed;
 	coroutine->wait_done = 1;
 	if (coroutine->state == HX_OS_CO_WAITING)
 		hx_os_i_coro_enqueue(coroutine);
@@ -403,6 +596,8 @@ void hx_os_i_coro_clear_wait(hx_os_coro *coroutine)
 		hx_os_i_coro_channel_dispose_wait(coroutine);
 	else if (kind == HX_OS_CO_WAIT_IO)
 		hx_os_i_coro_io_dispose_wait(coroutine);
+	else if (kind == HX_OS_CO_WAIT_SYNC)
+		hx_os_i_coro_sync_dispose(coroutine);
 	hx_os_coro_release(target);
 }
 
@@ -579,10 +774,10 @@ static void hx_os_coro_finish(hx_os_coro *coroutine)
 	if (coroutine->context)
 		hx_os_i_coro_context_destroy(coroutine->context);
 #endif
-#if HX_OS_ENABLE_PROFILER
 	hx_os_coro_locals_destroy(coroutine);
-#endif
 	(void)hx_os_mutex_lock(runtime->mutex, NULL);
+	if (coroutine->managed)
+		hx_os_coro_record_error(runtime, &coroutine->result);
 	runtime->stack_bytes -= coroutine->stack_cost;
 	coroutine->stack_cost = 0;
 	if (coroutine->previous)
@@ -812,7 +1007,7 @@ hx_os_status hx_os_coro_runtime_create(hx_os_context *context,
 static hx_os_status hx_os_coro_submit(hx_os_coro_runtime *runtime, int kind,
 	hx_os_coro_fn function, void *user, hx_os_coro_cleanup_fn cleanup,
 	hx_os_coro_prepare_fn prepare, void *factory, hx_os_coro **out,
-	hx_os_error *error)
+	int managed, hx_os_error *error)
 {
 	hx_os_coro *coroutine;
 	hx_os_status status;
@@ -832,6 +1027,7 @@ static hx_os_status hx_os_coro_submit(hx_os_coro_runtime *runtime, int kind,
 	(void)hx_os_mutex_lock(runtime->mutex, NULL);
 	status = runtime->closing ? HX_OS_CLOSED
 		: runtime->objects >= runtime->options.max_coroutines ||
+			runtime->next_identity == UINT64_MAX ||
 			stack_cost > runtime->options.max_stack_bytes -
 					runtime->stack_bytes
 		? HX_OS_LIMIT
@@ -871,6 +1067,8 @@ static hx_os_status hx_os_coro_submit(hx_os_coro_runtime *runtime, int kind,
 		coroutine->user = user;
 		coroutine->cleanup = cleanup;
 		coroutine->kind = kind;
+		coroutine->managed = managed;
+		coroutine->identity = ++runtime->next_identity;
 		coroutine->stack_cost = stack_cost;
 		coroutine->timer_index = SIZE_MAX;
 		if (kind == HX_OS_CORO_STACKFUL)
@@ -914,8 +1112,8 @@ hx_os_status hx_os_coro_go(hx_os_coro_runtime *runtime, int kind,
 	hx_os_coro_fn function, void *user, hx_os_coro_cleanup_fn cleanup,
 	hx_os_coro **out, hx_os_error *error)
 {
-	return hx_os_coro_submit(
-		runtime, kind, function, user, cleanup, NULL, NULL, out, error);
+	return hx_os_coro_submit(runtime, kind, function, user, cleanup, NULL,
+		NULL, out, 0, error);
 }
 
 hx_os_status hx_os_coro_go_prepared(hx_os_coro_runtime *runtime, int kind,
@@ -927,7 +1125,57 @@ hx_os_status hx_os_coro_go_prepared(hx_os_coro_runtime *runtime, int kind,
 	if (!prepare)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 	return hx_os_coro_submit(runtime, kind, function, NULL, cleanup,
-		prepare, factory, out, error);
+		prepare, factory, out, 0, error);
+}
+
+static hx_os_status hx_os_coro_spawn_submit(hx_os_coro_runtime *runtime,
+	int kind, hx_os_coro_fn function, void *user,
+	hx_os_coro_cleanup_fn cleanup, hx_os_coro_prepare_fn prepare,
+	void *factory, hx_os_error *error)
+{
+	hx_os_coro *task = NULL;
+	hx_os_error detail;
+	hx_os_status status;
+	hx_os_error_clear(&detail);
+	status = hx_os_coro_submit(runtime, kind, function, user, cleanup,
+		prepare, factory, &task, 1, &detail);
+	if (status != HX_OS_OK && runtime) {
+		(void)hx_os_mutex_lock(runtime->mutex, NULL);
+		hx_os_coro_record_error(runtime, &detail);
+		(void)hx_os_mutex_unlock(runtime->mutex, NULL);
+	}
+	if (error)
+		*error = detail;
+	hx_os_coro_release(task);
+	return status;
+}
+
+hx_os_status hx_os_coro_spawn(hx_os_coro_runtime *runtime, int kind,
+	hx_os_coro_fn function, void *user, hx_os_coro_cleanup_fn cleanup,
+	hx_os_error *error)
+{
+	return hx_os_coro_spawn_submit(
+		runtime, kind, function, user, cleanup, NULL, NULL, error);
+}
+
+hx_os_status hx_os_coro_spawn_prepared(hx_os_coro_runtime *runtime, int kind,
+	hx_os_coro_prepare_fn prepare, void *factory, hx_os_coro_fn function,
+	hx_os_coro_cleanup_fn cleanup, hx_os_error *error)
+{
+	if (!prepare) {
+		hx_os_error detail;
+		(void)hx_os_i_error(&detail, HX_OS_INVALID, 0, 0);
+		if (runtime) {
+			(void)hx_os_mutex_lock(runtime->mutex, NULL);
+			hx_os_coro_record_error(runtime, &detail);
+			(void)hx_os_mutex_unlock(runtime->mutex, NULL);
+		}
+		if (error)
+			*error = detail;
+		return HX_OS_INVALID;
+	}
+	return hx_os_coro_spawn_submit(runtime, kind, function, NULL, cleanup,
+		prepare, factory, error);
 }
 
 static hx_os_status hx_os_coro_close(hx_os_coro_runtime *runtime, int mode,
@@ -987,6 +1235,7 @@ static hx_os_status hx_os_coro_close(hx_os_coro_runtime *runtime, int mode,
 	runtime->joining = 0;
 	if (status == HX_OS_OK)
 		runtime->closed = 1;
+	hx_os_condition_notify_all(runtime->condition);
 	(void)hx_os_mutex_unlock(runtime->mutex, NULL);
 	return status == HX_OS_OK ? hx_os_i_error(error, status, 0, 0) : status;
 }

@@ -1,6 +1,6 @@
 # hx_c_platform
 
-[![CI configuration][ci-badge]](.github/workflows/build.yml) [![C99 core][c-badge]](CMakeLists.txt) [![C++11 facade][cpp-badge]](docs/CPP_POOL.md) [![Header-only C++ facade][header-badge]](docs/CPP_POOL.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![First-party license pending][license-badge]](THIRD_PARTY_NOTICES.md) [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md) [![macOS validation pending][macos-badge]](docs/VALIDATION.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.md) [![Windows 100/100 and Linux 102/102 local suites passed][tests-badge]](docs/VALIDATION.md) [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md) [![Android API 21 ARM cross-build passed][android-badge]](docs/ANDROID.md)
+[![CI configuration][ci-badge]](.github/workflows/build.yml) [![C99 core][c-badge]](CMakeLists.txt) [![C++11 facade][cpp-badge]](docs/CPP_POOL.md) [![Header-only C++ facade][header-badge]](docs/CPP_POOL.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![First-party license pending][license-badge]](THIRD_PARTY_NOTICES.md) [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md) [![macOS validation pending][macos-badge]](docs/VALIDATION.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.md) [![Windows 110/110 and Linux 112/112 local suites passed][tests-badge]](docs/VALIDATION.md) [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md) [![Android API 21 ARM cross-build passed][android-badge]](docs/ANDROID.md)
 
 [简体中文](README.zh-CN.md) · [Task tutorials](docs/USAGE.md) · [Detailed reference](docs/REFERENCE.md)
 
@@ -306,22 +306,44 @@ std::puts(path.value().c_str());
 
 If the file is assets/nested/config.json, that path is printed. No match reports failure. This call scans synchronously; a GUI should use its existing pool. Directory::findFiles streams every match. Complete C/C++ and background examples are in the [recursive search tutorial](docs/FILE_SEARCH.md).
 
-### 4.9 Start a coroutine: C++11 / optional C++20
+### 4.9 Start a coroutine without retaining task handles
 
-A coroutine can pause during a wait while its worker runs another task. Create `hx::coro::Runtime` explicitly, then submit an ordinary function or lambda with `go`. This excerpt submits a calculation and reads its result:
+A coroutine pauses during a library wait so its worker can run another task. After creating `runtime` once and entering its `Scope`, include the optional `hx/GoKeywords.hpp` last and write:
 
 ```cpp
-auto task = runtime.go([]() noexcept { return 6 * 7; });
-if (task) {
-	auto result = task.value().getUntil(hx_os_deadline_after_ms(2000));
-	if (result)
-		std::printf("Answer: %d\n", result.value());
-}
+co_chan<int> answers(1); // One buffered value.
+if (!answers)
+	return 1;
+go [answers]() noexcept { return answers << 6 * 7; };
+auto done = runtime.waitUntil(hx_os_deadline_after_ms(2000));
+if (!done)
+	return 1;
+auto answer = answers.receive(HX_OS_DEADLINE_NOW);
+if (answer)
+	std::printf("Answer: %d\n", answer.value());
 ```
 
-Output: `Answer: 42`. [The complete C++11 program](examples/coroutine.cpp) includes creation, coroutine sleep, error checks and explicit shutdown. [The C99 example](examples/coroutine.c) shows a stackless state machine; [the C++20 example](examples/coroutine20.cpp) uses `co_await`. The [coroutine guide](docs/COROUTINES.md) explains channels, select, I/O, cancellation and retryable close. Ordinary blocking functions still block the worker; long computations explicitly yield.
+Output: `Answer: 42`. The runtime owns ordinary `go` tasks, releases them after cleanup and retains submission/execution failures for a unified check. [The complete C++11 program](examples/go.cpp) shows the one-time setup and explicit shutdown. `runtime.submit(...)` remains available for `Task<T>` results. [The coroutine guide](docs/COROUTINES.md) explains `co_sleep`, channels with owning values, cooperative locks, local values, optional groups and C++20 `co_await`. Ordinary blocking calls still occupy a worker; long computations explicitly yield.
 
-Need ordered or duplicate keys and traversal macros? The [red-black multimap example](examples/ordered_map.c) prints `a: 10`, `b: 20`, `b: 21` in key order. [The container guide](docs/CONTAINERS.md) covers reverse traversal, stable sorting, filtering, list splice and set operations.
+### 4.10 Format and print text
+
+In C++11, include `hx/Format.hpp`:
+
+```cpp
+auto printed = hx::println("{}: {:.2f}", "张三", 3.75);
+if (!printed)
+	return 1;
+```
+
+Output: `张三: 3.75`. `{}` takes the next argument; `.2f` prints two digits after the decimal point. In C99, enabling one CMake helper also allows automatic types and C expressions:
+
+```c
+hx_os_status status = HX_FPRINTLN("{user.name}: {price * count:.2f}");
+```
+
+Here `user`, `price` and `count` are ordinary variables in the calling C function. The [formatting guide](docs/FORMAT.md) includes complete programs, the CMake setup, custom structures, encoding rules and a C99 path needing no generator. The optional generator runs during the normal build and leaves original sources unchanged.
+
+Need ordered or duplicate keys? The [red-black multimap example](examples/ordered_map.c) and [container guide](docs/CONTAINERS.md) cover ordered traversal, sorting, filtering, list splice and set operations.
 
 <a id="section-5"></a>
 
@@ -340,6 +362,7 @@ The meaning of `NULL` depends on its position: allocator/options parameters sele
 
 | What you need | Where to start |
 | --- | --- |
+| Brace formatting, automatic C arguments and expressions | [Formatting](docs/FORMAT.md) |
 | Complete text, configuration, container and pool programs | [Task tutorials](docs/USAGE.md) |
 | Nested file search and background scanning | [Recursive search tutorial](docs/FILE_SEARCH.md) |
 | Full feature list, limits and build switches | [Detailed reference](docs/REFERENCE.md) |
@@ -355,7 +378,7 @@ The meaning of `NULL` depends on its position: allocator/options parameters sele
 
 ## 7. Builds, validation and licensing
 
-See the [build reference](docs/REFERENCE.md#section-27) for development builds, tests, static/shared installation and optional dependencies. The code's local full-suite record is Windows 100/100 and WSL Linux 102/102; [validation records](docs/VALIDATION.md) identify exact configurations and pending targets. Documentation-example checks are separate from target-platform validation.
+See the [build reference](docs/REFERENCE.md#section-27) for development builds, tests, static/shared installation and optional dependencies. The code's local full-suite record is Windows 110/110 and WSL Linux 112/112; [validation records](docs/VALIDATION.md) identify exact configurations and pending targets. Documentation-example checks are separate from target-platform validation.
 
 The first-party distribution license is pending; see [third-party licensing](THIRD_PARTY_NOTICES.md). The coroutine implementation is self-developed; hx_c_log integration remains future work.
 
@@ -368,6 +391,6 @@ The first-party distribution license is pending; see [third-party licensing](THI
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%20100%2F100%20Linux%20102%2F102-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%20110%2F110%20Linux%20112%2F112-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

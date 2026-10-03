@@ -7,9 +7,8 @@
 typedef struct hx_os_coro_worker hx_os_coro_worker;
 typedef struct hx_os_coro_waiter hx_os_coro_waiter;
 typedef struct hx_os_coro_io_state hx_os_coro_io_state;
-#if HX_OS_ENABLE_PROFILER
 typedef struct hx_os_coro_local hx_os_coro_local;
-#endif
+typedef struct hx_os_coro_sync_waiter hx_os_coro_sync_waiter;
 
 enum { HX_OS_CO_READY, HX_OS_CO_RUNNING, HX_OS_CO_WAITING, HX_OS_CO_FINISHED };
 enum {
@@ -18,7 +17,8 @@ enum {
 	HX_OS_CO_WAIT_SLEEP,
 	HX_OS_CO_WAIT_TASK,
 	HX_OS_CO_WAIT_CHANNEL,
-	HX_OS_CO_WAIT_IO
+	HX_OS_CO_WAIT_IO,
+	HX_OS_CO_WAIT_SYNC
 };
 
 typedef struct hx_os_coro_execution {
@@ -31,6 +31,7 @@ struct hx_os_coro {
 	hx_os_atomic references;
 	hx_os_atomic cancelled;
 	hx_os_atomic finished;
+	uint64_t identity;
 	hx_os_coro_runtime *runtime;
 	hx_os_coro_worker *worker;
 	hx_os_coro *previous;
@@ -49,9 +50,8 @@ struct hx_os_coro {
 	hx_os_error wait_result;
 	hx_os_coro_waiter *cases;
 	void *io;
-#if HX_OS_ENABLE_PROFILER
 	hx_os_coro_local *locals;
-#endif
+	hx_os_coro_sync_waiter *sync_wait;
 	hx_os_deadline deadline;
 	size_t timer_index;
 	size_t stack_cost;
@@ -65,6 +65,7 @@ struct hx_os_coro {
 	int wait_kind;
 	int wait_done;
 	int preparing;
+	int managed;
 };
 
 struct hx_os_coro_worker {
@@ -79,6 +80,8 @@ struct hx_os_coro_worker {
 
 struct hx_os_coro_runtime {
 	hx_os_atomic references;
+	hx_os_coro_errors errors;
+	uint64_t next_identity;
 	hx_os_context *context;
 	hx_os_mutex *mutex;
 	hx_os_condition *condition;
@@ -128,6 +131,12 @@ hx_os_status hx_os_i_coro_io_close(hx_os_coro_runtime *runtime,
 	hx_os_deadline deadline, hx_os_error *error);
 void hx_os_i_coro_io_destroy(hx_os_coro_runtime *runtime);
 int hx_os_i_coro_io_inside(void);
+int hx_os_i_coro_worker_inside(void);
+void *hx_os_i_coro_sync_alloc(hx_os_coro_runtime *runtime, size_t bytes,
+	size_t alignment, hx_os_error *error);
+void hx_os_i_coro_sync_free(hx_os_coro_runtime *runtime, void *memory);
+int hx_os_i_coro_sync_finish(hx_os_coro *coroutine, hx_os_error *result);
+void hx_os_i_coro_sync_dispose(hx_os_coro *coroutine);
 enum { HX_OS_CO_DIAL = 100, HX_OS_CO_LISTEN, HX_OS_CO_PIPE };
 hx_os_status hx_os_i_coro_io_call(hx_os_coro_stream *stream, int kind,
 	const hx_os_operation *input, int backlog, int reuse,

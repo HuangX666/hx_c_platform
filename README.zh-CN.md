@@ -1,6 +1,6 @@
 # hx_c_platform
 
-[![CI 配置][ci-badge]](.github/workflows/build.yml) [![C99 核心][c-badge]](CMakeLists.txt) [![C++11 封装][cpp-badge]](docs/CPP_POOL.zh-CN.md) [![仅 C++ 封装为 header-only][header-badge]](docs/CPP_POOL.zh-CN.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![自有代码许可证待定][license-badge]](THIRD_PARTY_NOTICES.zh-CN.md) [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md) [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md) [![本地 Windows 100/100、Linux 102/102 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md) [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md) [![Android API 21 ARM 交叉编译通过][android-badge]](docs/ANDROID.zh-CN.md)
+[![CI 配置][ci-badge]](.github/workflows/build.yml) [![C99 核心][c-badge]](CMakeLists.txt) [![C++11 封装][cpp-badge]](docs/CPP_POOL.zh-CN.md) [![仅 C++ 封装为 header-only][header-badge]](docs/CPP_POOL.zh-CN.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![自有代码许可证待定][license-badge]](THIRD_PARTY_NOTICES.zh-CN.md) [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md) [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md) [![本地 Windows 110/110、Linux 112/112 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md) [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md) [![Android API 21 ARM 交叉编译通过][android-badge]](docs/ANDROID.zh-CN.md)
 
 [English](README.md) · [常用任务教程](docs/USAGE.zh-CN.md) · [详细参考](docs/REFERENCE.zh-CN.md)
 
@@ -306,22 +306,44 @@ std::puts(path.value().c_str());
 
 例如文件位于 assets/nested/config.json，就输出这个路径。没有匹配会明确失败。这个调用同步扫描；界面程序应放进现有线程池。逐个返回全部匹配的入口是 Directory::findFiles，完整 C/C++ 程序和后台示例见[递归查找教程](docs/FILE_SEARCH.zh-CN.md)。
 
-### 4.9 启动一个协程：C++11 / 可选 C++20
+### 4.9 启动协程，不必为普通任务保存句柄
 
-协程等待时可以暂停，让工作线程执行其他任务。先显式创建 `hx::coro::Runtime`，再用 `go` 提交普通函数或 lambda。下面这段提交一个计算任务，然后取出结果：
+协程在调用本库等待接口时可以暂停，让工作线程执行其他任务。先创建一次 `runtime` 并进入它的 `Scope`，最后包含可选的 `hx/GoKeywords.hpp`，后面的任务就可以这样写：
 
 ```cpp
-auto task = runtime.go([]() noexcept { return 6 * 7; });
-if (task) {
-	auto result = task.value().getUntil(hx_os_deadline_after_ms(2000));
-	if (result)
-		std::printf("Answer: %d\n", result.value());
-}
+co_chan<int> answers(1); // 可以暂存一个值。
+if (!answers)
+	return 1;
+go [answers]() noexcept { return answers << 6 * 7; };
+auto done = runtime.waitUntil(hx_os_deadline_after_ms(2000));
+if (!done)
+	return 1;
+auto answer = answers.receive(HX_OS_DEADLINE_NOW);
+if (answer)
+	std::printf("Answer: %d\n", answer.value());
 ```
 
-输出：`Answer: 42`。[完整 C++11 程序](examples/coroutine.cpp) 包含创建运行时、协程睡眠、检查错误和显式关闭。[C99 示例](examples/coroutine.c) 使用无栈状态机，[C++20 示例](examples/coroutine20.cpp) 使用 `co_await`。[协程教程](docs/COROUTINES.zh-CN.md) 继续说明 channel、select、I/O、取消和关闭重试。普通阻塞函数仍会占住工作线程，长时间计算需要主动 yield。
+输出：`Answer: 42`。运行时自动持有普通 `go` 任务，清理完成后回收，并保留提交／执行失败供统一检查。[完整 C++11 程序](examples/go.cpp) 展示一次性创建和显式关闭。需要任务返回值时仍可用 `runtime.submit(...)` 获取 `Task<T>`。[协程教程](docs/COROUTINES.zh-CN.md) 继续说明 `co_sleep`、拥有字符串等资源的 channel、协程锁、局部值、可选任务组和 C++20 `co_await`。普通阻塞调用仍会占住工作线程，长时间计算需要主动 yield。
 
-需要有序键、重复键或遍历宏时，[红黑树 multimap 示例](examples/ordered_map.c) 按键顺序输出 `a: 10`、`b: 20`、`b: 21`。[容器说明](docs/CONTAINERS.zh-CN.md) 包含反向遍历、稳定排序、筛选、链表 splice 和集合运算。
+### 4.10 格式化并打印文本
+
+C++11 包含 `hx/Format.hpp` 后可以直接写：
+
+```cpp
+auto printed = hx::println("{}: {:.2f}", "张三", 3.75);
+if (!printed)
+	return 1;
+```
+
+输出：`张三: 3.75`。`{}` 取下一个实参，`.2f` 表示保留小数点后两位。C99 在 CMake 中启用一次辅助函数后，也可以自动识别类型，直接写 C 表达式：
+
+```c
+hx_os_status status = HX_FPRINTLN("{user.name}: {price * count:.2f}");
+```
+
+这里的 `user`、`price`、`count` 都是当前 C 函数里的普通变量。[格式化教程](docs/FORMAT.zh-CN.md) 提供完整程序、CMake 配置、自定义结构体、编码规则，以及不使用生成步骤的 C99 写法。可选的生成步骤随正常构建自动运行，不改原始源文件。
+
+需要有序键或重复键时，[红黑树 multimap 示例](examples/ordered_map.c) 与[容器说明](docs/CONTAINERS.zh-CN.md) 包含有序遍历、排序、筛选、链表 splice 和集合运算。
 
 <a id="section-5"></a>
 
@@ -340,6 +362,7 @@ if (task) {
 
 | 想做什么 | 先看哪里 |
 | --- | --- |
+| 花括号格式化、C 自动实参与表达式 | [格式化教程](docs/FORMAT.zh-CN.md) |
 | 文本、配置、容器和线程池的完整程序 | [常用任务教程](docs/USAGE.zh-CN.md) |
 | 在多层目录中查找文件、后台扫描 | [递归查找教程](docs/FILE_SEARCH.zh-CN.md) |
 | 找完整功能、接口限制、构建开关 | [详细参考](docs/REFERENCE.zh-CN.md) |
@@ -355,7 +378,7 @@ if (task) {
 
 ## 7. 构建、验证与项目许可
 
-开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。当前代码的本地全量测试记录为 Windows 100/100、WSL Linux 102/102；具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
+开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。当前代码的本地全量测试记录为 Windows 110/110、WSL Linux 112/112；具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
 
 自有代码的发布许可证尚未确定，第三方许可证见[许可说明](THIRD_PARTY_NOTICES.zh-CN.md)。协程使用自研实现；hx_c_log 接入仍属于后续工作。
 
@@ -368,6 +391,6 @@ if (task) {
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%20100%2F100%20Linux%20102%2F102-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%20110%2F110%20Linux%20112%2F112-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

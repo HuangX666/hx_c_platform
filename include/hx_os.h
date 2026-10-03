@@ -41,6 +41,7 @@
 #include "hx_os_procedure.h"
 #include "hx_os_posix.h"
 #include "hx_string.h"
+#include "hx_format.h"
 #include "hx_config.h"
 #include "hx_container.h"
 #include "hx_variant.h"

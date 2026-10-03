@@ -6,7 +6,46 @@ Entries below describe the versions tested at the time. Historical C++ exception
 
 This records development validation through 2026-10-03. A design, implemented adapter, successful compile and successful target run are different states. Local tests do not certify every operating-system release, filesystem, CPU, libc or network provider.
 
-The containers/coroutines entry records the current addition. Recursive search, variant, onboarding documentation, common-call refinement, Result migration, earlier Final delivery matrix and batch checkpoints describe their original versions.
+The simple-go/format entry records the current addition. The containers/coroutines entry describes its earlier baseline. Recursive search, variant, onboarding documentation, common-call refinement, Result migration, earlier Final delivery matrix and batch checkpoints describe their original versions.
+
+## 2026-10-03: Simple go calls and brace formatting
+
+This entry covers the managed coroutine/synchronization additions and the typed C99 formatter with optional host generation. Prior entries retain their historical measurements. Source baseline: `266112b`; local `dev` changes, with generated files and logs kept under ignored build directories.
+
+| Configuration | Evidence |
+| --- | --- |
+| Windows MSVC x64 Release, shared, no-exception C++ | Full CTest 110/110; final formatter/sync/go checks 4/4; generated-source/tool checks 3/3; Debug generation 1/1 |
+| WSL Linux GCC x86_64 Release, shared, no-exception C++ | Full CTest 112/112; final related tests 7/7 |
+| Installed shared consumers, Windows and WSL | On each host: C/C++ 21/21 and pure C 12/12, including the installed generator |
+| Windows MSVC x86 Debug, static | Four focused runtime suites and C99/C++11 isolated headers; installed C/C++ 20/20 and pure C 11/11 |
+| Old headers against the new shared library | Baseline `7cf52fc`: Windows 10/10 and WSL 10/10; public export comparison 802/802 on both hosts |
+| ASan + UBSan + leak detection, WSL | Seven affected suites passed; final changed formatter/sync/go subset 5/5 |
+| TSan, WSL | Coroutine, coroutine I/O, synchronization and C++11/C++20 go: 5/5 |
+| Module disabled | COROUTINES/FORMAT disabled build, explicit unsupported C entries and formatting checks 3/3; C++ module-off wrappers compile and skip work |
+| Stackless-only, no coroutine I/O | Existing C scheduler and C++20 frame tests passed; tests requiring stackful support skip that work |
+| Android NDK r28c, API 21, ARM64 | Full build; 25 suites plus the existing portable benchmark completed on the API 34 x86_64 emulator using ARM translation |
+| Android NDK r28c, API 21, ARMv7 | Full cross build, including public headers; no ARMv7 runtime available on the selected emulator |
+
+The emulator ran read-only with snapshots disabled and was stopped after testing. These runs are not native ARM hardware, Android 5.0 OS, APK sandbox or actual embedded-board verification. macOS, Win7/8.1 and musl target validation remain pending. The helper uses the CMake 3.16 feature baseline; this turn exercised installed host CMake versions rather than installing/running CMake 3.16 itself. Runtime Windows-console Unicode output is implemented; automated output checks exercised redirected UTF-8 bytes.
+
+Tests cover default managed ownership/error clearing, explicit scope nesting, native-thread channel endpoints, owning and over-aligned moved values, CLS cleanup, condition cancellation followed by mutex reacquisition, timeout/retry groups and C++20 frames. The Windows frame test exposed an alignment error: MSVC x64's `max_align_t` is 8 but its coroutine ABI may require default-new alignment. Allocation now honors `__STDCPP_DEFAULT_NEW_ALIGNMENT__`; the original and new C++20 suites pass. ARMv7 Clang also exposed a tautological size-range comparison, now guarded for the target width. Checked contexts finish with zero outstanding allocations on the exercised success/failure paths. Sanitizers do not prove correctness for every possible schedule.
+
+Generator checks use the real host Clang and build tools: Chinese text, expressions, one-time ordered evaluation, custom structures, inherited dependency definitions, missing arguments/fields, wrong specs, header-change invalidation, unchanged-build caching, paths with spaces and original-source retention. The helper is installed and invoked through `find_package` by both pure-C and mixed consumers. Windows/MSVC and WSL/GCC builds use different configuration directories. Generation is optional, does not change original files and adds no target runtime dependency. POSIX closed-pipe output returns an error instead of terminating the test process. No output performance threshold is inferred from these correctness tests.
+
+Measured size/alignment, bytes; array stride equals the listed size:
+
+| Object | MSVC x64 | MSVC x86 | GCC Linux x86_64 |
+| --- | --- | --- | --- |
+| Coroutine metadata (private) | 320 / 8 | 224 / 8 | 320 / 8 |
+| Runtime metadata (private) | 280 / 8 | 176 / 8 | 280 / 8 |
+| `hx_format_arg` | 32 / 8 | 16 / 8 | 32 / 16 |
+| `hx_format_options` | 24 / 8 | 16 / 4 | 24 / 8 |
+| `hx_os_coro_errors` | 32 / 8 | 32 / 8 | 32 / 8 |
+
+The prior coroutine/runtime sizes were 304/240 on x64 and 208/136 on x86. Added identity/wait state and the bounded error report account for the increases; public pre-existing C layouts remain unchanged. Managed submission releases the caller task reference and publishes errors under the existing runtime lock. Uncontended coroutine sync does not allocate a waiter; contention does. Nontrivial channel values add a budgeted box/reference count, with separate payload costs. Formatting uses transactional temporary strings; floating conversion can allocate a locale and perform multiple round-trip attempts. No claim of faster libgo/Go execution, allocation-free formatting, or hx_c_log performance is made; no assembly optimization was added.
+
+Reproduction logs: `build-no-exceptions/current-full-{win,linux}.log`, `current-last-{win,linux}.log`, `current-focused-win.log`, `current-install-*`, `current-abi-*`, `current-asan*.log`, `current-tsan.log`, `current-win32.log`, `current-off-final.log`, `current-stackless-cpp20.log` and `current-layout-*.log`. Android snapshots: `build-android/report-format-arm64.json` and `report-format-armv7.json`, plus per-configuration build/run logs. The Android `tests` object also includes the benchmark, so it contains 26 executable results for 25 suites. Changed-source width checks pass; first-party UTF-8/LF files and documentation links were checked, with vendor sources unchanged.
+
 
 ## Red-black trees, algorithms and self-developed coroutines (2026-10-03)
 

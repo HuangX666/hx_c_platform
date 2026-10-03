@@ -19,6 +19,7 @@
 #include "settings_private.h"
 #include "profiler_private.h"
 #include "coroutine_private.h"
+#include "hx_format.h"
 #include <stdio.h>
 
 #define HX_OS_LAYOUT(type)                                                     \
@@ -34,6 +35,9 @@
 int main(void)
 {
 	HX_OS_LAYOUT(hx_string);
+	HX_OS_LAYOUT(hx_format_arg);
+	HX_OS_LAYOUT(hx_format_options);
+	HX_OS_LAYOUT(hx_os_coro_errors);
 	HX_OS_LAYOUT(hx_os_coro);
 	HX_OS_LAYOUT(hx_os_coro_worker);
 	HX_OS_LAYOUT(hx_os_i_coro_context);

@@ -1573,6 +1573,7 @@ int main(void)
 | `HX_OS_ENABLE_ICONV` | OFF | 传统字符编码转换后端 |
 | `HX_OS_ENABLE_CONFIG` | ON | 不可变配置文档解析 |
 | `HX_OS_ENABLE_CONTAINERS` | ON | C 容器与私有 uthash 存储 |
+| `HX_OS_ENABLE_FORMAT` | ON | UTF-8 花括号格式化与打印；见[教程](FORMAT.zh-CN.md) |
 | `HX_OS_ENABLE_VARIANT` | ON | 拥有资源的 variant 与自定义结构体 |
 | `HX_OS_ENABLE_SYSINFO` | ON | 系统指标与进程 CPU 采样 |
 | `HX_OS_ENABLE_LIBRARY` | ON | 动态库加载、符号与诊断 |

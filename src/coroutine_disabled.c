@@ -1,6 +1,37 @@
 #include "internal.h"
 #include "hx_os_coroutine.h"
 
+hx_os_status hx_os_coro_binding_create(hx_os_coro_runtime *runtime,
+	hx_os_coro_binding **out, hx_os_error *error)
+{
+	(void)runtime;
+	if (out)
+		*out = NULL;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+hx_os_status hx_os_coro_binding_close(
+	hx_os_coro_binding **binding, hx_os_error *error)
+{
+	if (binding && !*binding)
+		return hx_os_i_error(error, HX_OS_OK, 0, 0);
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_coro_value_alloc(hx_os_coro_channel *channel, size_t bytes,
+	size_t alignment, void **out, hx_os_error *error)
+{
+	(void)channel;
+	(void)bytes;
+	(void)alignment;
+	if (out)
+		*out = NULL;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+void hx_os_coro_value_free(void *memory)
+{
+	(void)memory;
+}
+
 hx_os_status hx_os_coro_options_init(
 	hx_os_coro_options *options, size_t capacity)
 {
@@ -300,5 +331,243 @@ hx_os_status hx_os_coro_pipe_pair(hx_os_coro_stream **reader,
 		*reader = NULL;
 	if (writer)
 		*writer = NULL;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_coro_spawn(hx_os_coro_runtime *runtime, int kind,
+	hx_os_coro_fn function, void *user, hx_os_coro_cleanup_fn cleanup,
+	hx_os_error *error)
+{
+	hx_os_coro *out;
+	return hx_os_coro_go(
+		runtime, kind, function, user, cleanup, &out, error);
+}
+hx_os_status hx_os_coro_spawn_prepared(hx_os_coro_runtime *runtime, int kind,
+	hx_os_coro_prepare_fn prepare, void *factory, hx_os_coro_fn function,
+	hx_os_coro_cleanup_fn cleanup, hx_os_error *error)
+{
+	hx_os_coro *out;
+	return hx_os_coro_go_prepared(runtime, kind, prepare, factory, function,
+		cleanup, &out, error);
+}
+hx_os_status hx_os_coro_errors_read(hx_os_coro_runtime *runtime, int clear,
+	hx_os_coro_errors *out, hx_os_error *error)
+{
+	(void)runtime;
+	(void)clear;
+	(void)out;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+hx_os_status hx_os_coro_runtime_wait_until(hx_os_coro_runtime *runtime,
+	hx_os_deadline deadline, hx_os_error *error)
+{
+	(void)runtime;
+	(void)deadline;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+hx_os_coro_runtime *hx_os_coro_current_runtime(void)
+{
+	return NULL;
+}
+hx_os_status hx_os_coro_local_key_create(hx_os_context *context,
+	hx_os_tls_destructor cleanup, void *user, hx_os_coro_local_key **out,
+	hx_os_error *error)
+{
+	(void)context;
+	(void)cleanup;
+	(void)user;
+	if (out)
+		*out = NULL;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+void hx_os_coro_local_key_retain(hx_os_coro_local_key *key)
+{
+	(void)key;
+}
+void hx_os_coro_local_key_release(hx_os_coro_local_key *key)
+{
+	(void)key;
+}
+void *hx_os_coro_local_get(hx_os_coro_local_key *key)
+{
+	(void)key;
+	return NULL;
+}
+hx_os_status hx_os_coro_local_set(
+	hx_os_coro_local_key *key, void *value, hx_os_error *error)
+{
+	(void)key;
+	(void)value;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+void hx_os_coro_sync_retain(hx_os_coro_sync *sync)
+{
+	(void)sync;
+}
+
+void hx_os_coro_sync_release(hx_os_coro_sync *sync)
+{
+	(void)sync;
+}
+
+hx_os_status hx_os_coro_sync_close(hx_os_coro_sync *sync, hx_os_error *error)
+{
+	(void)sync;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_coro_mutex_create(
+	hx_os_coro_runtime *runtime, hx_os_coro_mutex **out, hx_os_error *error)
+{
+	(void)runtime;
+	if (out)
+		*out = NULL;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_coro_mutex_lock_until(
+	hx_os_coro_mutex *mutex, hx_os_deadline deadline, hx_os_error *error)
+{
+	(void)mutex;
+	(void)deadline;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_coro_mutex_unlock(
+	hx_os_coro_mutex *mutex, hx_os_error *error)
+{
+	(void)mutex;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_coro_semaphore_create(hx_os_coro_runtime *runtime,
+	size_t initial, size_t maximum, hx_os_coro_semaphore **out,
+	hx_os_error *error)
+{
+	(void)runtime;
+	(void)initial;
+	(void)maximum;
+	if (out)
+		*out = NULL;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_coro_semaphore_wait_until(hx_os_coro_semaphore *semaphore,
+	hx_os_deadline deadline, hx_os_error *error)
+{
+	(void)semaphore;
+	(void)deadline;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_coro_semaphore_post(
+	hx_os_coro_semaphore *semaphore, size_t count, hx_os_error *error)
+{
+	(void)semaphore;
+	(void)count;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_coro_event_create(hx_os_coro_runtime *runtime,
+	int manual_reset, int initially_set, hx_os_coro_event **out,
+	hx_os_error *error)
+{
+	(void)runtime;
+	(void)manual_reset;
+	(void)initially_set;
+	if (out)
+		*out = NULL;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_coro_event_wait_until(
+	hx_os_coro_event *event, hx_os_deadline deadline, hx_os_error *error)
+{
+	(void)event;
+	(void)deadline;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_coro_event_set(hx_os_coro_event *event, hx_os_error *error)
+{
+	(void)event;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_coro_event_reset(hx_os_coro_event *event, hx_os_error *error)
+{
+	(void)event;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_coro_rwlock_create(hx_os_coro_runtime *runtime,
+	hx_os_coro_rwlock **out, hx_os_error *error)
+{
+	(void)runtime;
+	if (out)
+		*out = NULL;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_coro_rwlock_read_until(
+	hx_os_coro_rwlock *lock, hx_os_deadline deadline, hx_os_error *error)
+{
+	(void)lock;
+	(void)deadline;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_coro_rwlock_write_until(
+	hx_os_coro_rwlock *lock, hx_os_deadline deadline, hx_os_error *error)
+{
+	(void)lock;
+	(void)deadline;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_coro_rwlock_read_unlock(
+	hx_os_coro_rwlock *lock, hx_os_error *error)
+{
+	(void)lock;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_coro_rwlock_write_unlock(
+	hx_os_coro_rwlock *lock, hx_os_error *error)
+{
+	(void)lock;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_coro_condition_create(hx_os_coro_runtime *runtime,
+	hx_os_coro_condition **out, hx_os_error *error)
+{
+	(void)runtime;
+	if (out)
+		*out = NULL;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_coro_condition_wait_until(hx_os_coro_condition *condition,
+	hx_os_coro_mutex *mutex, hx_os_deadline deadline, hx_os_error *error)
+{
+	(void)condition;
+	(void)mutex;
+	(void)deadline;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_coro_condition_notify_one(
+	hx_os_coro_condition *condition, hx_os_error *error)
+{
+	(void)condition;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_coro_condition_notify_all(
+	hx_os_coro_condition *condition, hx_os_error *error)
+{
+	(void)condition;
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }

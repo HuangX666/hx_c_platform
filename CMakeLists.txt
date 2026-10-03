@@ -6,11 +6,13 @@ include(CMakePackageConfigHelpers)
 include(CheckSymbolExists)
 include(CheckCSourceCompiles)
 include(cmake/HxWarnings.cmake)
+include(cmake/HxFormat.cmake)
 
 option(BUILD_SHARED_LIBS "Build shared library" OFF)
 option(HX_OS_BUILD_TESTS "Build contract tests" ON)
 option(HX_OS_BUILD_EXAMPLES "Build standalone C examples" ON)
 option(HX_OS_BUILD_BENCHMARKS "Build development microbenchmarks" OFF)
+option(HX_OS_TEST_FORMAT_SYNTAX "Test optional host format generator" OFF)
 option(HX_OS_ENABLE_NETWORK "Build native networking" ON)
 option(HX_OS_ENABLE_LOOP "Build asynchronous event loop" ON)
 option(HX_OS_ENABLE_THREAD_POOL "Build bounded task pools" ON)
@@ -23,6 +25,7 @@ option(HX_OS_ENABLE_COROUTINES "Build bounded cooperative coroutines" ON)
 option(HX_OS_ENABLE_STACKFUL_COROUTINES "Build native stack switching" ON)
 option(HX_OS_ENABLE_COROUTINE_IO "Build coroutine I/O adapters" ON)
 option(HX_OS_ENABLE_VARIANT "Build owned variant values and custom types" ON)
+option(HX_OS_ENABLE_FORMAT "Build typed UTF-8 brace formatting and printing" ON)
 option(HX_OS_ENABLE_SYSINFO "Build native system information" ON)
 option(HX_OS_ENABLE_LIBRARY "Build native dynamic library loading" ON)
 option(HX_OS_ENABLE_FILE_UTILS "Build file and path conveniences" ON)
@@ -230,7 +233,7 @@ configure_file(cmake/hx_os_config.h.in
 add_library(hx_c_platform
 	src/base.c src/atomic.c src/time.c src/unicode.c src/thread.c
 	src/convenience.c src/lexer.c src/wide.c src/wait.c src/string.c
-	src/string_utils.c src/file.c src/text.c src/optional.c
+	src/string_utils.c src/format.c src/file.c src/text.c src/optional.c
 	src/config.c src/config_values.c
 	src/containers.c src/variant.c src/file_search.c
 	src/sysinfo.c src/library.c src/path.c src/env.c src/paths.c
@@ -247,10 +250,19 @@ add_library(hx_c_platform
 	src/profiler.c
 	${hx_parser_sources} ${hx_parser_objects}
 	${hx_platform_sources})
+if(HX_OS_ENABLE_FORMAT)
+	target_sources(hx_c_platform PRIVATE src/format_value.c)
+	if(WIN32)
+		target_sources(hx_c_platform PRIVATE
+			src/windows/format_native.c)
+	else()
+		target_sources(hx_c_platform PRIVATE src/posix/format_native.c)
+	endif()
+endif()
 if(HX_OS_ENABLE_COROUTINES)
 	target_sources(hx_c_platform PRIVATE src/coroutine.c
 		src/coroutine_channel.c src/coroutine_io.c
-		src/coroutine_stream.c)
+		src/coroutine_stream.c src/coroutine_sync.c)
 	if(HX_OS_ENABLE_STACKFUL_COROUTINES)
 		if(WIN32)
 			target_sources(hx_c_platform PRIVATE
@@ -597,6 +609,7 @@ write_basic_package_version_file(
 	${CMAKE_CURRENT_BINARY_DIR}/hx_c_platformConfigVersion.cmake
 	VERSION ${PROJECT_VERSION} COMPATIBILITY SameMinorVersion)
 install(FILES
+	cmake/HxFormat.cmake tools/hx_format_codegen.py
 	${CMAKE_CURRENT_BINARY_DIR}/hx_c_platformConfig.cmake
 	${CMAKE_CURRENT_BINARY_DIR}/hx_c_platformConfigVersion.cmake
 	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/hx_c_platform)

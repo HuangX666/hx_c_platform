@@ -1573,6 +1573,7 @@ All new native/common modules default to ON; optional third-party encoding and p
 | `HX_OS_ENABLE_ICONV` | OFF | Build legacy text encoding adapter |
 | `HX_OS_ENABLE_CONFIG` | ON | Build configuration file parsers |
 | `HX_OS_ENABLE_CONTAINERS` | ON | Build generic C containers |
+| `HX_OS_ENABLE_FORMAT` | ON | UTF-8 brace formatting and printing; [guide](FORMAT.md) |
 | `HX_OS_ENABLE_VARIANT` | ON | Build owned variant values and custom structures |
 | `HX_OS_ENABLE_SYSINFO` | ON | Build native system information |
 | `HX_OS_ENABLE_LIBRARY` | ON | Build native dynamic library loading |

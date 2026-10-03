@@ -4,7 +4,7 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 	random_uuid mapped_file file_attributes watch_directory capture_process
 	delayed_task duplex_message obfuscated_string localized_time
 	signal_notifications settings profile_intervals atomic_publication
-	common_tasks variant find_files coroutine ordered_map)
+	common_tasks variant find_files coroutine ordered_map format)
 	add_executable(hx_os_${example} ${example}.c)
 	target_link_libraries(hx_os_${example} PRIVATE hx_c_platform)
 	set_target_properties(hx_os_${example} PROPERTIES
@@ -13,6 +13,8 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 	hx_apply_warnings(hx_os_${example})
 endforeach()
 if(HX_OS_BUILD_TESTS)
+	add_test(NAME format_example COMMAND hx_os_format)
+	set_tests_properties(format_example PROPERTIES TIMEOUT 20)
 	add_test(NAME ordered_map_example COMMAND hx_os_ordered_map)
 	set_tests_properties(ordered_map_example PROPERTIES TIMEOUT 20)
 	add_test(NAME coroutine_example COMMAND hx_os_coroutine)
@@ -24,6 +26,20 @@ if(HX_OS_BUILD_TESTS)
 	add_test(NAME atomic_publication_example
 		COMMAND hx_os_atomic_publication)
 	set_tests_properties(atomic_publication_example PROPERTIES TIMEOUT 20)
+endif()
+if(HX_OS_TEST_FORMAT_SYNTAX)
+	add_executable(hx_os_format_syntax format_syntax.c)
+	target_link_libraries(hx_os_format_syntax PRIVATE hx_c_platform)
+	set_target_properties(hx_os_format_syntax PROPERTIES
+		C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+	hx_apply_warnings(hx_os_format_syntax)
+	hx_enable_format_syntax(hx_os_format_syntax SOURCES format_syntax.c)
+	if(HX_OS_BUILD_TESTS)
+		add_test(NAME format_syntax_example COMMAND hx_os_format_syntax)
+		set_tests_properties(format_syntax_example
+			PROPERTIES TIMEOUT 20)
+	endif()
 endif()
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_FILE_UTILS
 		AND HX_OS_ENABLE_SYSTEM_UTILS)
@@ -155,6 +171,16 @@ if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_PROFILER)
 	set_tests_properties(profile_intervals_example PROPERTIES TIMEOUT 20)
 endif()
 if(CMAKE_CXX_COMPILER_LOADED)
+	add_executable(hx_os_go go.cpp)
+	target_link_libraries(hx_os_go PRIVATE hx_c_platform::cpp)
+	set_target_properties(hx_os_go PROPERTIES
+		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+	hx_apply_warnings(hx_os_go)
+	if(HX_OS_BUILD_TESTS)
+		add_test(NAME go_example COMMAND hx_os_go)
+		set_tests_properties(go_example PROPERTIES TIMEOUT 20)
+	endif()
 	add_executable(hx_os_cpp_coroutine coroutine.cpp)
 	target_link_libraries(hx_os_cpp_coroutine PRIVATE hx_c_platform::cpp)
 	set_target_properties(hx_os_cpp_coroutine PROPERTIES

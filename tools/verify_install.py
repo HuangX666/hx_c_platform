@@ -16,6 +16,7 @@ def main():
     parser.add_argument("--config", default="Debug")
     parser.add_argument("--cmake", default="cmake")
     parser.add_argument("--ctest", default="ctest")
+    parser.add_argument("--format-clang")
     arguments = parser.parse_args()
     build = arguments.build_directory.resolve()
     root = Path(__file__).resolve().parents[1]
@@ -44,6 +45,9 @@ def main():
     ):
         if cache.get(key):
             command.extend([flag, cache[key]])
+    if arguments.format_clang:
+        command += ["-DHX_CONSUMER_FORMAT_SYNTAX=ON",
+                    "-DHX_FORMAT_CLANG=" + arguments.format_clang]
     run(command)
     run([
         arguments.cmake, "--build", str(consumer),

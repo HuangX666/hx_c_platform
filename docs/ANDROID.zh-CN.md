@@ -35,7 +35,7 @@ adb devices -l
 python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --serial DEVICE_SERIAL
 ~~~
 
-可用 --adb 指定 adb 绝对路径。脚本核对目标 ABI/API，在新建的 /data/local/tmp/hx_c_platform-随机值 目录上传本次构建的文件，仅为本次进程设置 LD_LIBRARY_PATH，运行以下 20 组：
+可用 --adb 指定 adb 绝对路径。脚本核对目标 ABI/API，在新建的 /data/local/tmp/hx_c_platform-随机值 目录上传本次构建的文件，仅为本次进程设置 LD_LIBRARY_PATH，运行以下 25 组：
 
 | 测试 | 重点 |
 | --- | --- |
@@ -56,6 +56,8 @@ python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --ser
 | containers / stl | 红黑树/AVL/重复键不变量、遍历、排序、筛选、splice 和集合运算 |
 | coroutine / coroutine_io | 有栈/无栈调度、浮点状态、channel/select、准备失败回滚、关闭重试、TCP/DNS/管道和取消 |
 | cpp_coroutine / cpp_coroutine20 | 无异常 C++11 go、C++20 帧/局部变量、等待和取消后的析构 |
+| coroutine_sync / cpp_go11 / cpp_go20 | 自动持有任务、错误汇总、拥有值 channel、协程锁、条件变量取消和局部值清理 |
+| format / cpp_format | UTF-8 类型化格式化、自定义值、失败时保持输出、分配释放 |
 
 另运行 hx_os_portable_baseline，记录原子、ASCII、宽位換算、命名过程、精细等待观察值，没有固定时间阈值。ADB 只负责部署和控制。记录 NDK、源码版本及是否有未提交修改、ABI/API、设备型号/指纹/API、模拟器标记和每项输出。清理只移除确切上传文件，不递归删除目录；失败夹保留排查。ADB 超时可能留下目标进程，保留目录并报告，不强杀。性能采样需记录负载、温度、调频状态并重复多轮。
 
@@ -121,3 +123,7 @@ API 21 的 arm64-v8a、armeabi-v7a 完整/最小共享配置均编译通过。AR
 ARM64 共享程序最初无法通过 LD_LIBRARY_PATH 找到本库；加入程序自身目录的 RUNPATH 后，两组共享配置及最小配置通过。该路径机制在 API 24 起可用，参阅 [Android 动态链接器说明](https://android.googlesource.com/platform/bionic/+/refs/heads/android15-tests-release/android-changes-for-ndk-developers.md)。 ARM64 是翻译执行，性能数据含翻译和虚拟化开销，不代表 ARM 硬件性能。模拟器未提供 ARMv7 ABI，该配置在部署前明确跳过，未伪装运行成功。编译最低 API 21 并不代表在 Android 5.0 系统运行过；旧系统、ARMv7、真实 ARM 设备和应用沙箱权限仍需对应环境验证。
 
 原始报告分别位于 build-android-emulator/report.json、build-android/report.json、 build-android/report-minimal.json、build-android-static/report.json，每个配置目录内 run-*.log 保存程序实际输出。 CI 已加入固定 NDK 矩阵和 API 21 最小配置，尚无远程执行证据。
+
+## 2026-10-03 新增验证范围
+
+C 自动语法生成器只在宿主运行，已单独在 Windows／MSVC 和 WSL／GCC 中验证，包括安装后消费。安卓测试运行不依赖生成器的 C99 格式化核心和无异常 C++ 包装。核心交叉编译成功不等于任意应用源文件已经通过特定 Android sysroot 的生成分析。此次协程／格式化增量的真实 ABI 和系统运行证据见[验证记录](VALIDATION.zh-CN.md)。

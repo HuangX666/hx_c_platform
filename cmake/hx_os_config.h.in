@@ -65,5 +65,6 @@
 #cmakedefine01 HX_OS_ENABLE_STACKFUL_COROUTINES
 #cmakedefine01 HX_OS_ENABLE_COROUTINE_IO
 #cmakedefine01 HX_OS_ENABLE_VARIANT
+#cmakedefine01 HX_OS_ENABLE_FORMAT
 
 #endif
