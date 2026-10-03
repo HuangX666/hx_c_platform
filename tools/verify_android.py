@@ -17,6 +17,7 @@ SUITES = (
     "file_search", "containers", "stl", "coroutine", "coroutine_io",
     "cpp_coroutine", "cpp_coroutine20",
     "coroutine_sync", "cpp_go11", "cpp_go20", "format", "cpp_format",
+    "kcp", "ipc", "lifecycle",
 )
 
 
@@ -66,7 +67,8 @@ def device_run(args, build, abi, api, record):
         record["runtime"] = "skipped: target ABI/API is incompatible"
         return
     remote = "/data/local/tmp/hx_c_platform-" + uuid.uuid4().hex
-    binaries = [build / "bin" / f"hx_os_test_{suite}" for suite in SUITES]
+    binaries = [build / "bin" / f"hx_os_test_{suite}"
+                for suite in (args.suite or SUITES)]
     binaries.append(build / "bin" / "hx_os_portable_baseline")
     files = list(binaries)
     if not args.static:
@@ -95,6 +97,12 @@ def device_run(args, build, abi, api, record):
             run([args.adb, "-s", args.serial, "shell", command],
                 build / ("run-" + path.name + ".log"), 60)
             record["tests"][path.name] = "passed"
+            notes = [line for line in
+                     (build / ("run-" + path.name + ".log")).read_text(
+                         encoding="utf-8", errors="replace").splitlines()
+                     if line.startswith("SKIP ")]
+            if notes:
+                record.setdefault("test_notes", {})[path.name] = notes
         record["runtime"] = (
             "passed on emulator" if info["ro.kernel.qemu"] == "1"
             else "passed on adb target; verify physical-device provenance"
@@ -128,6 +136,8 @@ def main():
                         action="append",
                         help="x86_64 supplements the two ARM baselines")
     parser.add_argument("--api", type=int, action="append")
+    parser.add_argument("--suite", choices=SUITES, action="append",
+                        help="Run selected suites; default runs all suites")
     parser.add_argument("--minimal", action="store_true")
     parser.add_argument("--static", action="store_true")
     parser.add_argument("--serial", help="Explicit adb device/emulator serial")
@@ -154,6 +164,7 @@ def main():
         "dirty": bool(subprocess.check_output(
             ["git", "status", "--porcelain"], cwd=ROOT, text=True).strip()),
         "results": [],
+        "suites": args.suite or list(SUITES),
     }
     try:
         for api in apis:

@@ -196,6 +196,14 @@ hx_os_status hx_os_i_pipe_attach(
 	hx_os_loop *loop, hx_os_pipe *pipe, hx_os_error *error)
 {
 #if defined(_WIN32)
+	/* Duplicate pipe handles share the underlying IOCP association. The
+	 * owning endpoint attaches its reader before submitting writer I/O.
+	 */
+	if (pipe->association)
+		return hx_os_i_error(error,
+			pipe->association->loop == loop ? HX_OS_OK
+							: HX_OS_INVALID,
+			0, 0);
 	if (!CreateIoCompletionPort(pipe->native, loop->port, 0, 0))
 		return hx_os_i_win32(error, GetLastError());
 #else

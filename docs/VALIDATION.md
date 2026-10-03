@@ -6,7 +6,57 @@ Entries below describe the versions tested at the time. Historical C++ exception
 
 This records development validation through 2026-10-03. A design, implemented adapter, successful compile and successful target run are different states. Local tests do not certify every operating-system release, filesystem, CPU, libc or network provider.
 
-The simple-go/format entry records the current addition. The containers/coroutines entry describes its earlier baseline. Recursive search, variant, onboarding documentation, common-call refinement, Result migration, earlier Final delivery matrix and batch checkpoints describe their original versions.
+The IPC/KCP entry records the current addition. Simple go, formatting, containers, recursive search, variant and earlier batch entries describe their respective historical versions.
+
+## 2026-10-03: Local IPC, KCP and runnable examples
+
+Source baseline `ec51a1e`, developed on local `dev`. This adds C99 IPC entry points, an exception-free C++11 facade and a private KCP v1 adapter. Windows named pipes and POSIX Unix domain sockets share message/session logic; TCP, ordinary UDP and KCP retain distinct delivery contracts. See the [IPC tutorial](IPC.md) for direct calls and the language-independent wire protocol.
+
+| Configuration | Evidence |
+| --- | --- |
+| Windows MSVC x64 Release shared | Full CTest 113/113; final IPC/KCP/separate-process/TLS-lifetime subset 4/4 |
+| WSL Linux GCC x86_64 Release shared | Full CTest 115/115; final related subset 4/4 |
+| Standalone C99/C++11 public headers | Compiled on Windows x64/x86, WSL and Android ARM64/ARMv7; C++ exceptions disabled |
+| Installed shared consumers on Windows and WSL | Each host: C/C++ 23/23 and pure C 14/14, including IPC/KCP; KCP license installed |
+| Windows MSVC x86 Debug static | IPC/KCP 2/2; installed C/C++ 22/22 and pure C 13/13 |
+| WSL ASan + UBSan with leak detection | IPC, KCP and separate-process examples 3/3 |
+| WSL TSan | Same three suites 3/3, no race reported |
+| IPC/KCP disabled | Build and two unsupported-behavior suites pass |
+| Minimal profile with only KCP enabled | C99 headers, KCP engine and unsupported IPC pass without NETWORK/LOOP |
+| IPC enabled; KCP, PIPE and NET_OPTIONS disabled | Linux build and 2/2 suites; TCP/UDP/Unix remain usable |
+| Android NDK r28c, minimum API 21, ARM64 | Full build; 28 suites and portable benchmark on API 34 x86_64 emulator through ARM translation |
+| Android NDK r28c, minimum API 21, ARMv7 | Full cross-build; selected emulator has no matching ABI, no run |
+| Shared exports | Windows/Linux both match 833 public functions, with no extra HX private exports |
+| Old headers with current shared library | `7cf52fc` headers/consumers pass 10/10 on both Windows and WSL |
+
+Android TCP/UDP/KCP subcases pass. The selected emulator's SELinux `sock_file create` policy rejects shell pathname Unix socket creation with EACCES. That subcase is explicitly SKIP, retained in report `test_notes`; security policy and device privileges were not changed. The emulator instance created for this run was stopped. This is not evidence of Android 5.0 hardware, an APK sandbox, ARMv7 execution, macOS, Win7/8.1 or embedded-board execution.
+
+A parallel Windows full run, while the host was building and running an emulator, encountered one existing `coroutine` test's five-second wait failure. Its isolated rerun passed, followed by a complete serial 113/113 run. Neither the test deadline nor coroutine implementation was altered to hide the initial failure. This does not prove coroutine scheduling under every load; the IPC tutorial explicitly uses ordinary threads and makes no coroutine-suspension claim for synchronous IPC calls.
+
+IPC tests cover Chinese/supplementary Unicode, empty and 40 KB binary messages, simultaneous requests in both directions, four shared callers with replies sent in reverse order, multiple-peer isolation, listener restart/new sessions, stale-peer rejection, deadlines/late replies, inbox capacity and recovery, immediate close followed by retry, waking active callers, 32 creation-allocation failure positions and zero retained context allocations. The process driver launches real C servers and C/C++ clients. Its independent Python peer checks split headers, coalesced frames, oversized/truncated bodies and delayed old UDP HELLO/data with a reused business request ID.
+
+KCP synthetic links deliberately lose, duplicate and reorder traffic while delivering 100 messages in each direction across the 32-bit clock rollover. Other checks cover 64 KiB messages, malformed packets, queue bounds and continued operation with further context allocation forbidden after creation. All three upstream SHA256 values match the pin; vendor sources remain unchanged. Windows pipe tests exposed/fixed duplicate-handle IOCP reassociation, separate-process KCP exposed/fixed unsent protocol acknowledgements during immediate client completion, and Linux restart tests drove listener address reuse handling.
+
+Android previously lacked finite native join. The new Bionic adapter polls public `pthread_gettid_np` for a kernel-cleared ID before reclaiming a library-owned, unjoined thread. The existing `lifecycle` test confirms timeout/retention while a TLS destructor blocks, then successful retry after releasing it. It does not substitute a flag at the end of the user function for native thread termination.
+
+### Memory, layout and performance limits
+
+Each endpoint has one I/O worker and separate bounds for peers, business queues, pending calls, control queues and KCP storage. TCP/local endpoints allocate neither the UDP packet buffer nor the KCP reassembly buffer. KCP reserves engine storage at creation; IPC messages and asynchronous operations still allocate. Sends and waits use an endpoint mutex; business threads do not hold it while remote business work executes. KCP adds timer wakeups/retransmission costs. These are correctness/resource-lifetime results, not claims of zero allocations, locks or copies, superiority to TCP/ZeroMQ, or a device-workload throughput/latency threshold.
+
+Measured `hx_os_layout_report` size/alignment, in bytes; array stride equals size:
+
+| Object | MSVC x64 | MSVC x86 | Linux x86_64 |
+| --- | --- | --- | --- |
+| `hx_ipc_message` | 72 / 8 | 64 / 8 | 72 / 8 |
+| `hx_ipc_options` | 72 / 8 | 48 / 4 | 72 / 8 |
+| `hx_ipc_statistics` | 56 / 8 | 48 / 8 | 56 / 8 |
+| `hx_os_kcp_options` | 32 / 8 | 28 / 4 | 32 / 8 |
+| Private IPC endpoint metadata | 504 / 8 | 344 / 8 | 528 / 8 |
+| Private per-peer metadata and 4 KiB input buffer | 4440 / 8 | 4376 / 8 | 4440 / 8 |
+
+Existing public structure layouts are preserved. The private Windows pipe adds one association pointer. Passing sanitizers, zero context counts and layout measurements are not a proof of no possible leak or improved speed. Caller-held messages, compiler TLS, native stacks and socket buffers are separate costs. Before plugin unload, retire endpoints and threads that may still execute library code/TLS cleanup.
+
+Ignored logs: `build-shared-{msvc,linux}/ipc-*.log`, `build-win32/ipc-*.log`, `build-sanitize-linux/ipc-final-tests.log`, `build-tsan-linux/ipc-final-tests.log`. Android snapshots: `build-android/report-ipc-arm64.json` and `report-ipc-armv7.json`. The final shared-code Android baseline/KCP/IPC/lifecycle subset and benchmark also pass, recorded in `report-ipc-final-arm64.json`; per-program logs remain in their configuration directories. Changed first-party UTF-8/no-BOM/LF files, 80-column source rules and local documentation links were checked; Markdown prose is not forcibly wrapped into short lines.
 
 ## 2026-10-03: Simple go calls and brace formatting
 

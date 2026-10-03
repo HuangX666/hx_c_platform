@@ -40,8 +40,11 @@ static void test_thread_baseline(void)
 				? HX_OS_TIMEOUT
 				: HX_OS_NOT_SUPPORTED));
 	hx_os_event_set(state.release);
-	CHECK(hx_os_thread_join_until(thread, HX_OS_DEADLINE_INFINITE, &result,
-		      NULL) == HX_OS_OK &&
+	CHECK(hx_os_thread_join_until(thread,
+		      (hx_os_capabilities() & HX_OS_CAP_TIMED_JOIN)
+			      ? hx_os_deadline_after_ms(5000)
+			      : HX_OS_DEADLINE_INFINITE,
+		      &result, NULL) == HX_OS_OK &&
 		result == &state);
 	CHECK(hx_os_atomic_load(&state.destroyed, HX_OS_ACQUIRE) == 1);
 	CHECK(hx_os_thread_destroy(&thread, NULL) == HX_OS_OK);
@@ -83,7 +86,7 @@ int main(void)
 	printf("android_build_api=%d (runtime API is recorded by adb runner)\n",
 		__ANDROID_API__);
 	CHECK(!strcmp(hx_os_platform_name(), "Android"));
-	CHECK(!(hx_os_capabilities() & HX_OS_CAP_TIMED_JOIN));
+	CHECK(hx_os_capabilities() & HX_OS_CAP_TIMED_JOIN);
 #if __ANDROID_API__ < 28
 	CHECK(!(hx_os_capabilities() & HX_OS_CAP_PROCESS));
 #endif

@@ -14,6 +14,8 @@ option(HX_OS_BUILD_EXAMPLES "Build standalone C examples" ON)
 option(HX_OS_BUILD_BENCHMARKS "Build development microbenchmarks" OFF)
 option(HX_OS_TEST_FORMAT_SYNTAX "Test optional host format generator" OFF)
 option(HX_OS_ENABLE_NETWORK "Build native networking" ON)
+option(HX_OS_ENABLE_KCP "Build bounded reliable UDP protocol adapter" ON)
+option(HX_OS_ENABLE_IPC "Build local full-duplex message endpoints" ON)
 option(HX_OS_ENABLE_LOOP "Build asynchronous event loop" ON)
 option(HX_OS_ENABLE_THREAD_POOL "Build bounded task pools" ON)
 option(HX_OS_ENABLE_DELAYED_TASKS "Build bounded delayed pool tasks" ON)
@@ -144,7 +146,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR ANDROID OR
 			message(FATAL_ERROR
 				"Monotonic pthread conditions required")
 		endif()
-		if(NOT HX_OS_HAVE_PTHREAD_TRYJOIN)
+		if(NOT HX_OS_HAVE_PTHREAD_TRYJOIN AND NOT ANDROID)
 			set(HX_OS_HAVE_TIMED_JOIN 0)
 		endif()
 	endif()
@@ -227,6 +229,11 @@ if(NOT HX_OS_ENABLE_LOOP OR NOT HX_OS_ENABLE_NETWORK)
 	set(HX_OS_ENABLE_COROUTINE_IO OFF)
 endif()
 
+set(HX_OS_HAVE_IPC 0)
+if(HX_OS_ENABLE_IPC AND HX_OS_ENABLE_NETWORK AND HX_OS_ENABLE_LOOP
+		AND HX_OS_ENABLE_RANDOM)
+	set(HX_OS_HAVE_IPC 1)
+endif()
 configure_file(cmake/hx_os_config.h.in
 	${CMAKE_CURRENT_BINARY_DIR}/private/hx_os_config.h)
 
@@ -470,6 +477,41 @@ if(HX_OS_ENABLE_LOOP)
 	target_sources(hx_c_platform PRIVATE src/loop.c)
 endif()
 add_library(hx_c_platform::hx_c_platform ALIAS hx_c_platform)
+target_sources(hx_c_platform PRIVATE src/kcp.c src/ipc.c)
+if(HX_OS_HAVE_IPC)
+	target_sources(hx_c_platform PRIVATE src/ipc_wire.c src/ipc_io.c)
+	if(WIN32)
+		target_sources(hx_c_platform PRIVATE src/windows/ipc_native.c)
+		target_link_libraries(hx_c_platform PRIVATE advapi32)
+	else()
+		target_sources(hx_c_platform PRIVATE src/posix/ipc_native.c)
+	endif()
+endif()
+if(HX_OS_ENABLE_KCP)
+	set(hx_kcp_revision "8004f7eba5d1bf33f0691eef5f887f2cd3140cb5")
+	set(hx_kcp_source "${PROJECT_SOURCE_DIR}/third_party/kcp")
+	set(hx_kcp_source "${hx_kcp_source}/${hx_kcp_revision}")
+	add_library(hx_kcp_vendor OBJECT src/kcp_vendor.c)
+	set_target_properties(hx_kcp_vendor PROPERTIES
+		C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO
+		C_VISIBILITY_PRESET hidden POSITION_INDEPENDENT_CODE ON)
+	target_include_directories(hx_kcp_vendor SYSTEM PRIVATE
+		"${hx_kcp_source}")
+	target_include_directories(hx_c_platform SYSTEM PRIVATE
+		"${hx_kcp_source}")
+	target_sources(hx_c_platform PRIVATE $<TARGET_OBJECTS:hx_kcp_vendor>)
+	if(MSVC)
+		target_compile_definitions(hx_kcp_vendor PRIVATE
+			_CRT_SECURE_NO_WARNINGS)
+	endif()
+	if(HX_OS_SANITIZER AND NOT MSVC)
+		target_compile_options(hx_kcp_vendor PRIVATE
+			-fsanitize=${HX_OS_SANITIZER} -fno-omit-frame-pointer)
+	endif()
+	install(FILES "${hx_kcp_source}/LICENSE"
+		DESTINATION ${CMAKE_INSTALL_DATADIR}/hx_c_platform/licenses
+		RENAME kcp-LICENSE)
+endif()
 add_library(hx_c_platform_cpp INTERFACE)
 add_library(hx_c_platform::cpp ALIAS hx_c_platform_cpp)
 set_target_properties(hx_c_platform_cpp PROPERTIES EXPORT_NAME cpp)

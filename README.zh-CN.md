@@ -1,6 +1,6 @@
 # hx_c_platform
 
-[![CI 配置][ci-badge]](.github/workflows/build.yml) [![C99 核心][c-badge]](CMakeLists.txt) [![C++11 封装][cpp-badge]](docs/CPP_POOL.zh-CN.md) [![仅 C++ 封装为 header-only][header-badge]](docs/CPP_POOL.zh-CN.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![自有代码许可证待定][license-badge]](THIRD_PARTY_NOTICES.zh-CN.md) [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md) [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md) [![本地 Windows 110/110、Linux 112/112 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md) [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md) [![Android API 21 ARM 交叉编译通过][android-badge]](docs/ANDROID.zh-CN.md)
+[![CI 配置][ci-badge]](.github/workflows/build.yml) [![C99 核心][c-badge]](CMakeLists.txt) [![C++11 封装][cpp-badge]](docs/CPP_POOL.zh-CN.md) [![仅 C++ 封装为 header-only][header-badge]](docs/CPP_POOL.zh-CN.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![自有代码许可证待定][license-badge]](THIRD_PARTY_NOTICES.zh-CN.md) [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md) [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md) [![本地 Windows 113/113、Linux 115/115 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md) [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md) [![Android API 21 ARM 交叉编译通过][android-badge]](docs/ANDROID.zh-CN.md)
 
 [English](README.md) · [常用任务教程](docs/USAGE.zh-CN.md) · [详细参考](docs/REFERENCE.zh-CN.md)
 
@@ -345,6 +345,22 @@ hx_os_status status = HX_FPRINTLN("{user.name}: {price * count:.2f}");
 
 需要有序键或重复键时，[红黑树 multimap 示例](examples/ordered_map.c) 与[容器说明](docs/CONTAINERS.zh-CN.md) 包含有序遍历、排序、筛选、链表 splice 和集合运算。
 
+### 4.11 和另一个进程通信：C / C++
+
+先在一个终端运行 `hx_os_ipc_server local://demo 1`，再在另一个终端运行 `hx_os_ipc_client local://demo`。客户端会输出 `Reply: Hello from C`，服务端处理一条消息后退出。[IPC 教程](docs/IPC.zh-CN.md) 给出了完整的 Windows/Linux 构建命令和可直接运行的程序。
+
+客户端创建好 `connection` 后，C++11 发送请求并取得对应回复只需：
+
+```cpp
+auto reply = connection.requestText("读取设备状态", 7);
+if (reply)
+	std::printf("Reply: %s\n", reply.value().text());
+```
+
+`7` 是应用定义的设备编号；每次请求的编号由库自动管理。C 对应使用 `hx_ipc_request_text` 或带设备编号的 `hx_ipc_request_text_until`。收发都按完整消息处理，不需要自己拼半包或给多线程发送加锁。
+
+`local://` 使用 Windows 命名管道或 Unix 域套接字；也可以选择 `tcp://127.0.0.1:端口`、普通 `udp://` 或带可靠传送的 `kcp://`。[四线程共享连接示例](examples/ipc_threads.cpp) 和[独立 Python 对端](examples/ipc_python.py) 都有配套自动测试。超时、队列满、断开仍需要检查结果，连接需要显式关闭；本版 IPC 等待使用普通线程。
+
 <a id="section-5"></a>
 
 ## 5. 先记住的几条规则
@@ -362,6 +378,7 @@ hx_os_status status = HX_FPRINTLN("{user.name}: {price * count:.2f}");
 
 | 想做什么 | 先看哪里 |
 | --- | --- |
+| 进程通信、双向消息、多线程、其他语言对端 | [IPC 教程与协议](docs/IPC.zh-CN.md) |
 | 花括号格式化、C 自动实参与表达式 | [格式化教程](docs/FORMAT.zh-CN.md) |
 | 文本、配置、容器和线程池的完整程序 | [常用任务教程](docs/USAGE.zh-CN.md) |
 | 在多层目录中查找文件、后台扫描 | [递归查找教程](docs/FILE_SEARCH.zh-CN.md) |
@@ -378,7 +395,7 @@ hx_os_status status = HX_FPRINTLN("{user.name}: {price * count:.2f}");
 
 ## 7. 构建、验证与项目许可
 
-开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。当前代码的本地全量测试记录为 Windows 110/110、WSL Linux 112/112；具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
+开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。当前代码的本地全量测试记录为 Windows 113/113、WSL Linux 115/115；具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
 
 自有代码的发布许可证尚未确定，第三方许可证见[许可说明](THIRD_PARTY_NOTICES.zh-CN.md)。协程使用自研实现；hx_c_log 接入仍属于后续工作。
 
@@ -391,6 +408,6 @@ hx_os_status status = HX_FPRINTLN("{user.name}: {price * count:.2f}");
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%20110%2F110%20Linux%20112%2F112-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%20113%2F113%20Linux%20115%2F115-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

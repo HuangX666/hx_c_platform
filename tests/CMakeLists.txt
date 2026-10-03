@@ -38,7 +38,7 @@ set(hx_test_suites data options lifecycle config containers sysinfo file_utils
 	settings settings_concurrency settings_config profiler atomic
 	string_tools lexer wide_wait catalog_filename procedure
 	android_baseline convenience variant file_search stl
-	coroutine coroutine_io coroutine_sync format)
+	coroutine coroutine_io coroutine_sync format kcp ipc)
 if(HX_OS_ENABLE_THREAD_POOL)
 	list(APPEND hx_test_suites pool)
 endif()
@@ -55,6 +55,8 @@ foreach(suite IN LISTS hx_test_suites)
 	add_test(NAME ${suite} COMMAND hx_os_test_${suite})
 	set_tests_properties(${suite} PROPERTIES TIMEOUT 20)
 endforeach()
+
+set_tests_properties(ipc PROPERTIES TIMEOUT 60)
 
 target_sources(hx_os_test_variant PRIVATE variant_fixture.c)
 if(HX_OS_TEST_FORMAT_SYNTAX)

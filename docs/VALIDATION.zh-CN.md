@@ -6,7 +6,57 @@
 
 本文记录截至 2026-10-03 的开发验证。设计覆盖、已有适配源码、编译成功、目标运行成功是不同状态。本机测试不能证明所有系统版本、文件系统、 CPU、libc 或网络提供方均已通过。
 
-当前新增能力见简洁 go／格式化记录，容器与协程条目保留之前的起点；递归文件查询、variant、入门文档、常用接口打磨、Result 迁移、此前最终交付矩阵与各批次记录对应各自原版本。
+当前新增能力见 IPC／KCP 记录；简洁 go、格式化、容器、递归文件查询、variant 和此前各批记录对应各自当时的版本。
+
+## 2026-10-03：本机 IPC、KCP 与可运行示例
+
+源码起点 `ec51a1e`，在本地 `dev` 开发。新增独立的 C99 IPC 入口、无异常 C++11 封装和私有 KCP v1 适配。Windows 命名管道和 POSIX Unix 域套接字共用消息/会话逻辑，TCP、普通 UDP 与 KCP 分别保持明确的交付语义。简明调用和跨语言协议见 [IPC 教程](IPC.zh-CN.md)。
+
+| 配置 | 本次证据 |
+| --- | --- |
+| Windows MSVC x64 Release，共享库 | 全量 CTest 113/113；最终 IPC/KCP/独立进程示例/TLS 生命周期 4/4 |
+| WSL Linux GCC x86_64 Release，共享库 | 全量 CTest 115/115；最终相关 4/4 |
+| C99/C++11 独立公共头 | Windows x64/x86、WSL、Android ARM64/ARMv7 编译；C++ 关闭异常 |
+| Windows 与 WSL 安装后消费共享库 | 两端各 C/C++ 23/23、纯 C 14/14，包含 IPC 和 KCP；KCP 许可证随安装交付 |
+| Windows MSVC x86 Debug，静态库 | IPC/KCP 2/2；安装后 C/C++ 22/22、纯 C 13/13 |
+| WSL ASan + UBSan，开启泄漏检测 | IPC、KCP 和独立进程示例 3/3 |
+| WSL TSan | 同三组 3/3，未报告竞态 |
+| IPC/KCP 全关 | 构建与两个不支持行为用例通过 |
+| 最小配置仅开启 KCP | C99 公共头、KCP 引擎和 IPC 不支持行为通过；不需要 NETWORK/LOOP |
+| 保留 IPC，关闭 KCP、PIPE、NET_OPTIONS | Linux 构建；IPC 及 KCP 关闭行为 2/2，TCP/UDP/Unix 继续工作 |
+| Android NDK r28c，最低 API 21，ARM64 | 完整构建；API 34 x86_64 模拟器经 ARM 转译运行 28 组套件及可移植基准 |
+| Android NDK r28c，最低 API 21，ARMv7 | 完整交叉编译；当前模拟器不支持此 ABI，未运行 |
+| 共享库符号 | Windows 与 Linux 都匹配 833 个公共函数声明，无额外 HX 私有导出 |
+| 旧头配合新共享库 | `7cf52fc` 头文件和消费者在 Windows/WSL 各通过 10/10 |
+
+Android IPC 的 TCP/UDP/KCP 子项通过；路径型 Unix socket 创建被所选模拟器 SELinux 的 `sock_file create` 策略拒绝，原生错误为 EACCES。此子项明确记为 SKIP，报告含 `test_notes`；没有关闭 SELinux、提升设备权限或把跳过写成运行成功。所创建的模拟器实例已停止。此轮未提供 Android 5.0 真机、APK 沙箱、ARMv7 运行、macOS、Win7/8.1 或嵌入式板卡结果。
+
+Windows 全量并行测试曾在宿主同时构建/运行模拟器时出现一次原有 `coroutine` 用例的 5 秒等待超时。单独复跑通过，随后全量串行 113/113；没有通过放宽用例期限或修改协程实现来掩盖初次失败。这不能证明所有负载下的协程调度都没有问题，IPC 教程因此明确使用普通线程，不声称这些同步接口会挂起协程。
+
+IPC 覆盖中文/补充平面字符、零长度与 40 KB 二进制消息、双方同时请求、四线程共享连接及反序回复、多连接隔离、进程端点重建与新会话、旧会话发送拒绝、请求超时和晚到回复、收件箱满后恢复、关闭立即超时后重试、关闭唤醒在途调用、32 个创建分配失败位置和最终 context 分配计数归零。独立进程脚本运行真正的 C 服务端与 C/C++ 客户端；Python 对端仅用标准库，验证分段头、合并帧、过长/未完成正文、延迟的旧 UDP HELLO/数据与复用的业务请求编号。
+
+KCP 引擎用合成链路在双向各 100 条消息中有意丢包、重复和乱序，并经过 32 位时间回绕。测试还检查 64 KiB 消息、畸形包、队列上限，以及成功创建后禁止 context 继续分配时仍能收发。上游三个文件的 SHA256 与固定版本一致，没有修改第三方源码。Windows 管道测试修复了重复句柄二次关联 IOCP 的错误；跨进程 KCP 测试修复了立即结束客户端时尚未发出的协议确认；Linux 重启测试驱动了监听端口复用修正。
+
+Android 原先不提供有限 join，本次为 IPC 的关闭契约补齐 Bionic 适配。它通过公开 `pthread_gettid_np` 观察内核清零的线程 ID，再回收仍由库持有、尚未 join 的线程。既有 `lifecycle` 用例在 TLS 析构阻塞期间验证超时/对象保留，放行清理后验证重试回收；没有用用户函数末尾标志代替线程真正退出。
+
+### 内存、布局和性能边界
+
+每端点一个 I/O 线程，连接数、业务队列、在途调用、协议控制队列与 KCP 内存分别有界。TCP/本地传输不分配 UDP 收包和 KCP 重组缓冲。KCP 创建时预留协议内存，IPC 消息及异步操作仍会分配；发送与等待会进入端点互斥锁，业务线程不持锁执行远端工作。KCP 更新有定时唤醒与重传成本。没有声称零分配、零锁、零拷贝，或比 TCP/ZeroMQ 更快；本轮给出正确性和资源回收证据，不提供设备工作负载的吞吐/时延门槛。
+
+工具 `hx_os_layout_report` 的实际大小/对齐（字节，数组步长等于大小）：
+
+| 对象 | MSVC x64 | MSVC x86 | Linux x86_64 |
+| --- | --- | --- | --- |
+| `hx_ipc_message` | 72 / 8 | 64 / 8 | 72 / 8 |
+| `hx_ipc_options` | 72 / 8 | 48 / 4 | 72 / 8 |
+| `hx_ipc_statistics` | 56 / 8 | 48 / 8 | 56 / 8 |
+| `hx_os_kcp_options` | 32 / 8 | 28 / 4 | 32 / 8 |
+| IPC 端点元数据，私有 | 504 / 8 | 344 / 8 | 528 / 8 |
+| 每连接元数据与 4 KiB 输入缓冲，私有 | 4440 / 8 | 4376 / 8 | 4440 / 8 |
+
+已有公共结构体布局保持不变，Windows 私有管道对象增加一个关联指针。sanitizer 通过、context 计数归零及这些布局数字不构成“绝无泄漏”或运行更快的证明。来自调用者的消息持有、编译器 TLS、原生线程栈和 socket 缓冲需要分别考虑；插件卸载前必须回收端点并结束仍可能执行本库/TLS 清理的线程。
+
+日志在忽略目录：`build-shared-{msvc,linux}/ipc-*.log`、`build-win32/ipc-*.log`、`build-sanitize-linux/ipc-final-tests.log`、`build-tsan-linux/ipc-final-tests.log`；Android 快照为 `build-android/report-ipc-arm64.json`、`report-ipc-armv7.json`。最终共享代码的 Android 基线/KCP/IPC/lifecycle 四组及基准复核通过，记录为 `report-ipc-final-arm64.json`；逐程序日志留在对应配置目录。源码 UTF-8 无 BOM、LF、修改文件 80 列检查和文档本地链接已检查，Markdown 正文不强制短行换行。
 
 ## 2026-10-03：简洁 go 调用与花括号格式化
 

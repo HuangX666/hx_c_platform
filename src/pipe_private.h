@@ -15,6 +15,9 @@ typedef int hx_os_i_pipe_handle;
 struct hx_os_pipe {
 	hx_os_loop *loop;
 	hx_os_pipe *next;
+#if defined(_WIN32)
+	hx_os_pipe *association;
+#endif
 	hx_os_i_pipe_handle native;
 	hx_os_request *request;
 	int direction;
@@ -22,7 +25,11 @@ struct hx_os_pipe {
 	int close_running;
 	hx_os_i_poll_source source;
 };
-enum { HX_OS_I_OP_PIPE_READ = 1000, HX_OS_I_OP_PIPE_WRITE };
+enum {
+	HX_OS_I_OP_PIPE_READ = 1000,
+	HX_OS_I_OP_PIPE_WRITE,
+	HX_OS_I_OP_PIPE_ACCEPT
+};
 
 hx_os_status hx_os_i_pipe_pair(int read_async, int write_async,
 	hx_os_i_pipe_handle handles[2], hx_os_error *error);

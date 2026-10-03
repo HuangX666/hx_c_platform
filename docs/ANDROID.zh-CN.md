@@ -35,11 +35,11 @@ adb devices -l
 python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --serial DEVICE_SERIAL
 ~~~
 
-可用 --adb 指定 adb 绝对路径。脚本核对目标 ABI/API，在新建的 /data/local/tmp/hx_c_platform-随机值 目录上传本次构建的文件，仅为本次进程设置 LD_LIBRARY_PATH，运行以下 25 组：
+可用 --adb 指定 adb 绝对路径。脚本核对目标 ABI/API，在新建的 /data/local/tmp/hx_c_platform-随机值 目录上传本次构建的文件，仅为本次进程设置 LD_LIBRARY_PATH，运行以下 28 组：
 
 | 测试 | 重点 |
 | --- | --- |
-| android_baseline | 平台/API、UTF-8 文件与 I/O、线程/事件、TLS 析构、有限 join 不支持 |
+| android_baseline | 平台/API、UTF-8 文件与 I/O、线程/事件、TLS 析构、有限 join |
 | string_tools | Unicode、NUL、别名、失败保持、类型化容器 |
 | lexer | token 位置、代理对、错误保持、输入/数量上限 |
 | wide_wait | 独立大整数参考值、舍入、溢出、单调等待、周期回调 |
@@ -58,10 +58,14 @@ python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --ser
 | cpp_coroutine / cpp_coroutine20 | 无异常 C++11 go、C++20 帧/局部变量、等待和取消后的析构 |
 | coroutine_sync / cpp_go11 / cpp_go20 | 自动持有任务、错误汇总、拥有值 channel、协程锁、条件变量取消和局部值清理 |
 | format / cpp_format | UTF-8 类型化格式化、自定义值、失败时保持输出、分配释放 |
+| kcp / ipc | 丢包重传、完整消息、双向请求、多线程、重启、背压和关闭；本地路径权限拒绝明确记录 |
+| lifecycle | 分配失败、TLS 析构阻塞期间 join 超时，释放后重试成功 |
 
 另运行 hx_os_portable_baseline，记录原子、ASCII、宽位換算、命名过程、精细等待观察值，没有固定时间阈值。ADB 只负责部署和控制。记录 NDK、源码版本及是否有未提交修改、ABI/API、设备型号/指纹/API、模拟器标记和每项输出。清理只移除确切上传文件，不递归删除目录；失败夹保留排查。ADB 超时可能留下目标进程，保留目录并报告，不强杀。性能采样需记录负载、温度、调频状态并重复多轮。
 
 报告区分编译最低 API、实际系统 API、原生机器架构和翻译执行，逐程序记录结果。失败不会继续写成“未运行”。验证用共享库程序带 $ORIGIN RUNPATH，支持新版 Android 从程序所在目录加载依赖；旧系统仍使用 LD_LIBRARY_PATH。这些链接选项仅作用于测试/示例/基准程序，不传给消费者或修改系统库路径。
+
+只复核通信时，可在运行命令后追加 `--suite ipc --suite kcp --suite lifecycle`。不指定 `--suite` 时运行全部 28 组；可移植基准仍会运行，报告保存本次选择的套件和明确跳过的子项。
 
 ## 能力边界
 
@@ -70,8 +74,9 @@ python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --ser
 | 文件、UTF-8、线程、同步、TLS、原子 | 共用 C/POSIX，实现受 Bionic 和文件权限约束 |
 | epoll、inotify、socket、页/映射 | 共用 Linux 适配，受应用沙箱约束 |
 | 子进程 | API 21 构建返回 NOT_SUPPORTED、清除 PROCESS 位；API 28 使用 posix_spawn |
-| 有限期限线程 join | Bionic 缺少所需 tryjoin，返回 NOT_SUPPORTED、保留线程；无限 join 包含 TLS 清理 |
-| 池/监听器等最终回收 | 同受有限 join 限制；不把线程退出前的标记冒充完整 TLS 清理 |
+| 有限期限线程 join | 使用 Bionic 的公开 pthread_gettid_np 观察内核清零的 TID，再执行最终 join；包含 TLS 清理，支持超时重试 |
+| 池/监听器/IPC 等最终回收 | 使用上述有限 join；不把线程函数返回冒充完整 TLS 清理 |
+| 本机 IPC | TCP、普通 UDP、KCP；Unix 路径受 UID 和 SELinux 限制，拒绝时返回原生权限错误 |
 | 严格亲和性 | 当前适配返回 NOT_SUPPORTED |
 | HOME/配置/数据/共享数据/临时目录 | 返回 NOT_SUPPORTED；宿主通过 Context/NativeActivity 取得应用路径后传入 |
 | 可执行文件/模块位置 | /proc/self/exe、dladdr，原生限制明确报告 |
@@ -81,7 +86,13 @@ python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --ser
 
 模块位表示编译了功能族，不保证所有平台扩展可用。API 21 构建在新设备上也不会自动获得进程能力，需要更高最低 API 的构建。没有 JNI/Java 依赖、 APK、Manifest 权限、资产系统或 UI 自动化，这些由消费者处理。独立验证程序使用 c++_static，消费者沿用自己 NDK 工程的 STL 选择。
 
-## 容器与协程验证（2026-10-03）
+## IPC 与有时限回收验证（2026-10-03）
+
+API 21 ARM64 共享配置在现有 API 34 x86_64 模拟器通过 ARM 转译执行 28 组测试与可移植基准。IPC 的 TCP、普通 UDP、KCP 覆盖完整消息、双向请求、并发回复、重启、限额及关闭。所选模拟器的 SELinux 拒绝 shell 用户创建路径型 Unix socket（`sock_file create`，EACCES）；此子项明确跳过，报告 `test_notes` 和运行日志保留原因，没有降低系统安全设置，也没有写成 Unix socket 已运行通过。需要在有相应权限的 APK/目标环境验证本地路径传输。
+
+Android 有时限 join 适配依据 Bionic 的公开函数和线程退出实现，等待内核清零 TID 后才回收未分离的线程；[Bionic join 实现](https://android.googlesource.com/platform/bionic/+/master/libc/bionic/pthread_join.cpp) 也在最终回收前等待该清零。`lifecycle` 特别覆盖用户函数已返回但 TLS 清理尚未结束的情形。最低 API 21 的编译不等于 Android 5.0 真机运行，ARMv7 仍需目标运行。下方关于有限 join 不支持的文字是历史版本记录，由本节取代当前行为。
+
+## 容器与协程验证（2026-10-03，历史记录）
 
 NDK r28c 为 arm64-v8a、armeabi-v7a、x86_64 构建最低 API 21 的完整共享库，包含自研有栈适配、C99 状态机、C++11 go 和可选 C++20 层。API 34 的 Qt_Android_34 模拟器上，原生 x86_64 与转译 ARM64 各通过二十个套件和可移植基准。模拟器 ABI 列表不含 ARMv7，因此明确跳过其运行。报告为 build-android/report.json 与 build-android-emulator/report.json。
 

@@ -247,7 +247,7 @@ hx_os_status hx_os_i_loop_submit(hx_os_loop *loop, const hx_os_operation *op,
 	*out = NULL;
 	if (pipe) {
 		budget = op->bytes;
-		directions = op->kind == HX_OS_I_OP_PIPE_READ
+		directions = op->kind != HX_OS_I_OP_PIPE_WRITE
 			? HX_OS_WAIT_READ
 			: HX_OS_WAIT_WRITE;
 		status = !hx_os_loop_owner(loop) ? HX_OS_BUSY

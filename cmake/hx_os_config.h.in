@@ -49,6 +49,9 @@
 #cmakedefine01 HX_OS_HAVE_ICONV
 #define HX_OS_ICONV_CONST @HX_OS_ICONV_CONST@
 #cmakedefine01 HX_OS_ENABLE_NETWORK
+#cmakedefine01 HX_OS_ENABLE_KCP
+#cmakedefine01 HX_OS_ENABLE_IPC
+#cmakedefine01 HX_OS_HAVE_IPC
 #cmakedefine01 HX_OS_ENABLE_LOOP
 #cmakedefine01 HX_OS_ENABLE_THREAD_POOL
 #cmakedefine01 HX_OS_ENABLE_DELAYED_TASKS

@@ -1,6 +1,6 @@
 # hx_c_platform
 
-[![CI configuration][ci-badge]](.github/workflows/build.yml) [![C99 core][c-badge]](CMakeLists.txt) [![C++11 facade][cpp-badge]](docs/CPP_POOL.md) [![Header-only C++ facade][header-badge]](docs/CPP_POOL.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![First-party license pending][license-badge]](THIRD_PARTY_NOTICES.md) [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md) [![macOS validation pending][macos-badge]](docs/VALIDATION.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.md) [![Windows 110/110 and Linux 112/112 local suites passed][tests-badge]](docs/VALIDATION.md) [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md) [![Android API 21 ARM cross-build passed][android-badge]](docs/ANDROID.md)
+[![CI configuration][ci-badge]](.github/workflows/build.yml) [![C99 core][c-badge]](CMakeLists.txt) [![C++11 facade][cpp-badge]](docs/CPP_POOL.md) [![Header-only C++ facade][header-badge]](docs/CPP_POOL.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![First-party license pending][license-badge]](THIRD_PARTY_NOTICES.md) [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md) [![macOS validation pending][macos-badge]](docs/VALIDATION.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.md) [![Windows 113/113 and Linux 115/115 local suites passed][tests-badge]](docs/VALIDATION.md) [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md) [![Android API 21 ARM cross-build passed][android-badge]](docs/ANDROID.md)
 
 [简体中文](README.zh-CN.md) · [Task tutorials](docs/USAGE.md) · [Detailed reference](docs/REFERENCE.md)
 
@@ -345,6 +345,22 @@ Here `user`, `price` and `count` are ordinary variables in the calling C functio
 
 Need ordered or duplicate keys? The [red-black multimap example](examples/ordered_map.c) and [container guide](docs/CONTAINERS.md) cover ordered traversal, sorting, filtering, list splice and set operations.
 
+### 4.11 Communicate with another process: C / C++
+
+Run `hx_os_ipc_server local://demo 1` in one terminal, then `hx_os_ipc_client local://demo` in another. The client prints `Reply: Hello from C`; the server exits after handling one message. The [IPC tutorial](docs/IPC.md) provides complete Windows/Linux build commands and runnable programs.
+
+Once the client has created `connection`, C++11 sends a request and receives its matching reply with:
+
+```cpp
+auto reply = connection.requestText("read device status", 7);
+if (reply)
+	std::printf("Reply: %s\n", reply.value().text());
+```
+
+Here `7` is an application-defined device ID; the library manages individual request IDs. C uses `hx_ipc_request_text`, or `hx_ipc_request_text_until` with a device ID. Receives deliver complete messages, so callers need neither partial-frame assembly nor an extra concurrent-send lock.
+
+`local://` selects Windows named pipes or Unix domain sockets. You can also choose `tcp://127.0.0.1:port`, ordinary `udp://`, or reliable `kcp://`. The [four-thread shared-connection example](examples/ipc_threads.cpp) and [independent Python peer](examples/ipc_python.py) have automated tests. Check deadlines, capacity and disconnect errors, and close connections explicitly. These IPC waits use ordinary threads.
+
 <a id="section-5"></a>
 
 ## 5. A few rules to remember
@@ -362,6 +378,7 @@ The meaning of `NULL` depends on its position: allocator/options parameters sele
 
 | What you need | Where to start |
 | --- | --- |
+| IPC, duplex messages, concurrent callers and other languages | [IPC tutorial and protocol](docs/IPC.md) |
 | Brace formatting, automatic C arguments and expressions | [Formatting](docs/FORMAT.md) |
 | Complete text, configuration, container and pool programs | [Task tutorials](docs/USAGE.md) |
 | Nested file search and background scanning | [Recursive search tutorial](docs/FILE_SEARCH.md) |
@@ -378,7 +395,7 @@ The meaning of `NULL` depends on its position: allocator/options parameters sele
 
 ## 7. Builds, validation and licensing
 
-See the [build reference](docs/REFERENCE.md#section-27) for development builds, tests, static/shared installation and optional dependencies. The code's local full-suite record is Windows 110/110 and WSL Linux 112/112; [validation records](docs/VALIDATION.md) identify exact configurations and pending targets. Documentation-example checks are separate from target-platform validation.
+See the [build reference](docs/REFERENCE.md#section-27) for development builds, tests, static/shared installation and optional dependencies. The code's local full-suite record is Windows 113/113 and WSL Linux 115/115; [validation records](docs/VALIDATION.md) identify exact configurations and pending targets. Documentation-example checks are separate from target-platform validation.
 
 The first-party distribution license is pending; see [third-party licensing](THIRD_PARTY_NOTICES.md). The coroutine implementation is self-developed; hx_c_log integration remains future work.
 
@@ -391,6 +408,6 @@ The first-party distribution license is pending; see [third-party licensing](THI
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%20110%2F110%20Linux%20112%2F112-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%20113%2F113%20Linux%20115%2F115-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

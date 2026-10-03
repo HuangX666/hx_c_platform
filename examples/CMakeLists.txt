@@ -4,7 +4,8 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 	random_uuid mapped_file file_attributes watch_directory capture_process
 	delayed_task duplex_message obfuscated_string localized_time
 	signal_notifications settings profile_intervals atomic_publication
-	common_tasks variant find_files coroutine ordered_map format)
+	common_tasks variant find_files coroutine ordered_map format
+	ipc_server ipc_client)
 	add_executable(hx_os_${example} ${example}.c)
 	target_link_libraries(hx_os_${example} PRIVATE hx_c_platform)
 	set_target_properties(hx_os_${example} PROPERTIES
@@ -12,6 +13,31 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 	hx_apply_warnings(hx_os_${example})
 endforeach()
+if(HX_OS_BUILD_TESTS AND HX_OS_HAVE_IPC AND NOT CMAKE_CROSSCOMPILING)
+	find_package(Python3 QUIET COMPONENTS Interpreter)
+	if(Python3_Interpreter_FOUND)
+		set(hx_ipc_example_args
+			--server $<TARGET_FILE:hx_os_ipc_server>
+			--client $<TARGET_FILE:hx_os_ipc_client>
+			--python-peer
+			"${CMAKE_CURRENT_SOURCE_DIR}/ipc_python.py")
+		if(CMAKE_CXX_COMPILER_LOADED)
+			list(APPEND hx_ipc_example_args
+				--threads $<TARGET_FILE:hx_os_ipc_threads>)
+		endif()
+		if(HX_OS_ENABLE_KCP)
+			list(APPEND hx_ipc_example_args --kcp)
+		endif()
+		if((WIN32 AND HX_OS_ENABLE_PIPE) OR
+			(HX_OS_ENABLE_LOCAL_SOCKETS AND HX_OS_ENABLE_LOOP_FD))
+			list(APPEND hx_ipc_example_args --local)
+		endif()
+		add_test(NAME ipc_examples COMMAND "${Python3_EXECUTABLE}"
+			"${PROJECT_SOURCE_DIR}/tests/test_ipc_examples.py"
+			${hx_ipc_example_args})
+		set_tests_properties(ipc_examples PROPERTIES TIMEOUT 90)
+	endif()
+endif()
 if(HX_OS_BUILD_TESTS)
 	add_test(NAME format_example COMMAND hx_os_format)
 	set_tests_properties(format_example PROPERTIES TIMEOUT 20)
@@ -171,6 +197,12 @@ if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_PROFILER)
 	set_tests_properties(profile_intervals_example PROPERTIES TIMEOUT 20)
 endif()
 if(CMAKE_CXX_COMPILER_LOADED)
+	add_executable(hx_os_ipc_threads ipc_threads.cpp)
+	target_link_libraries(hx_os_ipc_threads PRIVATE hx_c_platform::cpp)
+	set_target_properties(hx_os_ipc_threads PROPERTIES
+		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+	hx_apply_warnings(hx_os_ipc_threads)
 	add_executable(hx_os_go go.cpp)
 	target_link_libraries(hx_os_go PRIVATE hx_c_platform::cpp)
 	set_target_properties(hx_os_go PROPERTIES

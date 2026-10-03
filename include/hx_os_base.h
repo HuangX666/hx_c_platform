@@ -213,6 +213,8 @@ HX_OS_API const char *HX_OS_CALL hx_os_cpu_name(void);
 #define HX_OS_CAP_STACKFUL_COROUTINES (UINT64_C(1) << 54)
 #define HX_OS_CAP_COROUTINE_IO (UINT64_C(1) << 55)
 #define HX_OS_CAP_FORMAT (UINT64_C(1) << 56)
+#define HX_OS_CAP_KCP (UINT64_C(1) << 58)
+#define HX_OS_CAP_IPC (UINT64_C(1) << 57)
 /* required includes NUL. These queries do not need initialization. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_version_string(
 	char *buffer, size_t capacity, size_t *required);

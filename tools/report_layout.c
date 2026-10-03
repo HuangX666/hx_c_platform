@@ -20,6 +20,7 @@
 #include "profiler_private.h"
 #include "coroutine_private.h"
 #include "hx_format.h"
+#include "ipc_private.h"
 #include <stdio.h>
 
 #define HX_OS_LAYOUT(type)                                                     \
@@ -35,6 +36,14 @@
 int main(void)
 {
 	HX_OS_LAYOUT(hx_string);
+	HX_OS_LAYOUT(hx_ipc_message);
+	HX_OS_LAYOUT(hx_ipc_options);
+	HX_OS_LAYOUT(hx_ipc_statistics);
+	HX_OS_LAYOUT(hx_os_kcp_options);
+#if HX_OS_HAVE_IPC
+	HX_OS_LAYOUT(hx_ipc);
+	HX_OS_LAYOUT(hx_ipc_connection);
+#endif
 	HX_OS_LAYOUT(hx_format_arg);
 	HX_OS_LAYOUT(hx_format_options);
 	HX_OS_LAYOUT(hx_os_coro_errors);

@@ -18,6 +18,19 @@ The pin identifies the integrated source, not the latest upstream version. Alloc
 
 The repository also retains unchanged minicoro 0.1.3 source and its [MIT license](third_party/minicoro/v0.1.3/LICENSE) from the initial evaluation. It is not built, installed, linked or exposed by any API. The coroutine scheduler and POSIX context switch are first-party implementations; Windows uses operating-system fibers. The retained evaluation copy is not used by this module.
 
+## Optional KCP reliable UDP
+
+`HX_OS_ENABLE_KCP` defaults ON; OFF removes the implementation dependency while retaining explicit unsupported C entry points. The unmodified upstream v1 sources are compiled as private object code. The first-party adapter isolates symbols, uses bounded per-instance allocation reserves and does not replace a process-global allocator. No KCP types enter the public ABI; installations include `share/hx_c_platform/licenses/kcp-LICENSE`.
+
+- [Upstream fixed revision](https://github.com/skywind3000/kcp/tree/8004f7eba5d1bf33f0691eef5f887f2cd3140cb5)
+- Commit: `8004f7eba5d1bf33f0691eef5f887f2cd3140cb5`, v1 branch integration pin, not a latest-version claim.
+- `ikcp.c` SHA256: `b476f4ae41b555f28e819f3a6f34b7e2307c93e17875b4864a8f5fc217f67f60`
+- `ikcp.h` SHA256: `f04f978a0893a8209d7b82095d19c38cefcf8f30bc932a85bb7fa53b33f9e76c`
+- `LICENSE` SHA256: `6587fd02a924b97dbd6758b0573ddec056fb494a84f3709c5aaa33ce1f7f029c`
+- [Retained MIT license](third_party/kcp/8004f7eba5d1bf33f0691eef5f887f2cd3140cb5/LICENSE)
+
+IPC framing, session management, thread coordination and native transports are first-party code. Ordinary UDP does not pass through KCP. See the [IPC guide](docs/IPC.md).
+
 ## Warning configuration
 
 cmake/HxWarnings.cmake was copied from the neighboring hx_c_log project, retaining its copyright and OBS commit reference. It is covered by the [retained MIT license](licenses/hx_c_log-MIT.txt). No hx_c_log runtime or logging implementation is linked.

@@ -18,6 +18,19 @@
 
 仓库还保留初期评估时取得的 minicoro 0.1.3 原始源码和 [MIT 许可证](third_party/minicoro/v0.1.3/LICENSE)。它没有参与构建、安装、链接或公共 API。当前协程调度器和 POSIX 上下文切换由本库自研，Windows 使用操作系统原生 fiber；保留的评估副本不用于本模块。
 
+## 可选 KCP 可靠 UDP
+
+`HX_OS_ENABLE_KCP` 默认开启；关闭后不编译此依赖，公共 C 入口明确报告不支持。上游 v1 源码保持原样，编译为私有对象代码。自有适配隔离符号、按实例预留有界内存，不更改进程级分配器。公共 ABI 不出现 KCP 类型；安装时包含 `share/hx_c_platform/licenses/kcp-LICENSE`。
+
+- [固定版本上游源码](https://github.com/skywind3000/kcp/tree/8004f7eba5d1bf33f0691eef5f887f2cd3140cb5)
+- 提交：`8004f7eba5d1bf33f0691eef5f887f2cd3140cb5`，v1 分支集成版本，不宣称为最新版。
+- `ikcp.c` SHA256：`b476f4ae41b555f28e819f3a6f34b7e2307c93e17875b4864a8f5fc217f67f60`
+- `ikcp.h` SHA256：`f04f978a0893a8209d7b82095d19c38cefcf8f30bc932a85bb7fa53b33f9e76c`
+- `LICENSE` SHA256：`6587fd02a924b97dbd6758b0573ddec056fb494a84f3709c5aaa33ce1f7f029c`
+- [保留的 MIT 许可证](third_party/kcp/8004f7eba5d1bf33f0691eef5f887f2cd3140cb5/LICENSE)
+
+IPC 分帧、会话管理、多线程协调和原生传输属于自有代码。普通 UDP 不经过 KCP，调用和协议见 [IPC 教程](docs/IPC.zh-CN.md)。
+
 ## 警告配置
 
 cmake/HxWarnings.cmake 复制自相邻 hx_c_log 项目，保留其版权声明和 OBS 提交引用，适用 [保留的 MIT 许可证](licenses/hx_c_log-MIT.txt)。没有链接 hx_c_log 运行库或日志实现。

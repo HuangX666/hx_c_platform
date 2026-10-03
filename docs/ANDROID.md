@@ -35,11 +35,11 @@ adb devices -l
 python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --serial DEVICE_SERIAL
 ~~~
 
-Pass --adb for an absolute adb path. The runner checks ABI/API, uploads only its artifacts into a fresh /data/local/tmp/hx_c_platform-UUID directory, sets that process's LD_LIBRARY_PATH, and executes twenty-five suites:
+Pass --adb for an absolute adb path. The runner checks ABI/API, uploads only its artifacts into a fresh /data/local/tmp/hx_c_platform-UUID directory, sets that process's LD_LIBRARY_PATH, and executes twenty-eight suites:
 
 | Suite | Coverage |
 | --- | --- |
-| android_baseline | Platform/API, Unicode files/I/O, thread/event/TLS cleanup, unsupported finite join |
+| android_baseline | Platform/API, Unicode files/I/O, thread/event/TLS cleanup, finite join |
 | string_tools | Unicode, NUL, aliases, failure retention, typed containers |
 | lexer | Positions, surrogate pairs, sticky errors, resource limits |
 | wide_wait | Big-integer reference values, rounding/overflow, waits/repeat |
@@ -58,10 +58,14 @@ Pass --adb for an absolute adb path. The runner checks ABI/API, uploads only its
 | cpp_coroutine / cpp_coroutine20 | Exception-free C++11 go, C++20 frames/locals, waits and cancellation cleanup |
 | coroutine_sync / cpp_go11 / cpp_go20 | Runtime-owned tasks, errors, owned channel values, cooperative locks, condition cancellation and local cleanup |
 | format / cpp_format | Typed UTF-8 formatting, custom values, failed-output retention and allocator cleanup |
+| kcp / ipc | Loss/retransmission, complete messages, duplex/concurrent requests, restart, backpressure and close; explicit local-path permission skips |
+| lifecycle | Allocation failures, join timeout during blocked TLS cleanup and successful retry after release |
 
 hx_os_portable_baseline also records atomic, ASCII, wide conversion, named-call and precise-wait observations without fixed timing thresholds. Logs include NDK, source revision/dirty status, ABI/API, device model, fingerprint, runtime API, emulator marker and command output. Cleanup removes only explicitly uploaded files, never recursively deleting test directories. Failed fixtures remain. An adb timeout may leave the target process running; preserve/report its directory without killing it. Record load/temperature/ frequency conditions and collect repeated performance samples.
 
 Reports distinguish build minimum API, runtime API, native machine and translation, with a result per executable. Failures do not remain labeled as unrun. Shared validation executables have $ORIGIN RUNPATH for newer Android; older native systems still use LD_LIBRARY_PATH. Only test/example/benchmark targets receive this option; consumer and system library paths are unchanged.
+
+For a focused communication run, append `--suite ipc --suite kcp --suite lifecycle`. Without `--suite`, all twenty-eight suites run. The portable benchmark still runs; the report records selected suites and explicit subcase skips.
 
 ## Platform boundaries
 
@@ -70,8 +74,9 @@ Reports distinguish build minimum API, runtime API, native machine and translati
 | Files, UTF-8, threads, synchronization, TLS, atomics | Shared C/POSIX, subject to Bionic and permissions |
 | epoll/inotify/sockets/pages/mappings | Shared Linux adapters, subject to app sandbox |
 | Processes | API 21 build: NOT_SUPPORTED, PROCESS bit cleared; API 28: posix_spawn |
-| Finite thread join | No required Bionic tryjoin; NOT_SUPPORTED retains thread; infinite join includes native TLS cleanup |
-| Final worker/watch joins | Same finite-join limit; a pre-exit flag is not TLS completion |
+| Finite thread join | Poll Bionic's public pthread_gettid_np for the kernel-cleared TID before final join; includes TLS cleanup and allows retry |
+| Final worker/watch/IPC joins | Use the finite native join; function return is not TLS completion |
+| Local IPC | TCP, ordinary UDP and KCP; Unix paths remain subject to UID and SELinux policy, with explicit native permission errors |
 | Strict affinity | NOT_SUPPORTED in this adapter |
 | HOME/config/data/shared-data/temp | NOT_SUPPORTED; host obtains app roots via Context/NativeActivity and passes paths |
 | Executable/module location | /proc/self/exe and dladdr with explicit native restrictions |
@@ -81,7 +86,13 @@ Reports distinguish build minimum API, runtime API, native machine and translati
 
 Module bits describe compiled families, not every platform extension. API 21 binaries remain process-disabled on newer devices; build with the higher minimum API for that feature. No JNI/Java dependency, APK, manifest permissions, asset API or UI automation is supplied. Consumers own those. Standalone validation uses c++_static; consumers retain their NDK STL policy.
 
-## Containers and coroutine verification (2026-10-03)
+## IPC and bounded native join verification (2026-10-03)
+
+The API 21 ARM64 shared configuration runs twenty-eight suites and the portable benchmark through ARM translation on the existing API 34 x86_64 emulator. TCP, ordinary UDP and KCP cover complete messages, duplex/concurrent requests, restart, bounds and closure. This emulator's SELinux policy denies shell creation of pathname Unix sockets (`sock_file create`, EACCES); that subcase is explicitly skipped, with reasons retained in report `test_notes` and logs. System security settings were not relaxed, and Unix socket runtime support was not claimed. Validate that transport inside an appropriately permitted APK/target environment.
+
+Bounded Android join uses Bionic's public API to observe the kernel-cleared TID before reclaiming an owned, joinable thread. [Bionic's join implementation](https://android.googlesource.com/platform/bionic/+/master/libc/bionic/pthread_join.cpp) also waits for that clearing before final reclamation. The `lifecycle` suite specifically covers a returned thread function whose TLS destructor is still blocked. Compiling for API 21 does not prove execution on Android 5.0 hardware; ARMv7 still requires a target run. The finite-join restrictions below are historical and are superseded by this section for current behavior.
+
+## Containers and coroutine verification (2026-10-03, historical)
 
 NDK r28c builds the full shared library at minimum API 21 for arm64-v8a, armeabi-v7a and x86_64, including self-developed stackful adapters, the C99 state machine, C++11 go and optional C++20 layer. The API 34 Qt_Android_34 emulator passes twenty suites plus the portable benchmark for native x86_64 and translated ARM64. ARMv7 runtime is explicitly skipped because it is absent from the emulator ABI list. Reports are build-android/report.json and build-android-emulator/report.json.
 

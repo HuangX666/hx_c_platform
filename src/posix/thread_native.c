@@ -259,6 +259,23 @@ hx_os_status hx_os_i_thread_join(
 			return hx_os_i_error(error, HX_OS_TIMEOUT, 0, 0);
 		(void)hx_os_sleep_until(hx_os_deadline_after_ms(1), NULL);
 	}
+#elif defined(__ANDROID__)
+	/* Bionic keeps an unjoined thread object alive. Its public gettid API
+	 * reads the kernel-cleared TID, which becomes zero after native TLS
+	 * destructors and thread exit. The outer layer serializes all joiners.
+	 * Never infer native termination from the user function's return alone.
+	 */
+	for (;;) {
+		pid_t tid = pthread_gettid_np(thread->native.id);
+		if (!tid)
+			return hx_os_i_errno(
+				error, pthread_join(thread->native.id, NULL));
+		if (tid < 0)
+			return hx_os_i_errno(error, ESRCH);
+		if (hx_os_deadline_expired(deadline))
+			return hx_os_i_error(error, HX_OS_TIMEOUT, 0, 0);
+		(void)hx_os_sleep_until(hx_os_deadline_after_ms(1), NULL);
+	}
 #elif defined(__APPLE__)
 	for (;;) {
 		if (hx_os_atomic_load(&thread->started, HX_OS_ACQUIRE)) {

@@ -502,6 +502,12 @@ uint64_t hx_os_capabilities(void)
 #if HX_OS_ENABLE_FORMAT
 	result |= HX_OS_CAP_FORMAT;
 #endif
+#if HX_OS_ENABLE_KCP
+	result |= HX_OS_CAP_KCP;
+#endif
+#if HX_OS_HAVE_IPC
+	result |= HX_OS_CAP_IPC;
+#endif
 #if HX_OS_ENABLE_COROUTINES
 	result |= HX_OS_CAP_COROUTINES;
 #endif

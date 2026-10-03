@@ -133,6 +133,31 @@ void hx_os_i_pipe_step(hx_os_request *request)
 		}
 		return;
 	}
+	if (op->kind == HX_OS_I_OP_PIPE_ACCEPT) {
+		if (request->native_done) {
+			request->native_done = 0;
+			hx_os_pipe_native_error(request, request->native_error);
+			request->ready = 1;
+			return;
+		}
+		if (request->stop_status) {
+			request->ready = 1;
+			return;
+		}
+		request->started = 1;
+		memset(&request->overlapped, 0, sizeof(request->overlapped));
+		result = ConnectNamedPipe(
+			request->pipe->native, &request->overlapped);
+		code = result ? 0 : GetLastError();
+		if (!code || code == ERROR_IO_PENDING)
+			request->native_pending = 1;
+		else {
+			hx_os_pipe_native_error(request,
+				code == ERROR_PIPE_CONNECTED ? 0 : code);
+			request->ready = 1;
+		}
+		return;
+	}
 	if (request->native_done) {
 		request->native_done = 0;
 		request->completion.bytes += request->native_bytes;

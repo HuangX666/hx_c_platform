@@ -13,6 +13,8 @@
 #include "hx_os_memory.h"
 #include "hx_os_text.h"
 #include "hx_os_net.h"
+#include "hx_os_kcp.h"
+#include "hx_ipc.h"
 #include "hx_os_loop.h"
 #include "hx_os_coroutine.h"
 #include "hx_os_pipe.h"

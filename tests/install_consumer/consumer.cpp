@@ -1,4 +1,5 @@
 #include <hx_os.h>
+#include <hx/Ipc.hpp>
 #include <cstring>
 
 int main()
