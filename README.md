@@ -1,6 +1,6 @@
 # hx_c_platform
 
-[![CI configuration][ci-badge]](.github/workflows/build.yml) [![C99 core][c-badge]](CMakeLists.txt) [![C++11 facade][cpp-badge]](docs/CPP_POOL.md) [![Header-only C++ facade][header-badge]](docs/CPP_POOL.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![First-party license pending][license-badge]](THIRD_PARTY_NOTICES.md) [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md) [![macOS validation pending][macos-badge]](docs/VALIDATION.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.md) [![Windows 88/88 and Linux 90/90 local suites passed][tests-badge]](docs/VALIDATION.md) [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md) [![Android API 21 ARM cross-build passed][android-badge]](docs/ANDROID.md)
+[![CI configuration][ci-badge]](.github/workflows/build.yml) [![C99 core][c-badge]](CMakeLists.txt) [![C++11 facade][cpp-badge]](docs/CPP_POOL.md) [![Header-only C++ facade][header-badge]](docs/CPP_POOL.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![First-party license pending][license-badge]](THIRD_PARTY_NOTICES.md) [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md) [![macOS validation pending][macos-badge]](docs/VALIDATION.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.md) [![Windows 91/91 and Linux 93/93 local suites passed][tests-badge]](docs/VALIDATION.md) [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md) [![Android API 21 ARM cross-build passed][android-badge]](docs/ANDROID.md)
 
 [简体中文](README.zh-CN.md) · [Task tutorials](docs/USAGE.md) · [Detailed reference](docs/REFERENCE.md)
 
@@ -114,7 +114,7 @@ The result should be `Hello, hx_c_platform!`. Input paths use the current workin
 
 ## 4. Common tasks
 
-These examples cover common tasks. The file examples are complete programs. Other short excerpts state their headers and required objects; find full programs, run steps and more C/C++ versions in the [task tutorials](docs/USAGE.md).
+These examples cover common tasks. The text-reading examples are complete programs. Other short excerpts state their headers and required objects; find full programs, run steps and more C/C++ versions in the linked task tutorials.
 
 ### 4.1 Read and display a text file: C / C++
 
@@ -293,6 +293,19 @@ std::printf("Point: %.1f, %.1f\n", position.value().x,
 
 Output: `Point: 2.0, 5.0`. set stores an independent copy; get<Point> checks its type and returns a structure reference. Destruction releases it automatically. See the [variant tutorial](docs/VARIANT.md) for complete C structure, copy, visitor and mixed-container examples.
 
+### 4.8 Find a file in nested directories: C++
+
+Find the first config.json under assets recursively. Include `<hx/Files.hpp>` and `<cstdio>` and put this excerpt in main():
+
+```cpp
+auto path = hx::Directory::findFirstFile("assets", "config.json");
+if (!path)
+	return 1;
+std::puts(path.value().c_str());
+```
+
+If the file is assets/nested/config.json, that path is printed. No match reports failure. This call scans synchronously; a GUI should use its existing pool. Directory::findFiles streams every match. Complete C/C++ and background examples are in the [recursive search tutorial](docs/FILE_SEARCH.md).
+
 <a id="section-5"></a>
 
 ## 5. A few rules to remember
@@ -310,7 +323,8 @@ The meaning of `NULL` depends on its position: allocator/options parameters sele
 
 | What you need | Where to start |
 | --- | --- |
-| Complete programs for the seven tasks above | [Task tutorials](docs/USAGE.md) |
+| Complete text, configuration, container and pool programs | [Task tutorials](docs/USAGE.md) |
+| Nested file search and background scanning | [Recursive search tutorial](docs/FILE_SEARCH.md) |
 | Full feature list, limits and build switches | [Detailed reference](docs/REFERENCE.md) |
 | Encoding, translation, directory visits and lexing | [Common utilities](docs/COMMON_UTILITIES.md) |
 | JSON/YAML/XML/INI/TOML/ENV/properties | [Configuration formats](docs/CONFIGURATION.md) |
@@ -324,7 +338,7 @@ The meaning of `NULL` depends on its position: allocator/options parameters sele
 
 ## 7. Builds, validation and licensing
 
-See the [build reference](docs/REFERENCE.md#section-27) for development builds, tests, static/shared installation and optional dependencies. The code's local full-suite record is Windows 88/88 and WSL Linux 90/90; [validation records](docs/VALIDATION.md) identify exact configurations and pending targets. Documentation-example checks are separate from target-platform validation.
+See the [build reference](docs/REFERENCE.md#section-27) for development builds, tests, static/shared installation and optional dependencies. The code's local full-suite record is Windows 91/91 and WSL Linux 93/93; [validation records](docs/VALIDATION.md) identify exact configurations and pending targets. Documentation-example checks are separate from target-platform validation.
 
 The first-party distribution license is pending; see [third-party licensing](THIRD_PARTY_NOTICES.md). Coroutines and hx_c_log integration remain future work.
 
@@ -337,6 +351,6 @@ The first-party distribution license is pending; see [third-party licensing](THI
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%2088%2F88%20Linux%2090%2F90-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%2091%2F91%20Linux%2093%2F93-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

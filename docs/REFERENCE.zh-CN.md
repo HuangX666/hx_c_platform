@@ -71,7 +71,7 @@
 
 C 核心需要编译成库，**不是 header-only**；只有可选 C++ 便利层是仅头文件。已验证 C++11，不宣称 C++14/17/20 矩阵通过。CMake 最低基线为 **3.16**。编译器、CRT 和 SDK 的兼容性需要与操作系统 API 兼容性分别确认，尤其是 Win7 部署，不能因接口保留兼容就宣称当前工具链生成的所有二进制都能直接运行。
 
-徽章记录截至 **2026-10-03** 的本地证据：Windows 88 项、Linux 90 项 CTest，数字表示测试条目，不是断言数量；Linux 多两项原生随机源故障测试。 GitHub Actions 已配置，未宣称远程 CI 已通过。Android 的十三项集合不等于桌面全部测试。具体配置与限制见[验证记录](VALIDATION.zh-CN.md)。
+徽章记录截至 **2026-10-03** 的本地证据：Windows 91 项、Linux 93 项 CTest，数字表示测试条目，不是断言数量；Linux 多两项原生随机源故障测试。 GitHub Actions 已配置，未宣称远程 CI 已通过。Android 的十四项集合不等于桌面全部测试。具体配置与限制见[验证记录](VALIDATION.zh-CN.md)。
 
 <a id="section-3"></a>
 
@@ -549,6 +549,8 @@ int main(void)
 带备份替换不是自动回滚事务；跨文件系统移动不会偷偷变成复制。替换失败时，保留原生错误和可供恢复的现场，不能假设所有中间步骤都没有发生。
 
 ### 8.3 其他文件能力
+
+递归文件名查找新增 hx_os_directory_find_first_file / Directory::findFirstFile，直接取得一个拥有的路径；hx_os_directory_find_files / Directory::findFiles 同步流式返回匹配结果。它们复用缓冲并尽量利用原生目录项类型，限制深度、数量和内存，不依赖 CONTAINERS，也可提交到现有线程池。[递归查找](FILE_SEARCH.zh-CN.md)说明匹配、部分失败、借用路径和工作线程/界面生命周期。原有 path_glob 仍按给定路径层级匹配，不提供双星号任意深度语义。
 
 | 需求 | 接口与示例 |
 | --- | --- |
@@ -1659,7 +1661,7 @@ python tools/verify_android.py --ndk /absolute/path/to/ndk \
 
 默认交叉编译两种 ARM ABI 的 API 21/28 配置，通过 `--serial` 明确选择运行设备。 `--abi x86_64` 用于匹配的模拟器。adb 列表为空时，可能只是已有 AVD 未启动；先用 `emulator -list-avds` 检查，不能直接认定机器没有模拟器。
 
-当前 variant 扩展已编译 API 21 ARM64/ARMv7 的完整与最小共享配置。ARM64 两种配置各通过十三组 Android 测试和 portable 基准，在 Android 14/API 34 x86_64 模拟器经翻译执行；ARMv7 缺少运行环境。此前 API 28、静态库和 x86_64 执行保留为历史记录。API 21 构建不等于 Android 5.0 运行通过；ARM 真机性能、应用沙箱和旧系统仍需目标验证。API 28 以下进程能力与有限时长原生 join 有明确限制，见 [ANDROID.zh-CN.md](ANDROID.zh-CN.md)。
+当前递归查询扩展已编译 API 21 ARM64/ARMv7 的完整与最小共享配置。ARM64 两种配置各通过十四组 Android 测试和 portable 基准，在 Android 14/API 34 x86_64 模拟器经翻译执行；ARMv7 缺少运行环境。此前 API 28、静态库和 x86_64 执行保留为历史记录。API 21 构建不等于 Android 5.0 运行通过；ARM 真机性能、应用沙箱和旧系统仍需目标验证。API 28 以下进程能力与有限时长原生 join 有明确限制，见 [ANDROID.zh-CN.md](ANDROID.zh-CN.md)。
 
 ### 28.2 板卡的最小纯 C 配置
 
@@ -1722,7 +1724,7 @@ python tools/verify_install.py build --config Release
 python tools/verify_abi.py build-shared --config Release
 ```
 
-安装工具使用构建目录内的独立前缀，默认能力齐全时运行十三项 C/C++ 消费测试，再运行纯 C 工程的八项测试。ABI 命令要求已准备的共享库构建和仓库基线历史。它们是原生主机检查，不会自动模拟交叉编译目标。
+安装工具使用构建目录内的独立前缀，默认能力齐全时运行十五项 C/C++ 消费测试，再运行纯 C 工程的九项测试。ABI 命令要求已准备的共享库构建和仓库基线历史。它们是原生主机检查，不会自动模拟交叉编译目标。
 
 GCC/Clang 内存检查使用单独构建目录：
 
@@ -1749,7 +1751,7 @@ TSan 在另一个目录配置 `HX_OS_SANITIZER=thread`，不与 ASan 混用。�
 | ARM Linux | ARMv7/AArch64 交叉编译及 QEMU 兼容集合 |
 | Android | API 21/28、两种 ARM ABI 和最小配置 |
 
-工作流见 [build.yml](../.github/workflows/build.yml)。配置存在不等于远程已运行通过。本次全量 CTest 为 Windows 88/88、WSL Linux 90/90，variant 相关 ASan/UBSan/LSan 为 6/6；常用接口改进的 TSan 结果保留在其带日期的记录中。此前全量 sanitizer 与 1,001 轮生命周期审查对应各自记录的版本，该次审查在每轮清理后观测到追踪存活字节为零。详见[验证记录](VALIDATION.zh-CN.md)。
+工作流见 [build.yml](../.github/workflows/build.yml)。配置存在不等于远程已运行通过。本次全量 CTest 为 Windows 91/91、WSL Linux 93/93，递归查询相关 ASan/UBSan/LSan 为 3/3，C++ 工具测试也通过 TSan。此前全量 sanitizer 与 1,001 轮生命周期审查对应各自记录的版本，该次审查在每轮清理后观测到追踪存活字节为零。详见[验证记录](VALIDATION.zh-CN.md)。
 
 ### 30.3 测量实际成本
 
@@ -1801,6 +1803,6 @@ TSan 在另一个目录配置 `HX_OS_SANITIZER=thread`，不与 ASan 混用。�
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%2088%2F88%20Linux%2090%2F90-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%2091%2F91%20Linux%2093%2F93-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

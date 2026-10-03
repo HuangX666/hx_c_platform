@@ -6,7 +6,37 @@ Entries below describe the versions tested at the time. Historical C++ exception
 
 This records development validation through 2026-10-03. A design, implemented adapter, successful compile and successful target run are different states. Local tests do not certify every operating-system release, filesystem, CPU, libc or network provider.
 
-The variant entry records the current addition. The onboarding documentation, common-call refinement, Result migration, earlier Final delivery matrix and batch checkpoints describe their original versions.
+The recursive search entry records the current addition. Variant, onboarding documentation, common-call refinement, Result migration, earlier Final delivery matrix and batch checkpoints describe their original versions.
+
+## Recursive file search (2026-10-03)
+
+Added C99 streaming and first-match file search with exception-free C++11 convenience methods. The synchronous implementation reuses native directory adapters and the existing UTF-8 glob matcher; the background example submits one task to the existing thread pool. Existing public structure layouts are unchanged; no new dependency or implicit worker is introduced.
+
+| Configuration | Evidence for this change |
+| --- | --- |
+| Windows MSVC 19.40 x64 shared Release | Full CTest 91/91 |
+| WSL Ubuntu GCC 15.2 x86_64 shared Release | Full CTest 93/93 |
+| Windows minimal shared, FILE_UTILS OFF | Rebuilt; 3/3 affected tests, including explicit unsupported behavior |
+| WSL minimal shared, FILE_UTILS ON | 3/3 affected tests with FILE_INFO, CONTAINERS, CONFIG, SETTINGS and THREAD_POOL disabled |
+| MSVC 19.29 x86 static Debug | Standalone C99/C++11 headers; 5/5 search/utility tests and examples |
+| WSL ASan + UBSan, leak detection enabled | 3/3 affected tests; no reported defects |
+| WSL TSan | C++ utility suite, including worker-thread search, passes with no reported races |
+| Installed shared consumers, Windows x64 and WSL | Each 15/15 C/C++ and 9/9 pure C programs |
+| Installed static consumers, Windows x86 | 15/15 C/C++ and 9/9 pure C programs |
+| Existing old-header consumers against current shared library | Windows/WSL each 10/10 |
+| Public declarations against exports | Windows/WSL each match 690 exported HX functions |
+| New bilingual documentation programs | Windows/WSL each 6/6 compiled and run with documented output |
+| Android API 21 ARM64/ARMv7, full/minimal shared | All four cross-builds pass, including standalone C99/C++11 headers |
+| ARM64 through API 34 x86_64 emulator native bridge | Both configurations pass 14/14 suites plus the portable benchmark |
+| ARMv7 runtime | Explicitly skipped: selected emulator does not support this ABI |
+
+Controlled fixtures cover 2,052 matching files, 96 nested directories, Unicode names, first match/no match, callback stop/error details, bounds, allocation failures and complete tracked cleanup. POSIX also tests link cycles, links to outside directories and invalid-byte filenames. WSL uses native /tmp for these fixtures because the Windows-mounted filesystem can translate invalid names. C++ verifies that callbacks run inside the selected pool and that copied task arguments remain valid.
+
+For a fixed directory shape, growing from 4 to 2,052 matches leaves search-context allocation calls and peak live bytes unchanged: Windows 23 calls/4,010 bytes; WSL 7 calls/1,866 bytes. These observations include allocations routed through that context, not libc/OS buffers or callback allocations. They do not establish whole-process memory use, a speedup, or a Windows/Linux performance comparison. The implementation uses an explicit depth-bounded stack and reusable buffers without collecting all results; complete scans still visit directory entries.
+
+The default depth is 64, configurable up to 256. Stop/error is observed at matching callbacks; running scans do not automatically poll task cancellation and cannot promise prompt cancellation when no files match. Native directory calls have no hard deadline. Pool wait/close timeout preserves pending work; the application must keep its owner and callback state alive. Directory enumeration is not a snapshot or a security sandbox against concurrent replacement.
+
+Bilingual snippets, commands, links, fences, UTF-8 without BOM and LF pass checks. Both new search Mermaid diagrams render successfully. Existing header builds disable C++ exceptions. macOS, Win7, Android 5.0 runtime, musl and physical embedded/Android ARM remain pending; translated emulator execution is not a physical ARM performance test.
 
 ## Variant values (2026-10-03)
 

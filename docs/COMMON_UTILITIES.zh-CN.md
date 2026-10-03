@@ -63,6 +63,8 @@ POD 宏仅包裹已有有界容器，不引入另一套实现。宏参数 name �
 
 ## 连续设置与直接目录遍历
 
+需要进入子目录时，使用 Directory::findFirstFile 取得一个拥有的路径，或 Directory::findFiles / hx_os_directory_find_files 流式返回匹配文件。这些入口同步执行；界面程序使用现有线程池，再把复制后的结果投递到界面线程。限制、原生类型复用、错误/所有权契约和完整后台示例见[递归查找](FILE_SEARCH.zh-CN.md)。下方原有 forEach/visit 仍只遍历一层。
+
 使用 `hx_settings_update_begin`、类型化 setter 和一次 `hx_settings_update_finish`，或 `settings.update().setInt(...).setString(...).finish()`。每次成功都通过既有实现发布和通知。首次失败固定保留，后续项跳过，此前修改保留。finish 只检查游标，失败时也返回成功操作次数。它不提供事务回滚，也不合并通知。设置、分配器和用户状态须覆盖 setter 生命周期；`unset` 只修改显式层，游标不额外串行化既有设置操作。
 
 参数包提供对应的 `hx_os_calldata_edit_*` 与 `CallData::edit()`。后续失败时，之前成功的 setter 仍生效。游标借用参数包，调用方排除并发修改，并在调用消费者前检查 finish。单独使用既有 setter 时，仍分别返回自己的 Result／状态码。

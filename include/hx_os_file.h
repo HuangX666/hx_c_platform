@@ -276,6 +276,37 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_path_glob_with_options(
 	hx_os_context *context, const char *pattern,
 	const hx_os_walk_options *options, hx_os_vector **matches,
 	hx_os_error *error);
+/* Synchronous recursive file search, streamed without collecting results.
+ * pattern matches a basename using glob's UTF-8 wildcards and leading-dot
+ * rules; '?' matches one codepoint. Separators, [] and escaping are not
+ * supported. Visits regular files only, traversing hidden directories too.
+ * Observed links/reparse points are skipped. Concurrent tree changes are not
+ * a snapshot or security boundary and may fail after earlier callbacks.
+ * Paths join root and the relative filename, absolute only for absolute root.
+ * Views borrow a reused NUL-terminated buffer only during each callback.
+ * OK continues, EOF stops successfully, other statuses retain callback error.
+ * Root counts as depth 1. Limits report LIMIT, never silent truncation.
+ * max_bytes bounds stack/path/name scratch allocations including growth,
+ * excluding native directory objects/OS buffers (at most max_depth open).
+ * completed counts callbacks started, including one that stops/fails. Callback
+ * effects are not rolled back; all handles and buffers close before return.
+ * Requires FILE_UTILS, works without CONTAINERS; no workers or file index.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_find_files(const char *root,
+	const char *pattern, hx_os_directory_visit_fn visit, void *user,
+	hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_find_files_ex(
+	hx_os_context *context, const char *root, const char *pattern,
+	const hx_os_walk_options *options, hx_os_directory_visit_fn visit,
+	void *user, size_t *completed, hx_os_error *error);
+/* Copies the first match using out's context, then stops. No match returns
+ * NOT_FOUND. Failure preserves out. Traversal order is unspecified. */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_find_first_file(
+	const char *root, const char *pattern, hx_string *out,
+	hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_find_first_file_ex(
+	const char *root, const char *pattern,
+	const hx_os_walk_options *options, hx_string *out, hx_os_error *error);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_remove_recursive(
 	const char *path, hx_os_error *error);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_remove_recursive_with_options(

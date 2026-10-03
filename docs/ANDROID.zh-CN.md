@@ -35,7 +35,7 @@ adb devices -l
 python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --serial DEVICE_SERIAL
 ~~~
 
-可用 --adb 指定 adb 绝对路径。脚本核对目标 ABI/API，在新建的 /data/local/tmp/hx_c_platform-随机值 目录上传本次构建的文件，仅为本次进程设置 LD_LIBRARY_PATH，运行以下 13 组：
+可用 --adb 指定 adb 绝对路径。脚本核对目标 ABI/API，在新建的 /data/local/tmp/hx_c_platform-随机值 目录上传本次构建的文件，仅为本次进程设置 LD_LIBRARY_PATH，运行以下 14 组：
 
 | 测试 | 重点 |
 | --- | --- |
@@ -52,6 +52,7 @@ python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --ser
 | convenience | 原地字符串、并发更新期间持有设置字符串、连续设置失败、翻译借用视图和有界目录遍历 |
 | variant | 精确类型、UTF-8/NUL、自定义复制/清理、对齐、所有权/context 回收和容器失败路径 |
 | cpp_variant | 无异常 C++11 set/get/emplace/clone/visit、类型列表、只构造对象和分配失败 |
+| file_search | 递归流式/首次命中查询、Unicode、限额、链接、分配回收和模块关闭 |
 
 另运行 hx_os_portable_baseline，记录原子、ASCII、宽位換算、命名过程、精细等待观察值，没有固定时间阈值。ADB 只负责部署和控制。记录 NDK、源码版本及是否有未提交修改、ABI/API、设备型号/指纹/API、模拟器标记和每项输出。清理只移除确切上传文件，不递归删除目录；失败夹保留排查。ADB 超时可能留下目标进程，保留目录并报告，不强杀。性能采样需记录负载、温度、调频状态并重复多轮。
 
@@ -75,9 +76,13 @@ python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --ser
 
 模块位表示编译了功能族，不保证所有平台扩展可用。API 21 构建在新设备上也不会自动获得进程能力，需要更高最低 API 的构建。没有 JNI/Java 依赖、 APK、Manifest 权限、资产系统或 UI 自动化，这些由消费者处理。独立验证程序使用 c++_static，消费者沿用自己 NDK 工程的 STL 选择。
 
+## 递归搜索验证（2026-10-03）
+
+API 21 ARM64/ARMv7 完整和最小共享库四项配置均构建通过，包含 C99/C++11 公共头。ARM64 两种配置各在 API 34 x86_64 模拟器经 native-bridge 翻译通过十四组测试及 portable 基准。ARMv7 因 ABI 不兼容明确跳过运行。file_search 增加深度/宽度、Unicode、首次命中、回调、链接、分配和模块关闭检查，cpp_utilities 也验证现有线程池中的查询。结果不等于 Android 5.0 运行、ARM 真机性能或应用沙箱验证，详见[验证记录](VALIDATION.zh-CN.md)。
+
 ## variant 验证（2026-10-03）
 
-当前集合为 13 组，增加 variant/cpp_variant；portable 基准增加整数和自定义结构体 set/get 时间观察。API 21 ARM64/ARMv7 完整及最小共享库构建包含该模块、模块关闭测试和公共头 C99/C++11 独立编译。实际运行与待验证目标分别记录在 [VALIDATION.zh-CN.md](VALIDATION.zh-CN.md)。下面的此前记录描述原版本和当时的测试集合。
+variant 阶段的集合为 13 组，增加 variant/cpp_variant；portable 基准增加整数和自定义结构体 set/get 时间观察。API 21 ARM64/ARMv7 完整及最小共享库构建包含该模块、模块关闭测试和公共头 C99/C++11 独立编译。实际运行与待验证目标分别记录在 [VALIDATION.zh-CN.md](VALIDATION.zh-CN.md)。下面的此前记录描述原版本和当时的测试集合。
 
 ## 常用接口验证（2026-10-01）
 
@@ -102,7 +107,7 @@ API 21 的 arm64-v8a、armeabi-v7a 完整/最小共享配置均编译通过。AR
 | API 21 arm64-v8a，静态、默认模块 | 通过 | Android 14 翻译执行 8/8 |
 | API 21 arm64-v8a，共享、最小模块 | 通过 | Android 14 翻译执行 8/8 |
 
-最小/静态配置及宿主验证见[验证记录](VALIDATION.zh-CN.md)。已启动现有 Qt_Android_34，序列号 emulator-5580，实际系统为 API 34，原生机器为 x86_64，提供 libndk_translation。上表 6 个已运行配置分别通过 8 项安卓基准测试，另各执行一次性能基准程序。最小配置验证功能关闭语义。这 8 项属于此前安卓基准子集，不是当前十一项集合，也不是整套桌面 CTest。
+最小/静态配置及宿主验证见[验证记录](VALIDATION.zh-CN.md)。已启动现有 Qt_Android_34，序列号 emulator-5580，实际系统为 API 34，原生机器为 x86_64，提供 libndk_translation。上表 6 个已运行配置分别通过 8 项安卓基准测试，另各执行一次性能基准程序。最小配置验证功能关闭语义。这 8 项属于此前安卓基准子集，不是当前集合，也不是整套桌面 CTest。
 
 ARM64 共享程序最初无法通过 LD_LIBRARY_PATH 找到本库；加入程序自身目录的 RUNPATH 后，两组共享配置及最小配置通过。该路径机制在 API 24 起可用，参阅 [Android 动态链接器说明](https://android.googlesource.com/platform/bionic/+/refs/heads/android15-tests-release/android-changes-for-ndk-developers.md)。 ARM64 是翻译执行，性能数据含翻译和虚拟化开销，不代表 ARM 硬件性能。模拟器未提供 ARMv7 ABI，该配置在部署前明确跳过，未伪装运行成功。编译最低 API 21 并不代表在 Android 5.0 系统运行过；旧系统、ARMv7、真实 ARM 设备和应用沙箱权限仍需对应环境验证。
 

@@ -1,6 +1,6 @@
 # hx_c_platform
 
-[![CI 配置][ci-badge]](.github/workflows/build.yml) [![C99 核心][c-badge]](CMakeLists.txt) [![C++11 封装][cpp-badge]](docs/CPP_POOL.zh-CN.md) [![仅 C++ 封装为 header-only][header-badge]](docs/CPP_POOL.zh-CN.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![自有代码许可证待定][license-badge]](THIRD_PARTY_NOTICES.zh-CN.md) [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md) [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md) [![本地 Windows 88/88、Linux 90/90 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md) [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md) [![Android API 21 ARM 交叉编译通过][android-badge]](docs/ANDROID.zh-CN.md)
+[![CI 配置][ci-badge]](.github/workflows/build.yml) [![C99 核心][c-badge]](CMakeLists.txt) [![C++11 封装][cpp-badge]](docs/CPP_POOL.zh-CN.md) [![仅 C++ 封装为 header-only][header-badge]](docs/CPP_POOL.zh-CN.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![自有代码许可证待定][license-badge]](THIRD_PARTY_NOTICES.zh-CN.md) [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md) [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md) [![本地 Windows 91/91、Linux 93/93 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md) [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md) [![Android API 21 ARM 交叉编译通过][android-badge]](docs/ANDROID.zh-CN.md)
 
 [English](README.md) · [常用任务教程](docs/USAGE.zh-CN.md) · [详细参考](docs/REFERENCE.zh-CN.md)
 
@@ -114,7 +114,7 @@ Linux 的 Makefile/Ninja 构建运行：
 
 ## 4. 常用任务示例
 
-下面保留几个常用任务。读取文件给出完整程序；其余短片段标明所需头文件和已有对象，完整程序、运行步骤和更多 C/C++ 写法见[常用任务教程](docs/USAGE.zh-CN.md)。
+下面保留几个常用任务。读取文本给出完整程序；其余短片段标明所需头文件和已有对象，完整程序、运行步骤和更多 C/C++ 写法见各任务所链接的教程。
 
 ### 4.1 读取并显示文本文件：C / C++
 
@@ -293,6 +293,19 @@ std::printf("Point: %.1f, %.1f\n", position.value().x,
 
 输出：`Point: 2.0, 5.0`。set 保存独立副本，get<Point> 检查类型并返回结构体引用，离开作用域时自动释放。C 自定义结构体、复制、访问器和容器混合值的完整示例见[variant 教程](docs/VARIANT.zh-CN.md)。
 
+### 4.8 在多层目录中找到文件：C++
+
+任务：递归查找 assets 中第一个 config.json。包含 `<hx/Files.hpp>` 和 `<cstdio>`，把下面片段放入 main()：
+
+```cpp
+auto path = hx::Directory::findFirstFile("assets", "config.json");
+if (!path)
+	return 1;
+std::puts(path.value().c_str());
+```
+
+例如文件位于 assets/nested/config.json，就输出这个路径。没有匹配会明确失败。这个调用同步扫描；界面程序应放进现有线程池。逐个返回全部匹配的入口是 Directory::findFiles，完整 C/C++ 程序和后台示例见[递归查找教程](docs/FILE_SEARCH.zh-CN.md)。
+
 <a id="section-5"></a>
 
 ## 5. 先记住的几条规则
@@ -310,7 +323,8 @@ std::printf("Point: %.1f, %.1f\n", position.value().x,
 
 | 想做什么 | 先看哪里 |
 | --- | --- |
-| 完整复制、编译和运行上面七种任务 | [常用任务教程](docs/USAGE.zh-CN.md) |
+| 文本、配置、容器和线程池的完整程序 | [常用任务教程](docs/USAGE.zh-CN.md) |
+| 在多层目录中查找文件、后台扫描 | [递归查找教程](docs/FILE_SEARCH.zh-CN.md) |
 | 找完整功能、接口限制、构建开关 | [详细参考](docs/REFERENCE.zh-CN.md) |
 | 更多编码、翻译、目录遍历、词法工具 | [常用工具说明](docs/COMMON_UTILITIES.zh-CN.md) |
 | JSON/YAML/XML/INI/TOML/ENV/properties | [配置格式说明](docs/CONFIGURATION.zh-CN.md) |
@@ -324,7 +338,7 @@ std::printf("Point: %.1f, %.1f\n", position.value().x,
 
 ## 7. 构建、验证与项目许可
 
-开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。当前代码的本地全量测试记录为 Windows 88/88、WSL Linux 90/90；具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
+开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。当前代码的本地全量测试记录为 Windows 91/91、WSL Linux 93/93；具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
 
 自有代码的发布许可证尚未确定，第三方许可证见[许可说明](THIRD_PARTY_NOTICES.zh-CN.md)。协程和 hx_c_log 接入属于后续工作。
 
@@ -337,6 +351,6 @@ std::printf("Point: %.1f, %.1f\n", position.value().x,
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%2088%2F88%20Linux%2090%2F90-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%2091%2F91%20Linux%2093%2F93-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

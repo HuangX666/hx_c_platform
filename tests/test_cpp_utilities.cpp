@@ -227,6 +227,17 @@ static void TestDirectCalls()
 	}
 	CHECK(hx_os_context_destroy(&context, NULL) == HX_OS_OK && !state.live);
 }
+static hx::Result<size_t> FindPoolFiles(
+	hx_os_thread_pool *owner, hx::String folder) noexcept
+{
+	return hx::Directory::findFiles(
+		folder.c_str(), "*.txt", [owner](hx::StringView) noexcept {
+			int inside = 0;
+			CHECK(hx_os_thread_pool_inside(owner, &inside) ==
+				HX_OS_OK);
+			CHECK(inside);
+		});
+}
 static void TestDirectoryCalls()
 {
 	char root[80], path[96], bytes[4];
@@ -266,6 +277,43 @@ static void TestDirectoryCalls()
 	CHECK(failed.status() == HX_OS_CANCELLED && failed.value() == 1);
 	CHECK(failed.error().native_code == 17 &&
 		failed.error().cause_code == 23);
+	if (hx_os_capabilities() & HX_OS_CAP_FILE_SEARCH) {
+		CHECK(Equal(hx::Directory::findFirstFile(root, "*.txt"), path));
+		CHECK(hx::Directory::findFirstFile(root, "absent").status() ==
+			HX_OS_NOT_FOUND);
+		CHECK(Take(hx::Directory::findFiles(root, "*.txt",
+			      [](hx::StringView fullPath) noexcept {
+				      CHECK(fullPath.size() > 4);
+				      return false;
+			      })) == 1);
+		auto searchError = hx::Directory::findFiles(root, "*.txt",
+			[](hx::StringView) noexcept -> hx::Result<void> {
+				hx_os_error error = {HX_OS_CANCELLED,
+					HX_OS_ERROR_ERRNO, 31, 47};
+				return hx::Failure(error);
+			});
+		CHECK(searchError.status() == HX_OS_CANCELLED &&
+			searchError.hasValue() && searchError.value() == 1);
+		CHECK(searchError.error().native_code == 31 &&
+			searchError.error().cause_code == 47);
+		if (hx_os_capabilities() & HX_OS_CAP_THREAD_POOL) {
+			hx_os_thread_pool *owner = NULL;
+			auto pool =
+				Take(hx::ThreadPool::withThreads(owner, 1, 4));
+			auto copied = Take(hx::String::copy(root));
+			auto task = Take(pool.submit(
+				FindPoolFiles, owner, std::move(copied)));
+			CHECK(Take(task.getUntil(
+				      hx_os_deadline_after_ms(2000))) == 1);
+			Take(pool.shutdownUntil(TestJoinDeadline()));
+			CHECK(!owner);
+		}
+	}
+	else {
+		auto unsupported = hx::Directory::findFiles(
+			root, "*.txt", [](hx::StringView) noexcept {});
+		CHECK(unsupported.status() == HX_OS_NOT_SUPPORTED);
+	}
 	CHECK(hx_os_file_remove(path, NULL) == HX_OS_OK);
 	CHECK(hx_os_directory_remove(root, NULL) == HX_OS_OK);
 }

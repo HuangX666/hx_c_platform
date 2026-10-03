@@ -4,7 +4,7 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 	random_uuid mapped_file file_attributes watch_directory capture_process
 	delayed_task duplex_message obfuscated_string localized_time
 	signal_notifications settings profile_intervals atomic_publication
-	common_tasks variant)
+	common_tasks variant find_files)
 	add_executable(hx_os_${example} ${example}.c)
 	target_link_libraries(hx_os_${example} PRIVATE hx_c_platform)
 	set_target_properties(hx_os_${example} PROPERTIES
@@ -20,6 +20,17 @@ if(HX_OS_BUILD_TESTS)
 	add_test(NAME atomic_publication_example
 		COMMAND hx_os_atomic_publication)
 	set_tests_properties(atomic_publication_example PROPERTIES TIMEOUT 20)
+endif()
+if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_FILE_UTILS
+		AND HX_OS_ENABLE_SYSTEM_UTILS)
+	set(hx_search_fixture "${CMAKE_CURRENT_BINARY_DIR}/find-中文")
+	file(MAKE_DIRECTORY "${hx_search_fixture}/nested/deeper")
+	file(WRITE "${hx_search_fixture}/first.txt" "first\n")
+	file(WRITE "${hx_search_fixture}/nested/deeper/😀.txt" "second\n")
+	add_test(NAME find_files_example COMMAND hx_os_find_files
+		"${hx_search_fixture}" "*.txt")
+	set_tests_properties(find_files_example PROPERTIES
+		TIMEOUT 20 PASS_REGULAR_EXPRESSION "Files: 2")
 endif()
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_LIBRARY)
 	add_test(NAME plugin_example COMMAND hx_os_load_plugin
@@ -140,6 +151,21 @@ if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_PROFILER)
 	set_tests_properties(profile_intervals_example PROPERTIES TIMEOUT 20)
 endif()
 if(CMAKE_CXX_COMPILER_LOADED)
+	add_executable(hx_os_cpp_find_files find_files_async.cpp)
+	target_link_libraries(hx_os_cpp_find_files PRIVATE hx_c_platform::cpp)
+	set_target_properties(hx_os_cpp_find_files PROPERTIES
+		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+	hx_apply_warnings(hx_os_cpp_find_files)
+	if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_FILE_UTILS
+			AND HX_OS_ENABLE_SYSTEM_UTILS
+			AND HX_OS_ENABLE_THREAD_POOL AND HX_OS_HAVE_TIMED_JOIN)
+		add_test(NAME cpp_find_files_example
+			COMMAND hx_os_cpp_find_files
+			"${hx_search_fixture}" "*.txt")
+		set_tests_properties(cpp_find_files_example PROPERTIES
+			TIMEOUT 20 PASS_REGULAR_EXPRESSION "Files: 2")
+	endif()
 	add_executable(hx_os_cpp_variant variant.cpp)
 	target_link_libraries(hx_os_cpp_variant PRIVATE hx_c_platform::cpp)
 	set_target_properties(hx_os_cpp_variant PROPERTIES

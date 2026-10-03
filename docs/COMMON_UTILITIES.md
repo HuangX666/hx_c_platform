@@ -63,6 +63,8 @@ All four avoid copying string bytes. Borrowed getters allocate nothing. Acquirin
 
 ## Immediate updates and directory visits
 
+For descendants, use Directory::findFirstFile for one owned path or Directory::findFiles / hx_os_directory_find_files for streamed matching files. These are synchronous; a GUI uses an existing pool and posts copied results to its own thread. See [recursive search](FILE_SEARCH.md) for limits, native type reuse, error/ownership contracts and the complete background example. The existing forEach/visit entries below still enumerate one level only.
+
 Use `hx_settings_update_begin` plus typed setters and one `hx_settings_update_finish`, or `settings.update().setInt(...).setString(...).finish()`. Each successful setter publishes and notifies through the original implementation. The first failure remains sticky, later setters are skipped, and earlier writes remain. Finish only inspects the cursor and reports the successful-operation count even on failure. This is not a rollback transaction or a combined notification. Settings/allocator/user state stay alive through the setters; `unset` affects the explicit layer, and the cursor adds no serialization beyond existing settings operations.
 
 Parameter packs offer the analogous `hx_os_calldata_edit_*` and `CallData::edit()`. A successful setter remains applied when a later one fails. The cursor borrows the pack; exclude concurrent mutation and check finish before invoking a consumer. Each original typed setter still reports its own Result/status when used separately.

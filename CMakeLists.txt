@@ -219,7 +219,7 @@ add_library(hx_c_platform
 	src/convenience.c src/lexer.c src/wide.c src/wait.c src/string.c
 	src/string_utils.c src/file.c src/text.c src/optional.c
 	src/config.c src/config_values.c
-	src/containers.c src/variant.c
+	src/containers.c src/variant.c src/file_search.c
 	src/sysinfo.c src/library.c src/path.c src/env.c src/paths.c
 	src/thread_extra.c src/pipe.c src/file_at.c src/net_options.c
 	src/file_info.c src/bom.c src/number.c src/config_serialize.c

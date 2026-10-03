@@ -9,45 +9,6 @@ typedef struct hx_os_glob_frame {
 	size_t next;
 } hx_os_glob_frame;
 
-static const char *hx_os_glob_next_point(const char *text)
-{
-	++text;
-	while (((unsigned char)*text & 0xc0) == 0x80)
-		++text;
-	return text;
-}
-
-static int hx_os_glob_match(const char *pattern, size_t bytes, const char *name)
-{
-	const char *end = pattern + bytes;
-	const char *star = NULL, *retry = NULL;
-	if (name[0] == '.' && (!bytes || pattern[0] != '.'))
-		return 0;
-	while (*name)
-		if (pattern != end && *pattern == '*') {
-			star = ++pattern;
-			retry = name;
-		}
-		else if (pattern != end && *pattern == '?') {
-			++pattern;
-			name = hx_os_glob_next_point(name);
-		}
-		else if (pattern != end && *pattern == *name) {
-			++pattern;
-			++name;
-		}
-		else if (star) {
-			retry = hx_os_glob_next_point(retry);
-			name = retry;
-			pattern = star;
-		}
-		else
-			return 0;
-	while (pattern != end && *pattern == '*')
-		++pattern;
-	return pattern == end;
-}
-
 static hx_os_status hx_os_glob_name(
 	hx_os_directory *directory, hx_string *name, hx_os_error *error)
 {
@@ -170,7 +131,7 @@ static hx_os_status hx_os_glob_walk(hx_os_vector *matches, hx_string *path,
 			status = hx_os_i_error(error, HX_OS_LIMIT, 0, 0);
 			break;
 		}
-		if (!hx_os_glob_match(pattern + frame->begin,
+		if (!hx_os_i_glob_match(pattern + frame->begin,
 			    frame->end - frame->begin, hx_string_c_str(&name)))
 			continue;
 		if (path->size && path->data[path->size - 1] != '/'

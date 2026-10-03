@@ -1,5 +1,46 @@
 #include "file_utils_private.h"
 
+#if HX_OS_ENABLE_FILE_UTILS
+static const char *hx_os_glob_next_point(const char *text)
+{
+	++text;
+	while (((unsigned char)*text & 0xc0) == 0x80)
+		++text;
+	return text;
+}
+
+int hx_os_i_glob_match(const char *pattern, size_t bytes, const char *name)
+{
+	const char *end = pattern + bytes;
+	const char *star = NULL, *retry = NULL;
+	if (name[0] == '.' && (!bytes || pattern[0] != '.'))
+		return 0;
+	while (*name)
+		if (pattern != end && *pattern == '*') {
+			star = ++pattern;
+			retry = name;
+		}
+		else if (pattern != end && *pattern == '?') {
+			++pattern;
+			name = hx_os_glob_next_point(name);
+		}
+		else if (pattern != end && *pattern == *name) {
+			++pattern;
+			++name;
+		}
+		else if (star) {
+			retry = hx_os_glob_next_point(retry);
+			name = retry;
+			pattern = star;
+		}
+		else
+			return 0;
+	while (pattern != end && *pattern == '*')
+		++pattern;
+	return pattern == end;
+}
+#endif
+
 int hx_os_i_path_separator(char value)
 {
 	return value == '/' || value == '\\';

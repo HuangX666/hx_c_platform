@@ -6,6 +6,7 @@
 
 int hx_os_i_path_separator(char value);
 size_t hx_os_i_path_root(const char *path);
+int hx_os_i_glob_match(const char *pattern, size_t bytes, const char *name);
 hx_os_status hx_os_i_walk_options(const hx_os_walk_options *input,
 	hx_os_walk_options *out, hx_os_error *error);
 hx_os_status hx_os_i_file_copy(

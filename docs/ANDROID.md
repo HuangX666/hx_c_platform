@@ -35,7 +35,7 @@ adb devices -l
 python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --serial DEVICE_SERIAL
 ~~~
 
-Pass --adb for an absolute adb path. The runner checks ABI/API, uploads only its artifacts into a fresh /data/local/tmp/hx_c_platform-UUID directory, sets that process's LD_LIBRARY_PATH, and executes thirteen suites:
+Pass --adb for an absolute adb path. The runner checks ABI/API, uploads only its artifacts into a fresh /data/local/tmp/hx_c_platform-UUID directory, sets that process's LD_LIBRARY_PATH, and executes fourteen suites:
 
 | Suite | Coverage |
 | --- | --- |
@@ -52,6 +52,7 @@ Pass --adb for an absolute adb path. The runner checks ABI/API, uploads only its
 | convenience | In-place strings, retained setting strings under concurrent updates, immediate cursor failures, borrowed catalog values and bounded directory visits |
 | variant | Exact types, UTF-8/NUL, custom copy/drop, alignment, ownership/context cleanup and container failure paths |
 | cpp_variant | Exception-free C++11 set/get/emplace/clone/visit, typed alternatives, move-only objects and allocator failures |
+| file_search | Streaming/first-match recursive search, Unicode, limits, links, allocation cleanup and module-off behavior |
 
 hx_os_portable_baseline also records atomic, ASCII, wide conversion, named-call and precise-wait observations without fixed timing thresholds. Logs include NDK, source revision/dirty status, ABI/API, device model, fingerprint, runtime API, emulator marker and command output. Cleanup removes only explicitly uploaded files, never recursively deleting test directories. Failed fixtures remain. An adb timeout may leave the target process running; preserve/report its directory without killing it. Record load/temperature/ frequency conditions and collect repeated performance samples.
 
@@ -75,9 +76,13 @@ Reports distinguish build minimum API, runtime API, native machine and translati
 
 Module bits describe compiled families, not every platform extension. API 21 binaries remain process-disabled on newer devices; build with the higher minimum API for that feature. No JNI/Java dependency, APK, manifest permissions, asset API or UI automation is supplied. Consumers own those. Standalone validation uses c++_static; consumers retain their NDK STL policy.
 
+## Recursive search verification (2026-10-03)
+
+API 21 ARM64/ARMv7 full and minimal shared configurations all build, including C99/C++11 headers. Each ARM64 configuration passes fourteen suites and the portable benchmark on the API 34 x86_64 emulator through native-bridge translation. ARMv7 runtime is explicitly skipped for an incompatible ABI. file_search adds depth/width, Unicode, first-match, callback, link, allocation and disabled-module checks; cpp_utilities also exercises search in the existing pool. These results do not establish Android 5.0 runtime, physical ARM performance or app sandbox behavior. See [validation](VALIDATION.md).
+
 ## Variant verification (2026-10-03)
 
-The selected subset now contains thirteen suites, adding variant/cpp_variant; the portable benchmark adds integer and custom-structure set/get timing observations. API 21 ARM64/ARMv7 full and minimal shared builds include the module, disabled-module tests and standalone C99/C++11 headers. Runtime and pending targets are recorded separately in [VALIDATION.md](VALIDATION.md). Prior records below describe their original revisions and selected subsets.
+At the variant stage, the selected subset contained thirteen suites, adding variant/cpp_variant; the portable benchmark added integer and custom-structure set/get timing observations. API 21 ARM64/ARMv7 full and minimal shared builds included the module, disabled-module tests and standalone C99/C++11 headers. Runtime and pending targets are recorded separately in [VALIDATION.md](VALIDATION.md). Prior records below describe their original revisions and selected subsets.
 
 ## Common-call verification (2026-10-01)
 

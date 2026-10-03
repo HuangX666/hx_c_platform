@@ -150,6 +150,35 @@ private:
 
 class Directory {
 public:
+	static Result<String> findFirstFile(const char *root,
+		const char *pattern, const hx_os_walk_options *options = NULL,
+		hx_os_context *context = NULL) noexcept
+	{
+		return detail::StringQuery(
+			[=](hx_string *out, hx_os_error *error) noexcept {
+				return hx_os_directory_find_first_file_ex(
+					root, pattern, options, out, error);
+			},
+			context);
+	}
+	/* Recursive basename search. Paths are borrowed during the callback.
+	 * false/EOF stops normally, matching forEach's callback contract. */
+	template <typename F>
+	static Result<size_t> findFiles(const char *root, const char *pattern,
+		F &&function, const hx_os_walk_options *options = NULL,
+		hx_os_context *context = NULL) noexcept
+	{
+		typedef typename std::remove_reference<F>::type Function;
+		if (detail::NullCallable(function, std::is_pointer<Function>()))
+			return Failure(HX_OS_INVALID);
+		Visitor<Function> visitor = {&function};
+		size_t completed = 0;
+		hx_os_error error = {};
+		auto status = hx_os_directory_find_files_ex(context, root,
+			pattern, options, visit<Function>, &visitor, &completed,
+			&error);
+		return Result<size_t>::withValue(completed, status, error);
+	}
 	/* Callback borrows each name only during its call. A bool callback
 	 * continues on true and stops normally on false;
 	 * void/status/Result<void> callbacks follow the usual explicit-error

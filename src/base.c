@@ -616,6 +616,7 @@ uint64_t hx_os_capabilities(void)
 #endif
 #if HX_OS_ENABLE_FILE_UTILS
 	result |= HX_OS_CAP_FILE_UTILS;
+	result |= HX_OS_CAP_FILE_SEARCH;
 #if HX_OS_ENABLE_CONTAINERS
 	result |= HX_OS_CAP_GLOB;
 #endif

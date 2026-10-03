@@ -726,6 +726,7 @@ Tutorials use default modules. JSON needs CONFIG; containers need CONTAINERS; va
 | Task | Document |
 | --- | --- |
 | Dates/filenames, translations, lexing and directory visits | [Common utilities](COMMON_UTILITIES.md) |
+| Find files recursively and run a search in a pool | [File search](FILE_SEARCH.md) |
 | Network, processes, pipes, mappings and metrics | [Platform utilities](PLATFORM_UTILITIES.md) |
 | Locks, events, thread-local storage and resource lifetimes | [Core contracts](CONTRACTS.md) |
 | Installed static/shared find_package integration | [Installation reference](REFERENCE.md#section-5) |
