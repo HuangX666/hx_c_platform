@@ -53,7 +53,7 @@ Common calls handle their own composition: read a UTF-8 file into `hx_string`, g
 | File publication and timestamp mechanisms | Log rotation, retention, formatting and filtering |
 | Interval profiling and native system queries | Crash policy, LocalDumps setup and historical log rings |
 
-The library builds, tests, installs and runs independently of hx_c_log. It does not require Qt, C++, or the OBS runtime. OBS informs the unified API, shared implementation and build-selected adapter organization. hx_c_log integration and coroutines remain future work. Thread-local storage **TLS** does not mean network encryption TLS; no encryption protocol stack is bundled.
+The library builds, tests, installs and runs independently of hx_c_log. It does not require Qt, C++, or the OBS runtime. OBS informs the unified API, shared implementation and build-selected adapter organization. hx_c_log integration remains future work. Self-developed stackful and stackless coroutines are described in [the coroutine guide](COROUTINES.md). Thread-local storage **TLS** does not mean network encryption TLS; no encryption protocol stack is bundled.
 
 <a id="section-2"></a>
 
@@ -1767,7 +1767,7 @@ First-party source is UTF-8 without BOM, LF, Tab width 8, with an 80-column sour
 
 Native APIs and compiler builtins come first; assembly is reserved for measured local improvements with correct supported-target fallbacks. Most Apple code remains C; the optional Apple performance request adapter alone uses Objective-C/Foundation. Linux power/performance requests return NOT_SUPPORTED. Registry access is an explicit Windows extension. Strict affinity is not promised where the OS cannot implement it.
 
-Future work includes native target validation and measured improvements. Coroutines, hx_c_log migration, crash-policy frameworks and FreeRTOS/bare metal adaptation are not delivered features. The first-party distribution license is **not yet selected**; third-party licenses remain independently applicable. See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
+Future work includes native target validation and measured improvements. hx_c_log migration, crash-policy frameworks and FreeRTOS/bare metal adaptation are not delivered features. The first-party distribution license is **not yet selected**; third-party licenses remain independently applicable. See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
 
 <a id="section-32"></a>
 

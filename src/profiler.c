@@ -1,4 +1,7 @@
 #include "profiler_private.h"
+#if HX_OS_ENABLE_COROUTINES
+#include "hx_os_coroutine.h"
+#endif
 hx_os_status hx_os_profiler_options_init(
 	hx_os_profiler_options *options, size_t capacity)
 {
@@ -16,6 +19,12 @@ static __declspec(thread) hx_os_profile_guard *hx_os_profile_current;
 #else
 static __thread hx_os_profile_guard *hx_os_profile_current;
 #endif
+void *hx_os_i_profiler_exchange_execution(void *value)
+{
+	hx_os_profile_guard *previous = hx_os_profile_current;
+	hx_os_profile_current = value;
+	return previous;
+}
 static hx_os_profile_guard *hx_os_profiler_self(hx_os_profiler *profiler)
 {
 	hx_os_profile_guard *guard;
@@ -148,10 +157,38 @@ hx_os_status hx_os_profiler_create_with_options(hx_os_context *context,
 	*out = profiler;
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
+static void *hx_os_profiler_context_get(hx_os_profiler *profiler)
+{
+#if HX_OS_ENABLE_COROUTINES
+	if (hx_os_coro_current())
+		return hx_os_i_coro_local_get(profiler);
+#endif
+	return hx_os_tls_get(profiler->key);
+}
+static void hx_os_profiler_context_clear(hx_os_profiler *profiler)
+{
+#if HX_OS_ENABLE_COROUTINES
+	if (hx_os_coro_current()) {
+		hx_os_i_coro_local_clear(profiler);
+		return;
+	}
+#endif
+	hx_os_tls_clear(profiler->key);
+}
+static hx_os_status hx_os_profiler_context_set(hx_os_profiler *profiler,
+	hx_os_profile_thread *thread, hx_os_error *error)
+{
+#if HX_OS_ENABLE_COROUTINES
+	if (hx_os_coro_current())
+		return hx_os_i_coro_local_set(
+			profiler, thread, hx_os_profiler_thread_exit, error);
+#endif
+	return hx_os_tls_set(profiler->key, thread, error);
+}
 static hx_os_status hx_os_profiler_thread(hx_os_profiler *profiler,
 	hx_os_profile_thread **out, int *created, hx_os_error *error)
 {
-	hx_os_profile_thread *thread = hx_os_tls_get(profiler->key);
+	hx_os_profile_thread *thread = hx_os_profiler_context_get(profiler);
 	hx_os_status status;
 	*created = 0;
 	if (thread) {
@@ -178,7 +215,7 @@ static hx_os_status hx_os_profiler_thread(hx_os_profiler *profiler,
 		status = hx_os_i_error(error, HX_OS_NO_MEMORY, 0, 0);
 	else {
 		thread->profiler = profiler;
-		status = hx_os_tls_set(profiler->key, thread, error);
+		status = hx_os_profiler_context_set(profiler, thread, error);
 	}
 	if (status != HX_OS_OK) {
 		hx_os_memory_free(thread);
@@ -303,7 +340,7 @@ static hx_os_status hx_os_profiler_enter(hx_os_profiler *profiler,
 	status = hx_os_text_validate_utf8(name, bytes, &invalid);
 	if (status != HX_OS_OK)
 		goto done;
-	thread = hx_os_tls_get(profiler->key);
+	thread = hx_os_profiler_context_get(profiler);
 	if ((root && thread && thread->depth) ||
 		(!root && (!thread || !thread->depth))) {
 		status = root ? HX_OS_BUSY : HX_OS_INVALID;
@@ -330,7 +367,7 @@ static hx_os_status hx_os_profiler_enter(hx_os_profiler *profiler,
 	}
 native_done:
 	if (status != HX_OS_OK && created)
-		hx_os_tls_clear(profiler->key);
+		hx_os_profiler_context_clear(profiler);
 	hx_os_i_profiler_end(&guard);
 	return status;
 done:
@@ -359,7 +396,7 @@ hx_os_status hx_os_profiler_leave(hx_os_profiler *profiler, hx_os_error *error)
 		hx_os_i_profiler_begin(profiler, &guard, 1, error);
 	if (status != HX_OS_OK)
 		return status;
-	thread = hx_os_tls_get(profiler->key);
+	thread = hx_os_profiler_context_get(profiler);
 	if (!thread || !thread->depth) {
 		hx_os_i_profiler_end(&guard);
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
@@ -400,7 +437,7 @@ hx_os_status hx_os_profiler_leave(hx_os_profiler *profiler, hx_os_error *error)
 	}
 	(void)hx_os_mutex_unlock(profiler->mutex, NULL);
 	if (detach)
-		hx_os_tls_clear(profiler->key);
+		hx_os_profiler_context_clear(profiler);
 	hx_os_i_profiler_end(&guard);
 	return status;
 }
@@ -412,7 +449,7 @@ hx_os_status hx_os_profiler_restart_thread(
 		hx_os_i_profiler_begin(profiler, &guard, 1, error);
 	if (status != HX_OS_OK)
 		return status;
-	hx_os_tls_clear(profiler->key);
+	hx_os_profiler_context_clear(profiler);
 	hx_os_i_profiler_end(&guard);
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
@@ -444,7 +481,7 @@ hx_os_status hx_os_profiler_close_until(
 		return hx_os_i_error(error, HX_OS_OK, 0, 0);
 	if (hx_os_profiler_self(profiler))
 		return hx_os_i_error(error, HX_OS_DEADLOCK, 0, 0);
-	thread = hx_os_tls_get(profiler->key);
+	thread = hx_os_profiler_context_get(profiler);
 	if (thread && thread->depth)
 		return hx_os_i_error(error, HX_OS_DEADLOCK, 0, 0);
 	guard.previous = hx_os_profile_current;
@@ -453,7 +490,7 @@ hx_os_status hx_os_profiler_close_until(
 	hx_os_profile_current = &guard;
 	hx_os_profiler_stop(profiler);
 	if (thread)
-		hx_os_tls_clear(profiler->key);
+		hx_os_profiler_context_clear(profiler);
 	(void)hx_os_mutex_lock(profiler->mutex, NULL);
 	while (status == HX_OS_OK &&
 		(profiler->threads || profiler->operations)) {

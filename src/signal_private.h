@@ -2,6 +2,7 @@
 #define HX_C_PLATFORM_SIGNAL_PRIVATE_H
 #include "internal.h"
 #include "hx_os_signal.h"
+void *hx_os_i_signal_exchange_execution(void *value);
 typedef struct hx_os_signal_slot {
 	hx_os_signal_fn function;
 	hx_os_signal_cleanup_fn cleanup;

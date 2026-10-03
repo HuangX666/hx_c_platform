@@ -2,6 +2,7 @@
 #define HX_C_PLATFORM_PROFILER_PRIVATE_H
 #include "internal.h"
 #include "hx_os_profiler.h"
+void *hx_os_i_profiler_exchange_execution(void *value);
 typedef struct hx_os_profile_record {
 	struct hx_os_profile_record *next;
 	struct hx_os_profile_record *bucket_next;

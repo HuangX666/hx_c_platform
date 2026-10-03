@@ -1,6 +1,6 @@
 # hx_c_platform
 
-[![CI configuration][ci-badge]](.github/workflows/build.yml) [![C99 core][c-badge]](CMakeLists.txt) [![C++11 facade][cpp-badge]](docs/CPP_POOL.md) [![Header-only C++ facade][header-badge]](docs/CPP_POOL.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![First-party license pending][license-badge]](THIRD_PARTY_NOTICES.md) [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md) [![macOS validation pending][macos-badge]](docs/VALIDATION.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.md) [![Windows 91/91 and Linux 93/93 local suites passed][tests-badge]](docs/VALIDATION.md) [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md) [![Android API 21 ARM cross-build passed][android-badge]](docs/ANDROID.md)
+[![CI configuration][ci-badge]](.github/workflows/build.yml) [![C99 core][c-badge]](CMakeLists.txt) [![C++11 facade][cpp-badge]](docs/CPP_POOL.md) [![Header-only C++ facade][header-badge]](docs/CPP_POOL.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![First-party license pending][license-badge]](THIRD_PARTY_NOTICES.md) [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md) [![macOS validation pending][macos-badge]](docs/VALIDATION.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.md) [![Windows 100/100 and Linux 102/102 local suites passed][tests-badge]](docs/VALIDATION.md) [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md) [![Android API 21 ARM cross-build passed][android-badge]](docs/ANDROID.md)
 
 [简体中文](README.zh-CN.md) · [Task tutorials](docs/USAGE.md) · [Detailed reference](docs/REFERENCE.md)
 
@@ -16,9 +16,9 @@
 
 ## 1. What the library helps you do
 
-`hx_c_platform` gives C/C++ projects common tools for files, UTF-8 strings, configuration, containers, variant values, threads and background tasks. You call one interface; the library handles differences between Windows, Linux and other adapted systems.
+`hx_c_platform` gives C/C++ projects common tools for files, UTF-8 strings, configuration, containers, variant values, threads, background tasks and cooperative coroutines. You call one interface; the library handles differences between Windows, Linux and other adapted systems.
 
-The core uses C99. C++11 developers can choose the optional C++ interface. Ordinary use needs no global runtime setup, Qt or OBS dependency. The current version is 0.1.0.
+The core uses C99. C++11 developers can choose the optional C++ interface; C++20 coroutine syntax is a separate opt-in layer. Ordinary use needs no global runtime setup, Qt or OBS dependency. The current version is 0.1.0.
 
 The diagram shows the call path: your application calls the library, which selects the system implementation.
 
@@ -306,6 +306,23 @@ std::puts(path.value().c_str());
 
 If the file is assets/nested/config.json, that path is printed. No match reports failure. This call scans synchronously; a GUI should use its existing pool. Directory::findFiles streams every match. Complete C/C++ and background examples are in the [recursive search tutorial](docs/FILE_SEARCH.md).
 
+### 4.9 Start a coroutine: C++11 / optional C++20
+
+A coroutine can pause during a wait while its worker runs another task. Create `hx::coro::Runtime` explicitly, then submit an ordinary function or lambda with `go`. This excerpt submits a calculation and reads its result:
+
+```cpp
+auto task = runtime.go([]() noexcept { return 6 * 7; });
+if (task) {
+	auto result = task.value().getUntil(hx_os_deadline_after_ms(2000));
+	if (result)
+		std::printf("Answer: %d\n", result.value());
+}
+```
+
+Output: `Answer: 42`. [The complete C++11 program](examples/coroutine.cpp) includes creation, coroutine sleep, error checks and explicit shutdown. [The C99 example](examples/coroutine.c) shows a stackless state machine; [the C++20 example](examples/coroutine20.cpp) uses `co_await`. The [coroutine guide](docs/COROUTINES.md) explains channels, select, I/O, cancellation and retryable close. Ordinary blocking functions still block the worker; long computations explicitly yield.
+
+Need ordered or duplicate keys and traversal macros? The [red-black multimap example](examples/ordered_map.c) prints `a: 10`, `b: 20`, `b: 21` in key order. [The container guide](docs/CONTAINERS.md) covers reverse traversal, stable sorting, filtering, list splice and set operations.
+
 <a id="section-5"></a>
 
 ## 5. A few rules to remember
@@ -338,9 +355,9 @@ The meaning of `NULL` depends on its position: allocator/options parameters sele
 
 ## 7. Builds, validation and licensing
 
-See the [build reference](docs/REFERENCE.md#section-27) for development builds, tests, static/shared installation and optional dependencies. The code's local full-suite record is Windows 91/91 and WSL Linux 93/93; [validation records](docs/VALIDATION.md) identify exact configurations and pending targets. Documentation-example checks are separate from target-platform validation.
+See the [build reference](docs/REFERENCE.md#section-27) for development builds, tests, static/shared installation and optional dependencies. The code's local full-suite record is Windows 100/100 and WSL Linux 102/102; [validation records](docs/VALIDATION.md) identify exact configurations and pending targets. Documentation-example checks are separate from target-platform validation.
 
-The first-party distribution license is pending; see [third-party licensing](THIRD_PARTY_NOTICES.md). Coroutines and hx_c_log integration remain future work.
+The first-party distribution license is pending; see [third-party licensing](THIRD_PARTY_NOTICES.md). The coroutine implementation is self-developed; hx_c_log integration remains future work.
 
 [ci-badge]: https://img.shields.io/badge/CI-configured-lightgrey?logo=githubactions
 [c-badge]: https://img.shields.io/badge/C-99-blue?logo=c
@@ -351,6 +368,6 @@ The first-party distribution license is pending; see [third-party licensing](THI
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%2091%2F91%20Linux%2093%2F93-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%20100%2F100%20Linux%20102%2F102-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

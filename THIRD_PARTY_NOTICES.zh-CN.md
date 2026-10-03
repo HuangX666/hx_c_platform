@@ -16,7 +16,7 @@
 
 版本表示实际集成源码，不表示上游最新版。分配器钩子及可恢复 OOM 由自有适配文件配置，不修改第三方文件。公共 ABI 不出现 uthash 类型。启用时安装 `share/hx_c_platform/licenses/uthash-LICENSE`。
 
-仓库还保留初期评估时取得的 minicoro 0.1.3 原始源码和 [MIT 许可证](third_party/minicoro/v0.1.3/LICENSE)。它没有参与构建、安装或公共 API；协程开发已延后，源码存在不表示已经实现协程模块。
+仓库还保留初期评估时取得的 minicoro 0.1.3 原始源码和 [MIT 许可证](third_party/minicoro/v0.1.3/LICENSE)。它没有参与构建、安装、链接或公共 API。当前协程调度器和 POSIX 上下文切换由本库自研，Windows 使用操作系统原生 fiber；保留的评估副本不用于本模块。
 
 ## 警告配置
 

@@ -8,7 +8,8 @@ set(hx_search_fixture "${CMAKE_CURRENT_BINARY_DIR}/find-中文")
 file(MAKE_DIRECTORY "${hx_search_fixture}/nested")
 file(WRITE "${hx_search_fixture}/nested/😀.txt" "found\n")
 foreach(example IN ITEMS hello configuration containers settings
-	profile_intervals atomic_publication common_tasks variant find_files)
+	profile_intervals atomic_publication common_tasks variant find_files
+	coroutine)
 	add_executable(consumer_${example} ../../examples/${example}.c)
 	target_link_libraries(consumer_${example} PRIVATE
 		hx_c_platform::hx_c_platform)
@@ -26,14 +27,27 @@ foreach(example IN ITEMS hello configuration containers settings
 endforeach()
 if(HX_CONSUMER_CPP)
 	enable_language(CXX)
+	include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/HxCpp20.cmake")
+	hx_check_cpp20()
 	add_executable(consumer_cpp consumer.cpp)
+	add_executable(consumer_coroutine_cpp ../../examples/coroutine.cpp)
+	if(HX_OS_HAVE_CPP20_COROUTINES)
+		add_executable(consumer_coroutine20
+			../../examples/coroutine20.cpp)
+		target_link_libraries(consumer_coroutine20 PRIVATE
+			hx_c_platform::cpp20)
+		hx_disable_exceptions(consumer_coroutine20)
+		add_test(NAME installed_coroutine20
+			COMMAND consumer_coroutine20)
+	endif()
 	add_executable(consumer_utilities ../test_cpp_utilities.cpp)
 	add_executable(consumer_tasks ../../examples/thread_pool.cpp)
 	add_executable(consumer_direct ../../examples/direct_calls.cpp)
 	add_executable(consumer_cpp_variant ../../examples/variant.cpp)
 	add_executable(consumer_find_async ../../examples/find_files_async.cpp)
 	foreach(target IN ITEMS consumer_cpp consumer_tasks consumer_utilities
-		consumer_direct consumer_cpp_variant consumer_find_async)
+		consumer_direct consumer_cpp_variant consumer_find_async
+		consumer_coroutine_cpp)
 		hx_disable_exceptions(${target})
 		target_link_libraries(${target} PRIVATE hx_c_platform::cpp)
 		set_target_properties(${target} PROPERTIES
@@ -44,6 +58,7 @@ if(HX_CONSUMER_CPP)
 		endif()
 	endforeach()
 	add_test(NAME installed_cpp COMMAND consumer_cpp)
+	add_test(NAME installed_coroutine_cpp COMMAND consumer_coroutine_cpp)
 	add_test(NAME installed_utilities COMMAND consumer_utilities)
 	add_test(NAME installed_tasks COMMAND consumer_tasks)
 	add_test(NAME installed_direct COMMAND consumer_direct)

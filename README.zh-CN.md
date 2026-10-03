@@ -1,6 +1,6 @@
 # hx_c_platform
 
-[![CI 配置][ci-badge]](.github/workflows/build.yml) [![C99 核心][c-badge]](CMakeLists.txt) [![C++11 封装][cpp-badge]](docs/CPP_POOL.zh-CN.md) [![仅 C++ 封装为 header-only][header-badge]](docs/CPP_POOL.zh-CN.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![自有代码许可证待定][license-badge]](THIRD_PARTY_NOTICES.zh-CN.md) [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md) [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md) [![本地 Windows 91/91、Linux 93/93 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md) [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md) [![Android API 21 ARM 交叉编译通过][android-badge]](docs/ANDROID.zh-CN.md)
+[![CI 配置][ci-badge]](.github/workflows/build.yml) [![C99 核心][c-badge]](CMakeLists.txt) [![C++11 封装][cpp-badge]](docs/CPP_POOL.zh-CN.md) [![仅 C++ 封装为 header-only][header-badge]](docs/CPP_POOL.zh-CN.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![自有代码许可证待定][license-badge]](THIRD_PARTY_NOTICES.zh-CN.md) [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md) [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md) [![本地 Windows 100/100、Linux 102/102 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md) [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md) [![Android API 21 ARM 交叉编译通过][android-badge]](docs/ANDROID.zh-CN.md)
 
 [English](README.md) · [常用任务教程](docs/USAGE.zh-CN.md) · [详细参考](docs/REFERENCE.zh-CN.md)
 
@@ -16,9 +16,9 @@
 
 ## 1. 这个库能帮你做什么
 
-`hx_c_platform` 给 C/C++ 项目提供一套常用工具：读写文件、处理 UTF-8 字符串、读取配置、使用容器和 variant、创建线程和提交后台任务。你调用同一个函数，库负责处理 Windows、Linux 等系统的差异。
+`hx_c_platform` 给 C/C++ 项目提供一套常用工具：读写文件、处理 UTF-8 字符串、读取配置、使用容器和 variant、创建线程、提交后台任务和运行协程。你调用同一个函数，库负责处理 Windows、Linux 等系统的差异。
 
-核心用 C99 实现；C++11 开发者可以选择更方便的 C++ 接口。普通使用不需要创建全局运行环境，也不依赖 Qt 或 OBS。当前版本为 0.1.0。
+核心用 C99 实现；C++11 开发者可以选择更方便的 C++ 接口，C++20 协程语法是单独启用的可选层。普通使用不需要创建全局运行环境，也不依赖 Qt 或 OBS。当前版本为 0.1.0。
 
 下面这张图表示调用关系：业务代码调用库，由库选择对应的系统实现。
 
@@ -306,6 +306,23 @@ std::puts(path.value().c_str());
 
 例如文件位于 assets/nested/config.json，就输出这个路径。没有匹配会明确失败。这个调用同步扫描；界面程序应放进现有线程池。逐个返回全部匹配的入口是 Directory::findFiles，完整 C/C++ 程序和后台示例见[递归查找教程](docs/FILE_SEARCH.zh-CN.md)。
 
+### 4.9 启动一个协程：C++11 / 可选 C++20
+
+协程等待时可以暂停，让工作线程执行其他任务。先显式创建 `hx::coro::Runtime`，再用 `go` 提交普通函数或 lambda。下面这段提交一个计算任务，然后取出结果：
+
+```cpp
+auto task = runtime.go([]() noexcept { return 6 * 7; });
+if (task) {
+	auto result = task.value().getUntil(hx_os_deadline_after_ms(2000));
+	if (result)
+		std::printf("Answer: %d\n", result.value());
+}
+```
+
+输出：`Answer: 42`。[完整 C++11 程序](examples/coroutine.cpp) 包含创建运行时、协程睡眠、检查错误和显式关闭。[C99 示例](examples/coroutine.c) 使用无栈状态机，[C++20 示例](examples/coroutine20.cpp) 使用 `co_await`。[协程教程](docs/COROUTINES.zh-CN.md) 继续说明 channel、select、I/O、取消和关闭重试。普通阻塞函数仍会占住工作线程，长时间计算需要主动 yield。
+
+需要有序键、重复键或遍历宏时，[红黑树 multimap 示例](examples/ordered_map.c) 按键顺序输出 `a: 10`、`b: 20`、`b: 21`。[容器说明](docs/CONTAINERS.zh-CN.md) 包含反向遍历、稳定排序、筛选、链表 splice 和集合运算。
+
 <a id="section-5"></a>
 
 ## 5. 先记住的几条规则
@@ -338,9 +355,9 @@ std::puts(path.value().c_str());
 
 ## 7. 构建、验证与项目许可
 
-开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。当前代码的本地全量测试记录为 Windows 91/91、WSL Linux 93/93；具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
+开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。当前代码的本地全量测试记录为 Windows 100/100、WSL Linux 102/102；具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
 
-自有代码的发布许可证尚未确定，第三方许可证见[许可说明](THIRD_PARTY_NOTICES.zh-CN.md)。协程和 hx_c_log 接入属于后续工作。
+自有代码的发布许可证尚未确定，第三方许可证见[许可说明](THIRD_PARTY_NOTICES.zh-CN.md)。协程使用自研实现；hx_c_log 接入仍属于后续工作。
 
 [ci-badge]: https://img.shields.io/badge/CI-configured-lightgrey?logo=githubactions
 [c-badge]: https://img.shields.io/badge/C-99-blue?logo=c
@@ -351,6 +368,6 @@ std::puts(path.value().c_str());
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%2091%2F91%20Linux%2093%2F93-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%20100%2F100%20Linux%20102%2F102-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

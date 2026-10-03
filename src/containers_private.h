@@ -4,6 +4,8 @@
 #include "internal.h"
 #include "hx_container.h"
 
+void *hx_os_i_map_exchange_execution(void *value);
+
 typedef struct hx_os_container_base {
 	hx_os_context *context;
 	hx_os_container_options options;

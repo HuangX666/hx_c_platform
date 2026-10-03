@@ -19,6 +19,9 @@ option(HX_OS_ENABLE_MEMORY_POOLS "Build memory pools and arena" ON)
 option(HX_OS_ENABLE_ICONV "Build legacy text encoding adapter" OFF)
 option(HX_OS_ENABLE_CONFIG "Build configuration file parsers" ON)
 option(HX_OS_ENABLE_CONTAINERS "Build generic C containers" ON)
+option(HX_OS_ENABLE_COROUTINES "Build bounded cooperative coroutines" ON)
+option(HX_OS_ENABLE_STACKFUL_COROUTINES "Build native stack switching" ON)
+option(HX_OS_ENABLE_COROUTINE_IO "Build coroutine I/O adapters" ON)
 option(HX_OS_ENABLE_VARIANT "Build owned variant values and custom types" ON)
 option(HX_OS_ENABLE_SYSINFO "Build native system information" ON)
 option(HX_OS_ENABLE_LIBRARY "Build native dynamic library loading" ON)
@@ -68,6 +71,8 @@ if(HX_OS_BUILD_TESTS OR HX_OS_BUILD_EXAMPLES)
 	check_language(CXX)
 	if(CMAKE_CXX_COMPILER)
 		enable_language(CXX)
+		include(cmake/HxCpp20.cmake)
+		hx_check_cpp20()
 	endif()
 endif()
 if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
@@ -211,6 +216,14 @@ if(NOT WIN32)
 endif()
 include(cmake/ConfigParsers.cmake)
 
+if(NOT HX_OS_ENABLE_COROUTINES)
+	set(HX_OS_ENABLE_STACKFUL_COROUTINES OFF)
+	set(HX_OS_ENABLE_COROUTINE_IO OFF)
+endif()
+if(NOT HX_OS_ENABLE_LOOP OR NOT HX_OS_ENABLE_NETWORK)
+	set(HX_OS_ENABLE_COROUTINE_IO OFF)
+endif()
+
 configure_file(cmake/hx_os_config.h.in
 	${CMAKE_CURRENT_BINARY_DIR}/private/hx_os_config.h)
 
@@ -234,6 +247,24 @@ add_library(hx_c_platform
 	src/profiler.c
 	${hx_parser_sources} ${hx_parser_objects}
 	${hx_platform_sources})
+if(HX_OS_ENABLE_COROUTINES)
+	target_sources(hx_c_platform PRIVATE src/coroutine.c
+		src/coroutine_channel.c src/coroutine_io.c
+		src/coroutine_stream.c)
+	if(HX_OS_ENABLE_STACKFUL_COROUTINES)
+		if(WIN32)
+			target_sources(hx_c_platform PRIVATE
+				src/windows/coroutine_native.c)
+		else()
+			enable_language(ASM)
+			target_sources(hx_c_platform PRIVATE
+				src/posix/coroutine_native.c
+				src/posix/coroutine_cpu.S)
+		endif()
+	endif()
+else()
+	target_sources(hx_c_platform PRIVATE src/coroutine_disabled.c)
+endif()
 if(HX_OS_ENABLE_PROFILER)
 	target_sources(hx_c_platform PRIVATE src/profiler_dump.c)
 else()
@@ -432,6 +463,11 @@ add_library(hx_c_platform::cpp ALIAS hx_c_platform_cpp)
 set_target_properties(hx_c_platform_cpp PROPERTIES EXPORT_NAME cpp)
 target_link_libraries(hx_c_platform_cpp INTERFACE hx_c_platform)
 target_compile_features(hx_c_platform_cpp INTERFACE cxx_std_11)
+add_library(hx_c_platform_cpp20 INTERFACE)
+add_library(hx_c_platform::cpp20 ALIAS hx_c_platform_cpp20)
+set_target_properties(hx_c_platform_cpp20 PROPERTIES EXPORT_NAME cpp20)
+target_link_libraries(hx_c_platform_cpp20 INTERFACE hx_c_platform_cpp)
+target_compile_features(hx_c_platform_cpp20 INTERFACE cxx_std_20)
 set_target_properties(hx_c_platform PROPERTIES
 	C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO
 	C_VISIBILITY_PRESET hidden
@@ -546,6 +582,7 @@ install(TARGETS hx_c_platform EXPORT hx_c_platformTargets
 	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(TARGETS hx_c_platform_cpp EXPORT hx_c_platformTargets)
+install(TARGETS hx_c_platform_cpp20 EXPORT hx_c_platformTargets)
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(FILES README.md README.zh-CN.md THIRD_PARTY_NOTICES.md
 	THIRD_PARTY_NOTICES.zh-CN.md DESTINATION ${CMAKE_INSTALL_DOCDIR})

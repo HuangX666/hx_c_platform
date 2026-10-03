@@ -14,7 +14,8 @@ SUITES = (
     "android_baseline", "string_tools", "lexer", "wide_wait",
     "catalog_filename", "procedure", "atomic", "cpp_utilities",
     "cpp_pool", "cpp_extensions", "convenience", "variant", "cpp_variant",
-    "file_search",
+    "file_search", "containers", "stl", "coroutine", "coroutine_io",
+    "cpp_coroutine", "cpp_coroutine20",
 )
 
 

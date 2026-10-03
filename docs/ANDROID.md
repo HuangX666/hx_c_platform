@@ -35,7 +35,7 @@ adb devices -l
 python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --serial DEVICE_SERIAL
 ~~~
 
-Pass --adb for an absolute adb path. The runner checks ABI/API, uploads only its artifacts into a fresh /data/local/tmp/hx_c_platform-UUID directory, sets that process's LD_LIBRARY_PATH, and executes fourteen suites:
+Pass --adb for an absolute adb path. The runner checks ABI/API, uploads only its artifacts into a fresh /data/local/tmp/hx_c_platform-UUID directory, sets that process's LD_LIBRARY_PATH, and executes twenty suites:
 
 | Suite | Coverage |
 | --- | --- |
@@ -53,6 +53,9 @@ Pass --adb for an absolute adb path. The runner checks ABI/API, uploads only its
 | variant | Exact types, UTF-8/NUL, custom copy/drop, alignment, ownership/context cleanup and container failure paths |
 | cpp_variant | Exception-free C++11 set/get/emplace/clone/visit, typed alternatives, move-only objects and allocator failures |
 | file_search | Streaming/first-match recursive search, Unicode, limits, links, allocation cleanup and module-off behavior |
+| containers / stl | RB/AVL/duplicate invariants, traversal, sorting, filtering, splice and set operations |
+| coroutine / coroutine_io | Stackful/stackless scheduling, floating-point state, channel/select, prepare rollback, close retry, TCP/DNS/pipes and cancellation |
+| cpp_coroutine / cpp_coroutine20 | Exception-free C++11 go, C++20 frames/locals, waits and cancellation cleanup |
 
 hx_os_portable_baseline also records atomic, ASCII, wide conversion, named-call and precise-wait observations without fixed timing thresholds. Logs include NDK, source revision/dirty status, ABI/API, device model, fingerprint, runtime API, emulator marker and command output. Cleanup removes only explicitly uploaded files, never recursively deleting test directories. Failed fixtures remain. An adb timeout may leave the target process running; preserve/report its directory without killing it. Record load/temperature/ frequency conditions and collect repeated performance samples.
 
@@ -75,6 +78,12 @@ Reports distinguish build minimum API, runtime API, native machine and translati
 | /proc, topology, process/network access | Preserve native/permission failures, never fake metrics or success |
 
 Module bits describe compiled families, not every platform extension. API 21 binaries remain process-disabled on newer devices; build with the higher minimum API for that feature. No JNI/Java dependency, APK, manifest permissions, asset API or UI automation is supplied. Consumers own those. Standalone validation uses c++_static; consumers retain their NDK STL policy.
+
+## Containers and coroutine verification (2026-10-03)
+
+NDK r28c builds the full shared library at minimum API 21 for arm64-v8a, armeabi-v7a and x86_64, including self-developed stackful adapters, the C99 state machine, C++11 go and optional C++20 layer. The API 34 Qt_Android_34 emulator passes twenty suites plus the portable benchmark for native x86_64 and translated ARM64. ARMv7 runtime is explicitly skipped because it is absent from the emulator ABI list. Reports are build-android/report.json and build-android-emulator/report.json.
+
+New checks include RB/AVL invariants, duplicate keys, algorithms, channel/select, cancellation, prepare/close cleanup, floating-point state, profiler isolation, TCP/DNS/pipes and C++20 frame cleanup. The runtime retains the finite-native-join restriction: controlled tests explicitly choose infinite final join after arranging cooperative exit. The library never silently turns finite close into infinite close. API 21 runtime, ARMv7 execution and physical ARM boards remain unverified. Earlier minimal/static/API 28 records are historical, not reruns of this addition. See [validation and local measurements](VALIDATION.md).
 
 ## Recursive search verification (2026-10-03)
 

@@ -53,7 +53,7 @@
 | 文件发布与时间戳机制 | 日志轮转、保留数量、格式与过滤 |
 | 区间 profiler 和原生系统查询 | 崩溃策略、LocalDumps 配置、日志历史环 |
 
-基础库可以脱离 hx_c_log 独立构建、测试、安装和使用，不强制依赖 Qt、C++ 或 OBS 运行库。借鉴 OBS 的是统一接口、共用实现与构建选择平台实现的组织方式。 hx_c_log 接入与协程仍属于后续工作。线程局部存储 **TLS** 与网络加密 TLS 是不同概念；本库没有内置网络加密协议栈。
+基础库可以脱离 hx_c_log 独立构建、测试、安装和使用，不强制依赖 Qt、C++ 或 OBS 运行库。借鉴 OBS 的是统一接口、共用实现与构建选择平台实现的组织方式。 hx_c_log 接入仍属于后续工作；自研有栈和无栈协程见[协程教程](COROUTINES.zh-CN.md)。线程局部存储 **TLS** 与网络加密 TLS 是不同概念；本库没有内置网络加密协议栈。
 
 <a id="section-2"></a>
 
@@ -1767,7 +1767,7 @@ TSan 在另一个目录配置 `HX_OS_SANITIZER=thread`，不与 ASan 混用。�
 
 优先原生 API 与编译器内建；汇编用于有测量依据的局部优化，并保留受支持目标的正确回退。Apple 实现以 C 为主，仅可选性能请求适配使用 Objective-C/Foundation。 Linux 电源/性能请求明确返回 NOT_SUPPORTED，注册表是显式 Windows 扩展，系统无法提供时不承诺严格 CPU 亲和性。
 
-后续工作包括真实目标验证与有依据的性能改进。协程、hx_c_log 迁移、崩溃策略框架、FreeRTOS/裸机适配均不是已经交付的功能。自有代码的发布许可证**尚未选定**，第三方许可独立适用，见 [THIRD_PARTY_NOTICES.zh-CN.md](../THIRD_PARTY_NOTICES.zh-CN.md)。
+后续工作包括真实目标验证与有依据的性能改进。hx_c_log 迁移、崩溃策略框架、FreeRTOS/裸机适配均不是已经交付的功能。自有代码的发布许可证**尚未选定**，第三方许可独立适用，见 [THIRD_PARTY_NOTICES.zh-CN.md](../THIRD_PARTY_NOTICES.zh-CN.md)。
 
 <a id="section-32"></a>
 

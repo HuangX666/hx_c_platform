@@ -499,6 +499,15 @@ hx_os_status hx_os_i_path_validate(const char *path, hx_os_error *error)
 uint64_t hx_os_capabilities(void)
 {
 	uint64_t result = HX_OS_CAP_THREADS;
+#if HX_OS_ENABLE_COROUTINES
+	result |= HX_OS_CAP_COROUTINES;
+#endif
+#if HX_OS_ENABLE_STACKFUL_COROUTINES
+	result |= HX_OS_CAP_STACKFUL_COROUTINES;
+#endif
+#if HX_OS_ENABLE_COROUTINE_IO
+	result |= HX_OS_CAP_COROUTINE_IO;
+#endif
 #if HX_OS_ENABLE_VARIANT
 	result |= HX_OS_CAP_VARIANT;
 #endif

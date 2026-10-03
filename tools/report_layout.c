@@ -18,6 +18,7 @@
 #include "signal_private.h"
 #include "settings_private.h"
 #include "profiler_private.h"
+#include "coroutine_private.h"
 #include <stdio.h>
 
 #define HX_OS_LAYOUT(type)                                                     \
@@ -33,6 +34,10 @@
 int main(void)
 {
 	HX_OS_LAYOUT(hx_string);
+	HX_OS_LAYOUT(hx_os_coro);
+	HX_OS_LAYOUT(hx_os_coro_worker);
+	HX_OS_LAYOUT(hx_os_i_coro_context);
+	HX_OS_LAYOUT(hx_os_coro_runtime);
 	HX_OS_LAYOUT(hx_variant);
 	HX_OS_LAYOUT(hx_variant_type);
 	HX_OS_LAYOUT(hx_os_uint128);

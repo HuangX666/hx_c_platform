@@ -16,14 +16,15 @@ For mixed values, use the independent [variant module](VARIANT.md): it can own n
 | stack | LIFO names over vector; push/pop at back |
 | list | Doubly linked nodes; end operations and iterator steps O(1) |
 | heap | Max-heap; push/pop O(log n), top at index zero |
-| ordered map/set | AVL tree; find/insert/erase O(log n), sorted iteration |
+| ordered map/set | Existing AVL or opt-in red-black tree; O(log n) find/insert/erase, sorted iteration |
+| multimap/multiset | Add `HX_OS_MAP_MULTI` to AVL, red-black or hash kind; duplicate keys retained |
 | hash map/set | uthash 2.4.0; expected O(1) lookup, insertion-order iteration |
 
 Complexities exclude element/key byte costs and callbacks. A list's indexed access/insertion/removal needs O(n) traversal; iterate with the iterator API for linear total traversal. Vector/deque middle operations are O(n). Growth moves live bytes and may allocate. Hash collisions can make operations O(n); the current hash is not a defense against deliberately colliding input.
 
 The sequence types share `hx_os_sequence_*` operations. Queue/stack aliases are convenience names, not separate runtime implementations or DLL exports. A heap accepts insertion at the end and removal at index zero; arbitrary indexed changes return NOT_SUPPORTED. `hx_os_vector_sort` is an in-place, unstable heapsort. `hx_os_vector_lower_bound` requires an already sorted vector using the same strict weak ordering comparator.
 
-These are general-purpose container building blocks, not the complete C++ STL: there is no template type checking, multimap, concurrent queue, splice, or general algorithm/iterator-category framework in this version.
+These are C container and algorithm building blocks. There is no C++ template type system, complete iterator-category/ranges framework or lock-free concurrent queue. Use explicit external synchronization for shared containers. Coroutine channels are a separate bounded communication facility.
 
 ## Options, allocation and bounds
 
@@ -86,3 +87,61 @@ hx_string_destroy(&source);
 ~~~
 
 For a custom context, pass the same context to the preset and constructor. Extracting a string into external storage transfers its ownership; call `hx_string_destroy` on the extracted value when finished. If transferring a string into the container with `_take`, reset the source to `HX_STRING_INIT` without destroying the transferred contents.
+
+## Red-black maps and duplicate keys
+
+Select `HX_OS_MAP_RED_BLACK` at creation; `HX_OS_MAP_ORDERED` keeps its existing AVL implementation. No old enum value or public structure layout changed. OR the kind with `HX_OS_MAP_MULTI` for duplicate keys. `replace=0` inserts another equivalent entry in multi mode; `replace=1` replaces one. Ordered duplicates keep insertion order, and find/erase select the first equivalent entry. Hash duplicate lookup order is unspecified.
+
+The complete [ordered-map program](../examples/ordered_map.c) inserts `b:20`, `a:10`, `b:21` and prints:
+
+```text
+a: 10
+b: 20
+b: 21
+```
+
+The two important calls are:
+
+```c
+hx_os_map_create(NULL, HX_OS_MAP_RED_BLACK | HX_OS_MAP_MULTI,
+	&options, NULL, &map, &error);
+hx_os_map_insert(map, "b", 1, &value, 0, &error);
+```
+
+`hx_os_map_lower_bound`, `upper_bound` and `equal_range` operate on ordered trees. `count` works on all backends; `erase_all` removes every equivalent key, including when the supplied key borrows map storage. `erase_at` removes the current entry and refreshes that iterator to the next one; other iterators are invalidated. `last` and `previous` support reverse traversal. `validate` checks AVL/RB invariants and list/tree consistency without allocating; it is not a validator for arbitrary corrupted pointers.
+
+## Traversal and algorithms
+
+Declare iterator and status variables before the loops. These macros evaluate the container once, stop at EOF and retain errors. `break` leaves status OK. A mutation invalidates ordinary iterators, so use `erase_at` explicitly for erase-while-iterating.
+
+```c
+hx_os_sequence_iterator iterator;
+hx_os_status status;
+HX_OS_SEQUENCE_FOR_EACH(iterator, values, status)
+{
+	const void *value;
+	status = hx_os_sequence_value(&iterator, &value);
+	if (status != HX_OS_OK)
+		break;
+	printf("%d\n", *(const int *)value);
+}
+```
+
+There are matching `HX_OS_MAP_FOR_EACH` and reverse variants for both families. The callback interfaces are useful when the caller needs early stop, failure details or an accumulator.
+
+| Task | Entry or behavior |
+| --- | --- |
+| Find/count/filter predicates | `find_if`, `count_if`, `any_of`, `all_of`, `none_of`; the last three short-circuit |
+| Visit/fold | `visit`, `fold`; first failure preserves prior callback effects and reports progress |
+| Copy/convert | `clone`, `copy_if`, `transform`; return a new owned vector, leave the source intact on failure |
+| Remove/replace | `remove_if`, adjacent `unique`, `replace_if`; replacements stop at first copy failure and keep earlier replacements |
+| Reorder | `reverse`, `rotate`, `partition`; linear, no allocation; list partition is stable |
+| Stable sort | `stable_sort`; O(n log n), O(n) scratch for vector/deque, link merge with O(1) scratch for list |
+| Partial ordering | vector `partial_sort(k)` uses O(n log k); `nth_element` partitions around one rank with a bounded-depth heap fallback |
+| Search ordered values | vector `lower_bound`/`upper_bound`; input must already be sorted under the same comparator |
+| Merge/set operations | `merge` with MERGE, UNION, INTERSECTION, DIFFERENCE or SYMMETRIC_DIFFERENCE; multiset counts preserved |
+| Move a list range | `list_splice`; relink without element copies, drops or node allocation |
+
+Unless documented otherwise, structural algorithms reject heaps to preserve heap invariants. Predicates must not mutate the same container. A successful reorder invalidates iterators; allocation failure before sorting does not. Temporary container scratch is charged to its byte budget. For transform/copy callbacks, a failed element construction must release its own partial resources. Result vectors inherit source context/limits; sorted merge requires matching element/callback/user policies. A list splice requires compatible context and value policy, checks destination limits and transfers accounted node bytes. Self-splice into its own moved range is a no-op.
+
+AVL and RB have the same measured node allocation footprint in the supplied workloads. Neither is universally faster. [Validation and microbenchmarks](VALIDATION.md) separate allocation bytes, operation timing and runtime claims; smaller metadata alone is not a performance result.

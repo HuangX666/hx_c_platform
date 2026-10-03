@@ -43,6 +43,13 @@ size_t hx_os_i_allocation_cost(size_t bytes, size_t alignment);
 size_t hx_os_i_allocation_bytes(const void *memory);
 void hx_os_i_context_retain(hx_os_context *context);
 void hx_os_i_context_release(hx_os_context *context);
+#if HX_OS_ENABLE_COROUTINES && HX_OS_ENABLE_PROFILER
+/* Bounded execution-local storage for profiler frames, owned by a coroutine. */
+void *hx_os_i_coro_local_get(void *key);
+hx_os_status hx_os_i_coro_local_set(void *key, void *value,
+	hx_os_tls_destructor cleanup, hx_os_error *error);
+void hx_os_i_coro_local_clear(void *key);
+#endif
 uint32_t hx_os_i_wait_ms(hx_os_deadline deadline);
 int hx_os_i_add_size(size_t a, size_t b, size_t *out);
 int hx_os_i_alignment_valid(size_t alignment);

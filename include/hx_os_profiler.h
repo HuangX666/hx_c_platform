@@ -27,7 +27,9 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_options_init(
  * Inclusive/exclusive wall durations use the library's monotonic clock.
  * Concurrent intervals can sum to more than elapsed process wall time.
  * Storage grows by distinct path; each participating thread caches a bounded
- * frame array in TLS. Defaults above; maxima 65535 records, 1024 threads,
+ * frame array in TLS. Library coroutines use independent frame arrays;
+ * max_threads bounds all participating contexts (native and coroutine).
+ * Defaults above; maxima 65535 records, 1024 contexts,
  * depth 64, names 4096 bytes, output 64 MiB, 65535 active API calls.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_create(
@@ -40,7 +42,10 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_create_with_options(
  * current parent (otherwise INVALID). Only successful entries need leave.
  * Failure preserves the current stack. Repeated paths allocate no records.
  * Do not move an open scope to another thread/fiber or unwind through the C
- * call. Windows FLS follows fibers; max_threads bounds participating contexts.
+ * call. Library coroutine scopes remain with their coroutine across a yield.
+ * A coroutine can use at most 64 profiler instances at once. Its exit aborts
+ * unfinished frames and releases its cached arrays. Other Windows FLS usage
+ * follows fibers; max_threads bounds participating contexts.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_start_root(
 	hx_os_profiler *profiler, const char *name, hx_os_error *error);

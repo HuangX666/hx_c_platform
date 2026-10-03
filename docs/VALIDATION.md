@@ -6,7 +6,85 @@ Entries below describe the versions tested at the time. Historical C++ exception
 
 This records development validation through 2026-10-03. A design, implemented adapter, successful compile and successful target run are different states. Local tests do not certify every operating-system release, filesystem, CPU, libc or network provider.
 
-The recursive search entry records the current addition. Variant, onboarding documentation, common-call refinement, Result migration, earlier Final delivery matrix and batch checkpoints describe their original versions.
+The containers/coroutines entry records the current addition. Recursive search, variant, onboarding documentation, common-call refinement, Result migration, earlier Final delivery matrix and batch checkpoints describe their original versions.
+
+## Red-black trees, algorithms and self-developed coroutines (2026-10-03)
+
+Added red-black maps/sets, duplicate keys, traversal and sequence algorithms, together with a bounded cooperative scheduler, native stackful contexts, C99 state machines and an optional exception-free C++20 layer. Existing ordered maps remain AVL. Coroutine scheduling, channel/select and I/O integration are first-party implementations; no external coroutine source is compiled, installed or linked. The existing C99/C++11 baseline and public structure layouts remain intact.
+
+| Configuration | Evidence for this change |
+| --- | --- |
+| Windows MSVC 19.40 x64 shared Release | Full CTest 100/100 |
+| WSL Ubuntu GCC 15.2 x86_64 shared Release | Full CTest 102/102 |
+| Windows MSVC 19.29 x86 static Debug | 5/5 affected container/coroutine suites |
+| WSL ASan + UBSan, leak detection enabled | 6/6: containers, stl, profiler, coroutine, coroutine_io, cpp_coroutine20; no reported defects |
+| WSL TSan | 4/4: profiler, coroutine, coroutine_io, cpp_coroutine20; no reported races |
+| Public headers | C99/C++11 isolated header targets build; C++20 test/example includes its facade first, with exceptions disabled |
+| Installed shared consumers, Windows x64 and WSL | Each 18/18 C/C++ and 10/10 pure C programs |
+| Installed static consumers, Windows x86 | 18/18 C/C++ and 10/10 pure C programs |
+| Old headers from 7cf52fc with the new shared library | Windows/WSL each 10/10 |
+| Declarations against shared-library exports | Windows/WSL each match 761 exported HX functions |
+| Stackless only; coroutine I/O and containers OFF | WSL coroutine/C++20 suites 2/2 |
+| Coroutine core and containers OFF | WSL disabled stl/coroutine suites 2/2 |
+| Pipes and containers OFF, coroutine TCP enabled | WSL coroutine_io 1/1; profiler also OFF: coroutine/coroutine_io 2/2 |
+| ARMv7 hard-float Linux and AArch64 Linux, GCC static Release | Each 5/5 affected suites under QEMU user mode with the corresponding glibc sysroot |
+| Android API 21 ARM64/ARMv7/x86_64 full shared | All three cross-builds pass |
+| API 34 x86_64 emulator, native x86_64 and translated ARM64 | Each 20/20 selected suites plus the portable benchmark |
+| Android ARMv7 execution | Explicitly skipped: selected emulator does not provide this ABI |
+
+Container tests compare randomized insert/erase behavior against a model, validate AVL/RB invariants and duplicate-key order, and exercise iterator invalidation, bounds, allocation failure, stable/partial sort, selection, partition, transformation, splice and multiset operations. Coroutine tests cover rendezvous/buffered channels, exactly one selected branch, timeout/cancellation, bounded admission, prepare/close races, cleanup completion, C++ frame destruction, floating-point rounding state, loopback TCP, DNS, pipes and retained resources after close. An additional host ownership regression checks failed copying, disposal of unselected/full-buffer sends, deep-copy independence and final buffered-value cleanup; it runs on Windows x64/x86, WSL, ASan/UBSan and TSan.
+
+The review corrected a prepare/close race that could publish closure before prepared-data cleanup finished, a pipe-disabled close path, dispatcher/cleanup waits that could deadlock, and profiler frames shared between interleaved coroutines. Profiler contexts now follow each coroutine and retire before task completion; tests cover both coroutine kinds, unfinished scopes and the 64-context-per-coroutine limit. Tracked failure paths finish with zero context allocations. Sanitizer success applies to exercised paths, not every possible schedule or proof of universal leak freedom.
+
+### Layout and local performance observations
+
+Measured full-module object size/alignment in bytes; these private objects are not new ABI promises:
+
+| Object | MSVC x64 | MSVC x86 | GCC Linux x86_64 |
+| --- | --- | --- | --- |
+| Coroutine metadata | 304 / 8 | 208 / 8 | 304 / 8 |
+| Worker metadata including root context | 112 / 8 | 60 / 4 | 352 / 8 |
+| Native context | 48 / 8 | 28 / 4 | 288 / 8 |
+| Runtime metadata | 240 / 8 | 136 / 8 | 240 / 8 |
+
+The Windows native context contains only the fiber fields it uses. Stackless tasks have no separately reserved coroutine stack; they still consume metadata, persistent state and, for C++20, a compiler frame. The default stackful usable stack is 128 KiB; guard pages/native rounding count toward its 64 MiB aggregate reservation limit. Reservations, allocator accounting and resident physical memory are distinct measurements.
+
+The new hx_os_coroutine_benchmark uses the same 20,000 integer keys for AVL/RB, sorted or deterministically permuted insertion, sorted lookup and deletion. These are medians of three local Release runs, in nanoseconds per operation. Windows uses QPC for this benchmark. Builds and emulator runs were stopped before sampling; CPU frequency and unrelated host activity were not pinned.
+
+| Host / tree / insertion order | Insert | Find | Erase |
+| --- | ---: | ---: | ---: |
+| Windows / AVL / sorted | 171.4 | 80.0 | 122.4 |
+| Windows / RB / sorted | 150.2 | 80.3 | 113.9 |
+| Windows / AVL / permuted | 233.6 | 104.1 | 125.3 |
+| Windows / RB / permuted | 212.4 | 99.9 | 90.3 |
+| WSL / AVL / sorted | 185.0 | 61.6 | 54.8 |
+| WSL / RB / sorted | 119.3 | 61.5 | 59.8 |
+| WSL / AVL / permuted | 166.2 | 69.0 | 67.3 |
+| WSL / RB / permuted | 135.1 | 86.6 | 65.3 |
+
+Both trees account for the same allocation bytes after insertion on each host: 3,280,199 on Windows and 3,600,215 on WSL. This includes the container allocator wrapper, not user value allocations or process RSS. RB does not win every operation; AVL remains available.
+
+For one worker and one task performing 100,000 yield rounds, Windows medians are 148.0 ns for the C state machine and 327.6 ns for stackful execution; WSL medians are 693.4 ns and 618.2 ns. The three-run ranges are respectively 137.3–151.1, 291.6–333.1, 691.1–729.9 and 594.5–639.6 ns. These measurements include scheduler/locking and amortized task startup/completion; they are not raw assembly-switch latency or C++20-frame timings. No Go, external coroutine, thread-pool or historical throughput comparison was performed. These microbenchmarks do not establish hx_c_log performance.
+
+Trees introduce no internal lock or background thread. Sequence algorithms document their scratch-space costs; linked-list splice/partition only relink existing nodes. Coroutine resume/yield uses the scheduler mutex and a direct native switch or state callback; channel operations allocate bounded waiter/payload storage, and coroutine I/O uses the existing loop plus a dispatcher. Include these costs when choosing a facility. No assertion of allocation-free channels or lock-free scheduling is made.
+
+### Reproduce and remaining targets
+
+Run from the source root with the actual generator/compiler; add -DCMAKE_BUILD_TYPE=Release for a single-configuration generator:
+
+```sh
+cmake -S . -B build -DBUILD_SHARED_LIBS=ON -DHX_OS_BUILD_BENCHMARKS=ON
+cmake --build build --config Release --parallel 4
+ctest --test-dir build -C Release --output-on-failure
+python tools/verify_install.py build --config Release
+python tools/verify_abi.py build --config Release
+```
+
+Use separate build directories with -DHX_OS_SANITIZER=address,undefined or -DHX_OS_SANITIZER=thread. Select the subset with ctest -R '^(containers|stl|profiler|coroutine|coroutine_io|cpp_coroutine20)$'; set ASAN_OPTIONS=detect_leaks=1 for the address build. Benchmark/layout targets are hx_os_coroutine_benchmark and hx_os_layout_report, under build/bin and build/benchmarks with an additional configuration subdirectory on MSVC. Android commands are in [ANDROID.md](ANDROID.md). QEMU results are not board tests.
+
+Local ignored evidence resides in build-no-exceptions/coro-delivery-*.log, coro-ownership-*.log, coro-final-armv7.log, coro-final-aarch64.log, coro-trim-*.log, coro-no-profiler.log, coro-install-*.log, coro-bench-*-final.log and coro-layout-*.log. Android reports are build-android/report.json and build-android-emulator/report.json. Reports identify the parent Git revision plus a dirty working tree because validation precedes the delivery commit. Build products/logs are not committed.
+
+macOS Intel 10.13/ARM64 11.0, Win7/8.1, Android 5.0 runtime, ARMv7 Android execution, musl/uClibc-ng and physical embedded/Android boards remain pending. POSIX stack switching rejects unsupported CPU ABIs, including x32/AArch64 ILP32 and arm64e; stackless mode remains an option. Active Linux x86 shadow stacks are rejected without disabling host protection; that runtime path was not exercised here. Existing GCC maybe-uninitialized diagnostics in other modules remain; this is not a clean-warning certification. Tests disable exception handling and preserve finite-wait failures/resources. No remote CI or physical ARM performance result is claimed.
 
 ## Recursive file search (2026-10-03)
 

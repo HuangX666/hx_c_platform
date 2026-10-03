@@ -209,6 +209,9 @@ HX_OS_API const char *HX_OS_CALL hx_os_cpu_name(void);
 #define HX_OS_CAP_PROCEDURES (UINT64_C(1) << 50)
 #define HX_OS_CAP_VARIANT (UINT64_C(1) << 51)
 #define HX_OS_CAP_FILE_SEARCH (UINT64_C(1) << 52)
+#define HX_OS_CAP_COROUTINES (UINT64_C(1) << 53)
+#define HX_OS_CAP_STACKFUL_COROUTINES (UINT64_C(1) << 54)
+#define HX_OS_CAP_COROUTINE_IO (UINT64_C(1) << 55)
 /* required includes NUL. These queries do not need initialization. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_version_string(
 	char *buffer, size_t capacity, size_t *required);

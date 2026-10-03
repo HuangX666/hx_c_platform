@@ -391,6 +391,19 @@ hx_os_status hx_os_sequence_push_front(
 	return hx_os_seq_insert(sequence, 0, value, 0, error);
 }
 
+static void hx_os_seq_unlink(hx_os_sequence *sequence, hx_os_seq_link *link)
+{
+	if (link->previous)
+		link->previous->next = link->next;
+	else
+		sequence->first = link->next;
+	if (link->next)
+		link->next->previous = link->previous;
+	else
+		sequence->last = link->previous;
+	hx_os_i_container_free(&sequence->base, link);
+}
+
 static hx_os_status hx_os_seq_remove(
 	hx_os_sequence *sequence, size_t index, void *out)
 {
@@ -415,15 +428,7 @@ static hx_os_status hx_os_seq_remove(
 		hx_os_i_container_drop(&sequence->base, value);
 	if (sequence->kind == HX_OS_SEQ_LIST) {
 		hx_os_seq_link *link = hx_os_seq_link_at(sequence, index);
-		if (link->previous)
-			link->previous->next = link->next;
-		else
-			sequence->first = link->next;
-		if (link->next)
-			link->next->previous = link->previous;
-		else
-			sequence->last = link->previous;
-		hx_os_i_container_free(&sequence->base, link);
+		hx_os_seq_unlink(sequence, link);
 	}
 	else if (sequence->kind == HX_OS_SEQ_HEAP) {
 		if (sequence->count > 1)
@@ -533,22 +538,27 @@ hx_os_status hx_os_sequence_destroy(
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
 
+static void hx_os_seq_heap_sort(hx_os_sequence *vector, size_t count)
+{
+	size_t i;
+	for (i = count / 2; i; --i)
+		hx_os_seq_sift(vector, i - 1, count);
+	for (i = count; i > 1; --i) {
+		hx_os_seq_swap(vector, 0, i - 1);
+		hx_os_seq_sift(vector, 0, i - 1);
+	}
+}
+
 hx_os_status hx_os_vector_sort(hx_os_vector *vector, hx_os_error *error)
 {
 	hx_os_status status;
-	size_t i;
 	if (!vector || vector->kind != HX_OS_SEQ_VECTOR ||
 		!vector->base.options.compare)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 	status = hx_os_i_container_enter(&vector->base);
 	if (status != HX_OS_OK)
 		return hx_os_i_error(error, status, 0, 0);
-	for (i = vector->count / 2; i; --i)
-		hx_os_seq_sift(vector, i - 1, vector->count);
-	for (i = vector->count; i > 1; --i) {
-		hx_os_seq_swap(vector, 0, i - 1);
-		hx_os_seq_sift(vector, 0, i - 1);
-	}
+	hx_os_seq_heap_sort(vector, vector->count);
 	++vector->base.generation;
 	return hx_os_i_container_leave(&vector->base, HX_OS_OK, error);
 }
@@ -630,4 +640,928 @@ hx_os_status hx_os_sequence_value(
 			iterator->owner->value_offset
 		: hx_os_seq_slot(iterator->owner, iterator->index);
 	return HX_OS_OK;
+}
+
+hx_os_status hx_os_sequence_last(
+	const hx_os_sequence *sequence, hx_os_sequence_iterator *iterator)
+{
+	hx_os_status status = hx_os_sequence_begin(sequence, iterator);
+	if (status == HX_OS_OK) {
+		iterator->index = sequence->count - 1;
+		iterator->link = sequence->last;
+	}
+	return status;
+}
+
+hx_os_status hx_os_sequence_previous(hx_os_sequence_iterator *iterator)
+{
+	hx_os_status status = hx_os_seq_iterator_check(iterator);
+	if (status != HX_OS_OK)
+		return status;
+	if (iterator->link)
+		iterator->link =
+			((const hx_os_seq_link *)iterator->link)->previous;
+	if (!iterator->index) {
+		iterator->index = iterator->owner->count;
+		return HX_OS_EOF;
+	}
+	--iterator->index;
+	return HX_OS_OK;
+}
+
+hx_os_status hx_os_sequence_erase_at(hx_os_sequence *sequence,
+	hx_os_sequence_iterator *iterator, void *out, hx_os_error *error)
+{
+	hx_os_status status;
+	if (!sequence || !iterator || iterator->owner != sequence)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	status = hx_os_seq_iterator_check(iterator);
+	if (status != HX_OS_OK)
+		return hx_os_i_error(error, status, 0, 0);
+	status = hx_os_i_container_enter(&sequence->base);
+	if (status != HX_OS_OK)
+		return hx_os_i_error(error, status, 0, 0);
+	if (sequence->kind == HX_OS_SEQ_LIST) {
+		hx_os_seq_link *link = (hx_os_seq_link *)iterator->link;
+		void *value = (unsigned char *)link + sequence->value_offset;
+		size_t bytes = sequence->base.options.element_size;
+		if (hx_os_i_container_overlap(out, bytes, value, bytes))
+			return hx_os_i_container_leave(
+				&sequence->base, HX_OS_INVALID, error);
+		if (out)
+			memcpy(out, value, bytes);
+		else
+			hx_os_i_container_drop(&sequence->base, value);
+		iterator->link = link->next;
+		hx_os_seq_unlink(sequence, link);
+		--sequence->count;
+	}
+	else
+		status = hx_os_seq_remove(sequence, iterator->index, out);
+	if (status == HX_OS_OK)
+		iterator->generation = ++sequence->base.generation;
+	return hx_os_i_container_leave(&sequence->base, status, error);
+}
+
+hx_os_status hx_os_sequence_find_if(const hx_os_sequence *sequence,
+	hx_os_value_predicate_fn predicate, void *user,
+	hx_os_sequence_iterator *iterator)
+{
+	hx_os_sequence_iterator current;
+	hx_os_status status;
+	if (!predicate || !iterator)
+		return HX_OS_INVALID;
+	status = hx_os_sequence_begin(sequence, &current);
+	while (status == HX_OS_OK) {
+		const void *value;
+		status = hx_os_sequence_value(&current, &value);
+		if (status != HX_OS_OK)
+			return status;
+		if (predicate(value, user)) {
+			*iterator = current;
+			return HX_OS_OK;
+		}
+		status = hx_os_sequence_next(&current);
+	}
+	return status == HX_OS_EOF ? HX_OS_NOT_FOUND : status;
+}
+
+hx_os_status hx_os_sequence_count_if(const hx_os_sequence *sequence,
+	hx_os_value_predicate_fn predicate, void *user, size_t *count)
+{
+	hx_os_sequence_iterator iterator;
+	hx_os_status status;
+	size_t found = 0;
+	if (!predicate || !count)
+		return HX_OS_INVALID;
+	HX_OS_SEQUENCE_FOR_EACH(iterator, sequence, status)
+	{
+		const void *value;
+		status = hx_os_sequence_value(&iterator, &value);
+		if (status != HX_OS_OK)
+			return status;
+		if (predicate(value, user))
+			++found;
+	}
+	if (status != HX_OS_EOF)
+		return status;
+	*count = found;
+	return HX_OS_OK;
+}
+
+hx_os_status hx_os_sequence_visit(hx_os_sequence *sequence,
+	hx_os_value_visit_fn visit, void *user, size_t *completed,
+	hx_os_error *error)
+{
+	hx_os_status status;
+	hx_os_seq_link *link;
+	size_t index;
+	if (completed)
+		*completed = 0;
+	if (!sequence || !visit)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	status = hx_os_i_container_enter(&sequence->base);
+	if (status != HX_OS_OK)
+		return hx_os_i_error(error, status, 0, 0);
+	link = sequence->first;
+	for (index = 0; index < sequence->count; ++index) {
+		const void *value = link
+			? (const unsigned char *)link + sequence->value_offset
+			: hx_os_seq_slot(sequence, index);
+		hx_os_error detail;
+		hx_os_error_clear(&detail);
+		if (completed)
+			*completed = index + 1;
+		status = visit(value, user, &detail);
+		if (status != HX_OS_OK && status != HX_OS_EOF) {
+			sequence->base.busy = 0;
+			if (error) {
+				*error = detail;
+				error->status = status;
+			}
+			return status;
+		}
+		if (status == HX_OS_EOF)
+			break;
+		if (link)
+			link = link->next;
+	}
+	return hx_os_i_container_leave(&sequence->base, HX_OS_OK, error);
+}
+
+static hx_os_status hx_os_seq_filter(hx_os_sequence *sequence,
+	hx_os_value_predicate_fn predicate, void *user, int unique,
+	size_t *removed, hx_os_error *error)
+{
+	hx_os_seq_link *link;
+	const void *previous = NULL;
+	size_t read, kept = 0, bytes;
+	hx_os_status status;
+	if (!sequence || (!unique && !predicate) ||
+		(unique && !sequence->base.options.compare))
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (sequence->kind == HX_OS_SEQ_HEAP)
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+	status = hx_os_i_container_enter(&sequence->base);
+	if (status != HX_OS_OK)
+		return hx_os_i_error(error, status, 0, 0);
+	bytes = sequence->base.options.element_size;
+	link = sequence->first;
+	for (read = 0; read < sequence->count; ++read) {
+		hx_os_seq_link *next = link ? link->next : NULL;
+		void *value = link
+			? (unsigned char *)link + sequence->value_offset
+			: hx_os_seq_slot(sequence, read);
+		int discard = unique ? previous &&
+				!hx_os_seq_compare(sequence, previous, value)
+				     : predicate(value, user);
+		if (discard) {
+			hx_os_i_container_drop(&sequence->base, value);
+			if (link)
+				hx_os_seq_unlink(sequence, link);
+		}
+		else {
+			previous = value;
+			if (!link) {
+				void *destination =
+					hx_os_seq_slot(sequence, kept);
+				if (read != kept)
+					memcpy(destination, value, bytes);
+				previous = destination;
+			}
+			++kept;
+		}
+		link = next;
+	}
+	if (removed)
+		*removed = sequence->count - kept;
+	if (kept != sequence->count)
+		++sequence->base.generation;
+	sequence->count = kept;
+	return hx_os_i_container_leave(&sequence->base, HX_OS_OK, error);
+}
+
+hx_os_status hx_os_sequence_remove_if(hx_os_sequence *sequence,
+	hx_os_value_predicate_fn predicate, void *user, size_t *removed,
+	hx_os_error *error)
+{
+	return hx_os_seq_filter(sequence, predicate, user, 0, removed, error);
+}
+
+hx_os_status hx_os_sequence_unique(
+	hx_os_sequence *sequence, size_t *removed, hx_os_error *error)
+{
+	return hx_os_seq_filter(sequence, NULL, NULL, 1, removed, error);
+}
+
+static hx_os_status hx_os_seq_quantify(const hx_os_sequence *sequence,
+	hx_os_value_predicate_fn predicate, void *user, int mode, int *result)
+{
+	hx_os_sequence_iterator iterator;
+	hx_os_status status;
+	if (!sequence || !predicate || !result)
+		return HX_OS_INVALID;
+	*result = mode != 0;
+	for (status = hx_os_sequence_begin(sequence, &iterator);
+		status == HX_OS_OK; status = hx_os_sequence_next(&iterator)) {
+		const void *value;
+		int matches;
+		status = hx_os_sequence_value(&iterator, &value);
+		if (status != HX_OS_OK)
+			return status;
+		matches = predicate(value, user) != 0;
+		if (matches != (mode == 1)) {
+			*result = mode == 0;
+			return HX_OS_OK;
+		}
+	}
+	return status == HX_OS_EOF ? HX_OS_OK : status;
+}
+hx_os_status hx_os_sequence_any_of(const hx_os_sequence *sequence,
+	hx_os_value_predicate_fn predicate, void *user, int *result)
+{
+	return hx_os_seq_quantify(sequence, predicate, user, 0, result);
+}
+hx_os_status hx_os_sequence_all_of(const hx_os_sequence *sequence,
+	hx_os_value_predicate_fn predicate, void *user, int *result)
+{
+	return hx_os_seq_quantify(sequence, predicate, user, 1, result);
+}
+hx_os_status hx_os_sequence_none_of(const hx_os_sequence *sequence,
+	hx_os_value_predicate_fn predicate, void *user, int *result)
+{
+	return hx_os_seq_quantify(sequence, predicate, user, 2, result);
+}
+
+hx_os_status hx_os_sequence_partition(hx_os_sequence *sequence,
+	hx_os_value_predicate_fn predicate, void *user, size_t *boundary,
+	hx_os_error *error)
+{
+	hx_os_status status;
+	size_t kept = 0, scan;
+	if (!sequence || !predicate || !boundary)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (sequence->kind == HX_OS_SEQ_HEAP)
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+	status = hx_os_i_container_enter(&sequence->base);
+	if (status != HX_OS_OK)
+		return hx_os_i_error(error, status, 0, 0);
+	if (sequence->kind == HX_OS_SEQ_LIST) {
+		hx_os_seq_link *heads[2] = {NULL, NULL},
+			       *tails[2] = {NULL, NULL};
+		hx_os_seq_link *link = sequence->first;
+		while (link) {
+			hx_os_seq_link *next = link->next;
+			int group = !predicate(
+				(unsigned char *)link + sequence->value_offset,
+				user);
+			kept += group == 0;
+			link->previous = tails[group];
+			link->next = NULL;
+			if (tails[group])
+				tails[group]->next = link;
+			else
+				heads[group] = link;
+			tails[group] = link;
+			link = next;
+		}
+		if (tails[0])
+			tails[0]->next = heads[1];
+		if (heads[1])
+			heads[1]->previous = tails[0];
+		sequence->first = heads[0] ? heads[0] : heads[1];
+		sequence->last = tails[1] ? tails[1] : tails[0];
+	}
+	else
+		for (scan = 0; scan < sequence->count; ++scan)
+			if (predicate(hx_os_seq_slot(sequence, scan), user))
+				hx_os_seq_swap(sequence, kept++, scan);
+	if (sequence->count > 1)
+		++sequence->base.generation;
+	*boundary = kept;
+	return hx_os_i_container_leave(&sequence->base, HX_OS_OK, error);
+}
+
+hx_os_status hx_os_sequence_replace_if(hx_os_sequence *sequence,
+	hx_os_value_predicate_fn predicate, void *user, const void *replacement,
+	size_t *replaced, hx_os_error *error)
+{
+	hx_os_status status;
+	size_t bytes, index, count = 0;
+	hx_os_seq_link *link;
+	unsigned char *scratch, *value;
+	if (replaced)
+		*replaced = 0;
+	if (!sequence || !predicate || !replacement)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (sequence->kind == HX_OS_SEQ_HEAP)
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+	bytes = sequence->base.options.element_size;
+	if (bytes > SIZE_MAX / 2)
+		return hx_os_i_error(error, HX_OS_LIMIT, 0, 0);
+	status = hx_os_i_container_enter(&sequence->base);
+	if (status != HX_OS_OK)
+		return hx_os_i_error(error, status, 0, 0);
+	scratch = hx_os_i_container_alloc(&sequence->base, bytes * 2,
+		sequence->base.options.element_alignment);
+	if (!scratch)
+		return hx_os_i_container_leave(&sequence->base,
+			sequence->base.allocation_status, error);
+	status = hx_os_i_container_copy(
+		&sequence->base, scratch, replacement, 0);
+	if (status != HX_OS_OK)
+		goto done;
+	link = sequence->first;
+	for (index = 0; index < sequence->count; ++index) {
+		value = link ? (unsigned char *)link + sequence->value_offset
+			     : hx_os_seq_slot(sequence, index);
+		if (link)
+			link = link->next;
+		if (!predicate(value, user))
+			continue;
+		status = hx_os_i_container_copy(
+			&sequence->base, scratch + bytes, scratch, 0);
+		if (status != HX_OS_OK)
+			break;
+		hx_os_i_container_drop(&sequence->base, value);
+		memcpy(value, scratch + bytes, bytes);
+		++count;
+	}
+	hx_os_i_container_drop(&sequence->base, scratch);
+done:
+	hx_os_i_container_free(&sequence->base, scratch);
+	if (count)
+		++sequence->base.generation;
+	if (replaced)
+		*replaced = count;
+	return hx_os_i_container_leave(&sequence->base, status, error);
+}
+
+static void hx_os_seq_reverse_range(
+	hx_os_sequence *sequence, size_t first, size_t last)
+{
+	while (first < last && first < --last)
+		hx_os_seq_swap(sequence, first++, last);
+}
+
+hx_os_status hx_os_sequence_reverse(
+	hx_os_sequence *sequence, hx_os_error *error)
+{
+	hx_os_status status;
+	if (!sequence)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (sequence->kind == HX_OS_SEQ_HEAP)
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+	status = hx_os_i_container_enter(&sequence->base);
+	if (status != HX_OS_OK)
+		return hx_os_i_error(error, status, 0, 0);
+	if (sequence->kind == HX_OS_SEQ_LIST) {
+		hx_os_seq_link *node = sequence->first;
+		while (node) {
+			hx_os_seq_link *next = node->next;
+			node->next = node->previous;
+			node->previous = next;
+			node = next;
+		}
+		node = sequence->first;
+		sequence->first = sequence->last;
+		sequence->last = node;
+	}
+	else
+		hx_os_seq_reverse_range(sequence, 0, sequence->count);
+	if (sequence->count > 1)
+		++sequence->base.generation;
+	return hx_os_i_container_leave(&sequence->base, HX_OS_OK, error);
+}
+
+hx_os_status hx_os_sequence_rotate(
+	hx_os_sequence *sequence, size_t left_count, hx_os_error *error)
+{
+	hx_os_status status;
+	if (!sequence)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (sequence->kind == HX_OS_SEQ_HEAP)
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+	status = hx_os_i_container_enter(&sequence->base);
+	if (status != HX_OS_OK)
+		return hx_os_i_error(error, status, 0, 0);
+	if (sequence->count)
+		left_count %= sequence->count;
+	if (sequence->count && left_count) {
+		if (sequence->kind == HX_OS_SEQ_LIST) {
+			hx_os_seq_link *first =
+				hx_os_seq_link_at(sequence, left_count);
+			hx_os_seq_link *last = first->previous;
+			sequence->last->next = sequence->first;
+			sequence->first->previous = sequence->last;
+			first->previous = last->next = NULL;
+			sequence->first = first;
+			sequence->last = last;
+		}
+		else {
+			hx_os_seq_reverse_range(sequence, 0, left_count);
+			hx_os_seq_reverse_range(
+				sequence, left_count, sequence->count);
+			hx_os_seq_reverse_range(sequence, 0, sequence->count);
+		}
+		++sequence->base.generation;
+	}
+	return hx_os_i_container_leave(&sequence->base, HX_OS_OK, error);
+}
+
+hx_os_status hx_os_vector_upper_bound(
+	const hx_os_vector *vector, const void *key, size_t *index)
+{
+	size_t low = 0, high;
+	if (!vector || !key || !index || vector->kind != HX_OS_SEQ_VECTOR ||
+		!vector->base.options.compare)
+		return HX_OS_INVALID;
+	if (vector->base.busy)
+		return HX_OS_BUSY;
+	high = vector->count;
+	while (low < high) {
+		size_t middle = low + (high - low) / 2;
+		if (hx_os_seq_compare(
+			    vector, hx_os_seq_slot(vector, middle), key) <= 0)
+			low = middle + 1;
+		else
+			high = middle;
+	}
+	*index = low;
+	return HX_OS_OK;
+}
+
+static void hx_os_list_merge_sort(hx_os_sequence *sequence)
+{
+	size_t width = 1;
+	size_t offset = sequence->value_offset;
+	for (;;) {
+		hx_os_seq_link *left = sequence->first, *head = NULL,
+			       *tail = NULL;
+		size_t runs = 0;
+		while (left) {
+			hx_os_seq_link *right = left;
+			size_t left_count = 0, right_count = width;
+			++runs;
+			while (left_count < width && right) {
+				++left_count;
+				right = right->next;
+			}
+			while (left_count || (right_count && right)) {
+				hx_os_seq_link *next;
+				if (left_count &&
+					(!right_count || !right ||
+						hx_os_seq_compare(sequence,
+							(unsigned char *)left +
+								offset,
+							(unsigned char *)right +
+								offset) <=
+							0)) {
+					next = left;
+					left = left->next;
+					--left_count;
+				}
+				else {
+					next = right;
+					right = right->next;
+					--right_count;
+				}
+				next->previous = tail;
+				if (tail)
+					tail->next = next;
+				else
+					head = next;
+				tail = next;
+			}
+			left = right;
+		}
+		if (tail)
+			tail->next = NULL;
+		sequence->first = head;
+		sequence->last = tail;
+		if (runs <= 1)
+			return;
+		width *= 2;
+	}
+}
+
+hx_os_status hx_os_sequence_stable_sort(
+	hx_os_sequence *sequence, hx_os_error *error)
+{
+	hx_os_status status;
+	size_t width, start, bytes, count;
+	unsigned char *scratch;
+	if (!sequence || !sequence->base.options.compare)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (sequence->kind == HX_OS_SEQ_HEAP)
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+	status = hx_os_i_container_enter(&sequence->base);
+	if (status != HX_OS_OK)
+		return hx_os_i_error(error, status, 0, 0);
+	count = sequence->count;
+	if (count < 2)
+		return hx_os_i_container_leave(
+			&sequence->base, HX_OS_OK, error);
+	if (sequence->kind == HX_OS_SEQ_LIST) {
+		hx_os_list_merge_sort(sequence);
+		++sequence->base.generation;
+		return hx_os_i_container_leave(
+			&sequence->base, HX_OS_OK, error);
+	}
+	bytes = sequence->base.options.element_size;
+	scratch = hx_os_i_container_alloc(&sequence->base, count * bytes,
+		sequence->base.options.element_alignment);
+	if (!scratch)
+		return hx_os_i_container_leave(&sequence->base,
+			sequence->base.allocation_status, error);
+	for (width = 1; width < count;) {
+		for (start = 0; start < count;) {
+			size_t mid = start +
+				(count - start < width ? count - start : width);
+			size_t end = mid +
+				(count - mid < width ? count - mid : width);
+			size_t left = start, right = mid, target = start;
+			while (left < mid || right < end) {
+				size_t selected;
+				if (left < mid &&
+					(right == end ||
+						hx_os_seq_compare(sequence,
+							hx_os_seq_slot(
+								sequence, left),
+							hx_os_seq_slot(sequence,
+								right)) <= 0))
+					selected = left++;
+				else
+					selected = right++;
+				memcpy(scratch + target++ * bytes,
+					hx_os_seq_slot(sequence, selected),
+					bytes);
+			}
+			start = end;
+		}
+		for (start = 0; start < count; ++start)
+			memcpy(hx_os_seq_slot(sequence, start),
+				scratch + start * bytes, bytes);
+		if (width > count / 2)
+			break;
+		width *= 2;
+	}
+	hx_os_i_container_free(&sequence->base, scratch);
+	++sequence->base.generation;
+	return hx_os_i_container_leave(&sequence->base, HX_OS_OK, error);
+}
+
+hx_os_status hx_os_list_splice(hx_os_list *destination, size_t position,
+	hx_os_list *source, size_t first, size_t count, hx_os_error *error)
+{
+	hx_os_container_options *left, *right;
+	hx_os_seq_link *begin, *last, *after, *before;
+	size_t cost;
+	if (!destination || !source)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (destination->kind != HX_OS_SEQ_LIST ||
+		source->kind != HX_OS_SEQ_LIST)
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+	if (destination->base.busy || source->base.busy)
+		return hx_os_i_error(error, HX_OS_BUSY, 0, 0);
+	left = &destination->base.options;
+	right = &source->base.options;
+	if (destination->base.context != source->base.context ||
+		left->element_size != right->element_size ||
+		left->element_alignment != right->element_alignment ||
+		left->copy != right->copy || left->drop != right->drop ||
+		left->compare != right->compare || left->user != right->user ||
+		position > destination->count || first > source->count ||
+		count > source->count - first)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (!count ||
+		(source == destination && position >= first &&
+			position <= first + count))
+		return hx_os_i_error(error, HX_OS_OK, 0, 0);
+	begin = hx_os_seq_link_at(source, first);
+	last = hx_os_seq_link_at(source, first + count - 1);
+	cost = hx_os_i_allocation_bytes(begin) * count;
+	if (source != destination &&
+		(count > left->max_items - destination->count ||
+			cost > left->max_bytes - destination->base.memory))
+		return hx_os_i_error(error, HX_OS_LIMIT, 0, 0);
+	after = position == destination->count
+		? NULL
+		: hx_os_seq_link_at(destination, position);
+	if (begin->previous)
+		begin->previous->next = last->next;
+	else
+		source->first = last->next;
+	if (last->next)
+		last->next->previous = begin->previous;
+	else
+		source->last = begin->previous;
+	before = after ? after->previous : destination->last;
+	begin->previous = before;
+	last->next = after;
+	if (before)
+		before->next = begin;
+	else
+		destination->first = begin;
+	if (after)
+		after->previous = last;
+	else
+		destination->last = last;
+	source->count -= count;
+	destination->count += count;
+	source->base.memory -= cost;
+	destination->base.memory += cost;
+	++source->base.generation;
+	if (source != destination)
+		++destination->base.generation;
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+}
+
+hx_os_status hx_os_vector_partial_sort(
+	hx_os_vector *vector, size_t count, hx_os_error *error)
+{
+	hx_os_status status;
+	size_t i;
+	if (!vector || vector->kind != HX_OS_SEQ_VECTOR ||
+		!vector->base.options.compare || count > vector->count)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	status = hx_os_i_container_enter(&vector->base);
+	if (status != HX_OS_OK)
+		return hx_os_i_error(error, status, 0, 0);
+	if (count) {
+		for (i = count / 2; i; --i)
+			hx_os_seq_sift(vector, i - 1, count);
+		for (i = count; i < vector->count; ++i)
+			if (hx_os_seq_compare(vector, hx_os_seq_slot(vector, i),
+				    vector->data) < 0) {
+				hx_os_seq_swap(vector, i, 0);
+				hx_os_seq_sift(vector, 0, count);
+			}
+		for (i = count; i > 1; --i) {
+			hx_os_seq_swap(vector, 0, i - 1);
+			hx_os_seq_sift(vector, 0, i - 1);
+		}
+		++vector->base.generation;
+	}
+	return hx_os_i_container_leave(&vector->base, HX_OS_OK, error);
+}
+
+hx_os_status hx_os_vector_nth_element(
+	hx_os_vector *vector, size_t index, hx_os_error *error)
+{
+	hx_os_status status;
+	size_t first = 0, last, budget = 0, bytes;
+	void *pivot;
+	if (!vector || vector->kind != HX_OS_SEQ_VECTOR ||
+		!vector->base.options.compare || index >= vector->count)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	status = hx_os_i_container_enter(&vector->base);
+	if (status != HX_OS_OK)
+		return hx_os_i_error(error, status, 0, 0);
+	bytes = vector->base.options.element_size;
+	pivot = hx_os_i_container_alloc(
+		&vector->base, bytes, vector->base.options.element_alignment);
+	if (!pivot)
+		return hx_os_i_container_leave(
+			&vector->base, vector->base.allocation_status, error);
+	for (last = vector->count; last > 1; last /= 2)
+		budget += 2;
+	last = vector->count;
+	while (last - first > 1) {
+		size_t lower = first, scan = first, upper = last;
+		if (!budget--) {
+			hx_os_seq_heap_sort(vector, vector->count);
+			break;
+		}
+		memcpy(pivot,
+			hx_os_seq_slot(vector, first + (last - first) / 2),
+			bytes);
+		while (scan < upper) {
+			int order = hx_os_seq_compare(
+				vector, hx_os_seq_slot(vector, scan), pivot);
+			if (order < 0)
+				hx_os_seq_swap(vector, lower++, scan++);
+			else if (order > 0)
+				hx_os_seq_swap(vector, scan, --upper);
+			else
+				++scan;
+		}
+		if (index < lower)
+			last = lower;
+		else if (index >= upper)
+			first = upper;
+		else
+			break;
+	}
+	hx_os_i_container_free(&vector->base, pivot);
+	++vector->base.generation;
+	return hx_os_i_container_leave(&vector->base, HX_OS_OK, error);
+}
+
+static hx_os_status hx_os_seq_build(const hx_os_sequence *source,
+	const hx_os_container_options *options,
+	hx_os_value_predicate_fn predicate, hx_os_value_transform_fn transform,
+	void *user, hx_os_vector **out, hx_os_error *error)
+{
+	hx_os_vector *result;
+	hx_os_sequence_iterator iterator;
+	hx_os_status status;
+	if (out)
+		*out = NULL;
+	if (!source || !out)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	*out = NULL;
+	if (source->base.busy)
+		return hx_os_i_error(error, HX_OS_BUSY, 0, 0);
+	status = hx_os_vector_create(source->base.context,
+		options ? options : &source->base.options, &result, error);
+	if (status != HX_OS_OK)
+		return status;
+	if (transform) {
+		status = hx_os_sequence_reserve(result, source->count, error);
+		if (status != HX_OS_OK)
+			goto fail;
+	}
+	HX_OS_SEQUENCE_FOR_EACH(iterator, source, status)
+	{
+		const void *value;
+		status = hx_os_sequence_value(&iterator, &value);
+		if (status != HX_OS_OK)
+			goto fail;
+		if (transform) {
+			hx_os_error detail;
+			hx_os_error_clear(&detail);
+			status =
+				transform(hx_os_seq_slot(result, result->count),
+					value, user, &detail);
+			if (status != HX_OS_OK) {
+				if (error) {
+					*error = detail;
+					error->status = status;
+				}
+				goto fail;
+			}
+			++result->count;
+		}
+		else if (!predicate || predicate(value, user)) {
+			status = hx_os_sequence_push_back(result, value, error);
+			if (status != HX_OS_OK)
+				goto fail;
+		}
+	}
+	if (status != HX_OS_EOF)
+		goto fail;
+	*out = result;
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+fail:
+	(void)hx_os_sequence_destroy(&result, NULL);
+	return status;
+}
+
+hx_os_status hx_os_sequence_clone(
+	const hx_os_sequence *source, hx_os_vector **out, hx_os_error *error)
+{
+	return hx_os_seq_build(source, NULL, NULL, NULL, NULL, out, error);
+}
+
+hx_os_status hx_os_sequence_copy_if(const hx_os_sequence *source,
+	hx_os_value_predicate_fn predicate, void *user, hx_os_vector **out,
+	hx_os_error *error)
+{
+	if (out)
+		*out = NULL;
+	if (!predicate)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	return hx_os_seq_build(source, NULL, predicate, NULL, user, out, error);
+}
+
+hx_os_status hx_os_sequence_transform(const hx_os_sequence *source,
+	const hx_os_container_options *options,
+	hx_os_value_transform_fn transform, void *user, hx_os_vector **out,
+	hx_os_error *error)
+{
+	if (out)
+		*out = NULL;
+	if (!transform || !options)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	return hx_os_seq_build(
+		source, options, NULL, transform, user, out, error);
+}
+
+hx_os_status hx_os_sequence_fold(const hx_os_sequence *source,
+	void *accumulator, hx_os_value_fold_fn fold, void *user,
+	size_t *completed, hx_os_error *error)
+{
+	hx_os_sequence_iterator iterator;
+	hx_os_status status;
+	if (completed)
+		*completed = 0;
+	if (!accumulator || !fold)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	HX_OS_SEQUENCE_FOR_EACH(iterator, source, status)
+	{
+		const void *value;
+		hx_os_error detail;
+		status = hx_os_sequence_value(&iterator, &value);
+		if (status != HX_OS_OK)
+			return hx_os_i_error(error, status, 0, 0);
+		hx_os_error_clear(&detail);
+		if (completed)
+			*completed = iterator.index + 1;
+		status = fold(accumulator, value, user, &detail);
+		if (status != HX_OS_OK) {
+			if (error) {
+				*error = detail;
+				error->status = status;
+			}
+			return status;
+		}
+	}
+	return hx_os_i_error(
+		error, status == HX_OS_EOF ? HX_OS_OK : status, 0, 0);
+}
+
+static int hx_os_seq_same_policy(
+	const hx_os_sequence *left, const hx_os_sequence *right)
+{
+	const hx_os_container_options *a = &left->base.options;
+	const hx_os_container_options *b = &right->base.options;
+	return a->element_size == b->element_size &&
+		a->element_alignment == b->element_alignment &&
+		a->copy == b->copy && a->drop == b->drop &&
+		a->compare == b->compare && a->user == b->user;
+}
+
+hx_os_status hx_os_sequence_merge(const hx_os_sequence *left,
+	const hx_os_sequence *right, int operation, hx_os_vector **out,
+	hx_os_error *error)
+{
+	hx_os_sequence_iterator a, b;
+	hx_os_status as, bs, status;
+	hx_os_vector *result;
+	if (out)
+		*out = NULL;
+	if (!left || !right || !out || !left->base.options.compare ||
+		!hx_os_seq_same_policy(left, right) ||
+		operation < HX_OS_MERGE ||
+		operation > HX_OS_SET_SYMMETRIC_DIFFERENCE)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	*out = NULL;
+	if (left->base.busy || right->base.busy)
+		return hx_os_i_error(error, HX_OS_BUSY, 0, 0);
+	status = hx_os_vector_create(
+		left->base.context, &left->base.options, &result, error);
+	if (status != HX_OS_OK)
+		return status;
+	as = hx_os_sequence_begin(left, &a);
+	bs = hx_os_sequence_begin(right, &b);
+	while (as == HX_OS_OK || bs == HX_OS_OK) {
+		const void *av = NULL, *bv = NULL, *chosen = NULL;
+		int order;
+		if (as == HX_OS_OK)
+			(void)hx_os_sequence_value(&a, &av);
+		if (bs == HX_OS_OK)
+			(void)hx_os_sequence_value(&b, &bv);
+		order = !av ? 1 : !bv ? -1 : hx_os_seq_compare(left, av, bv);
+		if (operation == HX_OS_MERGE) {
+			chosen = order <= 0 ? av : bv;
+			if (order <= 0)
+				as = hx_os_sequence_next(&a);
+			else
+				bs = hx_os_sequence_next(&b);
+		}
+		else {
+			if (order < 0 && operation != HX_OS_SET_INTERSECTION)
+				chosen = av;
+			else if (order > 0 &&
+				(operation == HX_OS_SET_UNION ||
+					operation ==
+						HX_OS_SET_SYMMETRIC_DIFFERENCE))
+				chosen = bv;
+			else if (!order &&
+				(operation == HX_OS_SET_UNION ||
+					operation == HX_OS_SET_INTERSECTION))
+				chosen = av;
+			if (order <= 0)
+				as = hx_os_sequence_next(&a);
+			if (order >= 0)
+				bs = hx_os_sequence_next(&b);
+		}
+		if (chosen) {
+			status =
+				hx_os_sequence_push_back(result, chosen, error);
+			if (status != HX_OS_OK)
+				goto fail;
+		}
+		if ((as != HX_OS_OK && as != HX_OS_EOF) ||
+			(bs != HX_OS_OK && bs != HX_OS_EOF)) {
+			status = hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+			goto fail;
+		}
+	}
+	*out = result;
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+fail:
+	(void)hx_os_sequence_destroy(&result, NULL);
+	return status;
 }

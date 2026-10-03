@@ -16,14 +16,15 @@
 | stack | vector 的 LIFO 用法，尾部入栈、出栈 |
 | list | 双向链表；两端操作及迭代器步进 O(1) |
 | heap | 大顶堆；入堆、出堆 O(log n)，下标零为堆顶 |
-| 有序 map/set | AVL 树；查找、插入、删除 O(log n)，按键顺序迭代 |
+| 有序 map/set | 保留原 AVL，可选择红黑树；查找、插入、删除 O(log n)，按键顺序迭代 |
+| multimap/multiset | 在 AVL、红黑树或哈希类型上加入 `HX_OS_MAP_MULTI`，保留重复键 |
 | 哈希 map/set | uthash 2.4.0；预期查找 O(1)，按插入顺序迭代 |
 
 复杂度不包括元素／键的字节数和回调耗时。链表按下标查找、插入、删除需要 O(n) 遍历；使用迭代器才能实现总计 O(n) 的完整遍历。vector/deque 中间插删为 O(n)，扩容会搬移并分配。哈希冲突可使操作退化到 O(n)；当前哈希没有抵抗恶意碰撞输入的保证。
 
 序列共用 `hx_os_sequence_*` 接口，queue/stack 是便捷别名，不另建运行时实现或 DLL 导出。堆只接受尾部插入和下标零删除，任意下标修改返回 NOT_SUPPORTED。 `hx_os_vector_sort` 使用原地、不稳定的堆排序； `hx_os_vector_lower_bound` 要求 vector 已按同一严格弱序比较器排序。
 
-这是常用 C 容器设施。本版没有模板类型检查、multimap、并发队列、链表 splice 或完整的 STL 算法／迭代器分类体系。
+这些是 C 容器和算法设施，没有 C++ 模板类型系统、完整的迭代器分类/ranges 框架或无锁并发队列。跨线程共享容器需要外部同步；协程 channel 是独立的有界通信设施。
 
 ## 选项、分配器与容量限制
 
@@ -86,3 +87,61 @@ hx_string_destroy(&source);
 ~~~
 
 使用自定义 context 时，预设和容器构造传同一个 context。把字符串提取到外部存储后，调用者需在使用完毕时调用 `hx_string_destroy`。若用 `_take` 把字符串交给容器，来源应重置为 `HX_STRING_INIT`，不要先析构已交出的字符缓冲区。
+
+## 红黑树和重复键
+
+创建时选择 `HX_OS_MAP_RED_BLACK` 即使用红黑树；原 `HX_OS_MAP_ORDERED` 继续使用 AVL，没有改变旧枚举值或公共结构体布局。与 `HX_OS_MAP_MULTI` 按位或，便可保留重复键。multi 模式下，`replace=0` 新增一个同键项目，`replace=1` 替换其中一个。有序容器的同键项目保持插入顺序，find/erase 操作第一个同键项目；哈希同键项目的查找顺序不作保证。
+
+[完整红黑树程序](../examples/ordered_map.c) 依次插入 `b:20`、`a:10`、`b:21`，输出：
+
+```text
+a: 10
+b: 20
+b: 21
+```
+
+关键调用只有创建容器和插入值：
+
+```c
+hx_os_map_create(NULL, HX_OS_MAP_RED_BLACK | HX_OS_MAP_MULTI,
+	&options, NULL, &map, &error);
+hx_os_map_insert(map, "b", 1, &value, 0, &error);
+```
+
+`hx_os_map_lower_bound`、`upper_bound`、`equal_range` 用于有序树。`count` 可用于全部后端，`erase_all` 删除所有同键项目，也允许查询键借用容器内部存储。`erase_at` 删除当前项目，并将传入的迭代器更新到下一项；其他迭代器失效。`last`、`previous` 提供反向遍历。`validate` 不分配内存，检查 AVL/RB 不变量和树/链表的一致性，但不能用于验证任意损坏的内存指针。
+
+## 遍历和算法
+
+先声明 iterator/status，再使用循环宏。宏只计算一次容器表达式，遇到 EOF 结束，保留错误状态；主动 break 时状态仍为 OK。修改容器会让普通迭代器失效，边遍历边删除时应显式使用 `erase_at`。
+
+```c
+hx_os_sequence_iterator iterator;
+hx_os_status status;
+HX_OS_SEQUENCE_FOR_EACH(iterator, values, status)
+{
+	const void *value;
+	status = hx_os_sequence_value(&iterator, &value);
+	if (status != HX_OS_OK)
+		break;
+	printf("%d\n", *(const int *)value);
+}
+```
+
+map 有对应的 `HX_OS_MAP_FOR_EACH`，两类容器都有反向遍历宏。需要提前停止、详细错误或累积结果时，也可使用回调接口。
+
+| 要做的事 | 入口和行为 |
+| --- | --- |
+| 按条件查询 | `find_if`、`count_if`、`any_of`、`all_of`、`none_of`，后三个找到答案便停止 |
+| 逐项访问、累积 | `visit`、`fold`，首次失败停止，保留此前回调效果并报告进度 |
+| 复制、筛选、转换 | `clone`、`copy_if`、`transform` 返回新 vector，失败不改变源容器 |
+| 删除、替换 | `remove_if`、相邻去重 `unique`、`replace_if`；替换遇到首次复制失败即停止，保留前面已替换项 |
+| 调整顺序 | `reverse`、`rotate`、`partition`，线性处理，不额外分配；链表 partition 保持相对顺序 |
+| 稳定排序 | `stable_sort`，O(n log n)；vector/deque 使用 O(n) 临时空间，链表使用 O(1) 临时空间归并链接 |
+| 部分排序 | vector 的 `partial_sort(k)` 为 O(n log k)；`nth_element` 围绕某个名次分区，并在深度达到限制时回退到堆排序 |
+| 有序查询 | vector 的 `lower_bound`/`upper_bound`，要求已按同一比较器排序 |
+| 合并、集合运算 | `merge` 支持 MERGE、UNION、INTERSECTION、DIFFERENCE、SYMMETRIC_DIFFERENCE，保留 multiset 的重复次数语义 |
+| 移动链表区间 | `list_splice` 直接改链接，不复制、不释放元素，也不分配节点 |
+
+除非另有说明，改变顺序的算法会拒绝 heap，避免破坏堆不变量。谓词不能修改同一个容器。成功调整顺序后迭代器失效；排序前分配失败则不改变容器或迭代器。临时空间计入容器字节预算。transform/copy 回调构造元素失败时，需要自行释放该元素的部分构造资源。新 vector 继承源 context/容量限制；有序 merge 要求元素、回调和 user 策略一致。splice 要求 context 和值策略兼容，检查目标容量，并转移节点的内存计数；把同一个链表的区间移到自身区间内部时不做操作。
+
+在提供的工作负载中，AVL 和红黑树节点分配占用相同，不能认为红黑树总是更快。[验证及微基准记录](VALIDATION.zh-CN.md) 分别列出分配字节数、操作耗时和运行结论，不把元数据变小直接当成运行性能提升。

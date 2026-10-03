@@ -136,7 +136,7 @@ static void test_map(hx_os_context *context, int kind)
 	hx_os_container_options_init(&options, sizeof(int));
 	options.user = &comparisons;
 	CHECK(hx_os_map_create(context, kind, &options,
-		      kind == HX_OS_MAP_ORDERED ? test_key_compare : NULL, &map,
+		      kind != HX_OS_MAP_HASH ? test_key_compare : NULL, &map,
 		      NULL) == HX_OS_OK);
 	for (step = 0; step < 6000; ++step) {
 		int key, value, operation;
@@ -179,6 +179,7 @@ static void test_map(hx_os_context *context, int kind)
 				CHECK(*(const int *)stored == values[key]);
 		}
 		CHECK(hx_os_map_size(map) == count);
+		CHECK(hx_os_map_validate(map) == HX_OS_OK);
 		if (step % 100 == 0) {
 			size_t seen = 0;
 			int previous = -1;
@@ -194,7 +195,7 @@ static void test_map(hx_os_context *context, int kind)
 				CHECK(present[actual_key] &&
 					*(const int *)data ==
 						values[actual_key]);
-				if (kind == HX_OS_MAP_ORDERED)
+				if (kind != HX_OS_MAP_HASH)
 					CHECK(actual_key > previous);
 				previous = actual_key;
 				++seen;
@@ -228,6 +229,97 @@ static void test_map(hx_os_context *context, int kind)
 	CHECK(hx_os_map_begin(map, &iterator) == HX_OS_OK);
 	CHECK(hx_os_map_erase(map, NULL, 0, NULL, NULL) == HX_OS_OK);
 	CHECK(hx_os_map_next(&iterator) == HX_OS_INVALID);
+	CHECK(hx_os_map_destroy(&map, NULL) == HX_OS_OK);
+}
+
+static void test_map_duplicates(hx_os_context *context, int kind)
+{
+	hx_os_container_options options;
+	hx_os_map *map;
+	hx_os_map_iterator iterator, end, saved;
+	size_t comparisons = 0, counts[31] = {0}, step, total = 0;
+	uint32_t random = 193;
+	hx_os_status status;
+	hx_os_container_options_init(&options, sizeof(int));
+	options.user = &comparisons;
+	CHECK(hx_os_map_create(context, kind | HX_OS_MAP_MULTI, &options,
+		      kind == HX_OS_MAP_HASH ? NULL : test_key_compare, &map,
+		      NULL) == HX_OS_OK);
+	for (step = 0; step < 5000; ++step) {
+		int key, value = (int)step;
+		size_t count;
+		random = random * UINT32_C(1664525) + UINT32_C(1013904223);
+		key = (int)((random >> 8) % 31);
+		if (random % 5) {
+			CHECK(hx_os_map_insert(map, &key, sizeof(key), &value,
+				      0, NULL) == HX_OS_OK);
+			++counts[key];
+			++total;
+		}
+		else {
+			CHECK(hx_os_map_erase_all(map, &key, sizeof(key),
+				      &count, NULL) == HX_OS_OK);
+			CHECK(count == counts[key]);
+			total -= count;
+			counts[key] = 0;
+		}
+		CHECK(hx_os_map_validate(map) == HX_OS_OK);
+		CHECK(hx_os_map_size(map) == total);
+		CHECK(hx_os_map_count(map, &key, sizeof(key), &count) ==
+			HX_OS_OK);
+		CHECK(count == counts[key]);
+		if (kind != HX_OS_MAP_HASH) {
+			int previous = -1;
+			const void *key_data, *data;
+			size_t bytes, seen = 0;
+			CHECK(hx_os_map_equal_range(map, &key, sizeof(key),
+				      &iterator, &end) == HX_OS_OK);
+			while (iterator.entry != end.entry) {
+				CHECK(hx_os_map_entry(&iterator, &key_data,
+					      &bytes, &data) == HX_OS_OK);
+				CHECK(*(const int *)key_data == key);
+				CHECK(*(const int *)data > previous);
+				previous = *(const int *)data;
+				++seen;
+				status = hx_os_map_next(&iterator);
+				CHECK(status == HX_OS_OK ||
+					status == HX_OS_EOF);
+			}
+			CHECK(seen == count);
+		}
+	}
+	{
+		int key = 32, value = 10;
+		const void *borrowed_key, *data;
+		size_t bytes, count;
+		CHECK(hx_os_map_insert(map, &key, sizeof(key), &value, 0,
+			      NULL) == HX_OS_OK);
+		CHECK(hx_os_map_insert(map, &key, sizeof(key), &value, 0,
+			      NULL) == HX_OS_OK);
+		CHECK(hx_os_map_last(map, &iterator) == HX_OS_OK);
+		CHECK(hx_os_map_entry(&iterator, &borrowed_key, &bytes,
+			      &data) == HX_OS_OK);
+		CHECK(hx_os_map_erase_all(map, borrowed_key, bytes, &count,
+			      NULL) == HX_OS_OK &&
+			count == 2);
+		CHECK(hx_os_map_next(&iterator) == HX_OS_INVALID);
+		CHECK(hx_os_map_size(map) == total);
+	}
+	step = 0;
+	HX_OS_MAP_FOR_EACH_REVERSE(iterator, map, status)
+	{
+		++step;
+	}
+	CHECK(status == HX_OS_EOF && step == total);
+	CHECK(hx_os_map_begin(map, &iterator) == HX_OS_OK);
+	saved = iterator;
+	while (iterator.entry) {
+		CHECK(hx_os_map_erase_at(map, &iterator, NULL, NULL) ==
+			HX_OS_OK);
+		CHECK(hx_os_map_validate(map) == HX_OS_OK);
+	}
+	CHECK(hx_os_map_next(&saved) == HX_OS_INVALID);
+	CHECK(hx_os_map_size(map) == 0);
 	CHECK(hx_os_map_destroy(&map, NULL) == HX_OS_OK);
 }
 
@@ -585,6 +677,10 @@ int main(void)
 		test_heap_and_sort(context);
 		test_map(context, HX_OS_MAP_HASH);
 		test_map(context, HX_OS_MAP_ORDERED);
+		test_map(context, HX_OS_MAP_RED_BLACK);
+		test_map_duplicates(context, HX_OS_MAP_HASH);
+		test_map_duplicates(context, HX_OS_MAP_ORDERED);
+		test_map_duplicates(context, HX_OS_MAP_RED_BLACK);
 		test_ownership(context);
 		test_limits_and_failure();
 		test_string_values(context);

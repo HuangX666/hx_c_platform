@@ -4,7 +4,7 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 	random_uuid mapped_file file_attributes watch_directory capture_process
 	delayed_task duplex_message obfuscated_string localized_time
 	signal_notifications settings profile_intervals atomic_publication
-	common_tasks variant find_files)
+	common_tasks variant find_files coroutine ordered_map)
 	add_executable(hx_os_${example} ${example}.c)
 	target_link_libraries(hx_os_${example} PRIVATE hx_c_platform)
 	set_target_properties(hx_os_${example} PROPERTIES
@@ -13,6 +13,10 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 	hx_apply_warnings(hx_os_${example})
 endforeach()
 if(HX_OS_BUILD_TESTS)
+	add_test(NAME ordered_map_example COMMAND hx_os_ordered_map)
+	set_tests_properties(ordered_map_example PROPERTIES TIMEOUT 20)
+	add_test(NAME coroutine_example COMMAND hx_os_coroutine)
+	set_tests_properties(coroutine_example PROPERTIES TIMEOUT 20)
 	add_test(NAME variant_example COMMAND hx_os_variant)
 	set_tests_properties(variant_example PROPERTIES TIMEOUT 20)
 	add_test(NAME common_tasks_example COMMAND hx_os_common_tasks)
@@ -151,6 +155,33 @@ if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_PROFILER)
 	set_tests_properties(profile_intervals_example PROPERTIES TIMEOUT 20)
 endif()
 if(CMAKE_CXX_COMPILER_LOADED)
+	add_executable(hx_os_cpp_coroutine coroutine.cpp)
+	target_link_libraries(hx_os_cpp_coroutine PRIVATE hx_c_platform::cpp)
+	set_target_properties(hx_os_cpp_coroutine PROPERTIES
+		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+	hx_apply_warnings(hx_os_cpp_coroutine)
+	if(HX_OS_BUILD_TESTS)
+		add_test(NAME cpp_coroutine_example COMMAND hx_os_cpp_coroutine)
+		set_tests_properties(cpp_coroutine_example
+			PROPERTIES TIMEOUT 20)
+	endif()
+	if(HX_OS_HAVE_CPP20_COROUTINES)
+		add_executable(hx_os_cpp_coroutine20 coroutine20.cpp)
+		target_link_libraries(hx_os_cpp_coroutine20 PRIVATE
+			hx_c_platform::cpp20)
+		set_target_properties(hx_os_cpp_coroutine20 PROPERTIES
+			CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES
+			CXX_EXTENSIONS NO
+			RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+		hx_apply_warnings(hx_os_cpp_coroutine20)
+		if(HX_OS_BUILD_TESTS)
+			add_test(NAME cpp_coroutine20_example
+				COMMAND hx_os_cpp_coroutine20)
+			set_tests_properties(cpp_coroutine20_example
+				PROPERTIES TIMEOUT 20)
+		endif()
+	endif()
 	add_executable(hx_os_cpp_find_files find_files_async.cpp)
 	target_link_libraries(hx_os_cpp_find_files PRIVATE hx_c_platform::cpp)
 	set_target_properties(hx_os_cpp_find_files PROPERTIES

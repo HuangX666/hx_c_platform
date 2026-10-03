@@ -16,6 +16,12 @@ static __declspec(thread) hx_os_signal_frame *hx_os_signal_current;
 #else
 static __thread hx_os_signal_frame *hx_os_signal_current;
 #endif
+void *hx_os_i_signal_exchange_execution(void *value)
+{
+	hx_os_signal_frame *previous = hx_os_signal_current;
+	hx_os_signal_current = value;
+	return previous;
+}
 static int hx_os_signal_self(
 	hx_os_signal_handler *handler, hx_os_signal_connection connection)
 {

@@ -16,7 +16,7 @@ Hash maps privately include the unmodified uthash 2.4.0 header under `third_part
 
 The pin identifies the integrated source, not the latest upstream version. Allocation hooks and nonfatal OOM handling are configured in the first-party adapter; no vendor edit is required. No uthash types enter the public ABI. Enabled installations include `share/hx_c_platform/licenses/uthash-LICENSE`.
 
-The repository also retains unchanged minicoro 0.1.3 source and its [MIT license](third_party/minicoro/v0.1.3/LICENSE) from the initial evaluation. It is not built, installed or exposed by any API; coroutine development is deferred. Its presence is not a claim of an implemented coroutine module.
+The repository also retains unchanged minicoro 0.1.3 source and its [MIT license](third_party/minicoro/v0.1.3/LICENSE) from the initial evaluation. It is not built, installed, linked or exposed by any API. The coroutine scheduler and POSIX context switch are first-party implementations; Windows uses operating-system fibers. The retained evaluation copy is not used by this module.
 
 ## Warning configuration
 

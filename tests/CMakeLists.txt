@@ -37,7 +37,8 @@ set(hx_test_suites data options lifecycle config containers sysinfo file_utils
 	registry power obfuscate calendar text_lookup bitstream calldata signal
 	settings settings_concurrency settings_config profiler atomic
 	string_tools lexer wide_wait catalog_filename procedure
-	android_baseline convenience variant file_search)
+	android_baseline convenience variant file_search stl
+	coroutine coroutine_io)
 if(HX_OS_ENABLE_THREAD_POOL)
 	list(APPEND hx_test_suites pool)
 endif()
@@ -56,6 +57,9 @@ foreach(suite IN LISTS hx_test_suites)
 endforeach()
 
 target_sources(hx_os_test_variant PRIVATE variant_fixture.c)
+if(NOT WIN32)
+	target_link_libraries(hx_os_test_coroutine PRIVATE m)
+endif()
 
 if(WIN32)
 	target_link_libraries(hx_os_test_file_extra PRIVATE shell32)
@@ -132,6 +136,31 @@ set_target_properties(hx_os_header_c PROPERTIES
 hx_apply_warnings(hx_os_header_c)
 
 if(CMAKE_CXX_COMPILER_LOADED)
+	add_executable(hx_os_test_cpp_coroutine test_cpp_coroutine.cpp)
+	target_link_libraries(hx_os_test_cpp_coroutine PRIVATE
+		hx_c_platform::cpp)
+	set_target_properties(hx_os_test_cpp_coroutine PROPERTIES
+		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+	hx_apply_warnings(hx_os_test_cpp_coroutine)
+	add_test(NAME cpp_coroutine COMMAND hx_os_test_cpp_coroutine)
+	set_tests_properties(cpp_coroutine PROPERTIES TIMEOUT 20)
+	if(HX_OS_HAVE_CPP20_COROUTINES)
+		add_executable(hx_os_test_cpp_coroutine20
+			test_cpp_coroutine.cpp)
+		target_link_libraries(hx_os_test_cpp_coroutine20 PRIVATE
+			hx_c_platform::cpp)
+		target_compile_definitions(hx_os_test_cpp_coroutine20 PRIVATE
+			HX_TEST_CPP20=1)
+		set_target_properties(hx_os_test_cpp_coroutine20 PROPERTIES
+			CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES
+			CXX_EXTENSIONS NO
+			RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+		hx_apply_warnings(hx_os_test_cpp_coroutine20)
+		add_test(NAME cpp_coroutine20
+			COMMAND hx_os_test_cpp_coroutine20)
+		set_tests_properties(cpp_coroutine20 PROPERTIES TIMEOUT 20)
+	endif()
 	add_executable(hx_os_test_cpp_variant test_cpp_variant.cpp
 		cpp_variant_fixture.cpp)
 	target_link_libraries(hx_os_test_cpp_variant PRIVATE hx_c_platform::cpp)
@@ -166,6 +195,9 @@ if(CMAKE_CXX_COMPILER_LOADED)
 	file(GLOB facade_headers "${PROJECT_SOURCE_DIR}/include/hx/*.hpp")
 	foreach(header IN LISTS facade_headers)
 		get_filename_component(name "${header}" NAME)
+		if(name STREQUAL "Coroutines20.hpp")
+			continue()
+		endif()
 		file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/${name}.cpp"
 			"#include <hx/${name}>\n#include <hx/${name}>\n")
 		list(APPEND cpp_headers

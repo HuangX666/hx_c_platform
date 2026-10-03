@@ -6,7 +6,85 @@
 
 本文记录截至 2026-10-03 的开发验证。设计覆盖、已有适配源码、编译成功、目标运行成功是不同状态。本机测试不能证明所有系统版本、文件系统、 CPU、libc 或网络提供方均已通过。
 
-当前新增能力见递归文件查询记录；variant、入门文档、常用接口打磨、Result 迁移、此前最终交付矩阵与各批次记录对应各自原版本。
+当前新增能力见容器与协程记录；递归文件查询、variant、入门文档、常用接口打磨、Result 迁移、此前最终交付矩阵与各批次记录对应各自原版本。
+
+## 红黑树、算法与自研协程（2026-10-03）
+
+新增红黑树 map/set、重复键、遍历和序列算法，以及有界协作式调度器、原生有栈上下文、C99 状态机和可选的无异常 C++20 层。原有有序 map 继续使用 AVL。协程调度、channel/select 和 I/O 组合由本库实现，没有编译、安装或链接外部协程源码。既有 C99/C++11 基线和公共结构体布局保持不变。
+
+| 配置 | 本次验证证据 |
+| --- | --- |
+| Windows MSVC 19.40 x64 共享库 Release | 全量 CTest 100/100 |
+| WSL Ubuntu GCC 15.2 x86_64 共享库 Release | 全量 CTest 102/102 |
+| Windows MSVC 19.29 x86 静态库 Debug | 容器与协程相关套件 5/5 |
+| WSL ASan + UBSan，开启泄漏检测 | containers、stl、profiler、coroutine、coroutine_io、cpp_coroutine20，6/6，未报告缺陷 |
+| WSL TSan | profiler、coroutine、coroutine_io、cpp_coroutine20，4/4，未报告竞态 |
+| 公共头 | C99/C++11 独立头目标编译成功；C++20 测试/示例首先包含其便利层头，关闭异常 |
+| 安装后消费共享库，Windows x64 与 WSL | 各 18/18 C/C++ 程序和 10/10 纯 C 程序 |
+| 安装后消费静态库，Windows x86 | 18/18 C/C++ 程序和 10/10 纯 C 程序 |
+| 7cf52fc 旧头与新共享库配合运行 | Windows/WSL 各 10/10 |
+| 声明与共享库导出对照 | Windows/WSL 各匹配 761 个 HX 导出函数 |
+| 仅无栈；关闭协程 I/O 与容器 | WSL coroutine/C++20 套件 2/2 |
+| 关闭协程核心与容器 | WSL stl/coroutine 关闭行为套件 2/2 |
+| 关闭管道与容器，保留协程 TCP | WSL coroutine_io 1/1；同时关闭 profiler 后 coroutine/coroutine_io 2/2 |
+| ARMv7 hard-float Linux 与 AArch64 Linux，GCC 静态库 Release | 使用对应 glibc sysroot，在 QEMU 用户态模式下各通过 5/5 相关套件 |
+| Android API 21 ARM64/ARMv7/x86_64 完整共享库 | 三个配置均交叉编译成功 |
+| API 34 x86_64 模拟器，原生 x86_64 与转译 ARM64 | 各 20/20 个选定套件，加可移植基准 |
+| Android ARMv7 运行 | 明确跳过：所选模拟器不提供此 ABI |
+
+容器测试将随机插入/删除与参考模型对照，检查 AVL/RB 不变量、重复键顺序，以及迭代器失效、上下界查询、分配失败、稳定/部分排序、名次选择、分区、转换、splice 和多重集合运算。协程测试覆盖无缓冲/有缓冲 channel、select 只提交一个分支、超时/取消、有界接收任务、prepare 与关闭竞争、清理完成时点、C++ 帧析构、浮点舍入状态、回环 TCP、DNS、管道以及关闭后仍持有的资源。另补宿主所有权回归，在 Windows x64/x86、WSL、ASan/UBSan 和 TSan 检查复制失败、未选中/缓冲已满的发送清理、深复制独立性和最后释放缓冲值。
+
+复查修复了 prepare 与关闭竞争时可能先报告关闭、后完成参数清理的问题，修复了关闭管道模块后的关闭路径、调度/清理线程等待未完成任务的死锁，以及协程交替执行时共用 profiler 计时栈的问题。profiler 上下文现在跟随协程，在发布任务完成前回收；测试覆盖两种协程、未结束区间和每个协程最多 64 个 profiler 上下文的限制。跟踪的失败路径最终 context 分配计数归零。sanitizer 结果仅说明已运行的路径，不等于覆盖所有调度顺序或证明绝无泄漏。
+
+### 布局与本地性能观察
+
+完整模块配置下测量的对象大小/对齐，单位为字节。这些私有对象不构成新的 ABI 保证：
+
+| 对象 | MSVC x64 | MSVC x86 | GCC Linux x86_64 |
+| --- | --- | --- | --- |
+| 协程元数据 | 304 / 8 | 208 / 8 | 304 / 8 |
+| 工作线程元数据，包含根上下文 | 112 / 8 | 60 / 4 | 352 / 8 |
+| 原生上下文 | 48 / 8 | 28 / 4 | 288 / 8 |
+| 运行时元数据 | 240 / 8 | 136 / 8 | 240 / 8 |
+
+Windows 原生上下文只保留 fiber 路径实际使用的字段。无栈任务没有单独预留的协程栈，但仍需要元数据、持久状态，以及 C++20 编译器帧。有栈默认可用栈为 128 KiB，保护页和原生取整计入 64 MiB 的总预留限制。地址空间预留、分配器记账和物理驻留内存是不同口径。
+
+新增 hx_os_coroutine_benchmark 对 AVL/RB 使用相同的 20,000 个整数键，分别按有序或固定置换顺序插入，再按键顺序查找、删除。下表为三次本地 Release 运行的中位数，单位为每次操作的纳秒数。Windows 在该基准中使用 QPC 计时。采样前已停止构建和模拟器运行，但没有固定 CPU 频率或隔离其他宿主负载。
+
+| 宿主 / 树 / 插入顺序 | 插入 | 查找 | 删除 |
+| --- | ---: | ---: | ---: |
+| Windows / AVL / 有序 | 171.4 | 80.0 | 122.4 |
+| Windows / RB / 有序 | 150.2 | 80.3 | 113.9 |
+| Windows / AVL / 固定置换 | 233.6 | 104.1 | 125.3 |
+| Windows / RB / 固定置换 | 212.4 | 99.9 | 90.3 |
+| WSL / AVL / 有序 | 185.0 | 61.6 | 54.8 |
+| WSL / RB / 有序 | 119.3 | 61.5 | 59.8 |
+| WSL / AVL / 固定置换 | 166.2 | 69.0 | 67.3 |
+| WSL / RB / 固定置换 | 135.1 | 86.6 | 65.3 |
+
+插入后，同一宿主的两种树记账字节数相同：Windows 为 3,280,199，WSL 为 3,600,215。该数值包含容器分配包装，不包含用户值内部内存或进程 RSS。红黑树没有在所有操作上获胜，因此继续保留 AVL 选择。
+
+一个工作线程、一个任务执行 100,000 轮 yield 时，Windows 的 C 状态机与有栈中位数分别为 148.0 ns、327.6 ns，WSL 分别为 693.4 ns、618.2 ns。对应三次运行范围分别为 137.3–151.1、291.6–333.1、691.1–729.9、594.5–639.6 ns。这里包含调度/锁和摊销后的任务启动/完成耗时，不是纯汇编切换延迟，也不是 C++20 帧的测量。没有进行 Go、第三方协程库、线程池或历史吞吐量对照，这些微基准不能替代 hx_c_log 的性能验收。
+
+树的新增能力没有引入内部锁或后台线程。序列算法分别说明临时空间成本；链表 splice/partition 只改变既有节点链接。协程恢复/yield 会使用调度器互斥锁，再直接切换原生上下文或调用状态机；channel 操作会分配有界等待项/载荷，协程 I/O 复用既有 loop 并增加调度线程。选择设施时需把这些成本算入工作负载，不能将其描述为零分配 channel 或无锁调度。
+
+### 复现方法与待验证目标
+
+在源码根目录运行，使用实际的生成器和编译器；单配置生成器另加 -DCMAKE_BUILD_TYPE=Release：
+
+```sh
+cmake -S . -B build -DBUILD_SHARED_LIBS=ON -DHX_OS_BUILD_BENCHMARKS=ON
+cmake --build build --config Release --parallel 4
+ctest --test-dir build -C Release --output-on-failure
+python tools/verify_install.py build --config Release
+python tools/verify_abi.py build --config Release
+```
+
+分别使用独立目录配置 -DHX_OS_SANITIZER=address,undefined 或 -DHX_OS_SANITIZER=thread。子集可通过 ctest -R '^(containers|stl|profiler|coroutine|coroutine_io|cpp_coroutine20)$' 选择，address 配置设置 ASAN_OPTIONS=detect_leaks=1。基准/布局目标分别为 hx_os_coroutine_benchmark 与 hx_os_layout_report，程序位于 build/bin 和 build/benchmarks，MSVC 还有配置子目录。安卓命令见 [ANDROID.zh-CN.md](ANDROID.zh-CN.md)。QEMU 结果不代表板卡实测。
+
+本地忽略的证据位于 build-no-exceptions 下的 coro-delivery-*.log、coro-ownership-*.log、coro-final-armv7.log、coro-final-aarch64.log、coro-trim-*.log、coro-no-profiler.log、coro-install-*.log、coro-bench-*-final.log 和 coro-layout-*.log。安卓报告为 build-android/report.json 与 build-android-emulator/report.json。验证先于交付提交，因此报告记录父 Git 版本和工作区有修改。构建产物及日志不提交进源码。
+
+macOS Intel 10.13/ARM64 11.0、Win7/8.1、Android 5.0 实际运行、ARMv7 安卓运行、musl/uClibc-ng 和嵌入式/安卓实体设备仍待验证。POSIX 有栈切换明确拒绝尚未适配的 CPU ABI，包括 x32/AArch64 ILP32 和 arm64e，可使用仅无栈配置。实际开启 Linux x86 影子栈时会拒绝有栈功能，不替宿主关闭保护；本次没有运行实际开启该保护的环境。其他模块原有的 GCC maybe-uninitialized 诊断仍存在，不将此次结果描述为零警告认证。测试保持关闭异常，并保留有限等待失败后的资源，没有远程 CI 或实体 ARM 性能结论。
 
 ## 递归文件查询（2026-10-03）
 
