@@ -207,7 +207,7 @@ C BOM 函数不分配、不加锁；属性查询不建立后台任务，但原�
 
 ## 配置序列化与数字文本
 
-CONFIG_SERIALIZE 默认开启，依赖 CONFIG。直接调用 hx_os_config_serialize 将结果写入 hx_string，或用 hx_os_config_save 一次完成序列化和原子发布。保存还依赖 FILE_UTILS，遵守原子发布既有的持久化及部分失败边界。文档保持不可变。写入器统一使用内置实现，不受原文档解析后端影响；显式 writer options 的 backend 须为 BUILTIN。YAML/XML/TOML/ENV 输出目前报 NOT_SUPPORTED。
+CONFIG_SERIALIZE 默认开启，依赖 CONFIG。`hx_os_config_serialize` 写入 `hx_string`，`hx_os_config_save` 完成序列化和原子发布；保存还需要 FILE_UTILS，保持既有的持久化和部分失败契约。七种格式均已提供输出：YAML 输出 block 集合，XML 保留元素/属性/文本模型，TOML 输出根赋值与内联容器，ENV 输出扁平引用字符串。详细范围、构造和结构体映射见[序列化教程](SERIALIZATION.zh-CN.md)。文档仍不可变；写出固定使用内置实现，显式写出选项的 backend 必须为 BUILTIN。
 
 JSON 输出紧凑 UTF-8，合法 JSON 数字保留原始拼写，不经过 double 舍入。TOML 进制整数精确转为十进制，十进制下划线和前导加号去除；非有限数字、XML 节点和日期节点不能悄悄改成 JSON 字符串。INI 支持根字符串键值及一层字符串 section，先写全局键再写 section，各组内部保持顺序，不保留注释和排版。会被 INI 解析器裁剪或误解的内容报 UNREPRESENTABLE。properties 支持平面字符串对象，转义分隔符、空格、反斜杠及控制字符，Unicode 保持 UTF-8。数字、布尔、数组、null 和嵌套对象不能静默转成行式格式的字符串。无法表达时保留原输出。
 

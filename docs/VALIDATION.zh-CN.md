@@ -8,6 +8,33 @@
 
 当前业务示例见下方 JSON 记录；此前独立文本示例、初版共用示例、IPC／KCP 实现及其他各批记录对应各自当时的版本。
 
+## 2026-10-04：嵌套文档与结构体序列化
+
+源码起点 `450e42f`，本地 `dev`。新增 YAML/XML/TOML/ENV 写出，补齐七种格式；新增文档创建、不可变替换、格式转换及显式字符串子文档解析。新增独立可裁剪的 `CODEC`，一次声明 C/C++ 值对象字段，支持嵌套对象、动态/固定数组和保留混合类型的 NODE。既有公共结构体布局未改，C++11 继续关闭异常，未新增第三方依赖或修改第三方文件。
+
+| 配置 | 本次结果 |
+| --- | --- |
+| Windows MSVC x64 Release，共享库 | 全量 CTest **131/131**；包括 C99/C++11 独立公共头构建 |
+| WSL Linux GCC x86_64 Release，共享库 | 全量 CTest **133/133**；包括独立公共头构建 |
+| WSL 静态库，ASan + UBSan | 13/13 相关配置/codec/示例测试；最终描述数量边界调整后重跑 3/3；启用泄漏检查，未报告内存错误或泄漏 |
+| WSL 静态库，TSan | 6/6 相关测试，未报告竞态 |
+| Windows MSVC Win32 | `config_tree`、`codec`、`cpp_codec`，3/3 |
+| 安装后消费：Windows / WSL 共享库 | 两端各纯 C 16/16，含 C++11 的消费工程 26/26；`find_package` 消费新头和符号 |
+| `450e42f` 旧头与旧测试配合新共享库 | Windows / WSL 各 10/10；兼容脚本补齐旧测试辅助头与已要求的关闭异常配置 |
+| 公共导出 | Windows DLL / Linux so 各 **844** 个函数，与当前公共头一致 |
+| 裁剪 | WSL：独立 CODEC=OFF、CONFIG=OFF 且 CODEC=ON 两个配置各 3/3；后者验证依赖关闭后不可用，不伪装支持 |
+| Android API 21 | NDK r28c 下 arm64-v8a、armeabi-v7a 完整交叉构建通过，最终相关目标再次编译通过；当前 adb 无设备，未运行 |
+| 文档代码 | 从新教程提取完整 C 程序、从 README 提取 C++11 示例，GCC/G++ 编译运行，输出符合说明 |
+
+新增用例覆盖：整数/浮点/布尔/字符串/null 混合数组，对象与数组交错，空对象/空数组，32/64/128 层与越界拒绝，原文档不变，动态子树保留，大整数、窄整数范围、固定数组长度、XML 属性转义、输入缓冲区释放后的结果寿命、配置上限，以及逐次注入解码分配失败后的清理。独立互操作脚本对共享库运行 101 组固定种子 JSON 树，用 Python 标准 JSON/XML/TOML 读取器核对；WSL 另用已安装的 PyYAML 核对 YAML。Windows 未安装 PyYAML，明确跳过这一可选读取器，内置和 libyaml 交叉测试仍通过。
+
+另外复现并修复了原 properties 写出的边界问题：首个键以 U+FEFF 开头时，重新解析会把它当成 BOM 丢弃。现输出转义，INI 遇到该无法保真的首键返回 UNREPRESENTABLE。YAML 输出显式转义 Unicode 行分隔符、C1 控制字符及 BMP 非字符，避免字面字符被其他解析器重新解释或拒绝。
+
+日志位于相应构建目录的 `serialization-build.log`、`serialization-ctest.log`、`serialization-install-cpp.log` 和 `serialization-abi.log`；Android 另有 `build-android/report.json` 和 `serialization-*-final.log`。源码规范检查、UTF-8 无 BOM/LF 与 `git diff --check` 一并检查。
+
+编码会分配有界文档树，最终写出仍使用测量和写入两遍；解码会为结果对象、数组和文本分配受控存储。无新增后台线程、全局可变注册表或隐式锁；不声称零分配、零拷贝，也没有把本次测试当作吞吐量基准。macOS、Win7/8.1、嵌入式 Linux 板卡、musl 和 Android 设备上的本轮运行仍待验证。格式子集、XML 映射及 C++ 值布局限制见[序列化教程](SERIALIZATION.zh-CN.md)。
+
+
 ## 2026-10-04：四套独立业务改用 JSON
 
 源码起点 `feac68e`，本地 `dev`。IPC 设备、TCP 订单、UDP 采样和 KCP 数据块的请求、回复及通知全部改为 UTF-8 JSON。四套业务、传输与运行器保持独立，仅共用 `business_json.h` 的编解码辅助。使用既有 settings 序列化和内置 JSON 解析，不修改库实现、公共 ABI 或第三方文件。

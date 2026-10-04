@@ -553,6 +553,9 @@ uint64_t hx_os_capabilities(void)
 #endif
 #if HX_OS_ENABLE_CONFIG && HX_OS_ENABLE_CONFIG_SERIALIZE
 	result |= HX_OS_CAP_CONFIG_SERIALIZE;
+#if HX_OS_ENABLE_CODEC
+	result |= HX_OS_CAP_CODEC;
+#endif
 #endif
 #if HX_OS_ENABLE_TIMER && HX_OS_ENABLE_LOOP
 	result |= HX_OS_CAP_TIMER;

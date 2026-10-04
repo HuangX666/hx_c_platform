@@ -32,7 +32,8 @@ add_test(NAME library COMMAND hx_os_test_library
 set_tests_properties(library PROPERTIES TIMEOUT 20)
 
 set(hx_test_suites data options lifecycle config containers sysinfo file_utils
-	env paths thread_extra pipe io_options file_info config_serialize timer
+	env paths thread_extra pipe io_options file_info
+	config_serialize config_tree codec timer
 	error_text util vm file_extra watch loop_fd system delayed local duplex
 	registry power obfuscate calendar text_lookup bitstream calldata signal
 	settings settings_concurrency settings_config profiler atomic
@@ -196,6 +197,14 @@ if(CMAKE_CXX_COMPILER_LOADED)
 			COMMAND hx_os_test_cpp_go${standard})
 		set_tests_properties(cpp_go${standard} PROPERTIES TIMEOUT 20)
 	endforeach()
+	add_executable(hx_os_test_cpp_codec test_cpp_codec.cpp)
+	target_link_libraries(hx_os_test_cpp_codec PRIVATE hx_c_platform::cpp)
+	set_target_properties(hx_os_test_cpp_codec PROPERTIES
+		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+	hx_apply_warnings(hx_os_test_cpp_codec)
+	add_test(NAME cpp_codec COMMAND hx_os_test_cpp_codec)
+	set_tests_properties(cpp_codec PROPERTIES TIMEOUT 20)
 	add_executable(hx_os_test_cpp_format test_cpp_format.cpp)
 	target_link_libraries(hx_os_test_cpp_format PRIVATE hx_c_platform::cpp)
 	set_target_properties(hx_os_test_cpp_format PROPERTIES

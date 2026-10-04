@@ -127,6 +127,22 @@ int main(int argc, char **argv)
 	CHECK(hx_settings_import(settings, document, NULL) == HX_OS_OK);
 	hx_os_config_release(document);
 	document = NULL;
+	{
+		const int formats[] = {
+			HX_OS_CONFIG_YAML, HX_OS_CONFIG_TOML, HX_OS_CONFIG_ENV};
+		size_t i;
+		for (i = 0; i < sizeof(formats) / sizeof(formats[0]); ++i) {
+			CHECK(hx_settings_serialize(settings, formats[i], &copy,
+				      NULL, NULL) == HX_OS_OK);
+			CHECK(hx_os_config_parse(NULL, formats[i], copy.data,
+				      copy.size, NULL, &document,
+				      NULL) == HX_OS_OK);
+			CHECK(hx_settings_import(settings, document, NULL) ==
+				HX_OS_OK);
+			hx_os_config_release(document);
+			document = NULL;
+		}
+	}
 	CHECK(hx_settings_set_i64(settings, "number", 1, NULL) == HX_OS_OK);
 	CHECK(hx_settings_serialize(settings, HX_OS_CONFIG_PROPERTIES, &copy,
 		      NULL, NULL) == HX_OS_UNREPRESENTABLE);

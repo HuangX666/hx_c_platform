@@ -1,6 +1,6 @@
 # hx_c_platform
 
-[![CI 配置][ci-badge]](.github/workflows/build.yml) [![C99 核心][c-badge]](CMakeLists.txt) [![C++11 封装][cpp-badge]](docs/CPP_POOL.zh-CN.md) [![仅 C++ 封装为 header-only][header-badge]](docs/CPP_POOL.zh-CN.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![自有代码许可证待定][license-badge]](THIRD_PARTY_NOTICES.zh-CN.md) [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md) [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md) [![本地 Windows 113/113、Linux 115/115 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md) [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md) [![Android API 21 ARM 交叉编译通过][android-badge]](docs/ANDROID.zh-CN.md)
+[![CI 配置][ci-badge]](.github/workflows/build.yml) [![C99 核心][c-badge]](CMakeLists.txt) [![C++11 封装][cpp-badge]](docs/CPP_POOL.zh-CN.md) [![仅 C++ 封装为 header-only][header-badge]](docs/CPP_POOL.zh-CN.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![自有代码许可证待定][license-badge]](THIRD_PARTY_NOTICES.zh-CN.md) [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md) [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md) [![本地 Windows 131/131、Linux 133/133 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md) [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md) [![Android API 21 ARM 交叉编译通过][android-badge]](docs/ANDROID.zh-CN.md)
 
 [English](README.md) · [常用任务教程](docs/USAGE.zh-CN.md) · [详细参考](docs/REFERENCE.zh-CN.md)
 
@@ -384,6 +384,23 @@ JSON 的 `type="get"` 表示查询，`device_id=101` 与设备通道相同；请
 
 TCP／UDP 业务直接使用 `hx_os_socket_*`，KCP 业务使用 `hx_os_kcp_*` 与 UDP；三个网络示例均不调用 `hx_ipc_*`，关闭 IPC 模块也能运行。完整接口契约与跨语言 HXIP 协议见 [IPC 参考](docs/IPC.zh-CN.md)。这些示例使用普通线程，超时、断开与资源释放都需要明确处理。
 
+### 4.12 读写多层 JSON，并转换成 YAML
+
+下面的数组同时包含整数、文字、null 和嵌套对象，转换后仍保留各自的类型。包含 `<hx/Config.hpp>` 和 `<cstdio>`，把下面片段放在 `main` 中：
+
+```cpp
+auto document = hx::ConfigDocument::parse(
+	"{\"items\":[1,\"文字\",null,{\"children\":[true,2.5]}]}");
+if (!document)
+	return 1;
+auto yaml = document.value().serialize(HX_OS_CONFIG_YAML);
+if (!yaml)
+	return 1;
+std::puts(yaml.value().c_str());
+```
+
+固定业务结构体可以声明一次字段映射，然后直接调用 `hx_os_codec_encode/decode`，C++ 对应 `hx::Codec<T>`。七种格式的范围、C/C++ 完整程序、嵌套数组和资源释放见[序列化教程](docs/SERIALIZATION.zh-CN.md)。普通文档默认最多 64 层，可显式调到 128 层；INI、ENV、properties 继续遵守各自的简单结构限制。
+
 <a id="section-5"></a>
 
 ## 5. 先记住的几条规则
@@ -412,6 +429,7 @@ TCP／UDP 业务直接使用 `hx_os_socket_*`，KCP 业务使用 `hx_os_kcp_*` �
 | 找完整功能、接口限制、构建开关 | [详细参考](docs/REFERENCE.zh-CN.md) |
 | 更多编码、翻译、目录遍历、词法工具 | [常用工具说明](docs/COMMON_UTILITIES.zh-CN.md) |
 | JSON/YAML/XML/INI/TOML/ENV/properties | [配置格式说明](docs/CONFIGURATION.zh-CN.md) |
+| 结构体与文本互转、深层混合数据、七种格式写出 | [序列化教程](docs/SERIALIZATION.zh-CN.md) |
 | 不同类型的值和自定义结构体 | [variant 说明](docs/VARIANT.zh-CN.md) |
 | 其他容器及元素复制/释放 | [C 容器说明](docs/CONTAINERS.zh-CN.md) |
 | 任务取消、关闭重试和 C++ 结果 | [线程池](docs/CPP_POOL.zh-CN.md) · [Result](docs/CPP_RESULTS.zh-CN.md) |
@@ -422,7 +440,7 @@ TCP／UDP 业务直接使用 `hx_os_socket_*`，KCP 业务使用 `hx_os_kcp_*` �
 
 ## 7. 构建、验证与项目许可
 
-开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。库实现最近一次全量记录为 2026-10-03 的 Windows 113/113、WSL Linux 115/115；当前 8 个 JSON 通信业务用例在 Windows、WSL 及 WSL 内存/竞态检测下分别通过，关闭 IPC 的 WSL 构建另通过 7 个网络业务用例。具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
+开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。2026-10-04 的全量测试为 Windows 131/131、WSL Linux 133/133；新增深层序列化、结构体映射及 C/C++ 示例通过内存检测与安装消费检查，Android API 21 两种 ARM ABI 编译通过。具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
 
 自有代码的发布许可证尚未确定，第三方许可证见[许可说明](THIRD_PARTY_NOTICES.zh-CN.md)。协程使用自研实现；hx_c_log 接入仍属于后续工作。
 
@@ -435,6 +453,6 @@ TCP／UDP 业务直接使用 `hx_os_socket_*`，KCP 业务使用 `hx_os_kcp_*` �
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%20113%2F113%20Linux%20115%2F115-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%20131%2F131%20Linux%20133%2F133-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

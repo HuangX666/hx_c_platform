@@ -2,7 +2,7 @@
 
 [English](CONFIGURATION.md) · [README](../README.zh-CN.md)
 
-这是可裁剪的同步 C99 模块，通过 C ABI 返回只读文档。应用设置管理、自动重载、环境变量修改、变量展开、默认值合并、模式校验、文件包含及保存时机属于消费者策略。可选 JSON/INI/properties 序列化及原子保存机制见 [平台便利接口](PLATFORM_UTILITIES.zh-CN.md)。模块不创建后台线程或队列。
+这是可裁剪的同步 C99 模块，通过 C ABI 返回只读文档。应用设置管理、自动重载、环境变量修改、变量展开、默认值合并、模式校验、文件包含及保存时机属于消费者策略。七种格式均有输出接口；嵌套文档构造、显式替换和结构体映射见[序列化教程](SERIALIZATION.zh-CN.md)。模块不创建后台线程或队列。
 
 默认后端始终是 BUILTIN，安装依赖不会自动切换解析规则。通过 options.backend 选择，并用 hx_os_config_backend_available 查询。后端关闭或格式不匹配时返回 NOT_SUPPORTED，不发布文档。
 
@@ -89,3 +89,5 @@ ctest --test-dir build-parsers -C Debug --output-on-failure
 五个后端开关默认 OFF，HX_OS_ENABLE_CONFIG 默认 ON。 CONFIG=OFF 移除各格式实现，保留 ABI 查询/错误接口， parse/load 返回 NOT_SUPPORTED。关闭 CONFIG 时启用其后端属于配置错误。嵌入式消费者可以只选内置，也可以完全裁去配置模块。
 
 第三方对象代码私有编入静态库或 DLL/so。安装后的消费者不需要第三方头文件或独立解析器库。启用依赖的许可证一同安装，详见 THIRD_PARTY_NOTICES.zh-CN.md。 examples/configuration.c 是共用 C 示例，不依赖 C++。
+
+内置 YAML 额外支持空 `{}` 和 `[]`，使写出的空对象和空数组能保持类型往返。其他非空 flow 容器仍按上文使用 libyaml。

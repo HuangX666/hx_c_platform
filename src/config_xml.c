@@ -27,6 +27,35 @@ static int hx_os_cfg_xml_name_start(uint32_t c)
 		(c >= 0x10000 && c <= 0xeffff);
 }
 
+int hx_os_cfg_xml_valid(hx_os_config_slice text, int name)
+{
+	size_t offset = 0;
+	if (name && !text.bytes)
+		return 0;
+	while (offset < text.bytes) {
+		uint32_t c;
+		size_t used;
+		if (hx_os_i_utf_decode(HX_OS_UTF8,
+			    (const unsigned char *)text.data + offset,
+			    text.bytes - offset, &c, &used) != HX_OS_OK)
+			return 0;
+		if (name) {
+			if (!hx_os_cfg_xml_name_start(c) &&
+				(!offset ||
+					!(c == '-' || c == '.' ||
+						(c >= '0' && c <= '9') ||
+						c == 0xb7 ||
+						(c >= 0x300 && c <= 0x36f) ||
+						(c >= 0x203f && c <= 0x2040))))
+				return 0;
+		}
+		else if (!hx_os_cfg_xml_char(c))
+			return 0;
+		offset += used;
+	}
+	return 1;
+}
+
 static int hx_os_cfg_xml_name(hx_os_cfg_parser *parser, hx_os_config_slice *out)
 {
 	size_t start = parser->position;

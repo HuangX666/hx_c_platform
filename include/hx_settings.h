@@ -303,7 +303,8 @@ HX_OS_API hx_os_status HX_OS_CALL hx_settings_load(hx_settings *settings,
 	int format, const char *path, const hx_os_config_options *options,
 	hx_os_config_error *error);
 /* Default serialization/save uses explicit values only. Defaults stay in
- * the program. JSON/INI/properties follow config's representability rules;
+ * the program. Formats follow config's representability rules; XML needs
+ * an element tree and is unrepresentable for settings object roots;
  * user pointers fail, never disappear. Save uses atomic file publication
  * with the existing durability/partial-native-replacement contract.
  */

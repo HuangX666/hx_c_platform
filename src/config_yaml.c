@@ -111,6 +111,16 @@ static int hx_os_cfg_yaml_text(hx_os_cfg_parser *parser,
 		*out = node;
 		return 1;
 	}
+	if (!key &&
+		(hx_os_cfg_equal(value, "{}") ||
+			hx_os_cfg_equal(value, "[]"))) {
+		node = hx_os_cfg_node(parser,
+			value.data[0] == '{' ? HX_OS_CONFIG_OBJECT
+					     : HX_OS_CONFIG_ARRAY,
+			depth);
+		*out = node;
+		return node != NULL;
+	}
 	if (value.bytes &&
 		(strchr("&*!|>{}[]%@\x60", value.data[0]) ||
 			(strchr("?:-", value.data[0]) &&

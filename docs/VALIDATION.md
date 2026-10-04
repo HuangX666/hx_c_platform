@@ -8,6 +8,33 @@ This records development validation through 2026-10-04. A design, implemented ad
 
 The JSON entry below records the current examples. Earlier independent text examples, initial shared workflows, IPC/KCP implementation and other batches describe their historical versions.
 
+## 2026-10-04: Nested documents and schema serialization
+
+Baseline `450e42f`, local `dev`. YAML/XML/TOML/ENV output completes the seven format writers. New APIs construct documents, return immutable replacements, convert formats and explicitly parse string subdocuments. The independently trimmable CODEC maps declared C/C++ value fields, nested objects, dynamic/fixed arrays and heterogeneous NODE subtrees. Existing public layouts remain intact; C++11 exceptions remain disabled. No new third-party dependency or vendor modification.
+
+| Configuration | Result in this run |
+| --- | --- |
+| Windows MSVC x64 Release shared | Full CTest **131/131**, including independent C99/C++11 public header builds |
+| WSL Linux GCC x86_64 Release shared | Full CTest **133/133**, including independent header builds |
+| WSL static ASan + UBSan | 13/13 relevant configuration/codec/example tests; 3/3 repeated after the final descriptor count guard; leak detection enabled, no reported memory errors/leaks |
+| WSL static TSan | 6/6 related tests, no reported races |
+| Windows MSVC Win32 | config_tree, codec and cpp_codec, 3/3 |
+| Installed shared consumption, Windows / WSL | Each: pure C 16/16 and the C++11-enabled consumer project 26/26; find_package uses installed new headers/symbols |
+| Old 450e42f headers/tests with new shared library | 10/10 on each host; compatibility runner now copies old test helper headers and honors their no-exception requirement |
+| Public exports | Windows DLL and Linux so each match **844** declared functions |
+| Trimming | WSL CODEC=OFF, and CONFIG=OFF with CODEC=ON, each 3/3; missing dependencies make codec explicitly unavailable |
+| Android API 21 | NDK r28c complete arm64-v8a and armeabi-v7a cross-builds, followed by final related target rebuilds; adb listed no device, no runtime claim |
+| Documentation programs | Complete tutorial C program and README C++11 fragment extracted, compiled and run with GCC/G++; expected output observed |
+
+New cases cover mixed integer/real/bool/string/null arrays, interleaved objects/arrays, empty collections, 32/64/128 levels and limit rejection, immutable source lifetime, dynamic subtrees, large/narrow integers, fixed-array lengths, XML attribute escaping, input-buffer independence, configured bounds and successive injected decode-allocation failures. Shared-library interoperability exercises 101 seeded JSON trees with independent Python JSON/XML/TOML readers; WSL additionally uses installed PyYAML. Windows lacks PyYAML and explicitly skips that optional reader, while builtin/libyaml cross-checks still pass.
+
+A reproduced pre-existing properties writer bug was repaired: an initial U+FEFF key was read back as a BOM and lost its prefix. Properties now escapes it; INI rejects that unrepresentable initial key. YAML output escapes Unicode separators, C1 controls and BMP noncharacters instead of exposing literal characters that independent readers may reinterpret or reject.
+
+Logs are in the corresponding build directories: serialization-build.log, serialization-ctest.log, serialization-install-cpp.log and serialization-abi.log. Android also has build-android/report.json and serialization-*-final.log. Source rules, UTF-8 without BOM/LF and git diff --check were checked.
+
+Encoding allocates a bounded document tree and retains two-pass output; decoding allocates owned values, arrays and text. No new background threads, mutable global registry or implicit locks. This is not a zero-allocation/zero-copy claim or a throughput benchmark. Runtime validation for macOS, Win7/8.1, embedded Linux boards, musl and Android devices remains pending. See [serialization](SERIALIZATION.md) for format subsets, XML mapping and C++ layout constraints.
+
+
 ## 2026-10-04: JSON in all four independent workflows
 
 Starting from `feac68e` on local `dev`, native IPC devices, TCP orders, UDP samples and KCP blocks now use UTF-8 JSON for requests, replies and notifications. Business programs, transports and runners stay separate; only codec helpers in `business_json.h` are shared. Existing settings serialization and built-in JSON parsing are reused. Library implementation, public ABI and third-party files are unchanged.

@@ -1,5 +1,29 @@
+function(hx_add_serialization_interop)
+	if(CMAKE_CROSSCOMPILING)
+		return()
+	endif()
+	find_package(Python3 QUIET COMPONENTS Interpreter)
+	if(NOT Python3_Interpreter_FOUND)
+		return()
+	endif()
+	set(hx_serialization_program
+		"${PROJECT_SOURCE_DIR}/tests/test_serialization_interop.py")
+	set(hx_serialization_args
+		--example $<TARGET_FILE:hx_os_serialization>
+		--nested $<TARGET_FILE:hx_os_nested_document>)
+	if(BUILD_SHARED_LIBS AND NOT HX_OS_SANITIZER)
+		list(APPEND hx_serialization_args
+			--library $<TARGET_FILE:hx_c_platform>)
+	endif()
+	add_test(NAME serialization_interop
+		COMMAND "${Python3_EXECUTABLE}"
+		"${hx_serialization_program}" ${hx_serialization_args})
+	set_tests_properties(serialization_interop PROPERTIES TIMEOUT 60)
+endfunction()
+
 foreach(example IN ITEMS hello async_timer configuration containers system_info
 	load_plugin text_file environment special_paths thread_options
+	serialization nested_document
 	pipe_transfer positioned_read file_info config_save periodic_timer
 	random_uuid mapped_file file_attributes watch_directory capture_process
 	delayed_task duplex_message obfuscated_string localized_time
@@ -314,6 +338,25 @@ if(CMAKE_CXX_COMPILER_LOADED)
 		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
 		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 	hx_apply_warnings(hx_os_cpp_thread_pool)
+	add_executable(hx_os_cpp_serialization serialization.cpp)
+	target_link_libraries(hx_os_cpp_serialization PRIVATE
+		hx_c_platform::cpp)
+	set_target_properties(hx_os_cpp_serialization PROPERTIES
+		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+	hx_apply_warnings(hx_os_cpp_serialization)
+	if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_CONFIG AND HX_OS_ENABLE_CODEC
+		AND HX_OS_ENABLE_CONFIG_SERIALIZE)
+		add_test(NAME cpp_serialization_example
+			COMMAND hx_os_cpp_serialization)
+		add_test(NAME nested_document_example
+			COMMAND hx_os_nested_document)
+		hx_add_serialization_interop()
+		foreach(format IN ITEMS json yaml xml toml)
+			add_test(NAME serialization_${format}_example
+				COMMAND hx_os_serialization ${format})
+		endforeach()
+	endif()
 	add_executable(hx_os_cpp_direct_calls direct_calls.cpp)
 	target_link_libraries(hx_os_cpp_direct_calls PRIVATE hx_c_platform::cpp)
 	set_target_properties(hx_os_cpp_direct_calls PROPERTIES

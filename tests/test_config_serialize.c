@@ -206,6 +206,9 @@ static void test_serialization(void)
 	round_trip("{\" #:=!\":\" \\n\\r\\t\\u0000\\\\中文 \"}",
 		HX_OS_CONFIG_JSON, HX_OS_CONFIG_PROPERTIES);
 	round_trip("{}", HX_OS_CONFIG_JSON, HX_OS_CONFIG_PROPERTIES);
+	round_trip("{\"\\ufeffkey\":\"value\"}", HX_OS_CONFIG_JSON,
+		HX_OS_CONFIG_PROPERTIES);
+	expect_unrepresentable("{\"\\ufeffkey\":\"value\"}", HX_OS_CONFIG_INI);
 	expect_unrepresentable("{\"value\":123}", HX_OS_CONFIG_INI);
 	expect_unrepresentable("{\"value\":[]}", HX_OS_CONFIG_PROPERTIES);
 	expect_unrepresentable("{\"value\":\"a ;comment\"}", HX_OS_CONFIG_INI);
@@ -240,7 +243,7 @@ static void test_serialization(void)
 		CHECK(!strcmp(output.data, "kept"));
 	}
 	CHECK(hx_os_config_serialize(document, HX_OS_CONFIG_YAML, &output, NULL,
-		      NULL) == HX_OS_NOT_SUPPORTED);
+		      NULL) == HX_OS_OK);
 	hx_string_destroy(&output);
 	hx_os_context_options_init(&context_options);
 	context_options.allocator.allocate = fail_allocate;

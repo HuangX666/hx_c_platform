@@ -42,6 +42,12 @@ def main():
               "pool", "net", "loop_concurrency", "options", "cpp_pool"]
     names += ["tests/test_" + suite +
               (".cpp" if suite == "cpp_pool" else ".c") for suite in suites]
+    # Newer baseline tests include small local assertion/helper headers.
+    test_headers = subprocess.check_output(
+        ["git", "ls-tree", "-r", "--name-only", revision, "tests"],
+        cwd=root, text=True,
+    ).splitlines()
+    names += [name for name in test_headers if name.endswith((".h", ".hpp"))]
     for name in names:
         destination = source / name
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -71,6 +77,17 @@ def main():
             f"add_test(NAME old_{suite} COMMAND old_{suite})",
             f"set_tests_properties(old_{suite} PROPERTIES TIMEOUT 30)",
         ]
+        if suite == "cpp_pool" and "tests/cpp_check.hpp" in names:
+            cmake += [
+                "if(MSVC)",
+                "  target_compile_options(old_cpp_pool PRIVATE /EHs-c-)",
+                "  target_compile_definitions(old_cpp_pool PRIVATE",
+                "    _HAS_EXCEPTIONS=0)",
+                "else()",
+                "  target_compile_options(old_cpp_pool PRIVATE",
+                "    -fno-exceptions)",
+                "endif()",
+            ]
     (source / "CMakeLists.txt").write_text(
         "\n".join(cmake) + "\n", encoding="utf-8", newline="\n"
     )

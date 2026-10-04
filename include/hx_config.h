@@ -105,7 +105,10 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_config_load(hx_os_context *context,
 	int format, const char *utf8_path, const hx_os_config_options *options,
 	hx_os_config_document **out, hx_os_config_error *error);
 /*
- * Serialize JSON, INI or properties into the output string's context.
+ * Serialize any declared format into the output string's context. XML takes
+ * an XML element tree; it does not guess a mapping from JSON objects. YAML
+ * emits block collections, TOML emits assignments with inline containers.
+ * INI/ENV/properties retain their string-only, representable tree profiles.
  * Failure preserves its old value. Options default to finite parser limits:
  * max_input_bytes bounds output, max_memory_bytes bounds new output storage
  * including allocator overhead, max_work bounds both passes, depth/nodes bound
@@ -123,6 +126,46 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_config_serialize(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_config_save(
 	const hx_os_config_document *document, int format, const char *path,
 	const hx_os_config_options *options, hx_os_error *error);
+/* Borrowed construction description. Names/values are UTF-8 slices; numeric
+ * values use their textual spelling. Containers use children; XML elements
+ * may additionally have ATTRIBUTE entries. Input is copied during create.
+ * DATETIME construction is reserved for parsed TOML values. Documents stay
+ * immutable; replace returns an independent document and never edits source.
+ */
+typedef struct hx_os_config_value {
+	hx_os_config_slice name;
+	hx_os_config_slice value;
+	const struct hx_os_config_value *children;
+	const struct hx_os_config_value *attributes;
+	size_t count;
+	size_t attribute_count;
+	int kind;
+} hx_os_config_value;
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_config_create(hx_os_context *context,
+	const hx_os_config_value *root, const hx_os_config_options *options,
+	hx_os_config_document **out, hx_os_config_error *error);
+/* target must be borrowed from source; its name is retained on replacement.
+ * Counts/depth/memory/work are bounded, and malformed/cyclic descriptions
+ * fail within those limits. root/target must be non-NULL. Failure sets *out
+ * to NULL; source and all of its borrowed nodes remain unchanged.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_config_replace(
+	const hx_os_config_document *source, const hx_os_config_node *target,
+	const hx_os_config_value *value, const hx_os_config_options *options,
+	hx_os_config_document **out, hx_os_config_error *error);
+/* Explicitly parse a STRING/TEXT/ATTRIBUTE as another document. Never
+ * automatically reinterpret strings that happen to resemble JSON or XML.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_config_parse_node(
+	hx_os_context *context, int format, const hx_os_config_node *node,
+	const hx_os_config_options *options, hx_os_config_document **out,
+	hx_os_config_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_config_convert(hx_os_context *context,
+	int input_format, const void *input, size_t bytes, int output_format,
+	hx_string *out, const hx_os_config_options *options,
+	hx_os_config_error *error);
+
 /*
  * Documents are immutable after successful parse and may be read concurrently.
  * Nodes/slices borrow the document. Retain it before sharing, and exclude

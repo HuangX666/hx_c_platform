@@ -42,6 +42,7 @@ option(HX_OS_ENABLE_FILE_INFO
 option(HX_OS_ENABLE_BOM "Build Unicode BOM helpers" ON)
 option(HX_OS_ENABLE_TEXT_NUMBER "Build public numeric text conversion" ON)
 option(HX_OS_ENABLE_CONFIG_SERIALIZE "Build configuration serialization" ON)
+option(HX_OS_ENABLE_CODEC "Build schema-based object serialization" ON)
 option(HX_OS_ENABLE_TIMER "Build periodic loop timers" ON)
 option(HX_OS_ENABLE_RANDOM "Build secure system randomness and UUID v4" ON)
 option(HX_OS_ENABLE_VIRTUAL_MEMORY "Build pages and file mappings" ON)
@@ -246,6 +247,7 @@ add_library(hx_c_platform
 	src/sysinfo.c src/library.c src/path.c src/env.c src/paths.c
 	src/thread_extra.c src/pipe.c src/file_at.c src/net_options.c
 	src/file_info.c src/bom.c src/number.c src/config_serialize.c
+	src/config_build.c src/codec.c
 	src/timer.c src/util.c src/vm.c src/file_extra.c
 	src/watch.c src/loop_fd.c
 	src/system.c src/cpu_features.c src/time_posix.c

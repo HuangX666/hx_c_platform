@@ -2,7 +2,7 @@
 
 [简体中文](CONFIGURATION.zh-CN.md) · [README](../README.md)
 
-This optional, synchronous C99 module returns immutable documents through a C ABI. Application settings, reload watchers, environment mutation, variable expansion, defaults, schema validation, includes and save timing remain consumer policies. Optional JSON/INI/properties serialization and atomic save mechanisms are described in [platform utilities](PLATFORM_UTILITIES.md). No background thread or queue is created.
+This optional, synchronous C99 module returns immutable documents through a C ABI. Application settings, reload watchers, environment mutation, variable expansion, defaults, schema validation, includes and save timing remain consumer policies. All seven formats now have output APIs; nested document construction, explicit replacement and schema-based object conversion are described in [serialization](SERIALIZATION.md). No background thread or queue is created.
 
 The default backend is always BUILTIN. Installing dependencies never changes parsing implicitly. Select options.backend and check hx_os_config_backend_available. Disabled or mismatched backends return NOT_SUPPORTED and publish no document.
 
@@ -30,7 +30,7 @@ Unsupported structures fail rather than being silently flattened or guessed.
 
 JSON accepts top-level scalars and rejects trailing garbage/commas, malformed numbers and unpaired surrogates. Numbers retain lexical spelling; 9007199254740993 is not rounded to double while constructing the document.
 
-Builtin YAML supports space indentation, block sequences, mapping sequence items, quotes, comments, and optional --- / ... document markers. Plain true/false are booleans; null/~ and empty values are null; JSON-style numbers are numeric; other plain values are strings. Yes/on/dates are strings; quoted values stay strings. Multiline plain/quoted scalars, flow containers, directives, block scalars, compact nested sequences and Unicode line-break extensions require libyaml. Both backends reject anchors, aliases, complex keys and custom tags. No alias expansion or YAML merge semantics occur. libyaml adds flow containers, multiline strings and block folding with the same scalar schema. Known standard scalar tags are checked against that schema. This is not a claim of complete YAML 1.2 support. Builtin double quotes support the common JSON escape set and UXXXXXXXX; other YAML-specific escapes require libyaml.
+Builtin YAML supports space indentation, block sequences, mapping sequence items, quotes, comments, and optional --- / ... document markers. Plain true/false are booleans; null/~ and empty values are null; JSON-style numbers are numeric; other plain values are strings. Yes/on/dates are strings; quoted values stay strings. Multiline plain/quoted scalars, nonempty flow containers, directives, block scalars, compact nested sequences and Unicode line-break extensions require libyaml. Both backends reject anchors, aliases, complex keys and custom tags. No alias expansion or YAML merge semantics occur. libyaml adds flow containers, multiline strings and block folding with the same scalar schema. Known standard scalar tags are checked against that schema. This is not a claim of complete YAML 1.2 support. Builtin double quotes support the common JSON escape set and UXXXXXXXX; other YAML-specific escapes require libyaml.
 
 XML supports predefined entities and numeric character references, checks XML character/name rules and matching tags, and normalizes CR/CRLF. Literal attribute whitespace becomes spaces; referenced whitespace is preserved. Comments/processing instructions are intentionally omitted from the data tree. A leading declaration specifies XML 1.0 and, if present, UTF-8 encoding. DTD and other named entities are unsupported; nothing external is loaded. Repeated elements and adjacent text/CDATA nodes remain distinct. This configuration tree is not a round-trip XML editor.
 
@@ -90,3 +90,5 @@ ctest --test-dir build-parsers -C Debug --output-on-failure
 All five backend switches default OFF; HX_OS_ENABLE_CONFIG defaults ON. CONFIG=OFF removes format parsers but keeps ABI queries/error entry points; parse/load return NOT_SUPPORTED. Backend=ON with CONFIG=OFF is an error. Embedded consumers can select builtin-only or omit the entire module.
 
 Native sources are private object code inside the static library or DLL/so. Installed consumers need neither vendor headers nor separate parser libraries. Enabled dependency licenses are installed; see THIRD_PARTY_NOTICES.md. examples/configuration.c is the common C example and requires no C++.
+
+Builtin YAML also accepts empty `{}` and `[]` to preserve empty collection types on output/readback. Nonempty flow containers still require libyaml.

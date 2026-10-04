@@ -43,6 +43,54 @@ public:
 			return Failure(status, error.detail);
 		return result;
 	}
+	static Result<ConfigDocument> create(const hx_os_config_value &root,
+		const hx_os_config_options *options = NULL,
+		hx_os_context *context = NULL,
+		hx_os_config_error *diagnostic = NULL) noexcept
+	{
+		ConfigDocument result;
+		hx_os_config_error error = {};
+		auto status = hx_os_config_create(
+			context, &root, options, &result.m_document_, &error);
+		if (diagnostic)
+			*diagnostic = error;
+		if (status != HX_OS_OK)
+			return Failure(status, error.detail);
+		return result;
+	}
+	Result<ConfigDocument> withValue(const char *pointer,
+		const hx_os_config_value &value,
+		const hx_os_config_options *options = NULL,
+		hx_os_config_error *diagnostic = NULL) const noexcept
+	{
+		auto found = node(pointer);
+		if (!found)
+			return Failure(found.error());
+		ConfigDocument result;
+		hx_os_config_error error = {};
+		auto status = hx_os_config_replace(m_document_, found.value(),
+			&value, options, &result.m_document_, &error);
+		if (diagnostic)
+			*diagnostic = error;
+		if (status != HX_OS_OK)
+			return Failure(status, error.detail);
+		return result;
+	}
+	static Result<String> convert(StringView text, int from, int to,
+		const hx_os_config_options *options = NULL,
+		hx_os_context *context = NULL,
+		hx_os_config_error *diagnostic = NULL) noexcept
+	{
+		String output(context);
+		hx_os_config_error error = {};
+		auto status = hx_os_config_convert(context, from, text.data(),
+			text.size(), to, output.native(), options, &error);
+		if (diagnostic)
+			*diagnostic = error;
+		if (status != HX_OS_OK)
+			return Failure(status, error.detail);
+		return output;
+	}
 	ConfigDocument(const ConfigDocument &other) noexcept
 	    : m_document_(other.m_document_)
 	{

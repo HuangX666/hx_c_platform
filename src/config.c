@@ -21,7 +21,7 @@ void hx_os_config_options_init(hx_os_config_options *options)
 	options->max_work = 16 * 1024 * 1024;
 }
 
-static void hx_os_cfg_error_init(hx_os_config_error *error, const char *source)
+void hx_os_cfg_error_init(hx_os_config_error *error, const char *source)
 {
 	size_t bytes = 0;
 	if (!error)

@@ -41,6 +41,9 @@ typedef struct hx_os_cfg_parser {
 	hx_os_config_error *error;
 	void *vendor_blocks;
 } hx_os_cfg_parser;
+void hx_os_cfg_error_init(hx_os_config_error *error, const char *source);
+hx_os_config_node *hx_os_cfg_clone(hx_os_cfg_parser *parser,
+	const hx_os_config_node *source, size_t depth);
 /* Requires validated options and an empty parser. Publishes no public tree. */
 int hx_os_cfg_document_create(hx_os_cfg_parser *parser, hx_os_context *context,
 	const hx_os_config_options *options);
@@ -85,6 +88,7 @@ hx_os_status hx_os_cfg_integer(
 int hx_os_cfg_json(hx_os_cfg_parser *parser, hx_os_config_node **out);
 int hx_os_cfg_yaml(hx_os_cfg_parser *parser, hx_os_config_node **out);
 int hx_os_cfg_xml(hx_os_cfg_parser *parser, hx_os_config_node **out);
+int hx_os_cfg_xml_valid(hx_os_config_slice text, int name);
 int hx_os_cfg_lines(hx_os_cfg_parser *parser, hx_os_config_node **out);
 int hx_os_cfg_toml(hx_os_cfg_parser *parser, hx_os_config_node **out);
 int hx_os_cfg_cjson(hx_os_cfg_parser *parser, hx_os_config_node **out);

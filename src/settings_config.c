@@ -390,8 +390,7 @@ hx_os_status hx_settings_serialize(hx_settings *settings, int format,
 	hx_settings_frame frame;
 	hx_os_config_document *document = NULL;
 	hx_os_status status;
-	if (format != HX_OS_CONFIG_JSON && format != HX_OS_CONFIG_INI &&
-		format != HX_OS_CONFIG_PROPERTIES)
+	if (format < HX_OS_CONFIG_JSON || format > HX_OS_CONFIG_PROPERTIES)
 		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 	status = hx_settings_i_begin(settings, &frame, error);
 	if (status != HX_OS_OK)
@@ -421,8 +420,7 @@ hx_os_status hx_settings_save(hx_settings *settings, int format,
 	hx_settings_frame frame;
 	hx_os_config_document *document = NULL;
 	hx_os_status status;
-	if (format != HX_OS_CONFIG_JSON && format != HX_OS_CONFIG_INI &&
-		format != HX_OS_CONFIG_PROPERTIES)
+	if (format < HX_OS_CONFIG_JSON || format > HX_OS_CONFIG_PROPERTIES)
 		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 	status = hx_settings_i_begin(settings, &frame, error);
 	if (status != HX_OS_OK)
