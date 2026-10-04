@@ -35,7 +35,7 @@ adb devices -l
 python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --serial DEVICE_SERIAL
 ~~~
 
-Pass --adb for an absolute adb path. The runner checks ABI/API, uploads only its artifacts into a fresh /data/local/tmp/hx_c_platform-UUID directory, sets that process's LD_LIBRARY_PATH, and executes twenty-eight suites:
+Pass --adb for an absolute adb path. The runner checks ABI/API, uploads only its artifacts into a fresh /data/local/tmp/hx_c_platform-UUID directory, sets that process's LD_LIBRARY_PATH, and executes thirty-one suites:
 
 | Suite | Coverage |
 | --- | --- |
@@ -60,12 +60,21 @@ Pass --adb for an absolute adb path. The runner checks ABI/API, uploads only its
 | format / cpp_format | Typed UTF-8 formatting, custom values, failed-output retention and allocator cleanup |
 | kcp / ipc | Loss/retransmission, complete messages, duplex/concurrent requests, restart, backpressure and close; explicit local-path permission skips |
 | lifecycle | Allocation failures, join timeout during blocked TLS cleanup and successful retry after release |
+| config_tree / codec / cpp_codec | Deep mixed trees, seven writers, schema mapping, ownership and no-exception C++11 |
 
 hx_os_portable_baseline also records atomic, ASCII, wide conversion, named-call and precise-wait observations without fixed timing thresholds. Logs include NDK, source revision/dirty status, ABI/API, device model, fingerprint, runtime API, emulator marker and command output. Cleanup removes only explicitly uploaded files, never recursively deleting test directories. Failed fixtures remain. An adb timeout may leave the target process running; preserve/report its directory without killing it. Record load/temperature/ frequency conditions and collect repeated performance samples.
 
 Reports distinguish build minimum API, runtime API, native machine and translation, with a result per executable. Failures do not remain labeled as unrun. Shared validation executables have $ORIGIN RUNPATH for newer Android; older native systems still use LD_LIBRARY_PATH. Only test/example/benchmark targets receive this option; consumer and system library paths are unchanged.
 
-For a focused communication run, append `--suite ipc --suite kcp --suite lifecycle`. Without `--suite`, all twenty-eight suites run. The portable benchmark still runs; the report records selected suites and explicit subcase skips.
+For a focused communication run, append `--suite ipc --suite kcp --suite lifecycle`. Without `--suite`, all thirty-one suites run. The portable benchmark still runs; the report records selected suites and explicit subcase skips.
+
+For serialization only, append `--suite config_tree --suite codec --suite cpp_codec`. See the [serialization tutorial](SERIALIZATION.md).
+
+## Serialization verification (2026-10-04)
+
+Commit `8de8da1`: minimum-API-21 full shared builds for x86_64 and arm64-v8a each passed config_tree, codec and cpp_codec on Qt_Android_34, plus one portable benchmark execution. The actual OS was Android 14 / API 34 on x86_64; ARM64 used libndk_translation. A temporary read-only, no-snapshot, headless emulator was closed afterward without wiping or saving user data.
+
+Reports are build-android-emulator/report.json and build-android/report.json. Each ABI directory retains run-hx_os_test_config_tree.log, run-hx_os_test_codec.log and run-hx_os_test_cpp_codec.log. ARMv7 cross-compilation passed but runtime remains pending because this emulator lacks that ABI. API 21 OS execution, physical ARM hardware, APK sandbox execution and performance acceptance remain unverified. The other 28 suites were not rerun in this follow-up.
 
 ## Platform boundaries
 

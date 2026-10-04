@@ -23,16 +23,16 @@ Baseline `450e42f`, local `dev`. YAML/XML/TOML/ENV output completes the seven fo
 | Old 450e42f headers/tests with new shared library | 10/10 on each host; compatibility runner now copies old test helper headers and honors their no-exception requirement |
 | Public exports | Windows DLL and Linux so each match **844** declared functions |
 | Trimming | WSL CODEC=OFF, and CONFIG=OFF with CODEC=ON, each 3/3; missing dependencies make codec explicitly unavailable |
-| Android API 21 | NDK r28c complete arm64-v8a and armeabi-v7a cross-builds, followed by final related target rebuilds; adb listed no device, no runtime claim |
+| Android API 21 | NDK r28c full arm64-v8a, armeabi-v7a and x86_64 builds; API 34 emulator: native x86_64 and translated ARM64 each 3/3 plus a portable benchmark execution |
 | Documentation programs | Complete tutorial C program and README C++11 fragment extracted, compiled and run with GCC/G++; expected output observed |
 
 New cases cover mixed integer/real/bool/string/null arrays, interleaved objects/arrays, empty collections, 32/64/128 levels and limit rejection, immutable source lifetime, dynamic subtrees, large/narrow integers, fixed-array lengths, XML attribute escaping, input-buffer independence, configured bounds and successive injected decode-allocation failures. Shared-library interoperability exercises 101 seeded JSON trees with independent Python JSON/XML/TOML readers; WSL additionally uses installed PyYAML. Windows lacks PyYAML and explicitly skips that optional reader, while builtin/libyaml cross-checks still pass.
 
 A reproduced pre-existing properties writer bug was repaired: an initial U+FEFF key was read back as a BOM and lost its prefix. Properties now escapes it; INI rejects that unrepresentable initial key. YAML output escapes Unicode separators, C1 controls and BMP noncharacters instead of exposing literal characters that independent readers may reinterpret or reject.
 
-Logs are in the corresponding build directories: serialization-build.log, serialization-ctest.log, serialization-install-cpp.log and serialization-abi.log. Android also has build-android/report.json and serialization-*-final.log. Source rules, UTF-8 without BOM/LF and git diff --check were checked.
+Logs are in the corresponding build directories: serialization-build.log, serialization-ctest.log, serialization-install-cpp.log and serialization-abi.log. Android also has build-android/report.json, build-android-emulator/report.json, serialization-run.log and per-program logs. Emulator follow-up used 8de8da1 with a temporary read-only/no-snapshot instance, closed afterward. Source rules, UTF-8 without BOM/LF and git diff --check were checked.
 
-Encoding allocates a bounded document tree and retains two-pass output; decoding allocates owned values, arrays and text. No new background threads, mutable global registry or implicit locks. This is not a zero-allocation/zero-copy claim or a throughput benchmark. Runtime validation for macOS, Win7/8.1, embedded Linux boards, musl and Android devices remains pending. See [serialization](SERIALIZATION.md) for format subsets, XML mapping and C++ layout constraints.
+Encoding allocates a bounded document tree and retains two-pass output; decoding allocates owned values, arrays and text. No new background threads, mutable global registry or implicit locks. This is not a zero-allocation/zero-copy claim or a throughput benchmark. Runtime validation for macOS, Win7/8.1, embedded Linux boards, musl, Android API 21 OS, ARMv7, physical ARM and APK sandboxes remains pending. See [serialization](SERIALIZATION.md) for format subsets, XML mapping and C++ layout constraints.
 
 
 ## 2026-10-04: JSON in all four independent workflows

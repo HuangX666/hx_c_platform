@@ -35,7 +35,7 @@ adb devices -l
 python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --serial DEVICE_SERIAL
 ~~~
 
-可用 --adb 指定 adb 绝对路径。脚本核对目标 ABI/API，在新建的 /data/local/tmp/hx_c_platform-随机值 目录上传本次构建的文件，仅为本次进程设置 LD_LIBRARY_PATH，运行以下 28 组：
+可用 --adb 指定 adb 绝对路径。脚本核对目标 ABI/API，在新建的 /data/local/tmp/hx_c_platform-随机值 目录上传本次构建的文件，仅为本次进程设置 LD_LIBRARY_PATH，运行以下 31 组：
 
 | 测试 | 重点 |
 | --- | --- |
@@ -60,12 +60,21 @@ python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --ser
 | format / cpp_format | UTF-8 类型化格式化、自定义值、失败时保持输出、分配释放 |
 | kcp / ipc | 丢包重传、完整消息、双向请求、多线程、重启、背压和关闭；本地路径权限拒绝明确记录 |
 | lifecycle | 分配失败、TLS 析构阻塞期间 join 超时，释放后重试成功 |
+| config_tree / codec / cpp_codec | 深层混合文档、七种格式写出、结构体映射、资源清理和无异常 C++11 |
 
 另运行 hx_os_portable_baseline，记录原子、ASCII、宽位換算、命名过程、精细等待观察值，没有固定时间阈值。ADB 只负责部署和控制。记录 NDK、源码版本及是否有未提交修改、ABI/API、设备型号/指纹/API、模拟器标记和每项输出。清理只移除确切上传文件，不递归删除目录；失败夹保留排查。ADB 超时可能留下目标进程，保留目录并报告，不强杀。性能采样需记录负载、温度、调频状态并重复多轮。
 
 报告区分编译最低 API、实际系统 API、原生机器架构和翻译执行，逐程序记录结果。失败不会继续写成“未运行”。验证用共享库程序带 $ORIGIN RUNPATH，支持新版 Android 从程序所在目录加载依赖；旧系统仍使用 LD_LIBRARY_PATH。这些链接选项仅作用于测试/示例/基准程序，不传给消费者或修改系统库路径。
 
-只复核通信时，可在运行命令后追加 `--suite ipc --suite kcp --suite lifecycle`。不指定 `--suite` 时运行全部 28 组；可移植基准仍会运行，报告保存本次选择的套件和明确跳过的子项。
+只复核通信时，可在运行命令后追加 `--suite ipc --suite kcp --suite lifecycle`。不指定 `--suite` 时运行全部 31 组；可移植基准仍会运行，报告保存本次选择的套件和明确跳过的子项。
+
+只验证序列化时，追加 `--suite config_tree --suite codec --suite cpp_codec`。用法与示例见[序列化教程](SERIALIZATION.zh-CN.md)。
+
+## 序列化补测（2026-10-04）
+
+提交 `8de8da1`，API 21 编译的 x86_64 与 arm64-v8a 完整共享配置在 Qt_Android_34 上各通过 `config_tree`、`codec`、`cpp_codec` 三个套件，并各完成一次可移植基准。实际系统为 Android 14 / API 34，原生机器 x86_64，ARM64 通过 libndk_translation 执行。模拟器以只读、不保存快照、无窗口方式临时启动，完成后关闭，未清空或保存用户数据。
+
+两份运行报告为 `build-android-emulator/report.json` 和 `build-android/report.json`；各 ABI 构建目录保留 `run-hx_os_test_config_tree.log`、`run-hx_os_test_codec.log`、`run-hx_os_test_cpp_codec.log`。ARMv7 交叉编译通过，但该模拟器 ABI 列表不含 ARMv7，仍待目标运行。API 21 系统、ARM 原生硬件、APK 沙箱运行与性能验收也仍待验证；本次没有重跑其余 28 个套件。
 
 ## 能力边界
 

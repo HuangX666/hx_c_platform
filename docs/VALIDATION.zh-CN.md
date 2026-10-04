@@ -23,16 +23,16 @@
 | `450e42f` 旧头与旧测试配合新共享库 | Windows / WSL 各 10/10；兼容脚本补齐旧测试辅助头与已要求的关闭异常配置 |
 | 公共导出 | Windows DLL / Linux so 各 **844** 个函数，与当前公共头一致 |
 | 裁剪 | WSL：独立 CODEC=OFF、CONFIG=OFF 且 CODEC=ON 两个配置各 3/3；后者验证依赖关闭后不可用，不伪装支持 |
-| Android API 21 | NDK r28c 下 arm64-v8a、armeabi-v7a 完整交叉构建通过，最终相关目标再次编译通过；当前 adb 无设备，未运行 |
+| Android API 21 | NDK r28c 下 arm64-v8a、armeabi-v7a、x86_64 完整构建通过；API 34 模拟器上 x86_64 原生与 ARM64 翻译各 3/3，另各完成一次可移植基准 |
 | 文档代码 | 从新教程提取完整 C 程序、从 README 提取 C++11 示例，GCC/G++ 编译运行，输出符合说明 |
 
 新增用例覆盖：整数/浮点/布尔/字符串/null 混合数组，对象与数组交错，空对象/空数组，32/64/128 层与越界拒绝，原文档不变，动态子树保留，大整数、窄整数范围、固定数组长度、XML 属性转义、输入缓冲区释放后的结果寿命、配置上限，以及逐次注入解码分配失败后的清理。独立互操作脚本对共享库运行 101 组固定种子 JSON 树，用 Python 标准 JSON/XML/TOML 读取器核对；WSL 另用已安装的 PyYAML 核对 YAML。Windows 未安装 PyYAML，明确跳过这一可选读取器，内置和 libyaml 交叉测试仍通过。
 
 另外复现并修复了原 properties 写出的边界问题：首个键以 U+FEFF 开头时，重新解析会把它当成 BOM 丢弃。现输出转义，INI 遇到该无法保真的首键返回 UNREPRESENTABLE。YAML 输出显式转义 Unicode 行分隔符、C1 控制字符及 BMP 非字符，避免字面字符被其他解析器重新解释或拒绝。
 
-日志位于相应构建目录的 `serialization-build.log`、`serialization-ctest.log`、`serialization-install-cpp.log` 和 `serialization-abi.log`；Android 另有 `build-android/report.json` 和 `serialization-*-final.log`。源码规范检查、UTF-8 无 BOM/LF 与 `git diff --check` 一并检查。
+日志位于相应构建目录的 `serialization-build.log`、`serialization-ctest.log`、`serialization-install-cpp.log` 和 `serialization-abi.log`；Android 另有 `build-android/report.json`、`build-android-emulator/report.json`、`serialization-run.log` 及逐程序日志；模拟器补测基于 `8de8da1`，以只读、不保存快照方式临时启动并在完成后关闭。源码规范检查、UTF-8 无 BOM/LF 与 `git diff --check` 一并检查。
 
-编码会分配有界文档树，最终写出仍使用测量和写入两遍；解码会为结果对象、数组和文本分配受控存储。无新增后台线程、全局可变注册表或隐式锁；不声称零分配、零拷贝，也没有把本次测试当作吞吐量基准。macOS、Win7/8.1、嵌入式 Linux 板卡、musl 和 Android 设备上的本轮运行仍待验证。格式子集、XML 映射及 C++ 值布局限制见[序列化教程](SERIALIZATION.zh-CN.md)。
+编码会分配有界文档树，最终写出仍使用测量和写入两遍；解码会为结果对象、数组和文本分配受控存储。无新增后台线程、全局可变注册表或隐式锁；不声称零分配、零拷贝，也没有把本次测试当作吞吐量基准。macOS、Win7/8.1、嵌入式 Linux 板卡、musl、Android API 21 系统、ARMv7、ARM 真机及 APK 沙箱中的本轮运行仍待验证。格式子集、XML 映射及 C++ 值布局限制见[序列化教程](SERIALIZATION.zh-CN.md)。
 
 
 ## 2026-10-04：四套独立业务改用 JSON

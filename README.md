@@ -440,7 +440,7 @@ The meaning of `NULL` depends on its position: allocator/options parameters sele
 
 ## 7. Builds, validation and licensing
 
-See the [build reference](docs/REFERENCE.md#section-27) for development builds, tests, static/shared installation and optional dependencies. Full tests on 2026-10-04 passed Windows 131/131 and WSL Linux 133/133. New nested serialization, object mapping and C/C++ examples passed memory and installed-consumer checks; both Android API 21 ARM ABIs cross-compiled. [Validation records](docs/VALIDATION.md) identify exact configurations and pending targets. Documentation-example checks are separate from target-platform validation.
+See the [build reference](docs/REFERENCE.md#section-27) for development builds, tests, static/shared installation and optional dependencies. Full tests on 2026-10-04 passed Windows 131/131 and WSL Linux 133/133. New nested serialization, object mapping and C/C++ examples passed memory and installed-consumer checks; both Android API 21 ARM ABIs cross-compiled, and native x86_64/translated ARM64 each passed three new serialization suites on the API 34 emulator. [Validation records](docs/VALIDATION.md) identify exact configurations and pending targets. Documentation-example checks are separate from target-platform validation.
 
 The first-party distribution license is pending; see [third-party licensing](THIRD_PARTY_NOTICES.md). The coroutine implementation is self-developed; hx_c_log integration remains future work.
 

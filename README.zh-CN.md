@@ -440,7 +440,7 @@ std::puts(yaml.value().c_str());
 
 ## 7. 构建、验证与项目许可
 
-开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。2026-10-04 的全量测试为 Windows 131/131、WSL Linux 133/133；新增深层序列化、结构体映射及 C/C++ 示例通过内存检测与安装消费检查，Android API 21 两种 ARM ABI 编译通过。具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
+开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。2026-10-04 的全量测试为 Windows 131/131、WSL Linux 133/133；新增深层序列化、结构体映射及 C/C++ 示例通过内存检测与安装消费检查，Android API 21 两种 ARM ABI 编译通过，API 34 模拟器上的 x86_64 与 ARM64 各通过 3 项新增序列化测试。具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
 
 自有代码的发布许可证尚未确定，第三方许可证见[许可说明](THIRD_PARTY_NOTICES.zh-CN.md)。协程使用自研实现；hx_c_log 接入仍属于后续工作。
 
