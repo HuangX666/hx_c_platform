@@ -2,26 +2,35 @@
 
 import argparse
 import uuid
-from business_runner import checked_main, run_pair
+from business_runner import checked_main, json_messages, run_pair
 
 
 def verify_device(server, client):
     if "DEVICE SERVER PASS" not in server or "DEVICE CLIENT PASS" not in client:
         raise RuntimeError("Device workflow did not finish")
+    replies = json_messages(client, "[IPC reply] ")
+    notices = json_messages(client, "[IPC notification] ")
+    if len(replies) != 15 or len(notices) != 2:
+        raise RuntimeError("Missing or duplicate JSON replies/notifications")
     for device, interval in ((101, 250), (102, 500)):
-        expected = (
-            f"device={device} OPEN -> OK online",
-            f"device={device} GET -> STATE interval_ms=1000",
-            f"device={device} SET {interval} -> OK interval_ms={interval}",
-            f"device={device} SET 0 -> ERROR interval must be 50..5000",
-            f"device={device} CLOSE -> OK offline",
-            f"[receive thread] device={device} CHANGED interval_ms={interval}",
-        )
-        if not all(line in client for line in expected):
-            raise RuntimeError(f"Missing device {device} steps")
-        state = f"device={device} GET -> STATE interval_ms={interval}"
-        if client.count(state) != 2:
-            raise RuntimeError("Readback after valid/rejected SET is missing")
+        actual = [reply for reply in replies
+                  if reply.get("device_id") == device]
+        stages = (("opened", 1000), ("state", 1000), ("updated", interval),
+                  ("state", interval), ("error", interval),
+                  ("state", interval), ("closed", interval))
+        expected = [{"type": kind, "device_id": device, "interval_ms": value,
+                     "ok": kind != "error",
+                     "code": "invalid_interval" if kind == "error" else ""}
+                    for kind, value in stages]
+        if actual != expected:
+            raise RuntimeError(f"Wrong JSON device sequence: {actual}")
+        notice = {"type": "changed", "device_id": device,
+                  "interval_ms": interval}
+        if notices.count(notice) != 1:
+            raise RuntimeError("Wrong JSON notification")
+    if replies[-1] != {"type": "bye", "device_id": 0, "ok": True,
+                       "interval_ms": 0, "code": ""}:
+        raise RuntimeError("Missing JSON shutdown reply")
 
 
 def main():

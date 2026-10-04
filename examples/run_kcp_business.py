@@ -1,7 +1,7 @@
 """KCP only: send ordered blocks and confirm application commit over UDP."""
 
 import argparse
-from business_runner import checked_main, run_pair
+from business_runner import checked_main, json_messages, run_pair
 
 
 def verify_transfer(server, client, dropping):
@@ -10,11 +10,16 @@ def verify_transfer(server, client, dropping):
         raise RuntimeError("Server did not apply all blocks exactly once")
     if f"KCP CLIENT PASS: 3 blocks committed; dropped={count}" not in client:
         raise RuntimeError("Client did not receive commit confirmation")
-    for index in range(1, 4):
-        if server.count(f"apply BLOCK id={index} value={index * 10}") != 1:
-            raise RuntimeError("Duplicated or missing application block")
-        if client.count(f"APPLIED id={index}") != 1:
-            raise RuntimeError("Duplicated or missing confirmation")
+    blocks = [{"type": "block", "id": index, "value": index * 10}
+              for index in range(1, 4)]
+    if json_messages(server, "[KCP server] ") != blocks:
+        raise RuntimeError("Duplicated or missing JSON block")
+    confirmations = [{"type": "applied", "id": index, "ok": True}
+                     for index in range(1, 4)]
+    confirmations.append({"type": "committed", "blocks": 3,
+                          "total": 60, "ok": True})
+    if json_messages(client, "[KCP I/O thread] ") != confirmations:
+        raise RuntimeError("Wrong JSON confirmations")
 
 
 def main():

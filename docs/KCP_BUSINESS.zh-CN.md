@@ -38,62 +38,64 @@ Linux/WSL 使用 `python3` 和 `--bin-dir build-net/bin`。已有构建可使用
 
 Linux/WSL 分别使用 `./build-net/bin/hx_os_kcp_transfer_server 39003 --drop-first` 和 `./build-net/bin/hx_os_kcp_transfer_client 39003 --drop-first`。去掉两边的 `--drop-first` 即为正常传输。两端使用 `127.0.0.1`，参数是端口号，不是 `kcp://` URI。服务端启动后请及时运行客户端；演示会话总时限为 10 秒。
 
-## 3. 线程如何配合
+## 3. 生产线程发 JSON，I/O 线程收 JSON 确认
 
 ```mermaid
 flowchart LR
-    P[客户端生产线程] -->|kcp_send| Q[有界 KCP 发送队列]
-    IO[客户端 I/O 线程] -->|update / flush| Q
-    Q <-->|UDP 数据报| S[服务端 KCP 接收与应用]
-    S -->|APPLIED / COMMITTED| Q
-    Q -->|kcp_receive| IO
+    P[生产线程：编码 JSON block] --> Q[有界 KCP 发送队列]
+    IO[I/O 线程：UDP 输入、update、flush] <--> Q
+    Q <-->|KCP over UDP| S[服务端：解析 JSON、按序应用]
+    S -->|JSON applied / committed| Q
 ```
 
-| 提交的数据 | 服务端操作 | 业务回复 |
-| --- | --- | --- |
-| `BLOCK id=1 value=10` | 应用第一个块，合计 10 | `APPLIED id=1` |
-| `BLOCK id=2 value=20` | 应用第二个块，合计 30 | `APPLIED id=2` |
-| `BLOCK id=3 value=30` | 应用第三个块，合计 60 | `APPLIED id=3`，再发 `COMMITTED blocks=3 total=60` |
+数据块、单块确认和最终确认分别是：
 
-`COMMITTED` 表示这个演示的三个块已经在服务端内存中处理完毕，没有磁盘持久化含义。`hx_os_kcp_send()` 成功只表示进入有界发送队列，不能直接当作远端执行成功；客户端继续等业务回复。
-
-`--drop-first` 在两端的输出回调中各丢弃第一个实际待发 KCP 数据报，并报告本地发送成功，驱动 KCP 自己重传。服务端仍必须只应用三次，客户端仍必须收到三个处理确认和一个完成消息。
-
-```text
-[KCP injection] first outgoing datagram dropped
-[KCP I/O thread] APPLIED id=1
-[KCP I/O thread] APPLIED id=2
-[KCP I/O thread] APPLIED id=3
-[KCP I/O thread] COMMITTED blocks=3 total=60
-KCP CLIENT PASS: 3 blocks committed; dropped=1
-KCP SERVER PASS: blocks=3 total=60 dropped=1
+```json
+{"type":"block","id":1,"value":10}
 ```
 
-## 4. 源码与关键调用
+```json
+{"type":"applied","id":1,"ok":true}
+```
+
+```json
+{"type":"committed","blocks":3,"total":60,"ok":true}
+```
+
+客户端依次发编号 1/2/3、数值 10/20/30 的三个 JSON 对象。服务端检查 `type`、整数编号、顺序与数值，应用后逐块确认，最后报告总值 60。客户端也解析 JSON，检查确认编号、布尔 `ok`、块数与总值；不拿原始字符串相等作为业务判断。
+
+`committed` 表示内存中的业务处理完成，没有磁盘持久化含义。`hx_os_kcp_send()` 成功只表示接受到发送队列，客户端仍需等待业务确认。
+
+`--drop-first` 在双方输出回调中各丢弃首个 KCP 数据报，由 KCP 重传。自动检查仍要求服务端仅应用三块，客户端收到三个 `applied` 和一个 `committed`。
+
+## 4. 源码与使用方式
 
 | 文件 | 看哪里 |
 | --- | --- |
-| [kcp_transfer_client.c](../examples/kcp_transfer_client.c) | `send_blocks()` 生产线程，`receive_confirmations()` I/O 与业务确认线程 |
-| [kcp_transfer_server.c](../examples/kcp_transfer_server.c) | `receive_blocks()` 按序接收、累加与回复 |
-| [kcp_business.h](../examples/kcp_business.h) | `kcp_output()` 原始 UDP 输出；`kcp_pump()` 输入 UDP、更新单调时钟、冲刷 ACK；有界创建与同步 |
-| [run_kcp_business.py](../examples/run_kcp_business.py) | 本例自己的普通传输/丢包断言 |
+| [kcp_transfer_client.c](../examples/kcp_transfer_client.c) | `send_blocks()` 构造并编码 JSON；`receive_confirmations()` 驱动 I/O 并解析结果 |
+| [kcp_transfer_server.c](../examples/kcp_transfer_server.c) | `receive_blocks()` 校验 JSON 和业务顺序；`send_confirmation()` 序列化回复 |
+| [kcp_business.h](../examples/kcp_business.h) | 独立的 UDP 输出、KCP 更新、冲刷与完整消息接收 |
+| [run_kcp_business.py](../examples/run_kcp_business.py) | 将日志解析为 JSON，检查块与确认没有重复/缺失 |
 
-生产线程的核心是：
+生产线程准备字段：
 
 ```c
-if (!kcp_send_text(job->session, block))
-	return NULL;
+json_field fields[] = {
+	json_text("type", "block"), json_int("id", 1), json_int("value", 10)
+};
 ```
 
-这个示例私有函数在短互斥区调用 `hx_os_kcp_send()`。I/O 线程每轮最多处理 32 个 UDP 包，驱动 `hx_os_kcp_update()` / `hx_os_kcp_flush()` 并取出完整业务消息；循环间休眠 5 毫秒。输出回调只调用非阻塞 `send_to()`，不递归进入 KCP，不在持锁期间等待网络。
+编码后交给本例的 `kcp_send_text()`；完整的错误检查与 `hx_string_destroy()` 在 `send_blocks()` 中。通用 [business_json.h](../examples/business_json.h) 使用现有 settings 序列化与内置 JSON 解析，不承载 KCP 业务逻辑，也不调用 IPC。
 
-本例的发送段上限为 16，接收窗口为 128，最大业务正文 127 字节，MTU 为 1200。主线程 join 后再销毁引擎、互斥锁、socket 和 network。接收最后结果后客户端继续驱动 500 毫秒以便重发末尾 ACK，整个会话仍受 10 秒期限限制。该有限策略不保证无限丢包下双方都能正常结束。
+示例需要默认开启的 `CONFIG`、`CONFIG_SERIALIZE`、`SETTINGS`。消息为 UTF-8 JSON，最多 1023 字节；解析限制深度 8、节点 64、内存 64 KiB，拒绝重复键和非对象根节点。整数与布尔字段按实际 JSON 类型校验。数据文档和临时字符串在各线程使用完后释放。
 
-## 5. 会话边界
+生产者在短互斥区提交 KCP 消息，唯一 I/O 线程每轮最多处理 32 个 UDP 包，执行 `update` / `flush` 并取完整消息，循环间休眠 5 毫秒。发送段上限 16、接收窗口 128、MTU 1200。JSON 编解码在引擎锁外完成。主线程 join 后再销毁引擎、互斥锁、socket 和 network。
 
-本例固定使用 `conv=7301`，每次启动服务一个对端，不提供自动发现、身份认证、自动重连或跨重启去重。`conv` 只是 KCP 会话编号，不能直接替代带随机性和代次的应用会话标识。真实多对端服务应定义自己的会话建立与销毁协议，不能照搬这个单次演示的固定编号。
+## 5. 会话与关闭边界
 
-KCP 提供当前活动会话内的可靠有序消息传输；应用是否完成、是否持久化、是否可安全重试仍由业务协议决定。这里测试“当前演示没有重复应用”，不承诺进程重启后的 exactly-once。更完整的 HXIP 会话机制另见 [IPC 协议](IPC.zh-CN.md)，但本例不依赖它。
+本例每进程仅服务一个对端，固定 `conv=7301`；没有自动发现、认证、重连或跨重启去重。对端重启可能重复编号，实际应用应给 JSON 协议定义会话代次和业务重试规则，不能把 KCP 的 `conv` 当作完整应用会话。
+
+客户端收到最终结果后继续驱动 500 毫秒以便重发末尾 ACK，总会话期限为 10 秒。无限丢包时不保证正常结束。当前会话中无重复应用的检查不构成跨重启 exactly-once 承诺；更完整的 HXIP 会话见 [IPC 协议](IPC.zh-CN.md)，本例不依赖它。
 
 ## 6. 自动测试
 
@@ -101,4 +103,4 @@ KCP 提供当前活动会话内的可靠有序消息传输；应用是否完成�
 ctest --test-dir build-net -C Release -R "^kcp_business_" --output-on-failure
 ```
 
-分别运行 `kcp_business_transfer`、`kcp_business_loss`；检查三个块的顺序、总值、无重复应用、对端业务确认与正常回收。KCP 引擎的乱序、重复、容量和时间回绕测试继续在 [test_kcp.c](../tests/test_kcp.c)。本例没有提出比 TCP 更快的性能结论。目标结果见[验证记录](VALIDATION.zh-CN.md)。
+`kcp_business_transfer` 与 `kcp_business_loss` 检查实际 JSON 块、处理总值、确认与资源回收。KCP 底层乱序、重复、容量和时间回绕仍由 [test_kcp.c](../tests/test_kcp.c) 覆盖。JSON 模块关闭时不注册业务用例；目标结果见[验证记录](VALIDATION.zh-CN.md)。

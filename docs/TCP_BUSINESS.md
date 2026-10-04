@@ -40,64 +40,92 @@ After `Listening:`, **terminal two**:
 
 On Linux/WSL run `./build-net/bin/hx_os_tcp_order_server 39001` and `./build-net/bin/hx_os_tcp_order_client 39001` separately. The argument is a port number; these programs bind/connect to `127.0.0.1`, not a `tcp://` URI. The server has a 15-second overall deadline; client I/O has 10 seconds. Restart the server for each demonstration.
 
-## 3. Threads and results
+## 3. Send JSON orders and receive JSON results
 
 ```mermaid
 flowchart LR
-    TX[Client send thread] -->|Three ORDER messages| Stream[TCP connection]
-    Stream --> S[Server order processing]
-    S -->|Receipts, shipping, rejection| Stream
+    TX[Client send thread] -->|JSON order| Stream[TCP length frames]
+    Stream --> S[Server: parse, validate, calculate]
+    S -->|JSON receipt / shipped / rejected| Stream
     Stream --> RX[Client receive thread]
-    Main[Main: connect, create threads, join, close] --> TX
-    Main --> RX
 ```
 
-| Request | Result |
-| --- | --- |
-| `ORDER id=1 sku=101 qty=2` | Unit price 1250 cents; receipt for 2500, then `SHIPPED id=1` |
-| `ORDER id=2 sku=102 qty=1` | Unit price 9000 cents; receipt for 9000, then `SHIPPED id=2` |
-| `ORDER id=3 sku=101 qty=0` | Invalid quantity: `REJECTED id=3 reason=invalid_order`; no charge |
+An order is a JSON object. Its note includes Chinese, quotes, a backslash and a supplementary-plane character:
 
-The server accepts two orders totaling `11500` cents. Integer amounts avoid floating-point pricing in the example. `id` is an application-defined order ID in the payload; the client checks it, with no IPC request router involved.
-
-```text
-[TCP receive thread] RECEIPT id=1 total_cents=2500
-[TCP receive thread] SHIPPED id=1
-[TCP receive thread] RECEIPT id=2 total_cents=9000
-[TCP receive thread] SHIPPED id=2
-[TCP receive thread] REJECTED id=3 reason=invalid_order
-TCP CLIENT PASS: 3 orders, 2 receipts, 2 notices, 1 rejection
-TCP SERVER PASS: accepted=2 total_cents=11500
+```json
+{"type":"order","id":1,"sku":101,"quantity":2,"note":"桌面 \"设备\"\\A🌐"}
 ```
 
-## 4. Framing and code entry points
+The server parses fields and returns the decoded note in the receipt:
 
-TCP is a byte stream. This example defines a two-byte big-endian payload length followed by 1–127 ASCII bytes. Both sides read a complete frame before processing it, rejecting oversized, empty or embedded-NUL payloads.
+```json
+{"type":"receipt","id":1,"ok":true,"total_cents":2500,"note":"桌面 \"设备\"\\A🌐"}
+```
 
-| File | What to read |
+It separately sends a shipping notification:
+
+```json
+{"type":"shipped","id":1,"ok":true}
+```
+
+| Order | Validated result |
 | --- | --- |
-| [tcp_order_client.c](../examples/tcp_order_client.c) | `send_orders()` and the independent `receive_receipts()` thread |
-| [tcp_order_server.c](../examples/tcp_order_server.c) | `process_orders()` parses orders, calculates totals and sends results |
-| [tcp_business.h](../examples/tcp_business.h) | `tcp_send_text()` / `tcp_receive_text()` implement framing; `tcp_transfer()` handles partial I/O and deadlines |
-| [run_tcp_business.py](../examples/run_tcp_business.py) | Business assertions and split/coalesced writes from a standard-library Python TCP peer |
+| `id=1, sku=101, quantity=2` | Unit price 1250 cents, total 2500, then `shipped` |
+| `id=2, sku=102, quantity=1` | Unit price 9000 cents, total 9000, then `shipped` |
+| `id=3, sku=101, quantity=0` | `{"type":"rejected","id":3,"ok":false,"reason":"invalid_order"}` |
 
-Business code uses:
+Accepted orders total 11500 cents. `id`, `sku` and `quantity` must be JSON integers, with quantity in 1–10. `note` must be a string of at most 128 UTF-8 bytes. `"1"`, `true` and `1.0` are not integer quantities. Order IDs are application payload fields, not IPC-routed requests.
+
+## 4. Encoding and TCP framing
+
+TCP still needs message boundaries: two-byte big-endian UTF-8 payload byte count, followed by at most 1023 bytes of JSON. Count bytes, not Chinese characters. The receiver assembles one frame, then parses one JSON object rather than using `sscanf` or raw string comparisons.
+
+| File | Entry points |
+| --- | --- |
+| [tcp_order_client.c](../examples/tcp_order_client.c) | `send_orders()` typed fields; `receive_receipts()` parsed results, amounts and notes |
+| [tcp_order_server.c](../examples/tcp_order_server.c) | `process_orders()` schema/range checks; `send_order_json()` response encoding |
+| [tcp_business.h](../examples/tcp_business.h) | Length framing, partial I/O and finite waits |
+| [business_json.h](../examples/business_json.h) | Codec helpers only: existing JSON parser, settings serialization, type and capacity checks |
+
+Adapt fields in this fragment; `stream` is an established TCP connection:
 
 ```c
-if (!tcp_send_text(job->stream, "ORDER id=1 sku=101 qty=2"))
-	return NULL;
+json_field fields[] = {
+	json_text("type", "order"), json_int("id", 1),
+	json_int("sku", 101), json_int("quantity", 2),
+	json_text("note", "桌面设备")
+};
+hx_string wire = HX_STRING_INIT;
+if (json_encode(fields, 5, &wire)) {
+	int sent = tcp_send_text(stream, hx_string_c_str(&wire));
+	/* Check sent before continuing the business operation. */
+	(void)sent;
+}
+hx_string_destroy(&wire);
 ```
 
-`tcp_send_text()` is an example-private helper over `hx_os_socket_send_some()`; receiving uses `hx_os_socket_receive_some()`. It is not a new public library API and never forwards to IPC. A short mutex serializes each nonblocking socket call. After `WOULD_BLOCK`, retry sleeps for 1 ms outside the lock. Exactly one thread sends complete frames and one receives them; this does not authorize multiple independent frame writers on the same raw stream.
+These helpers are private to the examples; business I/O remains raw TCP without IPC forwarding. The serializer handles quotes, backslashes and control characters. Parsing rejects duplicate keys and non-object roots, with limits of depth 8, 64 nodes and 64 KiB parsing memory. Default-enabled `CONFIG`, `CONFIG_SERIALIZE` and `SETTINGS` are required; no dependency was added.
 
-The finite demonstration has no unbounded queue. Main joins both threads before destroying the mutex, socket and network owner. Timeout/disconnect inside a frame fails the connection; leftover bytes are not treated as a new message. Long-running high-throughput applications can use the library loop for readiness-driven I/O; the short retry interval here is not a performance benchmark.
+A short mutex serializes nonblocking socket calls; retries sleep 1 ms outside it. Exactly one thread writes complete frames and one reads them. Main joins before destroying mutex, socket and network. Documents and temporary strings are released after use. Mid-frame timeout/disconnect fails the connection instead of reinterpreting leftovers. This finite example is not a throughput benchmark.
 
-## 5. Tests
+## 5. Executable tests
 
 ```sh
 ctest --test-dir build-net -C Release -R "^tcp_business_" --output-on-failure
 ```
 
-`tcp_business_orders` runs two C processes and verifies threaded communication and totals. `tcp_business_framing` uses a normal Python socket, splits the first header/body across writes, then combines the remaining two frames in one write. The server must still parse three orders. That Python peer implements this simple example protocol, not HXIP.
+| Test | Checks |
+| --- | --- |
+| `tcp_business_orders` | Two C processes: JSON orders, receipts, notifications, rejection and note round-trip |
+| `tcp_business_framing` | Python raw socket splits a header/body and coalesces following frames, using different JSON key order/whitespace |
+| `tcp_business_json_validation` | Seven faults: string quantity, bool quantity, real quantity, missing quantity, malformed JSON, duplicate key, array root |
 
-Raw TCP does not supply application sessions, retry deduplication or restart recovery. Define those in the real protocol; this example covers a finite workflow on one live connection. See [validation](VALIDATION.md). Other workflows are documented separately: [IPC](IPC_BUSINESS.md), [UDP](UDP_BUSINESS.md), [KCP](KCP_BUSINESS.md).
+Run the last case directly:
+
+```powershell
+python examples/run_tcp_business.py --json-errors --bin-dir build-net/bin/Release
+```
+
+Python uses its standard `json` module and UTF-8, not HXIP. Invalid field types/ranges receive `rejected`; invalid order objects receive `{"type":"error","ok":false,"reason":"invalid_json_request"}`. Each run still verifies the preceding two orders total 11500 cents, unchanged by invalid input.
+
+Raw TCP does not supply cross-restart sessions or retry deduplication; this example covers the current connection. See [validation](VALIDATION.md), and the separate [IPC](IPC_BUSINESS.md), [UDP](UDP_BUSINESS.md) and [KCP](KCP_BUSINESS.md) workflows.

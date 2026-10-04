@@ -2,8 +2,9 @@
 #define HX_EXAMPLE_TCP_BUSINESS_H
 
 #include "network_demo.h"
+#include "business_json.h"
 
-enum { TCP_TEXT_CAPACITY = 128 };
+enum { TCP_TEXT_CAPACITY = JSON_MESSAGE_CAPACITY };
 
 typedef struct tcp_stream {
 	hx_os_socket *socket;
@@ -52,7 +53,7 @@ static inline int tcp_transfer(
 	return 1;
 }
 
-/* Wire format: two-byte big-endian length, then that many ASCII bytes.
+/* Wire format: two-byte big-endian length, then that many UTF-8 JSON bytes.
  * TCP has no message boundaries. Keep this framing local to this example.
  */
 static inline int tcp_send_text(tcp_stream *stream, const char *text)

@@ -38,62 +38,64 @@ After `Listening:`, **terminal two**:
 
 On Linux/WSL run `./build-net/bin/hx_os_kcp_transfer_server 39003 --drop-first` and `./build-net/bin/hx_os_kcp_transfer_client 39003 --drop-first`. Omit both flags for normal transfer. Both sides use `127.0.0.1`; the argument is a port, not a `kcp://` URI. Start the client promptly: this demonstration has a 10-second session deadline.
 
-## 3. How the threads cooperate
+## 3. Produce JSON and receive JSON confirmations
 
 ```mermaid
 flowchart LR
-    P[Client producer] -->|kcp_send| Q[Bounded KCP send queue]
-    IO[Client I/O thread] -->|update / flush| Q
-    Q <-->|UDP datagrams| S[Server KCP receiver and application]
-    S -->|APPLIED / COMMITTED| Q
-    Q -->|kcp_receive| IO
+    P[Producer: encode JSON block] --> Q[Bounded KCP send queue]
+    IO[I/O thread: UDP input, update, flush] <--> Q
+    Q <-->|KCP over UDP| S[Server: parse JSON, apply in order]
+    S -->|JSON applied / committed| Q
 ```
 
-| Submitted block | Server state | Business reply |
-| --- | --- | --- |
-| `BLOCK id=1 value=10` | Apply first block; total 10 | `APPLIED id=1` |
-| `BLOCK id=2 value=20` | Apply second block; total 30 | `APPLIED id=2` |
-| `BLOCK id=3 value=30` | Apply third block; total 60 | `APPLIED id=3`, then `COMMITTED blocks=3 total=60` |
+A block, its acknowledgement and final confirmation are:
 
-`COMMITTED` means this demonstration processed all three blocks in server memory, not durable storage. A successful `hx_os_kcp_send()` only accepts data into a bounded queue; the client still waits for application confirmation.
-
-`--drop-first` discards the first outgoing KCP datagram at each endpoint's output callback while reporting local success. KCP must retransmit. The server must still apply exactly three blocks and the client must receive three acknowledgements plus completion.
-
-```text
-[KCP injection] first outgoing datagram dropped
-[KCP I/O thread] APPLIED id=1
-[KCP I/O thread] APPLIED id=2
-[KCP I/O thread] APPLIED id=3
-[KCP I/O thread] COMMITTED blocks=3 total=60
-KCP CLIENT PASS: 3 blocks committed; dropped=1
-KCP SERVER PASS: blocks=3 total=60 dropped=1
+```json
+{"type":"block","id":1,"value":10}
 ```
 
-## 4. Sources and calls
+```json
+{"type":"applied","id":1,"ok":true}
+```
 
-| File | What to read |
+```json
+{"type":"committed","blocks":3,"total":60,"ok":true}
+```
+
+The client sends three JSON objects with IDs 1/2/3 and values 10/20/30. The server checks type, integer IDs, sequence and values before applying each block, acknowledging it and reporting total 60. The client parses JSON and validates IDs, boolean `ok`, block count and total instead of comparing serialized strings.
+
+`committed` means in-memory processing completed, not durable storage. `hx_os_kcp_send()` only accepts data into its queue; business confirmation is still required.
+
+`--drop-first` drops each side's first KCP output datagram and lets KCP retransmit. Tests still require exactly three applications, three `applied` messages and one `committed` message within this run.
+
+## 4. Sources and usage
+
+| File | Entry points |
 | --- | --- |
-| [kcp_transfer_client.c](../examples/kcp_transfer_client.c) | `send_blocks()` producer; `receive_confirmations()` I/O and business results |
-| [kcp_transfer_server.c](../examples/kcp_transfer_server.c) | `receive_blocks()` ordered processing, totals and replies |
-| [kcp_business.h](../examples/kcp_business.h) | `kcp_output()` raw UDP; `kcp_pump()` input, monotonic updates and ACK flush; bounded setup and exclusion |
-| [run_kcp_business.py](../examples/run_kcp_business.py) | Separate normal/loss application assertions |
+| [kcp_transfer_client.c](../examples/kcp_transfer_client.c) | `send_blocks()` typed JSON encoding; `receive_confirmations()` I/O and parsed results |
+| [kcp_transfer_server.c](../examples/kcp_transfer_server.c) | `receive_blocks()` JSON/schema/order validation; `send_confirmation()` response serialization |
+| [kcp_business.h](../examples/kcp_business.h) | Independent UDP output, KCP update/flush and whole-message receive |
+| [run_kcp_business.py](../examples/run_kcp_business.py) | Parses JSON logs and checks missing/duplicate blocks or replies |
 
-The producer uses:
+The producer defines fields:
 
 ```c
-if (!kcp_send_text(job->session, block))
-	return NULL;
+json_field fields[] = {
+	json_text("type", "block"), json_int("id", 1), json_int("value", 10)
+};
 ```
 
-This example-private helper calls `hx_os_kcp_send()` under a short mutex. The I/O thread processes at most 32 datagrams per iteration, drives `hx_os_kcp_update()` / `hx_os_kcp_flush()`, and retrieves complete messages, sleeping 5 ms between iterations. Output uses nonblocking `send_to()` without KCP reentry or waiting for network readiness while locked.
+Encode and pass the result to the example's `kcp_send_text()`. `send_blocks()` includes error checking and string cleanup. The shared [business_json.h](../examples/business_json.h) uses existing settings serialization and built-in JSON parsing; it contains no KCP business logic or IPC calls.
 
-The example limits queued send segments to 16, receive window to 128, payload to 127 bytes, and MTU to 1200. Main joins threads before destroying engine, mutex, socket and network. After receiving the final result, the client drives another 500 ms to service retransmitted final ACKs, still bounded by the overall 10-second deadline. This finite policy cannot guarantee successful shutdown under unlimited loss.
+Default-enabled `CONFIG`, `CONFIG_SERIALIZE` and `SETTINGS` are required. UTF-8 JSON messages are capped at 1023 bytes, parsing depth at 8, nodes at 64 and parsing memory at 64 KiB. Duplicate keys and non-object roots are rejected; integers and booleans require their actual JSON types. Documents and temporary strings are released after use.
 
-## 5. Session limits
+A short mutex protects producer submissions. One I/O thread processes at most 32 UDP packets per iteration, updates/flushes KCP and retrieves messages, sleeping 5 ms between iterations. Send capacity is 16 segments, receive window 128 and MTU 1200. JSON parsing/encoding runs outside the engine lock. Main joins before destroying engine, mutex, socket and network.
 
-The example uses fixed `conv=7301`, one peer per process run, and no discovery, authentication, automatic reconnect or deduplication across restarts. KCP's conversation number is not a random, generation-aware application session identifier. A real multi-peer service must define establishment and teardown rather than copy this fixed ID.
+## 5. Session and shutdown limits
 
-KCP provides reliable ordered messages within a live conversation. Business completion, persistence and safe retries remain application responsibilities. The test checks no duplicate application in this run, not exactly-once execution across process restarts. The more complete HXIP session mechanism is documented in [IPC](IPC.md); this example does not depend on it.
+One peer per process run uses fixed `conv=7301`, with no discovery, authentication, reconnect or cross-restart deduplication. Real protocols need session generations and retry rules in their JSON; KCP's conversation number alone is insufficient.
+
+After the final result, the client drives 500 ms more for trailing ACK retransmission, within a 10-second overall deadline. Unlimited loss cannot guarantee successful shutdown. Checking no duplicate application in this run does not promise exactly-once across restarts. See the fuller [IPC session protocol](IPC.md), which this example does not depend on.
 
 ## 6. Automated tests
 
@@ -101,4 +103,4 @@ KCP provides reliable ordered messages within a live conversation. Business comp
 ctest --test-dir build-net -C Release -R "^kcp_business_" --output-on-failure
 ```
 
-`kcp_business_transfer` and `kcp_business_loss` check block order, totals, no duplicate application, confirmations and cleanup. Engine reordering, duplication, capacity and clock rollover remain in [test_kcp.c](../tests/test_kcp.c). These examples make no claim that KCP is faster than TCP. See [validation](VALIDATION.md) for target results.
+`kcp_business_transfer` and `kcp_business_loss` check actual JSON blocks, totals, confirmations and cleanup. Engine reordering, duplication, capacity and clock rollover remain in [test_kcp.c](../tests/test_kcp.c). Disabling required JSON modules omits these business cases. See [validation](VALIDATION.md).

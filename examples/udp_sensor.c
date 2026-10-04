@@ -18,15 +18,17 @@ typedef struct feedback_job {
 static int publish_sample(
 	publish_job *job, unsigned int device, unsigned int sequence)
 {
-	char sample[UDP_TEXT_CAPACITY];
-	int temperature = 2500 + (int)device * 100 + (int)sequence;
-	(void)snprintf(sample, sizeof(sample),
-		"SAMPLE device=%u seq=%u temperature_centi=%d", 101 + device,
-		sequence, temperature);
-	if (!udp_send_text(job->endpoint, &job->destination, sample))
-		return 0;
-	printf("[UDP send thread] %s\n", sample);
-	return 1;
+	json_field fields[] = {json_text("type", "sample"),
+		json_int("device_id", 101 + device), json_int("seq", sequence),
+		json_int("temperature_centi", 2500 + device * 100 + sequence)};
+	hx_string wire = HX_STRING_INIT;
+	int ok = json_encode(fields, 4, &wire) &&
+		udp_send_text(job->endpoint, &job->destination,
+			hx_string_c_str(&wire));
+	if (ok)
+		printf("[UDP send thread] %s\n", hx_string_c_str(&wire));
+	hx_string_destroy(&wire);
+	return ok;
 }
 
 static void *HX_OS_CALL publish_samples(void *user)
@@ -61,11 +63,13 @@ static void *HX_OS_CALL receive_feedback(void *user)
 		char text[UDP_TEXT_CAPACITY];
 		hx_os_address peer;
 		hx_os_error error = {0};
+		hx_os_config_document *document;
+		const hx_os_config_node *root;
+		int64_t device, sequence, accepted, gaps, stale, temperature;
+		int ok;
 		hx_os_status status = udp_receive_text(
 			job->endpoint, &peer, text, job->deadline, &error);
 		if (status == HX_OS_TIMEOUT) {
-			/* Feedback is best effort. Missing UDP is not retried.
-			 */
 			job->ok = 1;
 			return NULL;
 		}
@@ -73,6 +77,32 @@ static void *HX_OS_CALL receive_feedback(void *user)
 			return NULL;
 		if (!net_demo_same_peer(&peer, &job->server))
 			continue;
+		document = json_decode(text, strlen(text));
+		root = hx_os_config_root(document);
+		ok = document && json_get_int(root, "device_id", &device) &&
+			(device == 101 || device == 102);
+		if (json_has_text(root, "type", "latest"))
+			ok = ok && json_get_int(root, "seq", &sequence) &&
+				sequence > 0 && sequence <= 10;
+		else if (json_has_text(root, "type", "summary"))
+			ok = ok && json_get_int(root, "newest", &sequence) &&
+				sequence > 0 && sequence <= 10 &&
+				json_get_int(root, "accepted", &accepted) &&
+				accepted > 0 && accepted <= 10 &&
+				json_get_int(root, "gaps", &gaps) &&
+				gaps >= 0 && gaps <= 10 &&
+				json_get_int(root, "stale", &stale) &&
+				stale >= 0 && stale <= 10 &&
+				json_get_int(root, "temperature_centi",
+					&temperature) &&
+				temperature >= -10000 && temperature <= 20000;
+		else
+			ok = 0;
+		hx_os_config_release(document);
+		if (!ok) {
+			fputs("Invalid JSON feedback.\n", stderr);
+			return NULL;
+		}
 		++job->received;
 		printf("[UDP receive thread] %s\n", text);
 	}

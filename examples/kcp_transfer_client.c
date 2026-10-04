@@ -10,12 +10,17 @@ static void *HX_OS_CALL send_blocks(void *user)
 	transfer_job *job = user;
 	unsigned int id;
 	for (id = 1; id <= 3; ++id) {
-		char block[KCP_TEXT_CAPACITY];
-		(void)snprintf(block, sizeof(block), "BLOCK id=%u value=%u", id,
-			id * 10);
-		if (!kcp_send_text(job->session, block))
+		json_field fields[] = {json_text("type", "block"),
+			json_int("id", id), json_int("value", id * 10)};
+		hx_string wire = HX_STRING_INIT;
+		int ok = json_encode(fields, 3, &wire) &&
+			kcp_send_text(job->session, hx_string_c_str(&wire));
+		if (ok)
+			printf("[KCP producer thread] %s\n",
+				hx_string_c_str(&wire));
+		hx_string_destroy(&wire);
+		if (!ok)
 			return NULL;
-		printf("[KCP producer thread] %s\n", block);
 	}
 	job->ok = 1;
 	return NULL;
@@ -24,8 +29,6 @@ static void *HX_OS_CALL send_blocks(void *user)
 static void *HX_OS_CALL receive_confirmations(void *user)
 {
 	transfer_job *job = user;
-	const char *expected[] = {"APPLIED id=1", "APPLIED id=2",
-		"APPLIED id=3", "COMMITTED blocks=3 total=60"};
 	unsigned int received = 0;
 	hx_os_deadline linger = HX_OS_DEADLINE_INFINITE;
 	for (;;) {
@@ -35,10 +38,25 @@ static void *HX_OS_CALL receive_confirmations(void *user)
 			return NULL;
 		while ((status = kcp_receive_text(job->session, reply)) ==
 			HX_OS_OK) {
-			if (received >= 4 ||
-				strcmp(reply, expected[received])) {
-				fputs("Unexpected KCP business reply.\n",
-					stderr);
+			hx_os_config_document *document =
+				json_decode(reply, strlen(reply));
+			const hx_os_config_node *root =
+				hx_os_config_root(document);
+			int ok = document && json_has_bool(root, "ok", 1);
+			if (received < 3)
+				ok = ok &&
+					json_has_text(
+						root, "type", "applied") &&
+					json_has_int(root, "id", received + 1);
+			else
+				ok = ok && received == 3 &&
+					json_has_text(
+						root, "type", "committed") &&
+					json_has_int(root, "blocks", 3) &&
+					json_has_int(root, "total", 60);
+			hx_os_config_release(document);
+			if (!ok) {
+				fputs("Unexpected JSON KCP result.\n", stderr);
 				return NULL;
 			}
 			++received;

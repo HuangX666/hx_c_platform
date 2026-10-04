@@ -4,6 +4,8 @@
 
 **Business workflows are separate:** [native IPC devices](IPC_BUSINESS.md), [TCP orders](TCP_BUSINESS.md), [UDP samples](UDP_BUSINESS.md), and [KCP blocks](KCP_BUSINESS.md). Each has its own C programs and runner; TCP/UDP/KCP business code uses socket/KCP APIs without invoking the IPC device program. The minimal echo example below checks IPC connectivity and introduces its lifetime and cross-language protocol.
 
+All four business examples now use UTF-8 JSON for requests, replies and notifications, with real parsing, field-type checks and safe string escaping. The echo programs below are low-level connectivity checks and do not implement those business protocols.
+
 ## 1. Choose an address
 
 Two processes using the same transport and HXIP v1 protocol can send in both directions and match concurrent requests with their replies. The peer may use another language without linking hx_c_platform. Section 8 specifies the protocol; an independent Python peer is included.

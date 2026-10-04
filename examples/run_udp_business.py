@@ -1,27 +1,26 @@
 """UDP only: publish two sensors and observe feedback and sequence gaps."""
 
 import argparse
-import re
-from business_runner import checked_main, run_pair
+from business_runner import checked_main, json_messages, run_pair
 
 
 def verify_samples(server, client, gaps):
     if "UDP DASHBOARD PASS" not in server or "UDP SENSOR PASS" not in client:
         raise RuntimeError("UDP business threads did not finish")
-    pattern = re.compile(
-        r"\[UDP dashboard\] SUMMARY device=(\d+) accepted=(\d+) "
-        r"newest=(\d+) gaps=(\d+) stale=(\d+) temperature_centi=(\d+)"
-    )
-    actual = {int(row[0]): tuple(map(int, row[1:]))
-              for row in pattern.findall(server)}
-    expected = {device: (8 if gaps else 10, 10, 2 if gaps else 0,
-                         2 if gaps else 0, temperature)
-                for device, temperature in ((101, 2510), (102, 2610))}
-    if actual != expected:
-        raise RuntimeError(f"Unexpected UDP state: {actual}")
-    for device in (101, 102):
-        if f"[UDP receive thread] SUMMARY device={device} " not in client:
-            raise RuntimeError(f"Missing loopback feedback for {device}")
+    expected = [{"type": "summary", "device_id": device,
+                 "accepted": 8 if gaps else 10, "newest": 10,
+                 "gaps": 2 if gaps else 0, "stale": 2 if gaps else 0,
+                 "temperature_centi": temperature}
+                for device, temperature in ((101, 2510), (102, 2610))]
+    if json_messages(server, "[UDP summary] ") != expected:
+        raise RuntimeError("Unexpected JSON sensor state")
+    feedback = json_messages(client, "[UDP receive thread] ")
+    for summary in expected:
+        if feedback.count(summary) != 1:
+            raise RuntimeError("Missing loopback JSON summary")
+    samples = json_messages(server, "[UDP dashboard] ")
+    if len(samples) != (16 if gaps else 20):
+        raise RuntimeError("Wrong accepted JSON sample count")
 
 
 def main():

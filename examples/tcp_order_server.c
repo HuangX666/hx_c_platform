@@ -1,38 +1,71 @@
 #include "tcp_business.h"
 
+static int send_order_json(
+	tcp_stream *stream, const json_field *fields, size_t count)
+{
+	hx_string wire = HX_STRING_INIT;
+	int ok = json_encode(fields, count, &wire) &&
+		tcp_send_text(stream, hx_string_c_str(&wire));
+	hx_string_destroy(&wire);
+	return ok;
+}
+
 static int process_orders(tcp_stream *stream)
 {
 	unsigned int received, seen = 0, accepted = 0, total = 0;
 	for (received = 0; received < 3; ++received) {
-		char request[TCP_TEXT_CAPACITY], reply[TCP_TEXT_CAPACITY];
-		unsigned int id, sku, quantity;
-		int consumed = -1;
+		char request[TCP_TEXT_CAPACITY];
+		hx_os_config_document *document;
+		const hx_os_config_node *root;
+		hx_os_config_slice note;
+		int64_t id = 0, sku = 0, quantity = 0;
+		int ok;
 		if (!tcp_receive_text(stream, request))
 			return 0;
-		if (sscanf(request, "ORDER id=%9u sku=%9u qty=%9u%n", &id, &sku,
-			    &quantity, &consumed) != 3 ||
-			consumed < 0 || (size_t)consumed != strlen(request) ||
-			id < 1 || id > 3 || (seen & (1u << id)))
-			return net_demo_check(HX_OS_SYNTAX, NULL, "order");
-		seen |= 1u << id;
 		printf("[TCP server] %s\n", request);
-		if ((sku != 101 && sku != 102) || !quantity || quantity > 10)
-			(void)snprintf(reply, sizeof(reply),
-				"REJECTED id=%u reason=invalid_order", id);
+		document = json_decode(request, strlen(request));
+		root = hx_os_config_root(document);
+		if (!document || !json_has_text(root, "type", "order") ||
+			!json_get_int(root, "id", &id) || id < 1 || id > 3 ||
+			(seen & (1u << (unsigned int)id))) {
+			json_field fields[] = {json_text("type", "error"),
+				json_bool("ok", 0),
+				json_text("reason", "invalid_json_request")};
+			ok = send_order_json(stream, fields, 3);
+			hx_os_config_release(document);
+			if (!ok)
+				return 0;
+			continue;
+		}
+		seen |= 1u << (unsigned int)id;
+		if (!json_get_int(root, "sku", &sku) ||
+			!json_get_int(root, "quantity", &quantity) ||
+			(sku != 101 && sku != 102) || quantity < 1 ||
+			quantity > 10 ||
+			hx_os_config_get_string(
+				json_member(root, "note"), &note) != HX_OS_OK ||
+			note.bytes > 128) {
+			json_field fields[] = {json_text("type", "rejected"),
+				json_int("id", id), json_bool("ok", 0),
+				json_text("reason", "invalid_order")};
+			ok = send_order_json(stream, fields, 4);
+		}
 		else {
-			unsigned int amount =
-				quantity * (sku == 101 ? 1250 : 9000);
+			unsigned int amount = (unsigned int)quantity *
+				(sku == 101 ? 1250u : 9000u);
+			json_field receipt[] = {json_text("type", "receipt"),
+				json_int("id", id), json_bool("ok", 1),
+				json_int("total_cents", amount),
+				json_slice("note", note)};
+			json_field shipped[] = {json_text("type", "shipped"),
+				json_int("id", id), json_bool("ok", 1)};
 			total += amount;
 			++accepted;
-			(void)snprintf(reply, sizeof(reply),
-				"RECEIPT id=%u total_cents=%u", id, amount);
+			ok = send_order_json(stream, receipt, 5) &&
+				send_order_json(stream, shipped, 3);
 		}
-		if (!tcp_send_text(stream, reply))
-			return 0;
-		if (strncmp(reply, "RECEIPT ", 8))
-			continue;
-		(void)snprintf(reply, sizeof(reply), "SHIPPED id=%u", id);
-		if (!tcp_send_text(stream, reply))
+		hx_os_config_release(document);
+		if (!ok)
 			return 0;
 	}
 	printf("TCP SERVER PASS: accepted=%u total_cents=%u\n", accepted,

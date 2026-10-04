@@ -13,50 +13,67 @@ typedef struct notifications {
 } notifications;
 
 static int request_expected(hx_ipc *client, uint64_t device_id,
-	const char *command, const char *expected)
+	const char *type, int64_t interval, const char *expected,
+	int64_t expected_interval)
 {
+	json_field fields[] = {json_text("type", type),
+		json_int("device_id", (int64_t)device_id),
+		json_int("interval_ms", interval)};
+	hx_string wire = HX_STRING_INIT;
 	hx_ipc_message *reply = NULL;
 	hx_os_error error = {0};
-	hx_os_status status = hx_ipc_request_text_until(client, 0, device_id,
-		command, hx_os_deadline_after_ms(5000), &reply, &error);
-	int ok = demo_check(status, &error, command);
+	int ok = json_encode(fields, interval < 0 ? 2 : 3, &wire);
+	if (ok)
+		ok = demo_check(
+			hx_ipc_request_text_until(client, 0, device_id,
+				hx_string_c_str(&wire),
+				hx_os_deadline_after_ms(5000), &reply, &error),
+			&error, "JSON request");
 	if (ok) {
-		ok = reply->channel == device_id &&
-			demo_message_is(reply, expected);
-		printf("[%s] device=%llu %s -> %.*s\n",
-			device_id ? "request thread" : "main",
-			(unsigned long long)device_id, command,
-			(int)(reply->bytes > 160 ? 160 : reply->bytes),
+		hx_os_config_document *document = reply->encoding == HX_IPC_UTF8
+			? json_decode(reply->data, reply->bytes)
+			: NULL;
+		const hx_os_config_node *root = hx_os_config_root(document);
+		ok = document && reply->channel == device_id &&
+			json_has_text(root, "type", expected) &&
+			json_has_int(root, "device_id", (int64_t)device_id) &&
+			json_has_bool(
+				root, "ok", strcmp(expected, "error") != 0);
+		if (expected_interval >= 0)
+			ok = ok &&
+				json_has_int(
+					root, "interval_ms", expected_interval);
+		if (!strcmp(expected, "error"))
+			ok = ok &&
+				json_has_text(root, "code", "invalid_interval");
+		printf("[IPC reply] %.*s\n", (int)reply->bytes,
 			(const char *)reply->data);
+		hx_os_config_release(document);
 		if (!ok)
-			fprintf(stderr, "Expected reply: %s\n", expected);
+			fputs("Unexpected JSON device result.\n", stderr);
 	}
 	hx_ipc_message_release(reply);
+	hx_string_destroy(&wire);
 	return ok;
 }
 
 static void *HX_OS_CALL device_work(void *user)
 {
 	device_job *job = user;
-	char command[64], applied[64], state[64];
-	(void)snprintf(command, sizeof(command), "SET %u", job->interval_ms);
-	(void)snprintf(applied, sizeof(applied), "OK interval_ms=%u",
-		job->interval_ms);
-	(void)snprintf(
-		state, sizeof(state), "STATE interval_ms=%u", job->interval_ms);
-	/* The result of each business operation is checked before the next. */
-	job->ok = request_expected(
-			  job->client, job->device_id, "OPEN", "OK online") &&
-		request_expected(job->client, job->device_id, "GET",
-			"STATE interval_ms=1000") &&
-		request_expected(
-			job->client, job->device_id, command, applied) &&
-		request_expected(job->client, job->device_id, "GET", state) &&
-		request_expected(job->client, job->device_id, "SET 0",
-			"ERROR interval must be 50..5000") &&
-		request_expected(job->client, job->device_id, "GET", state) &&
-		request_expected(
-			job->client, job->device_id, "CLOSE", "OK offline");
+	job->ok = request_expected(job->client, job->device_id, "open", -1,
+			  "opened", 1000) &&
+		request_expected(job->client, job->device_id, "get", -1,
+			"state", 1000) &&
+		request_expected(job->client, job->device_id, "set",
+			job->interval_ms, "updated", job->interval_ms) &&
+		request_expected(job->client, job->device_id, "get", -1,
+			"state", job->interval_ms) &&
+		request_expected(job->client, job->device_id, "set", 0, "error",
+			job->interval_ms) &&
+		request_expected(job->client, job->device_id, "get", -1,
+			"state", job->interval_ms) &&
+		request_expected(job->client, job->device_id, "close", -1,
+			"closed", job->interval_ms);
 	return NULL;
 }
 
@@ -70,34 +87,42 @@ static void *HX_OS_CALL receive_notifications(void *user)
 		hx_os_error error = {0};
 		hx_os_status status = hx_ipc_receive_until(
 			receiver->client, deadline, &message, &error);
-		if (!demo_check(status, &error, "receive notification"))
+		int ok = 1;
+		if (!demo_check(status, &error, "receive JSON notification"))
 			return NULL;
 		if (message->kind == HX_IPC_DATA) {
 			unsigned int bit = message->channel == 101 ? 1
 				: message->channel == 102	   ? 2
 								   : 0;
-			const char *expected = bit == 1
-				? "CHANGED interval_ms=250"
-				: "CHANGED interval_ms=500";
-			if (!bit || (seen & bit) ||
-				!demo_message_is(message, expected)) {
-				fputs("Unexpected business notification.\n",
-					stderr);
-				hx_ipc_message_release(message);
-				return NULL;
+			hx_os_config_document *document =
+				message->encoding == HX_IPC_UTF8
+				? json_decode(message->data, message->bytes)
+				: NULL;
+			const hx_os_config_node *root =
+				hx_os_config_root(document);
+			ok = document && bit && !(seen & bit) &&
+				json_has_text(root, "type", "changed") &&
+				json_has_int(root, "device_id",
+					bit == 1 ? 101 : 102) &&
+				json_has_int(root, "interval_ms",
+					bit == 1 ? 250 : 500);
+			hx_os_config_release(document);
+			if (ok) {
+				seen |= bit;
+				printf("[IPC notification] %.*s\n",
+					(int)message->bytes,
+					(const char *)message->data);
 			}
-			seen |= bit;
-			printf("[receive thread] device=%llu %s\n",
-				(unsigned long long)message->channel, expected);
 		}
-		else if (message->kind != HX_IPC_CONNECTED) {
-			fputs("Session ended before all notifications "
-			      "arrived.\n",
+		else if (message->kind != HX_IPC_CONNECTED)
+			ok = 0;
+		hx_ipc_message_release(message);
+		if (!ok) {
+			fputs("Unexpected JSON notification or session "
+			      "event.\n",
 				stderr);
-			hx_ipc_message_release(message);
 			return NULL;
 		}
-		hx_ipc_message_release(message);
 	}
 	receiver->ok = 1;
 	return NULL;
@@ -145,7 +170,7 @@ int main(int argc, char **argv)
 	}
 	ok = ok && receiver.ok && jobs[0].ok && jobs[1].ok;
 	if (ok)
-		ok = request_expected(client, 0, "QUIT", "BYE");
+		ok = request_expected(client, 0, "quit", -1, "bye", -1);
 	if (!demo_close(&client))
 		ok = 0;
 	if (ok)

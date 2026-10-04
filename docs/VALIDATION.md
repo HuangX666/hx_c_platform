@@ -6,9 +6,31 @@ Entries below describe the versions tested at the time. Historical C++ exception
 
 This records development validation through 2026-10-04. A design, implemented adapter, successful compile and successful target run are different states. Local tests do not certify every operating-system release, filesystem, CPU, libc or network provider.
 
-The separation entry below records the current independent examples. The initial shared examples, IPC/KCP implementation, simple go, formatting, containers, recursive search, variant and earlier batches describe their historical versions.
+The JSON entry below records the current examples. Earlier independent text examples, initial shared workflows, IPC/KCP implementation and other batches describe their historical versions.
+
+## 2026-10-04: JSON in all four independent workflows
+
+Starting from `feac68e` on local `dev`, native IPC devices, TCP orders, UDP samples and KCP blocks now use UTF-8 JSON for requests, replies and notifications. Business programs, transports and runners stay separate; only codec helpers in `business_json.h` are shared. Existing settings serialization and built-in JSON parsing are reused. Library implementation, public ABI and third-party files are unchanged.
+
+| Configuration | Evidence |
+| --- | --- |
+| Windows MSVC x64 Release shared | Eight C99 business programs built; 8/8 business tests passed |
+| WSL Linux GCC x86_64 Release shared | Same eight programs; 8/8 passed |
+| WSL ASan + UBSan, `detect_leaks=1` | 8/8; no memory error, undefined behavior or leak reported |
+| WSL TSan, `halt_on_error=1` | 8/8; no data race reported |
+| WSL Release, `HX_OS_ENABLE_IPC=OFF` | Six TCP/UDP/KCP programs built; 7/7 network business tests passed |
+
+The previous seven cases still exercise device state, concurrent communication, split/coalesced TCP frames, unusual UDP sequence numbers and first-datagram KCP loss. All now compare parsed JSON fields independent of key order/whitespace. The C TCP client and independent Python socket peer verify Chinese, quotes, backslashes and supplementary-plane characters round-trip in order notes. Framing counts UTF-8 bytes. Runner output explicitly uses UTF-8 to avoid Windows code-page failures.
+
+The added `tcp_business_json_validation` runs seven independent connections with string quantity, boolean quantity, real quantity, missing quantity, malformed JSON, duplicate key and array root. Each is rejected while the preceding two valid orders still total 11500 cents. Explicit node-kind checks prevent the configuration getters' numeric-string conversions from accepting wrong business types. Example limits are 1023 payload bytes, parsing depth 8, 64 nodes and 64 KiB parsing memory.
+
+JSON examples require default-enabled `CONFIG`, `CONFIG_SERIALIZE` and `SETTINGS`; CMake registers them when these dependencies are satisfied. Documentation covers releasing parsed documents and temporary strings and keeping borrowed nodes/slices within document lifetime. Codecs allocate documents and temporary objects; no throughput or zero-allocation claim is made.
+
+Logs: `build-shared-msvc/json-business-tests.log`, `build-shared-linux/json-business-tests.log`, `build-sanitize-linux/json-business-tests.log`, `build-tsan-linux/json-business-tests.log`, and `build-transport-no-ipc/json-business-tests.log`. Full/install matrices were not rerun this turn. Android, macOS, Win7/8.1 and embedded execution of these new examples remains pending.
 
 ## 2026-10-04: Separate IPC, TCP, UDP and KCP workflows
+
+This records the `feac68e` text-message version, superseded by the JSON payloads above.
 
 Starting from `f89b566` on local `dev`, native IPC device programs now accept only named pipes/Unix sockets. TCP has new order programs, UDP samples use raw datagrams, and KCP has independent block-transfer programs. TCP/UDP use `hx_os_socket_*`; KCP uses `hx_os_kcp_*` with UDP. These network workflows never call `hx_ipc_*` or the IPC device business code. Runners, CTest names and bilingual tutorials are separate. Library implementation, public ABI and third-party sources are unchanged.
 

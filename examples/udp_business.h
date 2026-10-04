@@ -2,8 +2,9 @@
 #define HX_EXAMPLE_UDP_BUSINESS_H
 
 #include "network_demo.h"
+#include "business_json.h"
 
-enum { UDP_TEXT_CAPACITY = 128 };
+enum { UDP_TEXT_CAPACITY = JSON_MESSAGE_CAPACITY };
 
 typedef struct udp_endpoint {
 	hx_os_socket *socket;

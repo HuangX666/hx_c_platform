@@ -347,7 +347,7 @@ Need ordered or duplicate keys? The [red-black multimap example](examples/ordere
 
 ### 4.11 Communicate with another process: C / C++
 
-Each transport has its own business programs, runner and tutorial. Open the corresponding sources to adapt the workflow:
+Each transport has its own business programs, runner and tutorial. All business payloads are UTF-8 JSON: senders serialize, receivers parse and validate field types, preserving the distinction between numbers, strings and booleans. Open the corresponding sources to adapt the workflow:
 
 | Transport | Business and threads | Guide |
 | --- | --- | --- |
@@ -365,15 +365,22 @@ python examples/run_udp_business.py --bin-dir build-net/bin/Release
 python examples/run_kcp_business.py --bin-dir build-net/bin/Release
 ```
 
-In the native IPC device example, once the client has created `connection` and opened device `101` with `OPEN`, C++11 queries its interval with:
+For example, the TCP order payload is:
+
+```json
+{"type":"order","id":1,"sku":101,"quantity":2,"note":"桌面设备"}
+```
+
+In the native IPC device example, once the client has created `connection` and opened device `101` with `type="open"`, C++11 queries its interval with:
 
 ```cpp
-auto reply = connection.requestText("GET", 101);
+auto reply = connection.requestText(
+	R"({"type":"get","device_id":101})", 101);
 if (reply)
 	std::printf("Reply: %s\n", reply.value().text());
 ```
 
-`GET` is the native IPC server's query command and `101` its device channel. The library manages request IDs; C uses `hx_ipc_request_text_until`. These IPC calls provide complete messages, request matching and concurrent sending internally.
+JSON `type="get"` selects a query and `device_id=101` matches the device channel. The library manages request IDs; C uses `hx_ipc_request_text_until`. Full examples parse replies and validate fields rather than comparing serialized strings. JSON examples require default-enabled `CONFIG`, `CONFIG_SERIALIZE` and `SETTINGS`, reusing existing parsing and string escaping.
 
 TCP/UDP business code directly calls `hx_os_socket_*`; KCP uses `hx_os_kcp_*` with UDP. None of these three network workflows calls `hx_ipc_*`, and they run with IPC disabled. Full IPC contracts and the cross-language HXIP protocol are in the [IPC reference](docs/IPC.md). All examples use ordinary threads with explicit timeout, disconnect and resource handling.
 
@@ -415,7 +422,7 @@ The meaning of `NULL` depends on its position: allocator/options parameters sele
 
 ## 7. Builds, validation and licensing
 
-See the [build reference](docs/REFERENCE.md#section-27) for development builds, tests, static/shared installation and optional dependencies. The latest full-suite record for the library implementation is Windows 113/113 and WSL Linux 115/115 from 2026-10-03. The seven separated communication workflows passed on Windows, WSL and WSL memory/race detection builds; an IPC-disabled WSL build also passed six network business cases. [Validation records](docs/VALIDATION.md) identify exact configurations and pending targets. Documentation-example checks are separate from target-platform validation.
+See the [build reference](docs/REFERENCE.md#section-27) for development builds, tests, static/shared installation and optional dependencies. The latest full-suite record for the library implementation is Windows 113/113 and WSL Linux 115/115 from 2026-10-03. All eight current JSON communication cases passed on Windows, WSL and WSL memory/race detection builds; an IPC-disabled WSL build passed seven network business cases. [Validation records](docs/VALIDATION.md) identify exact configurations and pending targets. Documentation-example checks are separate from target-platform validation.
 
 The first-party distribution license is pending; see [third-party licensing](THIRD_PARTY_NOTICES.md). The coroutine implementation is self-developed; hx_c_log integration remains future work.
 

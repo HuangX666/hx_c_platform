@@ -38,65 +38,72 @@ After `Listening:`, **terminal two**:
 
 Omit `--simulate-gaps` for the ordinary run. On Linux/WSL use `./build-net/bin/hx_os_udp_dashboard 39002` and `./build-net/bin/hx_os_udp_sensor 39002 --simulate-gaps`. Both use `127.0.0.1`; the argument is a port number, not a `udp://` URI. Restart the dashboard for each workflow.
 
-## 3. Communication in both directions
+## 3. One JSON object per datagram
 
 ```mermaid
 flowchart LR
-    TX[Sensor send thread] -->|SAMPLE datagram| S[Dashboard: current state]
-    S -->|LATEST / SUMMARY datagram| RX[Sensor receive thread]
-    Main[Main: socket, threads, join, release] --> TX
-    Main --> RX
+    TX[Sensor send thread] -->|JSON sample| S[Dashboard: parse, validate, keep latest]
+    S -->|JSON latest / summary| RX[Sensor receive thread]
 ```
 
-`SAMPLE device=101 seq=10 temperature_centi=2510` carries a device ID, sequence within this run, and temperature in hundredths of a degree Celsius: `2510` means `25.10°C`. Each ASCII payload is at most 127 bytes and has no TCP length prefix.
+A sample has no TCP length prefix:
 
-The sender publishes ten rounds for devices `101`/`102`, roughly 30 ms apart. Every third accepted update triggers `LATEST device=101 seq=N` feedback to the source address. A final `SUMMARY` follows the collection window. Device identity is in the payload; `receive_from()` supplies the source address and port.
+```json
+{"type":"sample","device_id":101,"seq":10,"temperature_centi":2510}
+```
 
-The dashboard waits up to 10 seconds for initial data, then collects for 1 second. The feedback thread waits 2 seconds and ends normally at its deadline; lost feedback never causes indefinite waiting. These are application demonstration limits.
+`device_id`, `seq` and `temperature_centi` must be JSON integers. Temperature is in hundredths of a degree Celsius: `2510` means `25.10°C`. Devices are 101/102, sequences 1–10, temperatures -10000–20000. Missing fields, wrong types, invalid syntax and duplicate keys never update device state.
+
+Both devices publish ten rounds approximately 30 ms apart. Every third accepted update triggers feedback to its source:
+
+```json
+{"type":"latest","device_id":101,"seq":3}
+```
+
+At the end of the collection window, return statistics and final temperature:
+
+```json
+{"type":"summary","device_id":101,"accepted":10,"newest":10,"gaps":0,"stale":0,"temperature_centi":2510}
+```
+
+Device identity is in JSON; `receive_from()` supplies source address/port. Initial data has a 10-second deadline, followed by a 1-second collection window. The sensor receiver waits 2 seconds and finishes normally even if feedback is missing.
 
 ## 4. Gaps, duplicates and late samples
 
-| Condition | Dashboard behavior |
+| Condition | Action |
 | --- | --- |
-| Greater `seq` | Update temperature and count observed sequence gaps |
-| Equal or smaller `seq` | Increment `stale`, preserving current temperature |
+| Newer sequence | Update temperature and count observed gaps |
+| Same/older sequence | Increment `stale`, preserve current temperature |
+| Another source for the device | Ignore within this run, retaining the first binding |
 | Oversized/truncated datagram | Explicit failure; no remainder becomes a new message |
-| Another source for the same device | Ignore it in this demonstration, keeping the first binding |
 
-`--simulate-gaps` deliberately omits `3`/`7`, duplicates `4`, and sends `6` after `8`. This controls application input, not actual network packet loss.
+`--simulate-gaps` deliberately omits 3/7, duplicates 4 and sends 6 after 8. It controls application input, not measured packet loss. Per-device normal loopback results are `accepted=10,newest=10,gaps=0,stale=0`; fault results are `accepted=8,newest=10,gaps=2,stale=2`, without old data overwriting current temperature.
 
-| Mode | accepted | newest | gaps | stale |
-| --- | --- | --- | --- | --- |
-| Normal small loopback batch | 10 | 10 | 0 | 0 |
-| Sequence fault demonstration | 8 | 10 | 2 | 2 |
+Ordinary UDP still permits loss, duplication and reordering. The C sensor allows missing feedback; the automated fixture requires this small loopback batch to deliver expected JSON summaries and fails if it does not. This is not a reliable-UDP promise.
 
-```text
-[UDP receive thread] SUMMARY device=101 accepted=8 newest=10 gaps=2 stale=2
-[UDP receive thread] SUMMARY device=102 accepted=8 newest=10 gaps=2 stale=2
-UDP SENSOR PASS: send/receive threads joined; feedback=6
-```
-
-`feedback=6` is expected in the controlled fixture. The C program permits lost feedback; the automated test requires this small loopback run to produce the expected result and reports failure if it does not. It does not make ordinary UDP reliable.
-
-## 5. Sources and ownership
+## 5. Adapt fields and business logic
 
 | Source | Entry points |
 | --- | --- |
-| [udp_sensor.c](../examples/udp_sensor.c) | `publish_samples()` sender, `receive_feedback()` receiver, `main()` resource ownership |
-| [udp_dashboard.c](../examples/udp_dashboard.c) | `receive_sample()` validates numbers, updates each device and replies to the source |
-| [udp_business.h](../examples/udp_business.h) | Whole-datagram I/O, bounds and finite waits |
-| [run_udp_business.py](../examples/run_udp_business.py) | Independent normal/fault assertions |
+| [udp_sensor.c](../examples/udp_sensor.c) | `publish_sample()` JSON construction; sender publishes, `receive_feedback()` parses/validates results |
+| [udp_dashboard.c](../examples/udp_dashboard.c) | `receive_sample()` integer/range/source validation and state update; final JSON summaries |
+| [udp_business.h](../examples/udp_business.h) | Whole-datagram I/O and finite waits |
+| [run_udp_business.py](../examples/run_udp_business.py) | `json.loads` checks both devices' state and feedback |
 
-Once the sender has prepared the payload and destination:
+Build the payload as typed fields:
 
 ```c
-if (!udp_send_text(job->endpoint, &job->destination, sample))
-	return 0;
+json_field fields[] = {
+	json_text("type", "sample"), json_int("device_id", 101),
+	json_int("seq", 1), json_int("temperature_centi", 2501)
+};
 ```
 
-This private example helper directly uses `send_to()`, with no IPC forwarding. A short mutex serializes nonblocking socket calls; retry sleeps for 1 ms outside it. Main joins both threads before destroying mutex, socket and network; borrowed parameters remain alive. There is no application message queue.
+Use `json_encode()` and send through this example's `udp_send_text()`. `publish_sample()` contains the full checks and cleanup. [business_json.h](../examples/business_json.h) shares only JSON encoding/decoding, with no IPC business forwarding.
 
-The example covers one process run. If real devices reuse sequence numbers after restarting, define a session identifier and switching policy in your datagram protocol. Address binding is not authentication. For reliable transfer see the separate [KCP](KCP_BUSINESS.md) or [TCP](TCP_BUSINESS.md) workflows.
+Default-enabled `CONFIG`, `CONFIG_SERIALIZE` and `SETTINGS` provide built-in parsing and safe string escaping. UTF-8 payloads are at most 1023 bytes; parsing is limited to depth 8, 64 nodes and 64 KiB. Release documents and temporary strings; never retain pointers into a released document.
+
+Short mutexes serialize nonblocking socket calls; retry sleeps occur outside locks. Main joins before cleanup. Real devices that reuse sequence numbers after restarting need application session IDs in their JSON protocol; address binding is not authentication.
 
 ## 6. Automated tests
 
@@ -104,4 +111,4 @@ The example covers one process run. If real devices reuse sequence numbers after
 ctest --test-dir build-net -C Release -R "^udp_business_" --output-on-failure
 ```
 
-`udp_business_samples` and `udp_business_gaps` check both devices' final temperatures, sequence statistics, feedback and thread/process completion. They do not use IPC business programs. See [validation](VALIDATION.md) for target evidence.
+`udp_business_samples` and `udp_business_gaps` validate JSON samples, latest state, feedback and thread completion. Disabling required JSON modules omits these cases. See [KCP](KCP_BUSINESS.md) or [TCP](TCP_BUSINESS.md) for reliable workflows and [validation](VALIDATION.md) for target evidence.

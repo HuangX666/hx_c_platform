@@ -1,99 +1,110 @@
 #include "ipc_demo.h"
-#include <errno.h>
 
 typedef struct device {
 	hx_ipc_peer owner;
 	unsigned long interval_ms;
 } device;
 
-static int set_interval(const hx_ipc_message *message, unsigned long *value)
+static hx_os_status reply_json(hx_ipc *server, const hx_ipc_message *request,
+	const json_field *fields, size_t count, hx_os_error *error)
 {
-	const char *text = message->data;
-	char *end;
-	unsigned long parsed;
-	if (message->bytes < 5 || memcmp(text, "SET ", 4) || text[4] < '0' ||
-		text[4] > '9')
-		return 0;
-	errno = 0;
-	parsed = strtoul(text + 4, &end, 10);
-	if (errno || end != text + message->bytes || parsed < 50 ||
-		parsed > 5000)
-		return 0;
-	*value = parsed;
-	return 1;
+	hx_string wire = HX_STRING_INIT;
+	hx_os_status status = HX_OS_IO_ERROR;
+	if (json_encode(fields, count, &wire))
+		status = hx_ipc_reply_text(
+			server, request, hx_string_c_str(&wire), error);
+	hx_string_destroy(&wire);
+	return status;
 }
 
 static hx_os_status handle_request(hx_ipc *server,
 	const hx_ipc_message *request, device devices[2],
 	hx_ipc_peer *controller, int *finished, hx_os_error *error)
 {
+	hx_os_config_document *document = request->encoding == HX_IPC_UTF8
+		? json_decode(request->data, request->bytes)
+		: NULL;
+	const hx_os_config_node *root = hx_os_config_root(document);
+	int64_t device_id = 0, interval = 0;
 	device *value = NULL;
-	char reply[96] = "ERROR unknown command";
-	char notification[96];
+	const char *type = "error", *code = "unknown_operation";
 	int changed = 0;
 	hx_os_status status;
-	if (request->encoding != HX_IPC_UTF8 || request->bytes > 64)
-		return hx_ipc_reply_text(server, request,
-			"ERROR expected a short UTF-8 command", error);
-	printf("[server] device=%llu request=%.*s\n",
-		(unsigned long long)request->channel, (int)request->bytes,
+	if (!document || !json_get_int(root, "device_id", &device_id) ||
+		device_id < 0 || (uint64_t)device_id != request->channel) {
+		json_field fields[] = {json_text("type", "error"),
+			json_bool("ok", 0),
+			json_text("code", "invalid_request")};
+		hx_os_config_release(document);
+		return reply_json(server, request, fields, 3, error);
+	}
+	printf("[IPC server] %.*s\n", (int)request->bytes,
 		(const char *)request->data);
-	if (request->channel >= 101 && request->channel <= 102)
-		value = &devices[request->channel - 101];
-	if (demo_message_is(request, "QUIT") && !request->channel)
+	if (device_id >= 101 && device_id <= 102)
+		value = &devices[device_id - 101];
+	if (json_has_text(root, "type", "quit") && device_id == 0)
 		if (request->peer == *controller && !devices[0].owner &&
 			!devices[1].owner) {
-			strcpy(reply, "BYE");
+			type = "bye";
 			*finished = 1;
 		}
 		else
-			strcpy(reply, "ERROR close both devices first");
+			code = "close_devices_first";
 	else if (!value)
-		strcpy(reply, "ERROR unknown device");
-	else if (demo_message_is(request, "OPEN")) {
+		code = "unknown_device";
+	else if (json_has_text(root, "type", "open")) {
 		if (value->owner ||
 			(*controller && *controller != request->peer))
-			strcpy(reply, "ERROR device already owned");
+			code = "already_owned";
 		else {
 			*controller = request->peer;
 			value->owner = request->peer;
 			value->interval_ms = 1000;
-			strcpy(reply, "OK online");
+			type = "opened";
 		}
 	}
 	else if (value->owner != request->peer)
-		strcpy(reply, "ERROR open device first");
-	else if (demo_message_is(request, "GET"))
-		(void)snprintf(reply, sizeof(reply), "STATE interval_ms=%lu",
-			value->interval_ms);
-	else if (demo_message_is(request, "CLOSE")) {
+		code = "open_device_first";
+	else if (json_has_text(root, "type", "get"))
+		type = "state";
+	else if (json_has_text(root, "type", "close")) {
 		value->owner = 0;
-		strcpy(reply, "OK offline");
+		type = "closed";
 	}
-	else if (request->bytes >= 4 && !memcmp(request->data, "SET ", 4)) {
-		unsigned long interval;
-		if (!set_interval(request, &interval))
-			strcpy(reply, "ERROR interval must be 50..5000");
+	else if (json_has_text(root, "type", "set")) {
+		if (!json_get_int(root, "interval_ms", &interval) ||
+			interval < 50 || interval > 5000)
+			code = "invalid_interval";
 		else {
-			value->interval_ms = interval;
-			(void)snprintf(reply, sizeof(reply),
-				"OK interval_ms=%lu", interval);
-			(void)snprintf(notification, sizeof(notification),
-				"CHANGED interval_ms=%lu", interval);
+			value->interval_ms = (unsigned long)interval;
+			type = "updated";
 			changed = 1;
 		}
 	}
-	status = hx_ipc_reply_text(server, request, reply, error);
+	{
+		int ok = strcmp(type, "error") != 0;
+		json_field fields[] = {json_text("type", type),
+			json_int("device_id", device_id), json_bool("ok", ok),
+			json_int("interval_ms", value ? value->interval_ms : 0),
+			json_text("code", ok ? "" : code)};
+		status = reply_json(server, request, fields, 5, error);
+	}
+	hx_os_config_release(document);
 	if (status == HX_OS_OK && changed) {
-		/* This is an unsolicited business message, not the request
-		 * reply. */
-		status = hx_ipc_send_text_until(server, request->peer,
-			request->channel, notification,
-			hx_os_deadline_after_ms(5000), error);
-		if (status == HX_OS_OK)
-			printf("[server push] device=%llu %s\n",
-				(unsigned long long)request->channel,
-				notification);
+		json_field fields[] = {json_text("type", "changed"),
+			json_int("device_id", device_id),
+			json_int("interval_ms", interval)};
+		hx_string wire = HX_STRING_INIT;
+		status = HX_OS_IO_ERROR;
+		if (json_encode(fields, 3, &wire)) {
+			status = hx_ipc_send_text_until(server, request->peer,
+				request->channel, hx_string_c_str(&wire),
+				hx_os_deadline_after_ms(5000), error);
+			if (status == HX_OS_OK)
+				printf("[IPC push] %s\n",
+					hx_string_c_str(&wire));
+		}
+		hx_string_destroy(&wire);
 	}
 	return status;
 }

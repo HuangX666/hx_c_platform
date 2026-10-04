@@ -47,72 +47,89 @@ Windows 终端一：
 
 Linux/WSL 分别执行 `./build-net/bin/hx_os_ipc_device_server local://device-demo` 和 `./build-net/bin/hx_os_ipc_device_client local://device-demo`。服务端演示总时限为 30 秒；每次重跑流程重新启动服务端。手工运行不需要 Python。
 
-## 4. 线程与业务顺序
+## 4. JSON 消息与线程
 
 ```mermaid
 flowchart LR
-    Main[客户端主线程：创建、等待、关闭] --> A[请求线程：设备 101]
-    Main --> B[请求线程：设备 102]
+    Main[主线程：创建、等待、关闭] --> A[设备 101 请求线程]
+    Main --> B[设备 102 请求线程]
     Main --> R[通知接收线程]
-    A <--> I[共享 hx_ipc 连接]
+    A <--> I[本地 IPC：UTF-8 JSON 消息]
     B <--> I
     I --> R
     I <-->|命名管道或 Unix 域套接字| S[服务端设备状态]
 ```
 
-| 操作 | 设备 101 的结果 |
-| --- | --- |
-| `OPEN` | `OK online`，当前会话持有设备 |
-| `GET` | `STATE interval_ms=1000` |
-| `SET 250` | `OK interval_ms=250`，另发 `CHANGED interval_ms=250` 通知 |
-| `GET` | 确认间隔已变成 250 毫秒 |
-| `SET 0` | `ERROR interval must be 50..5000` |
-| 再次 `GET` | 确认拒绝操作后仍为 250 毫秒 |
-| `CLOSE` | `OK offline` |
+每次发送一个 UTF-8 JSON 对象。例如修改设备参数：
 
-设备 `102` 同时执行相同操作，将间隔改为 500 毫秒。两条通知都处理完、业务线程都结束后，主线程发送通道 `0` 的 `QUIT`，取得 `BYE` 再关闭连接。
+```json
+{"type":"set","device_id":101,"interval_ms":250}
+```
 
-`request_text_until()` 的回复由库按请求编号送回对应请求线程。`receive_until()` 接收独立推送与连接事件，不会抢走请求回复。服务端在一个业务循环里更新设备数组；主线程在 join 后读取各线程结果。
+服务端回复：
 
-## 5. 到哪里替换自己的业务
+```json
+{"type":"updated","device_id":101,"ok":true,"interval_ms":250,"code":""}
+```
+
+另外发送一条主动通知，由独立接收线程处理：
+
+```json
+{"type":"changed","device_id":101,"interval_ms":250}
+```
+
+| 请求的 `type` | 必填字段 | 回复与行为 |
+| --- | --- | --- |
+| `open` | 整数 `device_id` | `opened`；初始 `interval_ms=1000` |
+| `get` | 整数 `device_id` | `state`；返回当前采样间隔 |
+| `set` | 整数 `device_id`、整数 `interval_ms` | `updated`；合法范围 50～5000 毫秒，另发 `changed` |
+| `close` | 整数 `device_id` | `closed`；释放当前会话持有的设备 |
+| `quit` | `device_id=0` | 两个设备关闭后回复 `bye` 并结束 |
+
+设备 `101` 修改为 250 毫秒，设备 `102` 修改为 500 毫秒；每次修改后重新查询。测试还发送 `interval_ms=0`，检查得到 `type="error"`、`ok=false`、`code="invalid_interval"`，再查询确认原值保留。
+
+消息正文的 `device_id` 必须与 IPC 消息的 `channel` 相同。库内部管理请求编号，`request_text_until()` 的 JSON 回复返回对应请求线程；`receive_until()` 取得主动通知，不会抢走请求回复。
+
+## 5. 修改自己的业务
 
 | 源码 | 重点函数 |
 | --- | --- |
-| [ipc_device_client.c](../examples/ipc_device_client.c) | `device_work()` 连续设备操作；`request_expected()` 单次请求；`receive_notifications()` 独立接收；`main()` 线程生命周期 |
-| [ipc_device_server.c](../examples/ipc_device_server.c) | `handle_request()` 查询参数、修改、回复和主动通知 |
-| [run_ipc_business.py](../examples/run_ipc_business.py) | 对业务结果的自动检查 |
+| [ipc_device_client.c](../examples/ipc_device_client.c) | `device_work()` 连续操作；`request_expected()` 构造请求并检查 JSON 回复；`receive_notifications()` 独立通知接收 |
+| [ipc_device_server.c](../examples/ipc_device_server.c) | `handle_request()` 解析字段、检查范围和设备归属、改变状态；`reply_json()` 序列化回复 |
+| [run_ipc_business.py](../examples/run_ipc_business.py) | 解析程序输出的 JSON，逐项检查业务结果 |
 
-连接建立且设备已经 `OPEN` 后，一次查询的核心片段如下：
+设备已经打开后，查询片段如下；`client` 是已建立的连接：
 
 ```c
+json_field fields[] = {
+	json_text("type", "get"), json_int("device_id", 101)
+};
+hx_string request = HX_STRING_INIT;
 hx_ipc_message *reply = NULL;
 hx_os_error error = {0};
-hx_os_status status = hx_ipc_request_text_until(client, 0, 101,
-	"GET", hx_os_deadline_after_ms(5000), &reply, &error);
-if (status == HX_OS_OK)
-	printf("Device state: %.*s\n", (int)reply->bytes,
-		(const char *)reply->data);
+if (json_encode(fields, 2, &request)) {
+	hx_os_status status = hx_ipc_request_text_until(client, 0, 101,
+		hx_string_c_str(&request), hx_os_deadline_after_ms(5000),
+		&reply, &error);
+	/* Check status, then parse reply->data and reply->bytes. */
+	(void)status;
+}
 hx_ipc_message_release(reply);
+hx_string_destroy(&request);
 ```
 
-`0` 选择客户端连接的服务端，`101` 是应用的设备通道。完整源码还检查错误、通道、编码和预期正文。`HX_OS_OK` 表示拿到了回复；`ERROR ...` 仍属于业务拒绝，不能当作修改成功。
+`json_field` / `json_encode()` 是 [business_json.h](../examples/business_json.h) 中的示例辅助代码，使用库已有的 settings 序列化和内置 JSON 解析器。没有自己拼接字符串转义。业务命令、设备状态和收发代码仍属于本地 IPC 自己的文件。
 
-示例输出会包含：
-
-```text
-[request thread] device=101 SET 250 -> OK interval_ms=250
-[receive thread] device=101 CHANGED interval_ms=250
-[request thread] device=101 SET 0 -> ERROR interval must be 50..5000
-[main] device=0 QUIT -> BYE
-DEVICE CLIENT PASS: 2 devices, 2 request threads, 2 pushes
-```
+配置模块的通用数字 getter 允许字符串转换，本例额外检查 JSON 类型：整数 `250` 可以使用，字符串 `"250"`、布尔值、缺失字段都不能代替整数。语法损坏、重复键、非对象根节点不会进入设备操作。消息正文最多 1023 字节，解析深度最多 8、节点最多 64，解析内存限额为 64 KiB。
 
 ## 6. 所有权与测试
 
-主线程持有连接与线程参数，业务线程借用；先 join，再关闭连接。收到的每条消息都释放。关闭超时保留对象，可以重试。请求超时不证明远端操作没有执行，真实重试业务需定义幂等策略。`ipc_demo.h` 的不可恢复 join 失败会让这个命令行测试退出；长期运行宿主应保留 owner，继续自己的关闭流程。
+主线程持有连接与线程参数，业务线程借用；先 join，再关闭连接。每条 IPC 消息、每个解析文档和临时 `hx_string` 都释放，文档中的节点/字符串在文档释放后失效。关闭超时保留对象供重试；请求超时不证明远端未执行操作。
 
 ```sh
 ctest --test-dir build-net -C Release -R "^ipc_business_local$" --output-on-failure
 ```
 
-本例使用普通线程等待，不能在 Qt UI 线程阻塞，也不声称具备协程挂起适配。它独立于 TCP／UDP／KCP 业务用例。协议层半包、会话、容量和生命周期测试仍在 [test_ipc.c](../tests/test_ipc.c) 与 [test_ipc_examples.py](../tests/test_ipc_examples.py)；目标验证见[验证记录](VALIDATION.zh-CN.md)。
+`ipc_business_local` 检查两个设备的 14 条业务回复、最终 `bye` 和两条主动通知，按 JSON 字段比较而不是比较序列化文本顺序。JSON 示例需要默认开启的 `CONFIG`、`CONFIG_SERIALIZE` 和 `SETTINGS`；关闭所需模块时不注册该业务测试。
+
+本例使用普通线程等待，不要放在 Qt UI 线程，也不声称具有协程挂起适配。CLI join 失败出口与可重试关闭边界见源码。目标平台证据见[验证记录](VALIDATION.zh-CN.md)。

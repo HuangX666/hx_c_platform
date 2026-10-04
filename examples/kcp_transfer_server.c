@@ -1,36 +1,59 @@
 #include "kcp_business.h"
 
+static int send_confirmation(
+	kcp_session *session, const json_field *fields, size_t count)
+{
+	hx_string wire = HX_STRING_INIT;
+	int ok = json_encode(fields, count, &wire) &&
+		kcp_send_text(session, hx_string_c_str(&wire));
+	hx_string_destroy(&wire);
+	return ok;
+}
+
 static int receive_blocks(kcp_session *session)
 {
 	unsigned int received = 0, total = 0;
 	for (;;) {
-		char block[KCP_TEXT_CAPACITY], reply[KCP_TEXT_CAPACITY];
+		char block[KCP_TEXT_CAPACITY];
 		hx_os_status status;
 		if (!kcp_pump(session))
 			return 0;
 		while ((status = kcp_receive_text(session, block)) ==
 			HX_OS_OK) {
-			unsigned int id, value;
-			int consumed = -1;
-			if (sscanf(block, "BLOCK id=%9u value=%9u%n", &id,
-				    &value, &consumed) != 2 ||
-				consumed < 0 ||
-				(size_t)consumed != strlen(block) ||
-				id != received + 1 || id > 3 ||
-				value != id * 10)
+			hx_os_config_document *document =
+				json_decode(block, strlen(block));
+			const hx_os_config_node *root =
+				hx_os_config_root(document);
+			int64_t id, value;
+			int ok = document &&
+				json_has_text(root, "type", "block") &&
+				json_get_int(root, "id", &id) &&
+				id == received + 1 && id <= 3 &&
+				json_get_int(root, "value", &value) &&
+				value == id * 10;
+			hx_os_config_release(document);
+			if (!ok)
 				return net_demo_check(
-					HX_OS_SYNTAX, NULL, "block");
+					HX_OS_SYNTAX, NULL, "JSON block");
 			++received;
-			total += value;
-			printf("[KCP server] apply %s\n", block);
-			(void)snprintf(
-				reply, sizeof(reply), "APPLIED id=%u", id);
-			if (!kcp_send_text(session, reply))
-				return 0;
-			if (received == 3 &&
-				!kcp_send_text(
-					session, "COMMITTED blocks=3 total=60"))
-				return 0;
+			total += (unsigned int)value;
+			printf("[KCP server] %s\n", block);
+			{
+				json_field fields[] = {
+					json_text("type", "applied"),
+					json_int("id", id), json_bool("ok", 1)};
+				if (!send_confirmation(session, fields, 3))
+					return 0;
+			}
+			if (received == 3) {
+				json_field fields[] = {
+					json_text("type", "committed"),
+					json_int("blocks", received),
+					json_int("total", total),
+					json_bool("ok", 1)};
+				if (!send_confirmation(session, fields, 4))
+					return 0;
+			}
 		}
 		if (status != HX_OS_WOULD_BLOCK)
 			return net_demo_check(status, NULL, "KCP receive");

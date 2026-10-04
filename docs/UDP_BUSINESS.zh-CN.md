@@ -38,65 +38,72 @@ Linux/WSL 使用 `python3` 和 `--bin-dir build-net/bin`。也可使用已有 `b
 
 去掉 `--simulate-gaps` 就是普通演示。Linux/WSL 分别运行 `./build-net/bin/hx_os_udp_dashboard 39002` 和 `./build-net/bin/hx_os_udp_sensor 39002 --simulate-gaps`。两端都使用 `127.0.0.1`；参数是端口号，不能填 `udp://`。每次重跑重新启动接收端。
 
-## 3. 两个方向同时通信
+## 3. 一个数据报就是一个 JSON 对象
 
 ```mermaid
 flowchart LR
-    TX[传感器发送线程] -->|SAMPLE 数据报| S[接收端：最新状态]
-    S -->|LATEST / SUMMARY 数据报| RX[传感器接收线程]
-    Main[主线程：socket、线程、join、释放] --> TX
-    Main --> RX
+    TX[传感器发送线程] -->|JSON sample| S[接收端：解析、校验、保留最新值]
+    S -->|JSON latest / summary| RX[传感器接收线程]
 ```
 
-示例正文为 `SAMPLE device=101 seq=10 temperature_centi=2510`。`device` 是设备编号；`seq` 是该设备本次运行的样本序号；`temperature_centi` 以百分之一摄氏度计，`2510` 表示 `25.10°C`。正文是一个最长 127 字节的 ASCII 数据报，不添加 TCP 长度前缀。
+发送的采样正文如下，不添加 TCP 长度前缀：
 
-发送线程对设备 `101`、`102` 发 10 轮样本，每轮约间隔 30 毫秒。接收端每接受三个新的样本就向来源地址发送 `LATEST device=101 seq=N`；窗口结束后发送 `SUMMARY`。设备编号属于正文，来源由 `receive_from()` 取得的地址和端口确定。
+```json
+{"type":"sample","device_id":101,"seq":10,"temperature_centi":2510}
+```
 
-接收端等待首条数据最多 10 秒，之后收集 1 秒。反馈线程等待 2 秒，到期正常结束；反馈丢失时不会无限等待。这些数字是演示的应用时限。
+`device_id`、`seq`、`temperature_centi` 必须是 JSON 整数。温度单位是百分之一摄氏度，`2510` 表示 `25.10°C`。设备为 101/102，序号为 1～10，温度范围为 -10000～20000。缺失字段、类型错误、语法损坏和重复键都不更新设备状态。
+
+两个设备各发 10 轮数据，每轮约 30 毫秒。接收端每接受三个新的样本就向来源地址反馈：
+
+```json
+{"type":"latest","device_id":101,"seq":3}
+```
+
+收集窗口结束后反馈统计和最终温度：
+
+```json
+{"type":"summary","device_id":101,"accepted":10,"newest":10,"gaps":0,"stale":0,"temperature_centi":2510}
+```
+
+设备编号在 JSON 正文里；来源由 `receive_from()` 返回的地址和端口确定。接收端等待首条数据最多 10 秒，之后收集 1 秒；传感器接收线程等待 2 秒，到期正常结束。反馈缺失不会导致无限等待。
 
 ## 4. 缺号、重复与晚到
 
-| 情况 | 接收端行为 |
+| 情况 | 处理 |
 | --- | --- |
-| `seq` 大于已保存值 | 更新温度，累加观察到的序号空缺 |
-| `seq` 等于或小于已保存值 | 累加 `stale`，不覆盖最新温度 |
-| 数据报过长被截断 | 返回明确错误，不把剩余字节当成下一条 |
-| 同设备来自另一个地址 | 当前演示忽略，保持首次来源绑定 |
+| 序号更新 | 更新温度，记录观察到的序号空缺 |
+| 序号相同或更旧 | 增加 `stale`，不覆盖新温度 |
+| 同设备来自另一个地址 | 本次运行中忽略，保持首次来源绑定 |
+| 数据报超出容量被截断 | 明确报错，不尝试把剩余部分当新消息 |
 
-`--simulate-gaps` 主动漏发 `3`、`7`，重复 `4`，在 `8` 后再次发送 `6`。这是受控业务输入，不是测量真实网络丢包率。
+`--simulate-gaps` 主动漏发 3/7、重复 4、在 8 后发送 6。它控制业务输入，不测量真实网络丢包率。正常回环时每设备为 `accepted=10,newest=10,gaps=0,stale=0`；异常演示为 `accepted=8,newest=10,gaps=2,stale=2`，最新温度不被旧数据覆盖。
 
-| 模式 | accepted | newest | gaps | stale |
-| --- | --- | --- | --- | --- |
-| 正常小批量回环 | 10 | 10 | 0 | 0 |
-| 异常序号演示 | 8 | 10 | 2 | 2 |
+普通 UDP 仍可能丢失、重复、乱序。C 传感器程序允许没有反馈；自动测试要求这次小批量回环实际收到预期的 JSON 汇总，缺失时报告测试失败，不把普通 UDP 描述成可靠传输。
 
-```text
-[UDP receive thread] SUMMARY device=101 accepted=8 newest=10 gaps=2 stale=2
-[UDP receive thread] SUMMARY device=102 accepted=8 newest=10 gaps=2 stale=2
-UDP SENSOR PASS: send/receive threads joined; feedback=6
-```
-
-`feedback=6` 是受控演示的预期值。C 程序允许 UDP 反馈缺失；自动测试要求这次小批量回环确实得到预期结果，缺失时报告用例失败。它没有给普通 UDP 增加可靠送达语义。
-
-## 5. 源码与所有权
+## 5. 到哪里改字段与业务
 
 | 源码 | 重点 |
 | --- | --- |
-| [udp_sensor.c](../examples/udp_sensor.c) | `publish_samples()` 发送线程，`receive_feedback()` 接收线程，`main()` 持有资源 |
-| [udp_dashboard.c](../examples/udp_dashboard.c) | `receive_sample()` 校验数值、更新每设备状态、回复来源 |
-| [udp_business.h](../examples/udp_business.h) | UDP 完整数据报收发、容量限制、有限等待 |
-| [run_udp_business.py](../examples/run_udp_business.py) | 独立的正常/异常序号检查 |
+| [udp_sensor.c](../examples/udp_sensor.c) | `publish_sample()` 构造 JSON；发送线程上报，`receive_feedback()` 解析并校验 JSON 回复 |
+| [udp_dashboard.c](../examples/udp_dashboard.c) | `receive_sample()` 读取整数、验证范围和来源、更新状态；窗口结束编码 JSON 汇总 |
+| [udp_business.h](../examples/udp_business.h) | 完整数据报收发与有限等待 |
+| [run_udp_business.py](../examples/run_udp_business.py) | 使用 `json.loads` 检查两个设备的统计与反馈 |
 
-例如发送线程准备好正文与目标地址后使用：
+构造正文的方式是类型化字段数组：
 
 ```c
-if (!udp_send_text(job->endpoint, &job->destination, sample))
-	return 0;
+json_field fields[] = {
+	json_text("type", "sample"), json_int("device_id", 101),
+	json_int("seq", 1), json_int("temperature_centi", 2501)
+};
 ```
 
-这是示例私有辅助函数，内部直接 `send_to()`；没有转发给 IPC。两个线程的非阻塞 socket 调用用短互斥区串行，重试时在锁外休眠 1 毫秒。主线程先 join，再销毁互斥锁、socket 和 network；线程参数在整个借用期间有效。没有创建业务消息队列。
+将字段交给 `json_encode()`，再用本例 `udp_send_text()` 发送编码结果。完整创建、检查和释放流程都在 `publish_sample()` 中。辅助代码 [business_json.h](../examples/business_json.h) 只处理 JSON 编解码；UDP 业务不经过 IPC。
 
-本例只覆盖一次进程运行。真实设备重启后如果会重复使用旧序号，应在自己的数据报协议加入会话编号并定义切换规则；地址绑定不是身份认证。要求可靠传输的业务请另看 [KCP 示例](KCP_BUSINESS.zh-CN.md) 或 [TCP 示例](TCP_BUSINESS.zh-CN.md)。
+默认启用的 `CONFIG`、`CONFIG_SERIALIZE`、`SETTINGS` 提供内置解析与安全字符串转义。正文为 UTF-8，最多 1023 字节；解析深度最多 8、节点最多 64、内存限额 64 KiB。报文用完释放解析文档和临时字符串；不能保存已释放文档内的节点/字符串指针。
+
+两个线程的非阻塞 socket 调用按既有契约在短互斥区内串行，重试休眠在锁外。主线程先 join 再释放资源。真实设备重启后如果复用序号，需要在自己的 JSON 协议中加入会话标识；地址绑定不是身份认证。
 
 ## 6. 自动测试
 
@@ -104,4 +111,4 @@ if (!udp_send_text(job->endpoint, &job->destination, sample))
 ctest --test-dir build-net -C Release -R "^udp_business_" --output-on-failure
 ```
 
-分别运行 `udp_business_samples` 和 `udp_business_gaps`，检查两个设备的最终温度、序号统计、双向反馈和线程/进程结束。测试不使用 IPC 业务程序。具体目标验证见[验证记录](VALIDATION.zh-CN.md)。
+`udp_business_samples` 和 `udp_business_gaps` 检查两个设备的 JSON 样本、最新状态、双向反馈和线程结束。所需 JSON 模块关闭时不注册这些业务用例。可靠业务另见 [KCP](KCP_BUSINESS.zh-CN.md) 或 [TCP](TCP_BUSINESS.zh-CN.md)；目标证据见[验证记录](VALIDATION.zh-CN.md)。

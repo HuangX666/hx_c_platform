@@ -6,9 +6,31 @@
 
 本文记录截至 2026-10-04 的开发验证。设计覆盖、已有适配源码、编译成功、目标运行成功是不同状态。本机测试不能证明所有系统版本、文件系统、 CPU、libc 或网络提供方均已通过。
 
-当前独立业务示例见下方拆分记录；初版共用示例、IPC／KCP 实现、简洁 go、格式化、容器、递归文件查询、variant 和此前各批记录对应各自当时的版本。
+当前业务示例见下方 JSON 记录；此前独立文本示例、初版共用示例、IPC／KCP 实现及其他各批记录对应各自当时的版本。
+
+## 2026-10-04：四套独立业务改用 JSON
+
+源码起点 `feac68e`，本地 `dev`。IPC 设备、TCP 订单、UDP 采样和 KCP 数据块的请求、回复及通知全部改为 UTF-8 JSON。四套业务、传输与运行器保持独立，仅共用 `business_json.h` 的编解码辅助。使用既有 settings 序列化和内置 JSON 解析，不修改库实现、公共 ABI 或第三方文件。
+
+| 配置 | 本次证据 |
+| --- | --- |
+| Windows MSVC x64 Release，共享库 | 八个 C99 业务程序构建；8/8 业务测试通过 |
+| WSL Linux GCC x86_64 Release，共享库 | 同八个程序；8/8 通过 |
+| WSL ASan + UBSan，`detect_leaks=1` | 8/8，未报告内存错误、未定义行为或泄漏 |
+| WSL TSan，`halt_on_error=1` | 8/8，未报告数据竞态 |
+| WSL Release，`HX_OS_ENABLE_IPC=OFF` | TCP/UDP/KCP 六个程序构建；7/7 网络业务用例通过 |
+
+原七个业务测试继续覆盖设备状态、并发收发、TCP 分段/合并帧、UDP 异常序号和 KCP 首包丢弃。本次都按解析后的 JSON 字段检查结果，不依赖字段顺序与空白。TCP 的 C 客户端和独立 Python socket 对端验证中文、引号、反斜杠、补充平面字符备注的往返；字节长度按 UTF-8 计算。运行器输出显式使用 UTF-8，避免 Windows 代码页导致日志编码失败。
+
+新增 `tcp_business_json_validation`：依次运行七个独立连接，分别发送字符串数量、布尔数量、实数数量、缺失数量、损坏 JSON、重复键、数组根节点。服务端拒绝对应订单/报文，并保持先前两单总额 11500 分。整数 getter 之前额外检查节点类型，避免配置模块的数字字符串转换被当作业务整数。JSON 正文上限为 1023 字节，解析深度 8、节点 64、解析内存限额 64 KiB；这些是示例的局部资源上限。
+
+JSON 示例需要默认启用的 `CONFIG`、`CONFIG_SERIALIZE` 和 `SETTINGS`；CMake 在这些依赖满足时注册业务测试。文档说明每个解析文档和临时字符串的释放，借用节点/字符串不越过文档生命周期。编解码包含文档与临时对象分配，本次没有作吞吐量或零分配承诺。
+
+日志分别为 `build-shared-msvc/json-business-tests.log`、`build-shared-linux/json-business-tests.log`、`build-sanitize-linux/json-business-tests.log`、`build-tsan-linux/json-business-tests.log`、`build-transport-no-ipc/json-business-tests.log`。本轮未重跑全量/安装矩阵，未运行 Android、macOS、Win7/8.1 或嵌入式目标；相应新示例运行继续待验证。
 
 ## 2026-10-04：IPC、TCP、UDP、KCP 业务独立拆分
+
+本节记录 `feac68e` 的文本业务版本，其消息正文已由上方 JSON 版本替代。
 
 源码起点 `f89b566`，本地 `dev`。本地 IPC 的设备程序只接受命名管道/Unix 域套接字；新增独立 TCP 订单程序、改写为原始 UDP 的采样程序、新增独立 KCP 数据块程序。TCP/UDP 使用 `hx_os_socket_*`，KCP 使用 `hx_os_kcp_*` 与 UDP，三个网络业务不调用 `hx_ipc_*` 或 IPC 设备业务。运行器、CTest 名称和中英文教程也分别独立。库实现、公共 ABI 与第三方源码没有修改。
 

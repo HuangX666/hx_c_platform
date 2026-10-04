@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "business_json.h"
 
 /* Helpers for these standalone demos, not another communication API. */
 static inline int demo_check(
@@ -22,14 +23,6 @@ static inline int demo_check(
 	fprintf(stderr, "%s failed: status=%d %s\n", operation, (int)status,
 		text);
 	return 0;
-}
-
-static inline int demo_message_is(
-	const hx_ipc_message *message, const char *text)
-{
-	return message && message->encoding == HX_IPC_UTF8 &&
-		message->bytes == strlen(text) &&
-		!memcmp(message->data, text, message->bytes);
 }
 
 static inline int demo_close(hx_ipc **endpoint)

@@ -40,64 +40,92 @@ Linux/WSL 对应使用 `python3` 和 `--bin-dir build-net/bin`。已有构建可
 
 Linux/WSL 分别运行 `./build-net/bin/hx_os_tcp_order_server 39001` 和 `./build-net/bin/hx_os_tcp_order_client 39001`。参数是端口号；本例固定连接/监听 `127.0.0.1`，不接收 `tcp://` URI。服务端整体期限 15 秒，客户端 I/O 期限 10 秒；每次演示重新启动服务端。
 
-## 3. 线程与业务结果
+## 3. 发送 JSON 订单，接收 JSON 回执
 
 ```mermaid
 flowchart LR
-    TX[客户端发送线程] -->|三个 ORDER| Stream[TCP 连接]
-    Stream --> S[服务端订单处理]
-    S -->|回执、发货、拒绝| Stream
+    TX[客户端发送线程] -->|JSON order| Stream[TCP 长度帧]
+    Stream --> S[服务端：解析 JSON、校验、计算金额]
+    S -->|JSON receipt / shipped / rejected| Stream
     Stream --> RX[客户端接收线程]
-    Main[主线程：连接、创建线程、join、关闭] --> TX
-    Main --> RX
 ```
 
-| 请求 | 业务结果 |
+订单是一个真正的 JSON 对象，示例备注包含中文、引号、反斜杠和补充平面字符：
+
+```json
+{"type":"order","id":1,"sku":101,"quantity":2,"note":"桌面 \"设备\"\\A🌐"}
+```
+
+服务端解析字段后返回回执，并原样回传解析后的备注：
+
+```json
+{"type":"receipt","id":1,"ok":true,"total_cents":2500,"note":"桌面 \"设备\"\\A🌐"}
+```
+
+随后独立发送发货通知：
+
+```json
+{"type":"shipped","id":1,"ok":true}
+```
+
+| 订单 | 校验后的结果 |
 | --- | --- |
-| `ORDER id=1 sku=101 qty=2` | 单价 1250 分，回执金额 2500 分，另发 `SHIPPED id=1` |
-| `ORDER id=2 sku=102 qty=1` | 单价 9000 分，回执金额 9000 分，另发 `SHIPPED id=2` |
-| `ORDER id=3 sku=101 qty=0` | 数量无效，返回 `REJECTED id=3 reason=invalid_order`，不计入订单金额 |
+| `id=1, sku=101, quantity=2` | 单价 1250 分，回执 2500 分，另发 `shipped` |
+| `id=2, sku=102, quantity=1` | 单价 9000 分，回执 9000 分，另发 `shipped` |
+| `id=3, sku=101, quantity=0` | `{"type":"rejected","id":3,"ok":false,"reason":"invalid_order"}` |
 
-服务端最终接受两单，合计 `11500` 分。金额用整数表示，避免示例引入浮点计价误差。`id` 是应用自己放进正文的订单编号；这里由客户端解析/检查，不由 IPC 自动匹配。
+有效订单合计 11500 分。`id`、`sku`、`quantity` 必须是 JSON 整数，数量为 1～10；`note` 必须是字符串且 UTF-8 长度不超过 128 字节。字符串 `"1"`、布尔值 `true`、实数 `1.0` 都不能代替整数数量。订单编号由应用在 JSON 中定义和检查，不经过 IPC 请求路由。
 
-```text
-[TCP receive thread] RECEIPT id=1 total_cents=2500
-[TCP receive thread] SHIPPED id=1
-[TCP receive thread] RECEIPT id=2 total_cents=9000
-[TCP receive thread] SHIPPED id=2
-[TCP receive thread] REJECTED id=3 reason=invalid_order
-TCP CLIENT PASS: 3 orders, 2 receipts, 2 notices, 1 rejection
-TCP SERVER PASS: accepted=2 total_cents=11500
-```
+## 4. 编解码与 TCP 消息边界
 
-## 4. 消息边界与关键代码
-
-TCP 提供字节流，不提供消息边界。本例自己约定 `2 字节大端正文长度 + 正文`；正文是 1～127 字节 ASCII，支持的命令见上表。双方按长度收齐一条后再处理，明确拒绝过长、空正文和内嵌 NUL。
+TCP 字节流仍需要消息边界。本例使用 `2 字节大端 UTF-8 正文字节数 + JSON 正文`，每个正文最多 1023 字节。长度按 UTF-8 字节计，不按中文字符个数计。接收端收齐后解析一个 JSON 对象，不用 `sscanf` 或字符串比较代替 JSON 解析。
 
 | 文件 | 看哪里 |
 | --- | --- |
-| [tcp_order_client.c](../examples/tcp_order_client.c) | `send_orders()` 是发送线程，`receive_receipts()` 是独立接收线程 |
-| [tcp_order_server.c](../examples/tcp_order_server.c) | `process_orders()` 解析订单、计算金额、发送回复与通知 |
-| [tcp_business.h](../examples/tcp_business.h) | `tcp_send_text()` / `tcp_receive_text()` 的长度帧；`tcp_transfer()` 处理短读短写与截止时间 |
-| [run_tcp_business.py](../examples/run_tcp_business.py) | 订单断言，以及标准库 Python TCP 对端的分段/合并写入 |
+| [tcp_order_client.c](../examples/tcp_order_client.c) | `send_orders()` 构造类型化字段；`receive_receipts()` 解析回复、检查金额和备注 |
+| [tcp_order_server.c](../examples/tcp_order_server.c) | `process_orders()` 校验 JSON 和业务范围；`send_order_json()` 编码回复 |
+| [tcp_business.h](../examples/tcp_business.h) | 长度帧、短读短写、有限等待 |
+| [business_json.h](../examples/business_json.h) | 仅编解码辅助：现有 JSON 解析器与 settings 序列化、类型检查、容量限制 |
 
-业务代码直接写成：
+发送片段可以照着改字段，`stream` 是已连接的 TCP 流：
 
 ```c
-if (!tcp_send_text(job->stream, "ORDER id=1 sku=101 qty=2"))
-	return NULL;
+json_field fields[] = {
+	json_text("type", "order"), json_int("id", 1),
+	json_int("sku", 101), json_int("quantity", 2),
+	json_text("note", "桌面设备")
+};
+hx_string wire = HX_STRING_INIT;
+if (json_encode(fields, 5, &wire)) {
+	int sent = tcp_send_text(stream, hx_string_c_str(&wire));
+	/* Check sent before continuing the business operation. */
+	(void)sent;
+}
+hx_string_destroy(&wire);
 ```
 
-`tcp_send_text()` 是本示例内部函数，底层循环调用 `hx_os_socket_send_some()`；接收路径调用 `hx_os_socket_receive_some()`。函数不是新公共库 API，也不转发到 IPC。为了遵守原始 socket 的操作串行契约，每次非阻塞调用有一个短互斥区，遇到 `WOULD_BLOCK` 后在锁外休眠 1 毫秒。完整帧只有一个发送线程，完整消息只有一个接收线程；不能据此把多个发送者直接接到同一条原始流上。
+这些是示例私有辅助函数；业务始终调用原始 TCP socket，不转发到 IPC。序列化器负责引号、反斜杠与控制字符转义；接收端拒绝重复键和非对象根节点。解析深度最多 8、节点最多 64、解析内存限额 64 KiB。示例需要默认开启的 `CONFIG`、`CONFIG_SERIALIZE`、`SETTINGS`，没有新增第三方依赖。
 
-这一小批量演示没有无界队列。主线程先 join 两个线程，再释放互斥锁、关闭 socket、销毁 network。半条帧后发生超时/断线会让本次连接失败，不把残留正文当作下一个消息继续解析。长期高吞吐服务可使用库的 loop 接口集中处理就绪事件；这里的短周期重试不作为性能基准。
+每个非阻塞 socket 调用在短互斥区内串行，`WOULD_BLOCK` 后在锁外休眠 1 毫秒。只有一个线程发送完整帧、一个线程接收完整帧。主线程先 join，再释放锁、socket 和 network；解析文档与临时字符串在使用后释放。半帧超时/断开使本连接失败，不把残留当下一条消息。这是有限业务演示，不是高吞吐基准。
 
-## 5. 测试
+## 5. 实际运行测试
 
 ```sh
 ctest --test-dir build-net -C Release -R "^tcp_business_" --output-on-failure
 ```
 
-`tcp_business_orders` 运行两个独立 C 进程，验证线程收发和金额；`tcp_business_framing` 使用普通 Python socket，将第一个头和正文分开写入，再将后续两个请求合在一次写入中，验证服务端仍解析出三单。该 Python 对端没有实现 HXIP，展示了此 TCP 示例自己的简单协议。
+| 测试 | 检查内容 |
+| --- | --- |
+| `tcp_business_orders` | 两个 C 进程的 JSON 订单、回执、通知、拒绝与备注往返 |
+| `tcp_business_framing` | Python 普通 socket 分段写入一个头/正文，再合并后续帧；JSON 使用不同字段顺序和空白 |
+| `tcp_business_json_validation` | 7 类错误：字符串数量、布尔数量、实数数量、缺失数量、损坏 JSON、重复键、数组根节点 |
 
-原始 TCP 不自动提供应用会话、业务重试去重或重启恢复；这些应按实际协议定义。本例展示当前连接上的有限订单流程。目标平台结果见[验证记录](VALIDATION.zh-CN.md)。其他业务分别见 [IPC](IPC_BUSINESS.zh-CN.md)、[UDP](UDP_BUSINESS.zh-CN.md)、[KCP](KCP_BUSINESS.zh-CN.md)。
+最后一组也可以单独运行：
+
+```powershell
+python examples/run_tcp_business.py --json-errors --bin-dir build-net/bin/Release
+```
+
+Python 用标准 `json` 模块和 UTF-8 编解码，不实现 HXIP。错误类型/范围返回 `rejected`；无法作为有效订单对象解析时返回 `{"type":"error","ok":false,"reason":"invalid_json_request"}`。每轮仍检查之前两单合计 11500 分，错误输入不改变有效订单统计。
+
+原始 TCP 不自动提供跨重启会话或业务重试去重；本例覆盖当前连接。测试结果见[验证记录](VALIDATION.zh-CN.md)，其他独立业务见 [IPC](IPC_BUSINESS.zh-CN.md)、[UDP](UDP_BUSINESS.zh-CN.md)、[KCP](KCP_BUSINESS.zh-CN.md)。

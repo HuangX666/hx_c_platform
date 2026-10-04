@@ -1,10 +1,28 @@
 """Process lifetime and logs only; each runner owns its business assertions."""
 
 from pathlib import Path
+import json
 import subprocess
 import sys
 import tempfile
 import time
+
+
+# Keep captured JSON logs valid UTF-8 on Windows code-page configurations.
+for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+        stream.reconfigure(encoding="utf-8")
+
+
+def json_messages(log, prefix):
+    messages = []
+    for line in log.splitlines():
+        if line.startswith(prefix):
+            message = json.loads(line[len(prefix):])
+            if not isinstance(message, dict):
+                raise RuntimeError("Business payload must be a JSON object")
+            messages.append(message)
+    return messages
 
 
 def executable(directory, name):

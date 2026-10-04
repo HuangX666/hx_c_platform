@@ -2,9 +2,10 @@
 #define HX_EXAMPLE_KCP_BUSINESS_H
 
 #include "network_demo.h"
+#include "business_json.h"
 #include <hx_os_kcp.h>
 
-enum { KCP_TEXT_CAPACITY = 128, KCP_DEMO_CONV = 7301 };
+enum { KCP_TEXT_CAPACITY = JSON_MESSAGE_CAPACITY, KCP_DEMO_CONV = 7301 };
 
 typedef struct kcp_session {
 	hx_os_socket *socket;

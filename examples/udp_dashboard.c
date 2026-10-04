@@ -12,35 +12,44 @@ typedef struct sensor_state {
 static int receive_sample(udp_endpoint *dashboard, const char *sample,
 	const hx_os_address *peer, sensor_state sensors[2])
 {
-	unsigned int device, sequence;
-	int temperature, consumed = -1;
+	hx_os_config_document *document = json_decode(sample, strlen(sample));
+	const hx_os_config_node *root = hx_os_config_root(document);
+	int64_t device, sequence, temperature;
 	sensor_state *sensor;
-	char feedback[UDP_TEXT_CAPACITY];
-	if (sscanf(sample, "SAMPLE device=%9u seq=%9u temperature_centi=%9d%n",
-		    &device, &sequence, &temperature, &consumed) != 3 ||
-		consumed < 0 || (size_t)consumed != strlen(sample) ||
-		device < 101 || device > 102 || !sequence || sequence > 10 ||
-		temperature < -10000 || temperature > 20000)
+	int valid = document && json_has_text(root, "type", "sample") &&
+		json_get_int(root, "device_id", &device) && device >= 101 &&
+		device <= 102 && json_get_int(root, "seq", &sequence) &&
+		sequence > 0 && sequence <= 10 &&
+		json_get_int(root, "temperature_centi", &temperature) &&
+		temperature >= -10000 && temperature <= 20000;
+	hx_os_config_release(document);
+	if (!valid)
 		return 1;
 	sensor = &sensors[device - 101];
 	if (sensor->accepted && !net_demo_same_peer(peer, &sensor->peer))
 		return 1;
 	sensor->peer = *peer;
-	if (sequence <= sensor->newest) {
+	if ((unsigned int)sequence <= sensor->newest) {
 		++sensor->stale;
 		return 1;
 	}
-	/* An observed gap is not a measurement of permanent network loss. */
-	sensor->gaps += sequence - sensor->newest - 1;
-	sensor->newest = sequence;
-	sensor->temperature_centi = temperature;
+	sensor->gaps += (unsigned int)sequence - sensor->newest - 1;
+	sensor->newest = (unsigned int)sequence;
+	sensor->temperature_centi = (int)temperature;
 	++sensor->accepted;
 	printf("[UDP dashboard] %s\n", sample);
 	if (sensor->accepted % 3)
 		return 1;
-	(void)snprintf(feedback, sizeof(feedback), "LATEST device=%u seq=%u",
-		device, sequence);
-	return udp_send_text(dashboard, peer, feedback);
+	{
+		json_field fields[] = {json_text("type", "latest"),
+			json_int("device_id", device),
+			json_int("seq", sequence)};
+		hx_string wire = HX_STRING_INIT;
+		int ok = json_encode(fields, 3, &wire) &&
+			udp_send_text(dashboard, peer, hx_string_c_str(&wire));
+		hx_string_destroy(&wire);
+		return ok;
+	}
 }
 
 int main(int argc, char **argv)
@@ -77,16 +86,23 @@ int main(int argc, char **argv)
 	}
 	for (index = 0; index < 2 && ok; ++index) {
 		const sensor_state *sensor = &sensors[index];
-		char summary[UDP_TEXT_CAPACITY];
-		(void)snprintf(summary, sizeof(summary),
-			"SUMMARY device=%u accepted=%u newest=%u gaps=%u "
-			"stale=%u",
-			101 + index, sensor->accepted, sensor->newest,
-			sensor->gaps, sensor->stale);
-		printf("[UDP dashboard] %s temperature_centi=%d\n", summary,
-			sensor->temperature_centi);
-		if (sensor->accepted)
-			ok = udp_send_text(&dashboard, &sensor->peer, summary);
+		json_field fields[] = {json_text("type", "summary"),
+			json_int("device_id", 101 + index),
+			json_int("accepted", sensor->accepted),
+			json_int("newest", sensor->newest),
+			json_int("gaps", sensor->gaps),
+			json_int("stale", sensor->stale),
+			json_int("temperature_centi",
+				sensor->temperature_centi)};
+		hx_string wire = HX_STRING_INIT;
+		ok = json_encode(fields, 7, &wire);
+		if (ok) {
+			printf("[UDP summary] %s\n", hx_string_c_str(&wire));
+			if (sensor->accepted)
+				ok = udp_send_text(&dashboard, &sensor->peer,
+					hx_string_c_str(&wire));
+		}
+		hx_string_destroy(&wire);
 	}
 	hx_os_mutex_destroy(dashboard.access);
 	if (!net_demo_close(&dashboard.socket, &network))

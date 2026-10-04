@@ -40,7 +40,8 @@ if(HX_OS_BUILD_TESTS AND HX_OS_HAVE_IPC AND NOT CMAKE_CROSSCOMPILING)
 		set_tests_properties(ipc_examples PROPERTIES TIMEOUT 90)
 	endif()
 endif()
-if(HX_OS_BUILD_TESTS AND NOT CMAKE_CROSSCOMPILING)
+if(HX_OS_BUILD_TESTS AND NOT CMAKE_CROSSCOMPILING AND HX_OS_ENABLE_CONFIG
+		AND HX_OS_ENABLE_CONFIG_SERIALIZE AND HX_OS_ENABLE_SETTINGS)
 	find_package(Python3 QUIET COMPONENTS Interpreter)
 	if(Python3_Interpreter_FOUND)
 		function(hx_add_business_test name script target)
@@ -60,6 +61,9 @@ if(HX_OS_BUILD_TESTS AND NOT CMAKE_CROSSCOMPILING)
 			hx_add_business_test(tcp_business_framing
 				run_tcp_business.py hx_os_tcp_order_server
 				--fragmented)
+			hx_add_business_test(tcp_business_json_validation
+				run_tcp_business.py hx_os_tcp_order_server
+				--json-errors)
 			hx_add_business_test(udp_business_samples
 				run_udp_business.py hx_os_udp_dashboard)
 			hx_add_business_test(udp_business_gaps
