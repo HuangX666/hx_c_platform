@@ -8,6 +8,28 @@
 
 当前业务示例见下方 JSON 记录；此前独立文本示例、初版共用示例、IPC／KCP 实现及其他各批记录对应各自当时的版本。
 
+## 2026-10-04：一次声明字段的 codec 宏
+
+源码起点 `a48b51c`，本地 `dev`。增加可单独包含的 `hx_codec_macros.h`；`HX_CODEC_STRUCT` 生成普通 C99/C++11 值结构体、字段表及 schema，字段名只写一次。宏覆盖标量、字符串、内嵌对象、动态/固定数组、NODE、改名、可选值与 XML 属性，支持 1～32 字段。已有 codec 实现、公共结构体布局和导出函数未改；C++ facade 自动包含该宏头。没有增加源码生成工具、目标运行依赖、运行时注册或后台活动。
+
+| 配置 | 本轮结果 |
+| --- | --- |
+| Windows MSVC x64 Release 共享库 | 11/11 相关测试；传统预处理器与 `/Zc:preprocessor` 的 C/C++ 测试均通过 |
+| WSL Linux GCC x86_64 Release 共享库 | 9/9 codec、C/C++ 示例及格式互操作测试 |
+| 独立头及严格语言模式 | 公共头 C99/C++11 构建通过；GCC/Clang 的 C99、无异常 C++11 严格语法检查通过 |
+| WSL ASan + UBSan，泄漏检查开启 | codec、cpp_codec、宏示例，3/3；未报告内存错误或泄漏 |
+| ARMv7 Linux GNU 交叉工具链 | 静态库及 C/C++ 目标编译通过；`qemu-arm -L /usr/arm-linux-gnueabihf` 执行 3/3 |
+| AArch64 Linux GNU 交叉工具链 | 静态库及 C/C++ 目标编译通过；`qemu-aarch64 -L /usr/aarch64-linux-gnu` 执行 3/3 |
+| Windows / WSL 安装后消费 | 各纯 C 16/16、含 C++11 的消费工程 26/26；最终头文件安装后，相关 C/C++ 消费测试再各 2/2 |
+| 文档示例 | 中英文教程的完整 C 程序提取编译；运行输出 `{"host":"localhost","port":8080}` 与 `port = 8080` |
+
+扩展原有 codec 测试，检查宏与手写结构体的大小/字段偏移、1 和 32 字段边界、最后字段保留、标量宽度、两种数组、嵌套对象、NODE 混合值、多个字段修饰宏叠加以及 C++ 命名空间。GCC 的 C99/C++11 编译探针确认空字段、尾逗号、33 字段声明被拒绝。针对 MSVC 传统预处理器补齐实参展开层，针对 Clang 仅标注可能未使用的只读元数据，没有关闭消费者的全局警告。
+
+相关日志为上述构建目录下的 `codec-macros-build.log`、`codec-macros-ctest.log`、`codec-macros-install.log` 和 `codec-macros-consumer-final.log`。仅运行本次声明与使用方式涉及的测试，本轮没有重跑桌面全量、Android、macOS、Win7/8.1 或 TSan。ARM 结果来自 glibc 交叉工具链和 QEMU，不代表 musl、实际板卡/SDK、驱动或整机性能已经通过。
+
+宏保留 `sizeof`/`offsetof` 表达式，由实际目标编译器求值；字段顺序保持用户的声明顺序。该层只声明静态只读描述，没有运行时反射或新增分配路径；未进行吞吐量或内存占用优化宣称。具体写法及嵌入式接入边界见[序列化教程](SERIALIZATION.zh-CN.md)。
+
+
 ## 2026-10-04：嵌套文档与结构体序列化
 
 源码起点 `450e42f`，本地 `dev`。新增 YAML/XML/TOML/ENV 写出，补齐七种格式；新增文档创建、不可变替换、格式转换及显式字符串子文档解析。新增独立可裁剪的 `CODEC`，一次声明 C/C++ 值对象字段，支持嵌套对象、动态/固定数组和保留混合类型的 NODE。既有公共结构体布局未改，C++11 继续关闭异常，未新增第三方依赖或修改第三方文件。

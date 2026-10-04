@@ -4,7 +4,7 @@
 
 ## 1. 先选择适合你的入口
 
-数据已经有固定的结构体时，声明一次字段映射，使用 `hx_os_codec_encode/decode`。字段可以是整数、浮点、布尔、字符串、子结构体或数组。C++11 使用 `hx::Codec<T>`，返回 `Result`，不使用异常。
+新数据类型可以用 `HX_CODEC_STRUCT` 一次声明结构体和字段映射，使用 `hx_os_codec_encode/decode`。已有结构体继续使用显式映射。字段可以是整数、浮点、布尔、字符串、子结构体或数组。C++11 使用 `hx::Codec<T>`，返回 `Result`，不使用异常。
 
 数据结构不固定时，使用 `hx_os_config_parse/create/replace/serialize`。例如同一个数组里既有数字，又有字符串、null、对象和子数组，每个节点会保留自己的类型。读取时先看 `hx_os_config_kind`，再选择对应的 getter。不要把这样的数组声明为“整数数组”。
 
@@ -39,23 +39,16 @@ JSON 字符串中的 `"{...}"` 始终是字符串。只有你显式调用 `hx_os
 
 ## 3. 完整 C 示例：结构体和 JSON 相互转换
 
-下面的程序只需要 `hx_c_platform`。`HX_OS_CODEC_FIELD` 写一次，以后编码和解码都使用同一份映射。
+下面的程序只需要 `hx_c_platform`。`HX_CODEC_STRUCT` 同时声明结构体、字段表和 schema；`host`、`port` 各写一次。宏由正常的 C99/C++11 预处理器展开，不需要 Python、Clang 分析器或额外生成步骤。完整文件见 [codec_macros.c](../examples/codec_macros.c)。
 
 ```c
-#include <hx_codec.h>
+#include <hx_codec_macros.h>
 #include <stdio.h>
 
-typedef struct connection {
-	hx_string_view host;
-	int32_t port;
-} connection;
-
-static const hx_os_codec_field connection_fields[] = {
-	HX_OS_CODEC_FIELD(connection, host, HX_OS_CODEC_STRING),
-	HX_OS_CODEC_FIELD(connection, port, HX_OS_CODEC_I32)
-};
-static const hx_os_codec_schema connection_schema =
-	HX_OS_CODEC_SCHEMA(connection, connection_fields, "connection");
+HX_CODEC_STRUCT(connection,
+	HX_CODEC_STRING(host),
+	HX_CODEC_I32(port)
+);
 
 int main(void)
 {
@@ -106,12 +99,15 @@ port = 8080
 字段映射有这些常用形式：
 
 ```c
-HX_OS_CODEC_FIELD(device, name, HX_OS_CODEC_STRING)
-HX_OS_CODEC_OBJECT_FIELD(device, range, &limits_schema)
-HX_OS_CODEC_ARRAY_FIELD(device, samples, &sample_type)
+HX_CODEC_STRUCT(device,
+	HX_CODEC_STRING(name),
+	HX_CODEC_ARRAY(samples, sample),
+	HX_CODEC_OBJECT(range, limits),
+	HX_CODEC_BOOL(enabled)
+);
 ```
 
-动态数组字段的 C 类型是 `hx_os_codec_array`，即 `{data, count}`。编码时指向你现有的连续数组；解码时指向结果对象持有的连续数组。元素描述 `sample_type` 说明每个元素的实际类型。固定内嵌数组使用 `HX_OS_CODEC_FIXED_FIELD`，解码长度必须完全匹配。数组可以再包含对象或数组；深度与内存都受配置上限约束。
+动态数组字段的 C 类型是 `hx_os_codec_array`，即 `{data, count}`。编码时指向你现有的连续数组；解码时指向结果对象持有的连续数组。宏中的 `sample` 说明每个元素的实际类型，先用 `HX_CODEC_STRUCT` 声明它。固定内嵌数组使用 `HX_CODEC_FIXED(points, double, 3)`，解码长度必须完全匹配。宏数组可以包含对象。直接的“数组套数组”使用现有显式元素描述组合；深度与内存都受配置上限约束。
 
 字段类型支持带符号/无符号 8、16、32、64 位整数、`float`、`double`、布尔、`hx_string_view`、固定字符数组、对象、动态/固定数组以及 `NODE`。布尔存储为 `int` 或一字节布尔；`BUFFER` 字段是有 NUL 终止的内嵌字符数组，溢出或无法保存内嵌 NUL 时失败；`STRING` 保留精确字节长度和允许的内嵌 NUL。
 
@@ -121,9 +117,47 @@ HX_OS_CODEC_ARRAY_FIELD(device, samples, &sample_type)
 {"items":[1,"文字",null,{"children":[true,2.5,{},[]]}]}
 ```
 
-将字段声明为 `const hx_os_config_node *payload`，映射成 `HX_OS_CODEC_NODE`。它能保留整个子树，再用 `hx_os_config_pointer(payload, "/items/3/children/1", &node)` 查询里面的数值。这个指针仍借用解码结果。编码 NODE 时借用你提供的有效文档；库会复制子树。XML 的 NODE 字段要求 XML 元素子树；其他格式也必须能够表示该子树。
+使用 `HX_CODEC_NODE(payload)`，或者将已有字段 `const hx_os_config_node *payload` 显式映射成 `HX_OS_CODEC_NODE`。它能保留整个子树，再用 `hx_os_config_pointer(payload, "/items/3/children/1", &node)` 查询里面的数值。这个指针仍借用解码结果。编码 NODE 时借用你提供的有效文档；库会复制子树。XML 的 NODE 字段要求 XML 元素子树；其他格式也必须能够表示该子树。
 
 纯文档用法见 [nested_document.c](../examples/nested_document.c)：先用 `hx_os_config_value` 描述混合数组，再 `hx_os_config_create` 一次复制成文档，最后 `hx_os_config_serialize` 写出 JSON。描述中的名字、字符串和数字文本只借用到 create 返回。数字描述使用完整的 JSON 数字文本，避免经过 double 损失大整数精度。
+
+### 4.1 常用宏怎么选
+
+| 写法 | 生成的成员 / 用途 |
+| --- | --- |
+| `HX_CODEC_STRING(host)` | `hx_string_view host`，借用/持有规则见第 3 节 |
+| `HX_CODEC_I32(port)` | `int32_t port`；另有 I8/U8/I16/U16/U32/I64/U64 |
+| `HX_CODEC_FLOAT(value)` / `HX_CODEC_DOUBLE(value)` | `float` / `double` |
+| `HX_CODEC_BOOL(enabled)` | `hx_codec_bool`，即 `int`，语义为布尔 |
+| `HX_CODEC_BUFFER(name, 64)` | 内嵌 `char name[64]`，包括 NUL 的容量 |
+| `HX_CODEC_OBJECT(range, limits)` | 内嵌 `limits range`，子类型先声明 |
+| `HX_CODEC_ARRAY(samples, sample)` | 动态 `hx_os_codec_array`，元素是 `sample` |
+| `HX_CODEC_FIXED(points, double, 3)` | 内嵌 `double points[3]` |
+| `HX_CODEC_NODE(payload)` | `hx_codec_node`，即 `const hx_os_config_node *` |
+
+数组元素可以是 `int8_t` 到 `uint64_t` 的整数宽度类型、`float`、`double`、`hx_string_view`、`hx_codec_bool`、`hx_codec_node`，或当前作用域内先用 `HX_CODEC_STRUCT` 定义的类型。字符串数组例如 `HX_CODEC_ARRAY(names, hx_string_view)`，布尔数组例如 `HX_CODEC_ARRAY(states, hx_codec_bool)`。动态数组要指出元素类型，因为 `hx_os_codec_array` 本身只记录指针和数量。
+
+需要改名、可选字段或 XML 属性时，在单个字段外包一层：
+
+```c
+HX_CODEC_STRUCT_NAMED(connection_options, "connection",
+	HX_CODEC_NAME("server_host", HX_CODEC_STRING(host)),
+	HX_CODEC_OPTIONAL(HX_CODEC_I32(port)),
+	HX_CODEC_XML_ATTRIBUTE(HX_CODEC_I32(id))
+);
+```
+
+它仍生成普通成员 `host`、`port`、`id`；写出名称分别为 `server_host`、`port`、`id`。XML 根名为 `connection`，`id` 在 XML 中成为属性，在 JSON 等格式中仍为普通字段。这些包装可以组合，例如可选的 XML 属性。缺失可选值仍按原 codec 契约清零，不把类型错误当作缺失。
+
+宏适合新类型，需放在文件作用域或 C++ 命名空间作用域，末尾写分号；每个结构体支持 **1～32 个字段**，最后一个字段后不要加逗号。固定数组长度和字符缓冲容量必须为正整数常量表达式。顺序就是结构体的成员声明顺序，宏不会排序、压缩对齐或猜测指针类型。生成的 `类型_fields`、`类型_schema` 是当前编译单元的静态只读描述，可以把同一份声明放进有保护的头文件。
+
+现有公共结构体不需要改写成宏，继续使用 `HX_OS_CODEC_FIELD`、`HX_OS_CODEC_OBJECT_FIELD`、`HX_OS_CODEC_ARRAY_FIELD`、`HX_OS_CODEC_FIXED_FIELD` 和 `HX_OS_CODEC_SCHEMA`。超过 32 个字段、其他 typedef 元素别名或跨命名空间的限定类型，也使用这些显式入口。简洁宏的 32 字段上限不改变底层文档深度和节点上限。
+
+### 4.2 在嵌入式 Linux 中使用
+
+只需用实际 SDK 正常交叉编译。宏展开产生标准 C99/C++11 声明，`sizeof`、`offsetof` 由 ARM 等目标编译器计算，不包含宿主机生成的数值偏移。Windows/x86 上构建 ARM 程序时，板子不需要 Python、Clang 或其他生成工具。没有额外运行时注册和初始化；编解码仍调用同一份 codec 实现。
+
+使用正确的 sysroot、libc、浮点 ABI、头文件及对齐配置；它们是普通 C/C++ 工程的兼容要求。不能把某套 glibc 交叉编译结果推广到所有 musl、旧 SDK 或板卡。新宏的 ARMv7/AArch64 编译和 QEMU 证据见[验证记录](VALIDATION.zh-CN.md)，QEMU 通过不等于板卡实测。
 
 ## 5. C++11：直接取结果，不使用异常
 
@@ -197,6 +231,7 @@ ctest --test-dir build-serialization -C Release -R 'config_tree|codec|serializat
 Windows 程序在 `build-serialization/bin/Release`；单配置 Linux 构建在 `build-serialization/bin`。例如：
 
 ```powershell
+./build-serialization/bin/Release/hx_os_codec_macros.exe
 ./build-serialization/bin/Release/hx_os_serialization.exe json
 ./build-serialization/bin/Release/hx_os_serialization.exe xml
 ./build-serialization/bin/Release/hx_os_nested_document.exe

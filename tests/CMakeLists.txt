@@ -205,6 +205,44 @@ if(CMAKE_CXX_COMPILER_LOADED)
 	hx_apply_warnings(hx_os_test_cpp_codec)
 	add_test(NAME cpp_codec COMMAND hx_os_test_cpp_codec)
 	set_tests_properties(cpp_codec PROPERTIES TIMEOUT 20)
+	if(CMAKE_C_COMPILER_ID STREQUAL "MSVC")
+		include(CheckCCompilerFlag)
+		check_c_compiler_flag("/Zc:preprocessor" HX_CODEC_HAVE_MSVC_PP)
+		if(HX_CODEC_HAVE_MSVC_PP)
+			foreach(language IN ITEMS c cpp)
+				if(language STREQUAL "c")
+					set(hx_codec_pp_source test_codec.c)
+				else()
+					set(hx_codec_pp_source
+						test_cpp_codec.cpp)
+				endif()
+				set(hx_codec_pp_target
+					hx_os_codec_conforming_${language})
+				add_executable(${hx_codec_pp_target}
+					${hx_codec_pp_source})
+				target_link_libraries(${hx_codec_pp_target}
+					PRIVATE hx_c_platform::cpp)
+				target_compile_options(${hx_codec_pp_target}
+					PRIVATE /Zc:preprocessor)
+				set_target_properties(${hx_codec_pp_target}
+					PROPERTIES C_STANDARD 99
+					C_STANDARD_REQUIRED YES
+					C_EXTENSIONS NO
+					CXX_STANDARD 11
+					CXX_STANDARD_REQUIRED YES
+					CXX_EXTENSIONS NO
+					RUNTIME_OUTPUT_DIRECTORY
+					"${PROJECT_BINARY_DIR}/bin")
+				add_test(NAME codec_conforming_${language}
+					COMMAND ${hx_codec_pp_target})
+				set_tests_properties(
+					codec_conforming_${language}
+					PROPERTIES TIMEOUT 20)
+				hx_apply_warnings(${hx_codec_pp_target})
+			endforeach()
+		endif()
+	endif()
+
 	add_executable(hx_os_test_cpp_format test_cpp_format.cpp)
 	target_link_libraries(hx_os_test_cpp_format PRIVATE hx_c_platform::cpp)
 	set_target_properties(hx_os_test_cpp_format PROPERTIES

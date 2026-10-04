@@ -401,6 +401,19 @@ std::puts(yaml.value().c_str());
 
 For fixed business structures, declare fields once and call `hx_os_codec_encode/decode`, or `hx::Codec<T>` in C++. The [serialization tutorial](docs/SERIALIZATION.md) explains all seven formats, complete C/C++ programs, nested arrays and ownership. Documents default to 64 levels and can be configured up to 128; INI, ENV and properties retain their simpler representable shapes.
 
+### 4.13 Declare structure fields once: C / C++
+
+Include `<hx_codec_macros.h>`. These lines define both a normal structure and its serialization mapping; host and port need no second field table:
+
+```c
+HX_CODEC_STRUCT(connection,
+	HX_CODEC_STRING(host),
+	HX_CODEC_I32(port)
+);
+```
+
+Use connection as an ordinary structure, and pass connection_schema to hx_os_codec_encode/decode or hx::Codec<connection>. The compiler expands the macros using the target layout, including embedded Linux cross-builds, with no extra generation tools. [codec_macros.c](examples/codec_macros.c) is a complete initialize/encode/decode/release program; the [serialization tutorial](docs/SERIALIZATION.md) covers arrays, nesting and optional fields.
+
 <a id="section-5"></a>
 
 ## 5. A few rules to remember

@@ -401,6 +401,19 @@ std::puts(yaml.value().c_str());
 
 固定业务结构体可以声明一次字段映射，然后直接调用 `hx_os_codec_encode/decode`，C++ 对应 `hx::Codec<T>`。七种格式的范围、C/C++ 完整程序、嵌套数组和资源释放见[序列化教程](docs/SERIALIZATION.zh-CN.md)。普通文档默认最多 64 层，可显式调到 128 层；INI、ENV、properties 继续遵守各自的简单结构限制。
 
+### 4.13 结构体字段只声明一次：C / C++
+
+包含 `<hx_codec_macros.h>`，下面这几行同时定义普通结构体和序列化映射，`host`、`port` 不需要在另一张表里再写一次：
+
+```c
+HX_CODEC_STRUCT(connection,
+	HX_CODEC_STRING(host),
+	HX_CODEC_I32(port)
+);
+```
+
+生成的 `connection` 可以像普通结构体一样使用；`connection_schema` 可直接传给 `hx_os_codec_encode/decode` 或 `hx::Codec<connection>`。宏由当前编译器处理，嵌入式 Linux 交叉编译时使用目标架构的布局，不需要增加生成工具。完整的初始化、编码、解码和释放程序见 [codec_macros.c](examples/codec_macros.c)；数组、嵌套和可选字段见[序列化教程](docs/SERIALIZATION.zh-CN.md)。
+
 <a id="section-5"></a>
 
 ## 5. 先记住的几条规则

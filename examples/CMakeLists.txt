@@ -23,7 +23,7 @@ endfunction()
 
 foreach(example IN ITEMS hello async_timer configuration containers system_info
 	load_plugin text_file environment special_paths thread_options
-	serialization nested_document
+	serialization nested_document codec_macros
 	pipe_transfer positioned_read file_info config_save periodic_timer
 	random_uuid mapped_file file_attributes watch_directory capture_process
 	delayed_task duplex_message obfuscated_string localized_time
@@ -39,6 +39,11 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 	hx_apply_warnings(hx_os_${example})
 endforeach()
+if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_CONFIG AND HX_OS_ENABLE_CODEC
+	AND HX_OS_ENABLE_CONFIG_SERIALIZE)
+	add_test(NAME codec_macros_example COMMAND hx_os_codec_macros)
+	set_tests_properties(codec_macros_example PROPERTIES TIMEOUT 20)
+endif()
 if(HX_OS_BUILD_TESTS AND HX_OS_HAVE_IPC AND NOT CMAKE_CROSSCOMPILING)
 	find_package(Python3 QUIET COMPONENTS Interpreter)
 	if(Python3_Interpreter_FOUND)

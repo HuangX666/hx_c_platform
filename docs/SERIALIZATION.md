@@ -4,7 +4,7 @@
 
 ## 1. Choose an entry point
 
-For a known data structure, declare its fields once and call `hx_os_codec_encode/decode`. Fields can contain integers, floating-point values, booleans, strings, nested structures and arrays. C++11 uses `hx::Codec<T>` and `Result`, with exceptions disabled.
+For new data types, use `HX_CODEC_STRUCT` to declare the structure and its mapping together, then call `hx_os_codec_encode/decode`. Existing structures retain explicit mapping. Fields can contain integers, floating-point values, booleans, strings, nested structures and arrays. C++11 uses `hx::Codec<T>` and `Result`, with exceptions disabled.
 
 For a variable shape, use `hx_os_config_parse/create/replace/serialize`. An array can contain numbers, strings, null, objects and further arrays. Each node retains its actual type. Inspect `hx_os_config_kind` before selecting a getter; a heterogeneous array should not be declared as an integer array.
 
@@ -39,23 +39,16 @@ A JSON string containing `"{...}"` stays a string. Only the explicit `hx_os_conf
 
 ## 3. Complete C example: a structure to JSON and back
 
-This program links only to `hx_c_platform`. The same `HX_OS_CODEC_FIELD` declarations drive both directions.
+This program links only to `hx_c_platform`. `HX_CODEC_STRUCT` declares the structure, fields and schema together; each member name appears once. Ordinary C99/C++11 preprocessing expands it, with no Python, Clang analyzer or generation step. The complete file is [codec_macros.c](../examples/codec_macros.c).
 
 ```c
-#include <hx_codec.h>
+#include <hx_codec_macros.h>
 #include <stdio.h>
 
-typedef struct connection {
-	hx_string_view host;
-	int32_t port;
-} connection;
-
-static const hx_os_codec_field connection_fields[] = {
-	HX_OS_CODEC_FIELD(connection, host, HX_OS_CODEC_STRING),
-	HX_OS_CODEC_FIELD(connection, port, HX_OS_CODEC_I32)
-};
-static const hx_os_codec_schema connection_schema =
-	HX_OS_CODEC_SCHEMA(connection, connection_fields, "connection");
+HX_CODEC_STRUCT(connection,
+	HX_CODEC_STRING(host),
+	HX_CODEC_I32(port)
+);
 
 int main(void)
 {
@@ -106,12 +99,15 @@ The runnable [serialization.c](../examples/serialization.c) uses [serialization_
 Common field declarations:
 
 ```c
-HX_OS_CODEC_FIELD(device, name, HX_OS_CODEC_STRING)
-HX_OS_CODEC_OBJECT_FIELD(device, range, &limits_schema)
-HX_OS_CODEC_ARRAY_FIELD(device, samples, &sample_type)
+HX_CODEC_STRUCT(device,
+	HX_CODEC_STRING(name),
+	HX_CODEC_ARRAY(samples, sample),
+	HX_CODEC_OBJECT(range, limits),
+	HX_CODEC_BOOL(enabled)
+);
 ```
 
-A dynamic array field has type `hx_os_codec_array`, a `{data, count}` span. Encoding borrows your contiguous array; decoding returns a contiguous array owned by the result. `sample_type` describes an element. Inline fixed arrays use `HX_OS_CODEC_FIXED_FIELD`; decoded length must match exactly. Array elements may themselves be objects or arrays, within depth and memory limits.
+A dynamic array field has type `hx_os_codec_array`, a `{data, count}` span. Encoding borrows your contiguous array; decoding returns a contiguous array owned by the result. The `sample` macro argument describes an element; declare that type first with `HX_CODEC_STRUCT`. Inline fixed arrays use `HX_CODEC_FIXED(points, double, 3)`; decoded length must match exactly. Macro array elements can be objects. For direct arrays of arrays, compose the existing explicit element descriptors; depth and memory limits still apply.
 
 Field kinds cover signed/unsigned 8/16/32/64-bit integers, `float`, `double`, booleans, `hx_string_view`, inline character buffers, objects, dynamic/fixed arrays and NODE. Boolean storage is `int` or a one-byte bool. BUFFER is an inline NUL-terminated character array and rejects overflow or embedded NUL. STRING preserves byte length and allowed embedded NUL.
 
@@ -121,9 +117,47 @@ For a `payload` that can contain this:
 {"items":[1,"文字",null,{"children":[true,2.5,{},[]]}]}
 ```
 
-Declare `const hx_os_config_node *payload` and map it as `HX_OS_CODEC_NODE`. It retains the entire subtree. `hx_os_config_pointer(payload, "/items/3/children/1", &node)` locates the nested number. Nodes borrow the decoded owner. Encoding a NODE borrows a live document and copies its subtree. XML NODE fields require XML element subtrees; other formats must also represent the supplied subtree.
+Use `HX_CODEC_NODE(payload)`, or explicitly map an existing `const hx_os_config_node *payload` as `HX_OS_CODEC_NODE`. It retains the entire subtree. `hx_os_config_pointer(payload, "/items/3/children/1", &node)` locates the nested number. Nodes borrow the decoded owner. Encoding a NODE borrows a live document and copies its subtree. XML NODE fields require XML element subtrees; other formats must also represent the supplied subtree.
 
 For document-only construction, [nested_document.c](../examples/nested_document.c) describes a mixed array with `hx_os_config_value`, copies it with `hx_os_config_create`, then writes JSON with `hx_os_config_serialize`. Descriptor names, strings and numeric text are borrowed only until create returns. Numeric descriptions use complete JSON number text to avoid a double conversion that could round a large integer.
+
+### 4.1 Choosing field macros
+
+| Declaration | Member / purpose |
+| --- | --- |
+| `HX_CODEC_STRING(host)` | `hx_string_view host`, with section 3 lifetime rules |
+| `HX_CODEC_I32(port)` | `int32_t port`; also I8/U8/I16/U16/U32/I64/U64 |
+| `HX_CODEC_FLOAT(value)` / `HX_CODEC_DOUBLE(value)` | `float` / `double` |
+| `HX_CODEC_BOOL(enabled)` | `hx_codec_bool`, an `int` with boolean semantics |
+| `HX_CODEC_BUFFER(name, 64)` | Inline `char name[64]`, capacity includes NUL |
+| `HX_CODEC_OBJECT(range, limits)` | Inline `limits range`; define the child first |
+| `HX_CODEC_ARRAY(samples, sample)` | Dynamic `hx_os_codec_array` of `sample` |
+| `HX_CODEC_FIXED(points, double, 3)` | Inline `double points[3]` |
+| `HX_CODEC_NODE(payload)` | `hx_codec_node`, a `const hx_os_config_node *` |
+
+Array elements can be fixed-width integer identifiers from int8_t through uint64_t, float, double, hx_string_view, hx_codec_bool, hx_codec_node, or a type previously defined with HX_CODEC_STRUCT in the current scope. Examples: `HX_CODEC_ARRAY(names, hx_string_view)` and `HX_CODEC_ARRAY(states, hx_codec_bool)`. Dynamic spans require an element type because hx_os_codec_array itself stores only a pointer and count.
+
+Wrap a field to rename it, make it optional or map it to an XML attribute:
+
+```c
+HX_CODEC_STRUCT_NAMED(connection_options, "connection",
+	HX_CODEC_NAME("server_host", HX_CODEC_STRING(host)),
+	HX_CODEC_OPTIONAL(HX_CODEC_I32(port)),
+	HX_CODEC_XML_ATTRIBUTE(HX_CODEC_I32(id))
+);
+```
+
+Members remain host, port and id; output names are server_host, port and id. The XML root is connection, and id becomes an XML attribute while remaining a normal field in JSON and other formats. Wrappers compose, for example an optional XML attribute. Missing optional values retain the codec's zero/empty semantics; type errors still fail.
+
+Use the macros for new types at file or C++ namespace scope, terminated by a semicolon. Each structure supports **1–32 fields**, with no trailing comma. Fixed extents and buffer capacities must be positive integer constant expressions. Member order follows declaration order: no sorting, packing or guessed pointer types. Generated type_fields/type_schema objects have internal linkage and read-only static storage, so declarations can live in a guarded shared header.
+
+Existing public structures keep their declarations and use HX_OS_CODEC_FIELD, HX_OS_CODEC_OBJECT_FIELD, HX_OS_CODEC_ARRAY_FIELD, HX_OS_CODEC_FIXED_FIELD and HX_OS_CODEC_SCHEMA. Use those explicit APIs for more than 32 fields, other typedef element aliases or qualified types across namespaces. The macro field limit does not change document depth or node limits.
+
+### 4.2 Embedded Linux
+
+Build normally with the actual SDK. Macro expansion emits standard C99/C++11 declarations; the ARM or other target compiler evaluates sizeof/offsetof rather than importing host-calculated offsets. Building an ARM program on a Windows/x86 host requires no Python, Clang analyzer or generation tool on the board. There is no extra runtime registration/initialization; encoding and decoding reuse the existing codec.
+
+Use the correct sysroot, libc, floating-point ABI, headers and alignment settings, as in an ordinary C/C++ build. A glibc cross-build does not establish support for every musl toolchain, older SDK or physical board. [Validation records](VALIDATION.md) distinguish ARMv7/AArch64 cross-builds and QEMU execution from real board testing.
 
 ## 5. C++11 without exceptions
 
@@ -197,6 +231,7 @@ ctest --test-dir build-serialization -C Release -R 'config_tree|codec|serializat
 Windows executables are in `build-serialization/bin/Release`; a single-configuration Linux build uses `build-serialization/bin`:
 
 ```powershell
+./build-serialization/bin/Release/hx_os_codec_macros.exe
 ./build-serialization/bin/Release/hx_os_serialization.exe json
 ./build-serialization/bin/Release/hx_os_serialization.exe xml
 ./build-serialization/bin/Release/hx_os_nested_document.exe

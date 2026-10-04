@@ -8,6 +8,28 @@ This records development validation through 2026-10-04. A design, implemented ad
 
 The JSON entry below records the current examples. Earlier independent text examples, initial shared workflows, IPC/KCP implementation and other batches describe their historical versions.
 
+## 2026-10-04: Single-declaration codec macros
+
+Baseline a48b51c, local dev. The standalone hx_codec_macros.h header adds HX_CODEC_STRUCT to declare a normal C99/C++11 value structure, fields and schema from one member list. Scalars, strings, nested objects, dynamic/fixed arrays, NODE, renaming, optional values and XML attributes are supported, with 1–32 fields. Existing codec implementation, public layouts and exported functions remain intact. The C++ facade includes the macro header. No source generator, target runtime dependency, runtime registration or background activity was added.
+
+| Configuration | Evidence from this run |
+| --- | --- |
+| Windows MSVC x64 Release shared | 11/11 related tests, including C/C++ with both traditional and /Zc:preprocessor modes |
+| WSL Linux GCC x86_64 Release shared | 9/9 codec, C/C++ example and format interoperability tests |
+| Headers and strict language modes | Standalone C99/C++11 headers; GCC/Clang strict C99 and no-exception C++11 syntax checks |
+| WSL ASan + UBSan with leak detection | codec, cpp_codec and macro example, 3/3; no reported memory errors/leaks |
+| ARMv7 Linux GNU cross-toolchain | Static library and C/C++ targets built; qemu-arm -L /usr/arm-linux-gnueabihf passed 3/3 |
+| AArch64 Linux GNU cross-toolchain | Static library and C/C++ targets built; qemu-aarch64 -L /usr/aarch64-linux-gnu passed 3/3 |
+| Installed Windows / WSL consumers | Each: pure C 16/16 and C++11-enabled project 26/26; final installed headers rechecked with 2/2 relevant C/C++ tests |
+| Documentation | Both complete C tutorial programs extracted and compiled; execution produced {"host":"localhost","port":8080} and port = 8080 |
+
+Existing codec tests now check generated/manual layout and offsets, one/32-field boundaries and final-field preservation, scalar widths, arrays, nesting, heterogeneous NODE values, composed modifiers and C++ namespaces. GCC C99/C++11 compile probes reject empty lists, trailing commas and 33-field declarations. Expansion stages handle MSVC's traditional preprocessor; only potentially unused readonly metadata is annotated for Clang, without disabling consumer warnings globally.
+
+Build directories contain codec-macros-build.log, codec-macros-ctest.log, codec-macros-install.log and codec-macros-consumer-final.log. Validation was scoped to the changed declaration/consumption paths; no new full desktop, Android, macOS, Win7/8.1 or TSan run. ARM evidence uses glibc cross-toolchains and QEMU, not physical boards, musl, arbitrary SDKs, drivers or system performance.
+
+The macros retain sizeof/offsetof for evaluation by the actual target compiler and preserve declaration order. This layer declares static readonly descriptions, with no runtime reflection or new allocation path; no throughput or memory optimization claim. See [serialization](SERIALIZATION.md) for usage and embedded boundaries.
+
+
 ## 2026-10-04: Nested documents and schema serialization
 
 Baseline `450e42f`, local `dev`. YAML/XML/TOML/ENV output completes the seven format writers. New APIs construct documents, return immutable replacements, convert formats and explicitly parse string subdocuments. The independently trimmable CODEC maps declared C/C++ value fields, nested objects, dynamic/fixed arrays and heterogeneous NODE subtrees. Existing public layouts remain intact; C++11 exceptions remain disabled. No new third-party dependency or vendor modification.

@@ -1,7 +1,7 @@
 #ifndef HX_C_PLATFORM_CPP_CODEC_HPP
 #define HX_C_PLATFORM_CPP_CODEC_HPP
 
-#include <hx_codec.h>
+#include <hx_codec_macros.h>
 #include <hx/Values.hpp>
 
 namespace hx {

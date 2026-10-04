@@ -1,5 +1,6 @@
 #include <hx_os.h>
 #include "../examples/serialization_schema.h"
+#include "codec_macros_fixture.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -370,6 +371,144 @@ static void test_arrays_attributes_and_widths(void)
 	hx_string_destroy(&text);
 }
 
+static void test_macro_schema(void)
+{
+	typedef struct manual_connection {
+		hx_string_view host;
+		int32_t socket_port;
+		hx_string_view note;
+	} manual_connection;
+	hx_os_codec_result *owner = NULL;
+	macro_connection value = {{"local", 5}, 8080, {"ready", 5}};
+	hx_string text = HX_STRING_INIT;
+	const char *missing = "{\"server_host\":\"local\"}";
+	int format;
+	CHECK(sizeof(macro_connection) == sizeof(manual_connection));
+	CHECK(macro_connection_fields[0].offset ==
+		offsetof(manual_connection, host));
+	CHECK(macro_connection_fields[1].offset ==
+		offsetof(manual_connection, socket_port));
+	CHECK(macro_connection_fields[2].offset ==
+		offsetof(manual_connection, note));
+	CHECK(macro_connection_fields[1].flags ==
+		(HX_OS_CODEC_OPTIONAL | HX_OS_CODEC_XML_ATTRIBUTE));
+	CHECK(macro_one_schema.count == 1 && macro_many_schema.count == 32);
+	CHECK(macro_many_fields[31].offset == offsetof(macro_many, field_32));
+	CHECK(!strcmp(macro_many_fields[31].name, "field_32"));
+	for (format = HX_OS_CONFIG_JSON; format <= HX_OS_CONFIG_PROPERTIES;
+		++format) {
+		const macro_connection *copy;
+		CHECK(hx_os_codec_encode(&macro_connection_schema, &value,
+			      format, &text, NULL, NULL) == HX_OS_OK);
+		CHECK(hx_os_codec_decode(NULL, &macro_connection_schema, format,
+			      text.data, text.size, NULL, &owner,
+			      NULL) == HX_OS_OK);
+		copy = hx_os_codec_data(owner);
+		CHECK(copy->socket_port == 8080 && copy->host.size == 5 &&
+			copy->note.size == 5);
+		CHECK(!memcmp(copy->host.data, "local", 5));
+		hx_os_codec_release(owner);
+		owner = NULL;
+	}
+	CHECK(hx_os_codec_decode(NULL, &macro_connection_schema,
+		      HX_OS_CONFIG_JSON, missing, strlen(missing), NULL, &owner,
+		      NULL) == HX_OS_OK);
+	CHECK(((const macro_connection *)hx_os_codec_data(owner))
+			->socket_port == 0);
+	CHECK(((const macro_connection *)hx_os_codec_data(owner))->note.size ==
+		0);
+	hx_os_codec_release(owner);
+	{
+		macro_many many = {0};
+		many.field_01 = 10;
+		many.field_32 = 32;
+		CHECK(hx_os_codec_encode(&macro_many_schema, &many,
+			      HX_OS_CONFIG_JSON, &text, NULL,
+			      NULL) == HX_OS_OK);
+		CHECK(hx_os_codec_decode(NULL, &macro_many_schema,
+			      HX_OS_CONFIG_JSON, text.data, text.size, NULL,
+			      &owner, NULL) == HX_OS_OK);
+		CHECK(((const macro_many *)hx_os_codec_data(owner))->field_32 ==
+			32);
+		hx_os_codec_release(owner);
+	}
+	{
+		macro_scalars value_all = {INT8_MIN, UINT8_MAX, INT16_MIN,
+			UINT16_MAX, INT32_MIN, UINT32_MAX, INT64_MIN,
+			UINT64_MAX, 0.5f, 1.25, 1};
+		const macro_scalars *copy;
+		CHECK(hx_os_codec_encode(&macro_scalars_schema, &value_all,
+			      HX_OS_CONFIG_JSON, &text, NULL,
+			      NULL) == HX_OS_OK);
+		CHECK(hx_os_codec_decode(NULL, &macro_scalars_schema,
+			      HX_OS_CONFIG_JSON, text.data, text.size, NULL,
+			      &owner, NULL) == HX_OS_OK);
+		copy = hx_os_codec_data(owner);
+		CHECK(copy->s8 == INT8_MIN && copy->u8 == UINT8_MAX &&
+			copy->s16 == INT16_MIN);
+		CHECK(copy->u16 == UINT16_MAX && copy->s32 == INT32_MIN &&
+			copy->u32 == UINT32_MAX);
+		CHECK(copy->s64 == INT64_MIN && copy->u64 == UINT64_MAX &&
+			copy->flag);
+		CHECK(copy->real32 == 0.5f && copy->real64 == 1.25);
+		hx_os_codec_release(owner);
+	}
+	hx_string_destroy(&text);
+}
+
+static void test_macro_containers(void)
+{
+	const char *json =
+		"{\"values\":[-1,42],\"switches\":[true,false],"
+		"\"texts\":[\"a\",\"b\"],\"objects\":[{\"server_host\":"
+		"\"first\"}],"
+		"\"points\":[1.5,2.5,3.5],\"connections\":[{\"server_host\":"
+		"\"one\"},"
+		"{\"server_host\":\"two\"}],\"label\":\"sensor\","
+		"\"current\":{\"server_host\":\"current\",\"port\":80}}";
+	const char *mixed =
+		"{\"payload\":{\"mixed\":[1,null,\"x\"]},\"parts\":[true,2.5]}";
+	hx_os_codec_result *owner = NULL;
+	const macro_container *copy;
+	hx_string text = HX_STRING_INIT;
+	CHECK(hx_os_codec_decode(NULL, &macro_container_schema,
+		      HX_OS_CONFIG_JSON, json, strlen(json), NULL, &owner,
+		      NULL) == HX_OS_OK);
+	copy = hx_os_codec_data(owner);
+	CHECK(copy->values.count == 2 &&
+		((const int32_t *)copy->values.data)[1] == 42);
+	CHECK(copy->switches.count == 2 &&
+		((const hx_codec_bool *)copy->switches.data)[0] == 1);
+	CHECK(copy->texts.count == 2 &&
+		((const hx_string_view *)copy->texts.data)[1].size == 1);
+	CHECK(copy->objects.count == 1 &&
+		((const macro_connection *)copy->objects.data)[0].host.size ==
+			5);
+	CHECK(copy->points[2] == 3.5 && copy->connections[1].host.size == 3);
+	CHECK(!strcmp(copy->label, "sensor") &&
+		copy->current.socket_port == 80);
+	CHECK(hx_os_codec_encode(&macro_container_schema, copy,
+		      HX_OS_CONFIG_XML, &text, NULL, NULL) == HX_OS_OK);
+	CHECK(strstr(text.data, "<current port=\"80\">") != NULL);
+	hx_os_codec_release(owner);
+	owner = NULL;
+	CHECK(hx_os_codec_decode(NULL, &macro_container_schema,
+		      HX_OS_CONFIG_XML, text.data, text.size, NULL, &owner,
+		      NULL) == HX_OS_OK);
+	CHECK(((const macro_container *)hx_os_codec_data(owner))
+			->values.count == 2);
+	hx_os_codec_release(owner);
+	owner = NULL;
+	CHECK(hx_os_codec_decode(NULL, &macro_nodes_schema, HX_OS_CONFIG_JSON,
+		      mixed, strlen(mixed), NULL, &owner, NULL) == HX_OS_OK);
+	CHECK(((const macro_nodes *)hx_os_codec_data(owner))->parts.count == 2);
+	CHECK(hx_os_codec_encode(&macro_nodes_schema, hx_os_codec_data(owner),
+		      HX_OS_CONFIG_JSON, &text, NULL, NULL) == HX_OS_OK);
+	CHECK(!strcmp(text.data, mixed));
+	hx_os_codec_release(owner);
+	hx_string_destroy(&text);
+}
+
 int main(void)
 {
 	if (!hx_os_codec_available()) {
@@ -382,6 +521,8 @@ int main(void)
 		return 0;
 	}
 	CHECK(hx_os_capabilities() & HX_OS_CAP_CODEC);
+	test_macro_schema();
+	test_macro_containers();
 	test_arrays_attributes_and_widths();
 	test_nested();
 	test_flat();
