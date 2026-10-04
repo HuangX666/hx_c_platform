@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #define CHECK(value)                                                           \
 	do {                                                                   \
 		if (!(value)) {                                                \
@@ -16,13 +17,16 @@ int main(void)
 	hx_os_bit_writer writer;
 	uint64_t value = 99;
 	unsigned offset, bits;
+
 	if (!(hx_os_capabilities() & HX_OS_CAP_BITSTREAM)) {
 		CHECK(hx_os_bit_reader_init(&reader, NULL, 0, NULL) ==
 			HX_OS_NOT_SUPPORTED);
 		CHECK(hx_os_bit_writer_align(NULL, NULL) ==
 			HX_OS_NOT_SUPPORTED);
+
 		return 0;
 	}
+
 	memset(bytes, 0xff, sizeof(bytes));
 	CHECK(hx_os_bit_writer_init(&writer, bytes, 2, NULL) == HX_OS_OK);
 	CHECK(hx_os_bit_writer_write_bits(&writer, 3, 5, NULL) == HX_OS_OK);
@@ -42,6 +46,7 @@ int main(void)
 	CHECK(hx_os_bit_reader_read_bits(&reader, 1, &value, NULL) ==
 			HX_OS_EOF &&
 		value == 0x35 && reader.position_bits == 16);
+
 	memcpy(before, bytes, sizeof(bytes));
 	CHECK(hx_os_bit_writer_write_bits(&writer, 1, 1, NULL) ==
 			HX_OS_OUTPUT_FULL &&
@@ -55,12 +60,15 @@ int main(void)
 	CHECK(hx_os_bit_reader_read_bits(&reader, 0, &value, NULL) ==
 			HX_OS_OK &&
 		value == 0);
+
 	for (offset = 0; offset < 8; ++offset)
 		for (bits = 0; bits <= 64; ++bits) {
 			unsigned i;
+
 			uint64_t expected = UINT64_C(0xa513e7812ca43569);
 			if (bits < 64)
 				expected &= (UINT64_C(1) << bits) - 1;
+
 			memset(bytes, 0xcc, sizeof(bytes));
 			CHECK(hx_os_bit_writer_init(&writer, bytes,
 				      sizeof(bytes), NULL) == HX_OS_OK);
@@ -68,6 +76,7 @@ int main(void)
 				      &writer, offset, 0, NULL) == HX_OS_OK);
 			CHECK(hx_os_bit_writer_write_bits(&writer, bits,
 				      expected, NULL) == HX_OS_OK);
+
 			/* Inspect each output bit independently of the reader.
 			 */
 			for (i = 0; i < bits; ++i)
@@ -75,6 +84,7 @@ int main(void)
 					       (7 - (offset + i) % 8)) &
 					      1u) ==
 					((expected >> (bits - i - 1)) & 1u));
+
 			CHECK(hx_os_bit_reader_init(&reader, bytes,
 				      sizeof(bytes), NULL) == HX_OS_OK);
 			CHECK(hx_os_bit_reader_read_bits(&reader, offset,
@@ -83,5 +93,6 @@ int main(void)
 				      NULL) == HX_OS_OK &&
 				value == expected);
 		}
+
 	return 0;
 }

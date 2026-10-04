@@ -32,13 +32,17 @@ hx_os_status hx_os_i_pipe_pair(int read_async, int write_async,
 			break;
 		}
 	}
+
 	if (code) {
 		(void)close(pair[0]);
 		(void)close(pair[1]);
+
 		return hx_os_i_errno(error, code);
 	}
+
 	handles[0] = pair[0];
 	handles[1] = pair[1];
+
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
 
@@ -48,9 +52,11 @@ hx_os_status hx_os_i_pipe_file(hx_os_context *context, int native,
 	hx_os_file *file = hx_os_i_zero(context, sizeof(*file));
 	if (!file)
 		return hx_os_i_error(error, HX_OS_NO_MEMORY, 0, 0);
+
 	file->descriptor = native;
 	file->pipe = 1;
 	*out = file;
+
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
 
@@ -66,21 +72,28 @@ void hx_os_i_pipe_step(hx_os_request *request)
 	hx_os_operation *op = &request->operation;
 	hx_os_status status;
 	size_t count = 0, remaining = op->bytes - request->completion.bytes;
+
 	if (request->stop_status || !remaining) {
 		request->ready = 1;
+
 		return;
 	}
+
 	if (request->started && !(pipe->source.ready & request->directions))
 		return;
+
 	pipe->source.ready &= ~request->directions;
 	request->started = 1;
 	if (remaining > INT_MAX)
 		remaining = INT_MAX;
+
 	if (op->kind == HX_OS_I_OP_PIPE_READ) {
 		ssize_t result;
+
 		do {
 			result = read(pipe->native, op->data, remaining);
 		} while (result < 0 && errno == EINTR);
+
 		status = result < 0
 			? hx_os_i_errno(&request->completion.error, errno)
 			: hx_os_i_error(&request->completion.error,
@@ -96,6 +109,7 @@ void hx_os_i_pipe_step(hx_os_request *request)
 			status = hx_os_i_error(&request->completion.error,
 				HX_OS_IO_ERROR, 0, 0);
 	}
+
 	request->completion.bytes += count;
 	if (status == HX_OS_WOULD_BLOCK ||
 		(status == HX_OS_OK && op->kind == HX_OS_I_OP_PIPE_WRITE &&
@@ -104,6 +118,7 @@ void hx_os_i_pipe_step(hx_os_request *request)
 		if (status == HX_OS_OK)
 			return;
 	}
+
 	request->ready = 1;
 }
 #endif

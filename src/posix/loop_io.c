@@ -5,6 +5,7 @@ hx_os_status hx_os_i_loop_attach(
 {
 	(void)loop;
 	(void)socket;
+
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
 
@@ -16,14 +17,19 @@ void hx_os_i_loop_step(hx_os_request *request)
 	hx_os_status status;
 	size_t count = 0;
 	int was_started = request->started;
+
 	if (request->stop_status) {
 		request->ready = 1;
+
 		return;
 	}
+
 	if (was_started && !(socket->source.ready & request->directions))
 		return;
+
 	socket->source.ready &= ~request->directions;
 	request->started = 1;
+
 	switch (op->kind) {
 	case HX_OS_OP_CONNECT:
 		status = was_started
@@ -56,11 +62,13 @@ void hx_os_i_loop_step(hx_os_request *request)
 			&request->completion.peer, op->data, op->bytes, &count,
 			&request->completion.error);
 		break;
+
 	default:
 		status = hx_os_i_error(
 			&request->completion.error, HX_OS_INVALID, 0, 0);
 		break;
 	}
+
 	request->completion.bytes += count;
 	if (status == HX_OS_WOULD_BLOCK ||
 		(status == HX_OS_OK && op->kind == HX_OS_OP_WRITE &&
@@ -70,6 +78,7 @@ void hx_os_i_loop_step(hx_os_request *request)
 		if (status == HX_OS_OK)
 			return;
 	}
+
 	request->ready = 1;
 #else
 	(void)hx_os_i_error(

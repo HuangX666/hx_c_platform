@@ -29,12 +29,15 @@ Buildable examples: [direct_calls.cpp](../examples/direct_calls.cpp), [settings.
 ~~~c
 hx_string text = HX_STRING_INIT;
 hx_string_parts *parts = NULL;
+
 hx_os_status status = hx_string_assign_cstr(&text, " one,two,中文 ", NULL);
 if (status == HX_OS_OK)
 	hx_string_trim_ascii_in_place(&text);
+
 if (status == HX_OS_OK)
 	status = hx_string_split(&text, hx_string_view_from_cstr(","),
 		&parts, NULL);
+
 /* Check status before inspecting borrowed parts_at views. */
 hx_string_parts_destroy(&parts);
 hx_string_destroy(&text);
@@ -93,9 +96,11 @@ hx::Result<hx::String> window_title() noexcept
 	auto language = hx::TextLookup::load("language.ini");
 	if (!language)
 		return hx::Failure(language.error());
+
 	auto added = language.value().addFile("custom.ini");
 	if (!added)
 		return hx::Failure(added.error());
+
 	return language.value().get("window.title");
 }
 ~~~
@@ -108,6 +113,7 @@ Later duplicate keys win; a missing key returns itself. Default limits are 4096 
 
 ~~~c
 uint64_t interval_ns;
+
 hx_os_status status = hx_os_muldiv_u64(1001, 1000000000, 30000,
 	HX_OS_ROUND_NEAREST, &interval_ns, NULL);
 /* On success: 33366667 ns. */

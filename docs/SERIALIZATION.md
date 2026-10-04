@@ -65,18 +65,23 @@ int main(void)
 		status = hx_os_codec_decode(NULL, &connection_schema,
 			HX_OS_CONFIG_JSON, json.data, json.size, NULL,
 			&owner, &error);
+
 	if (status != HX_OS_OK) {
 		fprintf(stderr, "%s: %s\n",
 			hx_os_status_name(status), error.message);
+
 		hx_string_destroy(&json);
+
 		return 1;
 	}
 
 	puts(hx_string_c_str(&json));
 	decoded = hx_os_codec_data(owner);
 	printf("port = %d\n", (int)decoded->port);
+
 	hx_os_codec_release(owner);
 	hx_string_destroy(&json);
+
 	return 0;
 }
 ```
@@ -165,6 +170,7 @@ C++ reuses the same field mapping. These calls are from [serialization.cpp](../e
 
 ```cpp
 hx::Codec<device> codec(device_schema);
+
 auto decoded = codec.decode(json_text);
 if (!decoded)
 	return 1;
@@ -172,6 +178,7 @@ if (!decoded)
 auto xml = codec.encode(decoded.value().value(), HX_OS_CONFIG_XML);
 if (!xml)
 	return 1;
+
 std::puts(xml.value().c_str());
 ```
 
@@ -187,12 +194,15 @@ Documents are immutable. Editing returns a new version while the source and its 
 auto source = hx::ConfigDocument::parse("{\"port\":8080}");
 if (!source)
 	return 1;
+
 hx_os_config_value port = {
 	{NULL, 0}, {"9090", 4}, NULL, NULL, 0, 0, HX_OS_CONFIG_INTEGER
 };
+
 auto changed = source.value().withValue("/port", port);
 if (!changed)
 	return 1;
+
 auto yaml = changed.value().serialize(HX_OS_CONFIG_YAML);
 if (!yaml)
 	return 1;

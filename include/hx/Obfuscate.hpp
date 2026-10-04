@@ -1,8 +1,10 @@
 #ifndef HX_C_PLATFORM_CPP_OBFUSCATE_HPP
 #define HX_C_PLATFORM_CPP_OBFUSCATE_HPP
+
 #include <hx_os_obfuscate.h>
 #include <hx/Values.hpp>
 #include <array>
+
 namespace hx {
 namespace detail {
 template <size_t... Values> struct ObfuscationIndices {};
@@ -13,6 +15,7 @@ template <size_t... Values> struct ObfuscationSequence<0, Values...> {
 	typedef ObfuscationIndices<Values...> type;
 };
 } // namespace detail
+
 template <size_t Size, uint8_t Key> class ObfuscatedString {
 public:
 	static_assert(
@@ -23,13 +26,16 @@ public:
 	    : m_bytes_{{static_cast<unsigned char>(text[Indices] ^ Key)...}}
 	{
 	}
+
 	hx_os_obfuscated view() const noexcept
 	{
 		return {m_bytes_.data(), Size - 1, Key};
 	}
+
 	Result<String> decode(hx_os_context *context = NULL) const noexcept
 	{
 		auto encoded = view();
+
 		return detail::StringQuery(
 			[&](hx_string *out, hx_os_error *error) noexcept {
 				return hx_os_obfuscate_string(
@@ -41,6 +47,7 @@ public:
 private:
 	std::array<unsigned char, Size - 1> m_bytes_;
 };
+
 /* Declare the result constexpr to request compile-time encoding. Toolchains
  * can retain source/debug strings; this is reversible obfuscation.
  */

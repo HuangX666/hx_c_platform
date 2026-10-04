@@ -34,6 +34,7 @@ extern "C" {
 #define HX_OS_ABI_VERSION 1
 
 typedef int32_t hx_os_status;
+
 enum {
 	HX_OS_OK = 0,
 	HX_OS_EOF = 1,
@@ -105,7 +106,9 @@ typedef struct hx_os_context_options {
 } hx_os_context_options;
 
 HX_OS_API const char *HX_OS_CALL hx_os_status_name(hx_os_status status);
+
 HX_OS_API void HX_OS_CALL hx_os_error_clear(hx_os_error *error);
+
 /* required includes NUL; a small buffer is NUL-terminated when capacity > 0.
  * Native GAI text and Apple Mach text are appended only when valid UTF-8.
  * Other targets retain numeric Mach diagnostics. No network initialization.
@@ -113,19 +116,25 @@ HX_OS_API void HX_OS_CALL hx_os_error_clear(hx_os_error *error);
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_error_message(const hx_os_error *error,
 	char *buffer, size_t capacity, size_t *required);
+
 HX_OS_API void HX_OS_CALL hx_os_context_options_init(
 	hx_os_context_options *options);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_context_create(
 	const hx_os_context_options *options, hx_os_context **out,
 	hx_os_error *error);
+
 /* NULL context selects an immutable default allocator, not global settings. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_context_destroy(
 	hx_os_context **context, hx_os_error *error);
+
 HX_OS_API size_t HX_OS_CALL hx_os_context_allocations(
 	const hx_os_context *context);
+
 /* Zero-byte allocation is valid. alignment=0 selects fundamental alignment. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_memory_alloc(hx_os_context *context,
 	size_t bytes, size_t alignment, void **out, hx_os_error *error);
+
 HX_OS_API void HX_OS_CALL hx_os_memory_free(void *memory);
 
 typedef uint64_t hx_os_deadline;
@@ -135,20 +144,27 @@ typedef uint64_t hx_os_deadline;
 /* Read variants retain native failures. Units do not imply resolution. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_monotonic_read(
 	uint64_t *nanoseconds, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_wall_time_read(
 	int64_t *milliseconds, hx_os_error *error);
+
 /*
  * Monotonic time excludes suspend. Convenience reads return UINT64_MAX
  * (monotonic) or INT64_MIN (wall) on failure. Deadline creation then returns
  * NOW; use the status-returning read when clock failures need diagnosis.
  */
 HX_OS_API uint64_t HX_OS_CALL hx_os_monotonic_ns(void);
+
 HX_OS_API int64_t HX_OS_CALL hx_os_wall_time_ms(void);
+
 /* Overflow saturates to the largest finite deadline. */
 HX_OS_API hx_os_deadline HX_OS_CALL hx_os_deadline_after_ms(uint64_t ms);
+
 HX_OS_API int HX_OS_CALL hx_os_deadline_expired(hx_os_deadline deadline);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sleep_until(
 	hx_os_deadline deadline, hx_os_error *error);
+
 HX_OS_API void HX_OS_CALL hx_os_cpu_relax(void);
 
 enum {
@@ -164,8 +180,11 @@ enum {
 	HX_OS_CAP_CONFIG_DOUBLE = UINT64_C(1) << 9,
 	HX_OS_CAP_CONTAINERS = UINT64_C(1) << 10
 };
+
 HX_OS_API uint64_t HX_OS_CALL hx_os_capabilities(void);
+
 HX_OS_API const char *HX_OS_CALL hx_os_platform_name(void);
+
 HX_OS_API const char *HX_OS_CALL hx_os_cpu_name(void);
 #define HX_OS_CAP_SYSINFO (UINT64_C(1) << 11)
 #define HX_OS_CAP_LIBRARY (UINT64_C(1) << 12)
@@ -216,9 +235,11 @@ HX_OS_API const char *HX_OS_CALL hx_os_cpu_name(void);
 #define HX_OS_CAP_KCP (UINT64_C(1) << 58)
 #define HX_OS_CAP_CODEC (UINT64_C(1) << 59)
 #define HX_OS_CAP_IPC (UINT64_C(1) << 57)
+
 /* required includes NUL. These queries do not need initialization. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_version_string(
 	char *buffer, size_t capacity, size_t *required);
+
 HX_OS_API uint32_t HX_OS_CALL hx_os_abi_version(void);
 
 #ifdef __cplusplus

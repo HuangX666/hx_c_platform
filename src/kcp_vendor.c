@@ -5,8 +5,10 @@
 #include "kcp_symbols.h"
 
 void *hx_os_i_kcp_allocate(size_t bytes);
+
 void hx_os_i_kcp_deallocate(void *memory);
 
 #define malloc hx_os_i_kcp_allocate
 #define free hx_os_i_kcp_deallocate
+
 #include <ikcp.c>

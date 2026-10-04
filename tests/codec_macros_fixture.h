@@ -1,5 +1,6 @@
 #ifndef HX_TEST_CODEC_MACROS_FIXTURE_H
 #define HX_TEST_CODEC_MACROS_FIXTURE_H
+
 #include <hx_codec_macros.h>
 
 HX_CODEC_STRUCT(macro_one, HX_CODEC_I32(value));

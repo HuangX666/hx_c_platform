@@ -5,13 +5,17 @@ static int hx_os_filename_reserved(const char *text)
 {
 	char name[5] = {0};
 	size_t i = 0;
+
 	while (i < 4 && text[i] && text[i] != '.') {
 		unsigned char c = (unsigned char)text[i];
+
 		name[i] = (char)(c >= 'a' && c <= 'z' ? c - 'a' + 'A' : c);
 		++i;
 	}
+
 	if (text[i] && text[i] != '.')
 		return 0;
+
 	return !strcmp(name, "CON") || !strcmp(name, "PRN") ||
 		!strcmp(name, "AUX") || !strcmp(name, "NUL") ||
 		(i == 4 && name[3] >= '1' && name[3] <= '9' &&
@@ -26,31 +30,41 @@ hx_os_status hx_os_filename_format_string(int64_t milliseconds,
 	hx_string result;
 	hx_os_status status;
 	size_t i, bytes = 0;
+
 	if (!out)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+
 	if (extension && extension[0] == '.')
 		++extension;
+
 	while (extension && extension[bytes]) {
 		unsigned char c = (unsigned char)extension[bytes];
+
 		if (bytes == 32)
 			return hx_os_i_error(error, HX_OS_LIMIT, 0, 0);
+
 		if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
 			    (c >= '0' && c <= '9') || c == '-' || c == '_'))
 			return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 		++bytes;
 	}
+
 	hx_string_init(&result, out->context);
+
 	status = hx_os_wall_time_format_utc_string(milliseconds,
 		pattern ? pattern : "%CCYY-%MM-%DD_%hh-%mm-%ss", &result,
 		error);
 	if (status == HX_OS_OK && !result.size)
 		status = hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+
 	if (status == HX_OS_OK) {
 		for (i = 0; i < result.size; ++i) {
 			unsigned char c = (unsigned char)result.data[i];
+
 			if (c < 0x20 || c == 0x7f || strchr("<>:\"/\\|?*", c))
 				result.data[i] = '_';
 		}
+
 		for (i = result.size; i &&
 			(result.data[i - 1] == ' ' ||
 				result.data[i - 1] == '.');
@@ -60,32 +74,42 @@ hx_os_status hx_os_filename_format_string(int64_t milliseconds,
 			status = hx_string_insert(&result, 0,
 				hx_string_view_from_cstr("_"), error);
 	}
+
 	if (status == HX_OS_OK && bytes)
 		status = hx_string_append_cstr(&result, ".", error);
+
 	if (status == HX_OS_OK && bytes)
 		status = hx_string_append_cstr(&result, extension, error);
+
 	if (status == HX_OS_OK && result.size > 240)
 		status = hx_os_i_error(error, HX_OS_LIMIT, 0, 0);
+
 	if (status == HX_OS_OK)
 		hx_string_move(out, &result);
+
 	hx_string_destroy(&result);
+
 	return status;
 #else
 	(void)milliseconds;
 	(void)pattern;
 	(void)extension;
 	(void)out;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 #endif
 }
+
 hx_os_status hx_os_filename_format(int64_t milliseconds, const char *pattern,
 	const char *extension, char *buffer, size_t capacity, size_t *required,
 	hx_os_error *error)
 {
 	hx_string text = HX_STRING_INIT;
 	hx_os_status status;
+
 	if (!required || (!buffer && capacity))
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+
 	status = hx_os_filename_format_string(
 		milliseconds, pattern, extension, &text, error);
 	if (status == HX_OS_OK) {
@@ -95,14 +119,19 @@ hx_os_status hx_os_filename_format(int64_t milliseconds, const char *pattern,
 		else
 			memcpy(buffer, hx_string_c_str(&text), *required);
 	}
+
 	hx_string_destroy(&text);
+
 	return status;
 }
+
 hx_os_status hx_os_filename_generate(
 	const char *extension, hx_string *out, hx_os_error *error)
 {
 	int64_t milliseconds;
+
 	hx_os_status status = hx_os_wall_time_read(&milliseconds, error);
+
 	return status == HX_OS_OK ? hx_os_filename_format_string(milliseconds,
 					    NULL, extension, out, error)
 				  : status;

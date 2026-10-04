@@ -14,6 +14,7 @@
 int main(int argc, char **argv)
 {
 	typedef uint32_t(HX_OS_CALL * hx_plugin_abi_fn)(void);
+
 	hx_plugin_abi_fn abi;
 	hx_os_context *context = NULL;
 	hx_os_library *library = NULL;
@@ -23,6 +24,7 @@ int main(int argc, char **argv)
 	hx_os_error error;
 	void *address = NULL;
 	size_t invalid;
+
 	CHECK(argc == 2);
 	CHECK(hx_os_library_close(&library, NULL) == HX_OS_OK);
 	CHECK(hx_os_library_open(NULL, NULL, 0, &library, NULL) ==
@@ -34,8 +36,10 @@ int main(int argc, char **argv)
 				HX_OS_NOT_SUPPORTED &&
 			!library);
 		CHECK(error.status == HX_OS_NOT_SUPPORTED);
+
 		return 0;
 	}
+
 	CHECK(hx_os_library_open_ex(NULL, "hx-library-does-not-exist", 0,
 		      &missing, &diagnostic, &error) < HX_OS_OK);
 	CHECK(!missing && diagnostic.size && error.domain != HX_OS_ERROR_NONE);
@@ -49,6 +53,7 @@ int main(int argc, char **argv)
 	CHECK(hx_os_library_symbol(library, "hx_plugin_abi_version", &address,
 		      &error) == HX_OS_OK &&
 		address);
+
 	memcpy(&abi, &address, sizeof(abi));
 	CHECK(abi() == hx_os_abi_version());
 	CHECK(hx_os_library_bind(library, "hx_plugin_abi_version", &abi,
@@ -68,11 +73,14 @@ int main(int argc, char **argv)
 	CHECK(!library && !diagnostic.size);
 	CHECK(hx_os_context_allocations(context) == 0);
 	CHECK(hx_os_context_destroy(&context, NULL) == HX_OS_OK);
+
 	hx_string_destroy(&diagnostic);
 	hx_string_destroy(&saved);
 	CHECK(hx_os_library_open(NULL, argv[1], HX_OS_LIBRARY_GLOBAL, &library,
 		      NULL) == HX_OS_OK);
 	CHECK(hx_os_library_close(&library, NULL) == HX_OS_OK);
+
 	puts("dynamic library contracts passed");
+
 	return 0;
 }

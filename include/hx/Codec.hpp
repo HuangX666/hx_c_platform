@@ -23,6 +23,7 @@ public:
 	{
 		std::memcpy(&m_value_, hx_os_codec_data(owner), sizeof(T));
 	}
+
 	Decoded(Decoded &&other) noexcept
 	    : m_value_()
 	    , m_owner_(other.m_owner_)
@@ -30,6 +31,7 @@ public:
 		std::memcpy(&m_value_, &other.m_value_, sizeof(T));
 		other.m_owner_ = NULL;
 	}
+
 	Decoded &operator=(Decoded &&other) noexcept
 	{
 		if (this != &other) {
@@ -38,25 +40,35 @@ public:
 			std::memcpy(&m_value_, &other.m_value_, sizeof(T));
 			other.m_owner_ = NULL;
 		}
+
 		return *this;
 	}
+
 	Decoded(const Decoded &) = delete;
+
 	Decoded &operator=(const Decoded &) = delete;
+
 	~Decoded() noexcept
 	{
 		hx_os_codec_release(m_owner_);
 	}
+
 	const T &value() const & noexcept
 	{
 		assert(m_owner_);
+
 		return m_value_;
 	}
+
 	const T &value() const && = delete;
+
 	const T *operator->() const noexcept
 	{
 		assert(m_owner_);
+
 		return &m_value_;
 	}
+
 	/* U must match the field's declared element type. Copies one element
 	 * into a live C++ object; its views still borrow this owner. */
 	template <typename U>
@@ -75,6 +87,7 @@ public:
 			static_cast<const unsigned char *>(array.data) +
 				index * sizeof(U),
 			sizeof(U));
+
 		return item;
 	}
 
@@ -94,6 +107,7 @@ public:
 	    : m_schema_(&schema)
 	{
 	}
+
 	Result<String> encode(const T &value, int format = HX_OS_CONFIG_JSON,
 		const hx_os_config_options *options = NULL,
 		hx_os_context *context = NULL,
@@ -101,16 +115,22 @@ public:
 	{
 		if (m_schema_->size != sizeof(T))
 			return Failure(HX_OS_INVALID);
+
 		String text(context);
+
 		hx_os_config_error error = {};
+
 		auto status = hx_os_codec_encode(m_schema_, &value, format,
 			text.native(), options, &error);
 		if (diagnostic)
 			*diagnostic = error;
+
 		if (status != HX_OS_OK)
 			return Failure(status, error.detail);
+
 		return text;
 	}
+
 	Result<Decoded<T>> decode(StringView text,
 		int format = HX_OS_CONFIG_JSON,
 		const hx_os_config_options *options = NULL,
@@ -119,16 +139,21 @@ public:
 	{
 		if (m_schema_->size != sizeof(T))
 			return Failure(HX_OS_INVALID);
+
 		hx_os_codec_result *owner = NULL;
 		hx_os_config_error error = {};
+
 		auto status = hx_os_codec_decode(context, m_schema_, format,
 			text.data(), text.size(), options, &owner, &error);
 		if (diagnostic)
 			*diagnostic = error;
+
 		if (status != HX_OS_OK)
 			return Failure(status, error.detail);
+
 		return Decoded<T>(owner);
 	}
+
 	Result<Decoded<T>> load(const char *path,
 		int format = HX_OS_CONFIG_JSON,
 		const hx_os_config_options *options = NULL,
@@ -137,16 +162,21 @@ public:
 	{
 		if (m_schema_->size != sizeof(T))
 			return Failure(HX_OS_INVALID);
+
 		hx_os_codec_result *owner = NULL;
 		hx_os_config_error error = {};
+
 		auto status = hx_os_codec_load(context, m_schema_, format, path,
 			options, &owner, &error);
 		if (diagnostic)
 			*diagnostic = error;
+
 		if (status != HX_OS_OK)
 			return Failure(status, error.detail);
+
 		return Decoded<T>(owner);
 	}
+
 	Result<void> save(const T &value, const char *path,
 		int format = HX_OS_CONFIG_JSON,
 		const hx_os_config_options *options = NULL,
@@ -154,11 +184,14 @@ public:
 	{
 		if (m_schema_->size != sizeof(T))
 			return Failure(HX_OS_INVALID);
+
 		hx_os_config_error error = {};
+
 		auto status = hx_os_codec_save(
 			m_schema_, &value, format, path, options, &error);
 		if (diagnostic)
 			*diagnostic = error;
+
 		return detail::Status(status, error.detail);
 	}
 

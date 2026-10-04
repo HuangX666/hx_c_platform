@@ -86,13 +86,17 @@ enum {
 	HX_OS_ATOMIC_XOR,
 	HX_OS_ATOMIC_EXCHANGE
 };
+
 static int64_t hx_os_atomic_msvc32_update(
 	hx_os_atomic *value, int64_t operand, int operation)
 {
 	volatile __int64 *storage = (volatile __int64 *)&value->value;
+
 	int64_t previous = _InterlockedCompareExchange64(storage, 0, 0);
+
 	for (;;) {
 		int64_t desired, observed;
+
 		switch (operation) {
 		case HX_OS_ATOMIC_ADD:
 			desired = (int64_t)((uint64_t)previous +
@@ -107,14 +111,17 @@ static int64_t hx_os_atomic_msvc32_update(
 		case HX_OS_ATOMIC_XOR:
 			desired = previous ^ operand;
 			break;
+
 		default:
 			desired = operand;
 			break;
 		}
+
 		observed = _InterlockedCompareExchange64(
 			storage, desired, previous);
 		if (observed == previous)
 			return previous;
+
 		previous = observed;
 	}
 }
@@ -124,6 +131,7 @@ int64_t hx_os_atomic_load(const hx_os_atomic *value, hx_os_memory_order order)
 {
 #if defined(_MSC_VER)
 	(void)order;
+
 	return _InterlockedCompareExchange64(
 		(volatile __int64 *)&value->value, 0, 0);
 #else
@@ -152,6 +160,7 @@ void hx_os_atomic_store(
 	case HX_OS_RELEASE:
 		__atomic_store_n(&value->value, desired, __ATOMIC_RELEASE);
 		break;
+
 	default:
 		__atomic_store_n(&value->value, desired, __ATOMIC_SEQ_CST);
 		break;
@@ -266,7 +275,9 @@ static int hx_os_atomic_cas(hx_os_atomic *value, int64_t *expected,
 	(void)failure;
 	if (old == *expected)
 		return 1;
+
 	*expected = old;
+
 	return 0;
 #else
 	HX_OS_ATOMIC_CAS();
@@ -299,6 +310,7 @@ int32_t hx_os_atomic32_load(
 {
 #if defined(_MSC_VER)
 	(void)order;
+
 	return _InterlockedCompareExchange(
 		(volatile long *)&value->value, 0, 0);
 #else
@@ -327,6 +339,7 @@ void hx_os_atomic32_store(
 	case HX_OS_RELEASE:
 		__atomic_store_n(&value->value, desired, __ATOMIC_RELEASE);
 		break;
+
 	default:
 		__atomic_store_n(&value->value, desired, __ATOMIC_SEQ_CST);
 		break;
@@ -339,6 +352,7 @@ int32_t hx_os_atomic32_fetch_add(
 {
 #if defined(_MSC_VER)
 	(void)order;
+
 	return _InterlockedExchangeAdd((volatile long *)&value->value, operand);
 #else
 	HX_OS_ATOMIC_RMW(__atomic_fetch_add);
@@ -350,6 +364,7 @@ int32_t hx_os_atomic32_fetch_sub(
 {
 #if defined(_MSC_VER)
 	(void)order;
+
 	return _InterlockedExchangeAdd((volatile long *)&value->value,
 		(int32_t)(UINT32_C(0) - (uint32_t)operand));
 #else
@@ -362,6 +377,7 @@ int32_t hx_os_atomic32_fetch_or(
 {
 #if defined(_MSC_VER)
 	(void)order;
+
 	return _InterlockedOr((volatile long *)&value->value, operand);
 #else
 	HX_OS_ATOMIC_RMW(__atomic_fetch_or);
@@ -373,6 +389,7 @@ int32_t hx_os_atomic32_fetch_and(
 {
 #if defined(_MSC_VER)
 	(void)order;
+
 	return _InterlockedAnd((volatile long *)&value->value, operand);
 #else
 	HX_OS_ATOMIC_RMW(__atomic_fetch_and);
@@ -384,6 +401,7 @@ int32_t hx_os_atomic32_fetch_xor(
 {
 #if defined(_MSC_VER)
 	(void)order;
+
 	return _InterlockedXor((volatile long *)&value->value, operand);
 #else
 	HX_OS_ATOMIC_RMW(__atomic_fetch_xor);
@@ -395,6 +413,7 @@ int32_t hx_os_atomic32_exchange(
 {
 #if defined(_MSC_VER)
 	(void)order;
+
 	return _InterlockedExchange((volatile long *)&value->value, operand);
 #else
 	HX_OS_ATOMIC_RMW(__atomic_exchange_n);
@@ -413,7 +432,9 @@ static int hx_os_atomic32_cas(hx_os_atomic32 *value, int32_t *expected,
 	(void)failure;
 	if (old == *expected)
 		return 1;
+
 	*expected = old;
+
 	return 0;
 #else
 	HX_OS_ATOMIC_CAS();
@@ -449,6 +470,7 @@ void *hx_os_atomic_ptr_load(
 {
 #if defined(_MSC_VER)
 	(void)order;
+
 	return _InterlockedCompareExchangePointer(
 		(void *volatile *)&value->value, NULL, NULL);
 #else
@@ -477,6 +499,7 @@ void hx_os_atomic_ptr_store(
 	case HX_OS_RELEASE:
 		__atomic_store_n(&value->value, desired, __ATOMIC_RELEASE);
 		break;
+
 	default:
 		__atomic_store_n(&value->value, desired, __ATOMIC_SEQ_CST);
 		break;
@@ -489,6 +512,7 @@ void *hx_os_atomic_ptr_exchange(
 {
 #if defined(_MSC_VER)
 	(void)order;
+
 	return _InterlockedExchangePointer(
 		(void *volatile *)&value->value, operand);
 #else
@@ -508,7 +532,9 @@ static int hx_os_atomic_ptr_cas(hx_os_atomic_ptr *value, void **expected,
 	(void)failure;
 	if (old == *expected)
 		return 1;
+
 	*expected = old;
+
 	return 0;
 #else
 	HX_OS_ATOMIC_CAS();
@@ -546,6 +572,7 @@ void hx_os_atomic_fence(hx_os_memory_order order)
 		_ReadWriteBarrier();
 	else {
 		volatile long barrier = 0;
+
 		(void)_InterlockedExchange(&barrier, 1);
 	}
 #else
@@ -562,6 +589,7 @@ void hx_os_atomic_fence(hx_os_memory_order order)
 	case HX_OS_ACQ_REL:
 		__atomic_thread_fence(__ATOMIC_ACQ_REL);
 		break;
+
 	default:
 		__atomic_thread_fence(__ATOMIC_SEQ_CST);
 		break;

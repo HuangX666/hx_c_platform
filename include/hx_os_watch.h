@@ -1,11 +1,13 @@
 #ifndef HX_C_PLATFORM_WATCH_H
 #define HX_C_PLATFORM_WATCH_H
+
 #include "hx_os_thread.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 typedef struct hx_os_watch hx_os_watch;
+
 enum {
 	HX_OS_WATCH_CHANGED,
 	HX_OS_WATCH_ADDED,
@@ -14,8 +16,10 @@ enum {
 	HX_OS_WATCH_OVERFLOW,
 	HX_OS_WATCH_ERROR
 };
+
 /* DIRECTORY is positive evidence; absence can mean unknown on a backend. */
 enum { HX_OS_WATCH_DIRECTORY = 1u };
+
 typedef struct hx_os_watch_event {
 	const char *path;
 	const char *old_path;
@@ -25,6 +29,7 @@ typedef struct hx_os_watch_event {
 	uint32_t kind;
 	uint32_t flags;
 } hx_os_watch_event;
+
 typedef struct hx_os_watch_options {
 	uint32_t size;
 	uint32_t version;
@@ -45,6 +50,7 @@ typedef void(HX_OS_CALL *hx_os_watch_cleanup_fn)(void *user);
 
 HX_OS_API hx_os_status HX_OS_CALL hx_os_watch_options_init(
 	hx_os_watch_options *options, size_t capacity);
+
 /*
  * Explicitly starts one worker, no global runtime. Creation waits until the
  * native subscription is armed. *out is assigned before callbacks start,
@@ -59,6 +65,7 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_watch_options_init(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_watch_create(hx_os_context *context,
 	const char *path, int recursive, hx_os_watch_fn function, void *user,
 	hx_os_watch **out, hx_os_error *error);
+
 /* Retained variable storage uses max_memory_bytes, including allocation
  * overhead. Fixed thread/event controls, transient bounded native path
  * conversion and OS-managed buffers are outside this budget.
@@ -72,8 +79,10 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_watch_create_with_options(
 	const hx_os_watch_options *options, hx_os_watch_fn function,
 	hx_os_watch_cleanup_fn cleanup, void *user, hx_os_watch **out,
 	hx_os_error *error);
+
 /* Thread-safe request; caller excludes concurrent object destruction. */
 HX_OS_API void HX_OS_CALL hx_os_watch_stop(hx_os_watch *watch);
+
 /* Stop/join/close, including callback, cleanup and TLS return. Timeout keeps
  * *watch alive for retry. Self-close reports DEADLOCK. Once retired consumes
  * it, even when reporting a terminal backend error. Exclude parallel close.

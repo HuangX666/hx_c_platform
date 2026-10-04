@@ -172,18 +172,22 @@ int main(void)
 	hx_os_error error;
 	hx_os_status status =
 		hx_os_file_read_text("配置.json", &text, &error);
+
 	if (status == HX_OS_OK)
 		puts(hx_string_c_str(&text));
 	else {
 		char message[2304];
 		size_t required;
+
 		if (hx_os_error_message(&error, message, sizeof(message),
 			    &required) == HX_OS_OK)
 			fprintf(stderr, "%s\n", message);
 		else
 			fprintf(stderr, "%s\n", hx_os_status_name(status));
 	}
+
 	hx_string_destroy(&text);
+
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -203,16 +207,21 @@ int main()
 	if (!text) {
 		std::fprintf(stderr, "%s\n",
 			hx_os_status_name(text.status()));
+
 		return 1;
 	}
+
 	auto path = hx::Paths::configFile("hx_example", "settings.json");
 	if (!path) {
 		std::fprintf(stderr, "%s\n",
 			hx_os_status_name(path.status()));
+
 		return 1;
 	}
+
 	std::printf("%s\n%s\n", text.value().c_str(),
 		path.value().c_str());
+
 	return 0;
 }
 ```
@@ -232,56 +241,73 @@ int main()
 static int report_failure(hx_os_status status)
 {
 	std::fprintf(stderr, "%s\n", hx_os_status_name(status));
+
 	return 1;
 }
+
 int main()
 {
 	auto text = hx::String::copy("  Hello 中文😀  ");
 	if (!text)
 		return report_failure(text.status());
+
 	text.value().trimAscii().lowerAscii();
 	std::puts(text.value().c_str());
 	if (hx_os_capabilities() & HX_OS_CAP_SETTINGS) {
 		hx_settings *owner = NULL;
+
 		hx::Settings settings(owner);
+
 		auto created = settings.create();
 		if (!created)
 			return report_failure(created.status());
+
 		auto changed = settings.update()
 				       .setInt("port", 8080)
 				       .setString("label", "服务😀")
 				       .finish();
+
 		auto label = settings.stringView("label");
+
 		auto closed = settings.closeUntil(HX_OS_DEADLINE_NOW);
 		if (!closed)
 			return report_failure(closed.status());
+
 		if (!changed)
 			return report_failure(changed.status());
+
 		if (!label)
 			return report_failure(label.status());
+
 		/* The lease owns immutable bytes after the settings close. */
 		std::puts(label.value().c_str());
 	}
+
 	if (hx_os_capabilities() & (HX_OS_CAP_SIGNALS | HX_OS_CAP_PROCEDURES)) {
 		hx::CallData data;
+
 		auto prepared = data.edit()
 					.setInt("number", 42)
 					.setString("label", text.value().view())
 					.finish();
 		if (!prepared)
 			return report_failure(prepared.status());
+
 		auto label = data.view().stringView("label");
 		if (!label)
 			return report_failure(label.status());
+
 		std::printf("%.*s\n", static_cast<int>(label.value().size()),
 			label.value().data());
 	}
+
 	auto listed =
 		hx::Directory::forEach(".", [](hx::StringView name) noexcept {
 			std::printf("Entry: %.*s\n",
 				static_cast<int>(name.size()), name.data());
 			return false;
 		});
+
 	return listed ? 0 : report_failure(listed.status());
 }
 ```
@@ -297,13 +323,19 @@ int main()
 ```cmake
 cmake_minimum_required(VERSION 3.16)
 project(my_app LANGUAGES C)
+
 set(HX_OS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(HX_OS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+
 add_subdirectory(external/hx_c_platform)
+
 add_executable(my_app main.c)
 set_target_properties(my_app PROPERTIES
-	C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
+	C_STANDARD 99
+	C_STANDARD_REQUIRED YES
+	C_EXTENSIONS NO)
 target_link_libraries(my_app PRIVATE hx_c_platform::hx_c_platform)
+
 if(MSVC)
 	target_compile_options(my_app PRIVATE /utf-8)
 endif()
@@ -320,11 +352,16 @@ cmake --install build --config Release --prefix /absolute/install/prefix
 ```cmake
 cmake_minimum_required(VERSION 3.16)
 project(my_app LANGUAGES C)
+
 find_package(hx_c_platform 0.1 CONFIG REQUIRED)
+
 add_executable(my_app main.c)
 set_target_properties(my_app PROPERTIES
-	C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
+	C_STANDARD 99
+	C_STANDARD_REQUIRED YES
+	C_EXTENSIONS NO)
 target_link_libraries(my_app PRIVATE hx_c_platform::hx_c_platform)
+
 if(MSVC)
 	target_compile_options(my_app PRIVATE /utf-8)
 endif()
@@ -370,12 +407,14 @@ Windows 将 DLL 放在应用旁或运行时搜索路径中，并匹配架构、�
 static void *HX_OS_CALL allocate_bytes(size_t bytes, void *user)
 {
 	(void)user;
+
 	return malloc(bytes);
 }
 
 static void HX_OS_CALL release_bytes(void *memory, void *user)
 {
 	(void)user;
+
 	free(memory);
 }
 
@@ -385,18 +424,24 @@ int main(void)
 	hx_os_context *context = NULL;
 	hx_string text;
 	hx_os_status status;
+
 	hx_os_context_options_init(&options);
 	options.allocator.allocate = allocate_bytes;
 	options.allocator.deallocate = release_bytes;
 	options.allocator.user = NULL;
+
 	status = hx_os_context_create(&options, &context, NULL);
 	if (status != HX_OS_OK)
 		return 1;
+
 	hx_string_init(&text, context);
+
 	status = hx_string_assign_cstr(&text, "owned by this context", NULL);
+
 	hx_string_destroy(&text);
 	if (hx_os_context_destroy(&context, NULL) != HX_OS_OK)
 		return 2;
+
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -423,29 +468,38 @@ int main(void)
 	hx_os_text_result converted;
 	unsigned char utf16[128];
 	size_t i;
+
 	status = hx_string_assign_cstr(&text, " alpha,beta,中文😀 ", NULL);
 	if (status == HX_OS_OK) {
 		hx_string_trim_ascii_in_place(&text);
+
 		status = hx_string_split(&text,
 			hx_string_view_from_cstr(","), &parts, NULL);
 	}
+
 	if (status == HX_OS_OK) {
 		for (i = 0; i < hx_string_parts_count(parts); ++i) {
 			hx_string_view part;
+
 			status = hx_string_parts_at(parts, i, &part);
 			if (status != HX_OS_OK)
 				break;
+
 			(void)fwrite(part.data, 1, part.size, stdout);
 			putchar('\n');
 		}
 	}
+
 	if (status == HX_OS_OK)
 		status = hx_string_encode(&text, HX_OS_UTF16LE, utf16,
 			sizeof(utf16), &converted, NULL);
+
 	if (status == HX_OS_OK)
 		printf("UTF-16 bytes: %zu\n", converted.output_used);
+
 	hx_string_parts_destroy(&parts);
 	hx_string_destroy(&text);
+
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -498,21 +552,26 @@ int main(void)
 	hx_os_error error;
 	hx_os_status status, closed;
 	size_t completed = 0;
+
 	status = hx_os_file_open(NULL, "readme-output.txt",
 		HX_OS_FILE_WRITE | HX_OS_FILE_CREATE | HX_OS_FILE_TRUNCATE,
 		&file, &error);
 	if (status != HX_OS_OK)
 		return 1;
+
 	status = hx_os_file_write_all(file, payload, sizeof(payload) - 1,
 		&completed, &error);
 	if (status == HX_OS_OK)
 		status = hx_os_file_sync(file, &error);
+
 	closed = hx_os_file_close(&file, NULL);
 	if (status == HX_OS_OK)
 		status = closed;
+
 	if (status != HX_OS_OK)
 		fprintf(stderr, "%s after %zu bytes\n",
 			hx_os_status_name(status), completed);
+
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -533,15 +592,18 @@ int main(void)
 {
 	const char json[] = "{\"port\":8080}\n";
 	hx_os_file_save_result result;
+
 	hx_os_status status = hx_os_file_save_atomic_ex(
 		"readme-settings.json", json, sizeof(json) - 1, &result, NULL);
 	if (status != HX_OS_OK)
 		return 1;
+
 	printf("published=%d directory_synced=%d\n",
 		result.published, result.directory_synced);
 	if (result.durability_error.status != HX_OS_OK)
 		fprintf(stderr, "Directory sync: %s\n",
 			hx_os_status_name(result.durability_error.status));
+
 	return 0;
 }
 ```
@@ -578,18 +640,23 @@ int main(void)
 	hx_string value = HX_STRING_INIT;
 	hx_os_status status =
 		hx_os_path_config_file("my_app", "settings.json", &path, NULL);
+
 	if (status == HX_OS_OK)
 		puts(hx_string_c_str(&path));
+
 	if (status == HX_OS_OK) {
 		status = hx_os_env_get_string("HX_APP_MODE", &value, NULL);
 		if (status == HX_OS_NOT_FOUND)
 			status = hx_string_assign_cstr(&value, "production",
 				NULL);
 	}
+
 	if (status == HX_OS_OK)
 		puts(hx_string_c_str(&value));
+
 	hx_string_destroy(&value);
 	hx_string_destroy(&path);
+
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -647,27 +714,35 @@ int main(void)
 	const hx_os_config_node *port;
 	hx_os_status status;
 	int64_t number;
+
 	if (!hx_os_config_backend_available(
 		    HX_OS_CONFIG_TOML, HX_OS_CONFIG_BUILTIN)) {
 		puts("Configuration module is disabled.");
+
 		return 0;
 	}
+
 	status = hx_os_config_parse(NULL, HX_OS_CONFIG_TOML, input,
 		strlen(input), NULL, &document, &error);
 	if (status != HX_OS_OK) {
 		fprintf(stderr, "%s at %zu:%zu: %s\n", error.source, error.line,
 			error.column, error.message);
+
 		return 1;
 	}
+
 	status = hx_os_config_pointer(
 		hx_os_config_root(document), "/server/port", &port);
 	if (status == HX_OS_OK)
 		status = hx_os_config_get_i64(port, &number);
+
 	if (status == HX_OS_OK)
 		printf("Server port: %" PRId64 "\n", number);
 	else
 		fprintf(stderr, "Server port: %s\n", hx_os_status_name(status));
+
 	hx_os_config_release(document);
+
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -700,6 +775,7 @@ flowchart LR
 ```c
 #include <hx_os.h>
 #include <stdio.h>
+
 int main(void)
 {
 	hx_settings *settings = NULL;
@@ -707,38 +783,48 @@ int main(void)
 	hx_string json = HX_STRING_INIT;
 	int64_t port;
 	hx_os_error error;
+
 	hx_os_status status = hx_settings_create(NULL, &settings, &error);
 	if (status == HX_OS_OK)
 		status = hx_settings_set_default_i64(
 			settings, "port", 80, &error);
+
 	if (status == HX_OS_OK) {
 		hx_settings_update update = hx_settings_update_begin(settings);
 		hx_settings_update_set_i64(&update, "port", 8080);
 		hx_settings_update_set_string(&update, "label", "服务😀");
+
 		status = hx_settings_update_finish(&update, NULL, &error);
 	}
+
 	if (status == HX_OS_OK)
 		status = hx_settings_get_i64(settings, "port", &port, &error);
+
 	if (status == HX_OS_OK)
 		status = hx_settings_get_string_ref(
 			settings, "label", &label, &error);
+
 	if (status == HX_OS_OK)
 		printf("%s: %lld\n", label.text.data, (long long)port);
+
 	if (status == HX_OS_OK && (hx_os_capabilities() & HX_OS_CAP_CONFIG) &&
 		(hx_os_capabilities() & HX_OS_CAP_CONFIG_SERIALIZE)) {
 		status = hx_settings_to_json(settings, &json, &error);
 		if (status == HX_OS_OK)
 			puts(hx_string_c_str(&json));
 	}
+
 	if (settings) {
 		hx_os_status closed = hx_settings_destroy(&settings, NULL);
 		if (status == HX_OS_OK)
 			status = closed;
 	}
+
 	hx_settings_string_ref_destroy(&label);
 	hx_string_destroy(&json);
 	if (status != HX_OS_OK)
 		fprintf(stderr, "%s\n", hx_os_status_name(status));
+
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -766,20 +852,24 @@ HX_OS_DECLARE_VECTOR(int_values, int)
 int main(void)
 {
 	int_values *values = NULL;
+
 	hx_os_status status = int_values_create(NULL, 128, &values, NULL);
 	if (status == HX_OS_OK)
 		status = int_values_push(values, 42, NULL);
+
 	if (status == HX_OS_OK) {
 		const int *first = int_values_at(values, 0);
 		if (first)
 			printf("%d, size=%zu\n", *first,
 				int_values_size(values));
 	}
+
 	if (values) {
 		hx_os_status closed = int_values_destroy(&values, NULL);
 		if (status == HX_OS_OK)
 			status = closed;
 	}
+
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -825,16 +915,20 @@ C++11 的 Variant/TypedVariant 提供 set/get<T>/emplace/clone/visit，通过 Re
 static hx_os_status HX_OS_CALL tick(void *user, hx_os_error *error)
 {
 	unsigned *count = user;
+
 	(void)error;
 	printf("tick %u\n", ++*count);
+
 	return HX_OS_OK;
 }
 
 int main(void)
 {
 	unsigned count = 0;
+
 	hx_os_status status = hx_os_repeat_until(10, 3, tick, &count,
 		hx_os_deadline_after_ms(1000), NULL, NULL);
+
 	return status == HX_OS_OK && count == 3 ? 0 : 1;
 }
 ```
@@ -860,7 +954,9 @@ typedef struct app_worker {
 static void *HX_OS_CALL calculate(void *user)
 {
 	app_worker *worker = user;
+
 	worker->answer = 42;
+
 	return NULL;
 }
 
@@ -868,6 +964,7 @@ hx_os_status app_worker_start(app_worker *worker, hx_os_error *error)
 {
 	worker->thread = NULL;
 	worker->answer = 0;
+
 	return hx_os_thread_create(NULL, calculate, worker, &worker->thread,
 		error);
 }
@@ -879,6 +976,7 @@ hx_os_status app_worker_finish(app_worker *worker,
 		worker->thread, deadline, NULL, error);
 	if (status == HX_OS_OK)
 		status = hx_os_thread_destroy(&worker->thread, error);
+
 	return status;
 }
 ```
@@ -911,6 +1009,7 @@ hx_os_status app_worker_finish(app_worker *worker,
 static hx_os_status HX_OS_CALL work(hx_os_task *task, void *user)
 {
 	(void)user;
+
 	return hx_os_task_cancel_requested(task) ? HX_OS_CANCELLED : HX_OS_OK;
 }
 
@@ -920,25 +1019,32 @@ int main(void)
 	hx_os_thread_pool *pool = NULL;
 	hx_os_task *task = NULL;
 	hx_os_status status, closed, result = HX_OS_OK;
+
 	hx_os_thread_pool_options_init(&options);
 	options.threads = 2;
 	options.queue_capacity = 128;
+
 	status = hx_os_thread_pool_create(NULL, &options, &pool, NULL);
 	if (status != HX_OS_OK)
 		return 1;
+
 	status = hx_os_thread_pool_submit(pool, work, NULL, NULL, &task, NULL);
 	if (status == HX_OS_OK)
 		status = hx_os_task_wait_until(task,
 			hx_os_deadline_after_ms(2000), &result, NULL);
+
 	closed = hx_os_thread_pool_shutdown_ex(&pool,
 		HX_OS_POOL_CANCEL_PENDING, hx_os_deadline_after_ms(2000), NULL);
+
 	hx_os_task_release(task);
 	if (closed != HX_OS_OK) {
 		fprintf(stderr, "Close pending: %s\n",
 			hx_os_status_name(closed));
+
 		/* A service retains pool in its shutdown state and retries. */
 		return 1;
 	}
+
 	return status == HX_OS_OK && result == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -971,19 +1077,26 @@ C++ 便利层接受普通函数、lambda、仅移动参数/结果、成员函数
 int main()
 {
 	hx_os_thread_pool *owner = NULL;
+
 	if (!(hx_os_capabilities() & HX_OS_CAP_THREAD_POOL)) {
 		std::puts("Thread pools are disabled.");
+
 		return 0;
 	}
+
 	auto created = hx::ThreadPool::withThreads(owner, 2);
 	if (!created) {
 		std::fprintf(
 			stderr, "%s\n", hx_os_status_name(created.status()));
+
 		return 1;
 	}
+
 	auto &pool = created.value();
+
 	auto submitted =
 		pool.submit([](int value) noexcept { return value * 2; }, 21);
+
 	hx_os_status workStatus = submitted.status();
 	if (submitted) {
 		auto answer = submitted.value().getUntil(
@@ -992,16 +1105,19 @@ int main()
 		if (answer)
 			std::printf("Task result: %d\n", answer.value());
 	}
+
 	auto closed = pool.shutdownUntil(
 		hx_os_deadline_after_ms(2000), HX_OS_POOL_CANCEL_PENDING);
 	if (!closed) {
 		std::fprintf(stderr, "Close pending: %s\n",
 			hx_os_status_name(closed.status()));
+
 		/* A service keeps owner in its shutdown state and retries.
 		 * This command-line example reports the pending close.
 		 */
 		return 1;
 	}
+
 	return workStatus == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -1032,27 +1148,35 @@ typedef struct shared_result {
 static void *calculate(void *user)
 {
 	shared_result *result = user;
+
 	result->answer = 42;
 	hx_os_atomic32_store(&result->ready, 1, HX_OS_RELEASE);
+
 	return NULL;
 }
 
 int main(void)
 {
 	shared_result result = {HX_OS_ATOMIC32_INIT(0), 0};
+
 	hx_os_thread *thread = NULL;
 	hx_os_status status =
 		hx_os_thread_create(NULL, calculate, &result, &thread, NULL);
+
 	if (status != HX_OS_OK)
 		return 1;
+
 	/* For a long wait use an event/condition, not a busy loop. */
 	while (!hx_os_atomic32_load(&result.ready, HX_OS_ACQUIRE))
 		hx_os_cpu_relax();
+
 	printf("answer: %d\n", result.answer);
+
 	status = hx_os_thread_join_until(
 		thread, HX_OS_DEADLINE_INFINITE, NULL, NULL);
 	if (status == HX_OS_OK)
 		status = hx_os_thread_destroy(&thread, NULL);
+
 	return status == HX_OS_OK && result.answer == 42 ? 0 : 1;
 }
 ```
@@ -1080,6 +1204,7 @@ static void HX_OS_CALL posted(hx_os_request *request,
 	const hx_os_completion *completion, void *user)
 {
 	int *count = user;
+
 	(void)request;
 	if (completion->error.status == HX_OS_OK)
 		++*count;
@@ -1092,19 +1217,25 @@ int main(void)
 	hx_os_operation operation;
 	hx_os_status status, closed;
 	int count = 0;
+
 	status = hx_os_loop_create_local(NULL, NULL, &loop, NULL);
 	if (status != HX_OS_OK)
 		return 1;
+
 	hx_os_operation_init(&operation, HX_OS_OP_POST);
+
 	status = hx_os_loop_submit(loop, &operation, posted, &count,
 		&request, NULL);
 	if (status == HX_OS_OK)
 		status = hx_os_loop_run_until(
 			loop, hx_os_deadline_after_ms(2000), NULL);
+
 	closed = hx_os_loop_close_until(loop, HX_OS_DEADLINE_NOW, NULL);
 	if (closed == HX_OS_OK)
 		closed = hx_os_loop_destroy(&loop, NULL);
+
 	hx_os_request_release(request);
+
 	return status == HX_OS_OK && closed == HX_OS_OK && count == 1
 		? 0 : 1;
 }
@@ -1169,12 +1300,15 @@ hx_os_status app_capture_finish(hx_os_process_capture **session,
 		hx_os_deadline_after_ms(2000), NULL, error);
 	if (status != HX_OS_OK)
 		return status;
+
 	status = hx_os_process_capture_text(*session, 0, stdout_text, error);
 	if (status == HX_OS_OK)
 		status = hx_os_process_capture_text(
 			*session, 1, stderr_text, error);
+
 	if (status != HX_OS_OK)
 		return status;
+
 	return hx_os_process_capture_close_until(
 		session, HX_OS_DEADLINE_NOW, error);
 }
@@ -1199,8 +1333,10 @@ start 后同时检查状态和 session。创建失败时为 NULL；TIMEOUT、LIM
 static void tick(hx_os_timer *timer, const hx_os_error *error, void *user)
 {
 	unsigned *count = user;
+
 	if (error->status != HX_OS_OK)
 		return;
+
 	printf("tick %u\n", ++*count);
 	if (*count == 3)
 		hx_os_timer_stop(timer);
@@ -1212,17 +1348,23 @@ int main(void)
 	hx_os_timer *timer = NULL;
 	hx_os_status status;
 	unsigned count = 0;
+
 	if (hx_os_loop_create_local(NULL, NULL, &loop, NULL) != HX_OS_OK)
 		return 1;
+
 	status = hx_os_timer_create(
 		loop, UINT64_C(10000000), tick, &count, &timer, NULL);
 	if (status == HX_OS_OK)
 		status = hx_os_loop_run_until(
 			loop, hx_os_deadline_after_ms(2000), NULL);
+
 	if (timer)
 		(void)hx_os_timer_close_until(&timer, HX_OS_DEADLINE_NOW, NULL);
+
 	(void)hx_os_loop_close_until(loop, HX_OS_DEADLINE_NOW, NULL);
+
 	(void)hx_os_loop_destroy(&loop, NULL);
+
 	return status == HX_OS_OK && count == 3 ? 0 : 1;
 }
 ```
@@ -1251,22 +1393,29 @@ int main(void)
 	hx_os_cpu_usage *cpu = NULL;
 	hx_os_error error;
 	double percent;
+
 	hx_os_status status = hx_os_sys_version_string(&version, &error);
 	if (status == HX_OS_OK) {
 		puts(hx_string_c_str(&version));
+
 		status = hx_os_cpu_usage_create(NULL, &cpu, &error);
 	}
+
 	if (status == HX_OS_OK)
 		status =
 			hx_os_sleep_until(hx_os_deadline_after_ms(100), &error);
+
 	if (status == HX_OS_OK)
 		status = hx_os_cpu_usage_query(cpu, &percent, &error);
+
 	if (status == HX_OS_OK)
 		printf("Process CPU: %.2f%%\n", percent);
 	else
 		fprintf(stderr, "%s\n", hx_os_status_name(status));
+
 	hx_os_cpu_usage_destroy(&cpu);
 	hx_string_destroy(&version);
+
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -1306,14 +1455,19 @@ int main(void)
 	hx_os_file_map *map = NULL;
 	hx_os_status status =
 		hx_os_file_map_open("配置.json", HX_OS_MAP_READ, &map, NULL);
+
 	if (status == HX_OS_EOF)
 		return 0;
+
 	if (status != HX_OS_OK)
 		return 1;
+
 	printf("%zu bytes, CRC32=%08x\n", hx_os_file_map_size(map),
 		(unsigned)hx_os_crc32(0, hx_os_file_map_view(map),
 			hx_os_file_map_size(map)));
+
 	status = hx_os_file_map_destroy(&map, NULL);
+
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -1334,12 +1488,17 @@ int main(void)
 {
 	hx_string uuid = HX_STRING_INIT;
 	hx_os_error error;
+
 	if (hx_os_uuid_generate_string(&uuid, &error) != HX_OS_OK) {
 		fprintf(stderr, "%s\n", hx_os_status_name(error.status));
+
 		return 1;
 	}
+
 	puts(hx_string_c_str(&uuid));
+
 	hx_string_destroy(&uuid);
+
 	return 0;
 }
 ```
@@ -1356,10 +1515,12 @@ int main(void)
 int main(void)
 {
 	uint64_t interval_ns = 0;
+
 	hx_os_status status = hx_os_muldiv_u64(1001, UINT64_C(1000000000),
 		30000, HX_OS_ROUND_NEAREST, &interval_ns, NULL);
 	if (status == HX_OS_OK)
 		printf("%" PRIu64 " ns\n", interval_ns);
+
 	return status == HX_OS_OK && interval_ns == UINT64_C(33366667)
 		? 0 : 1;
 }
@@ -1396,19 +1557,24 @@ int main(void)
 	hx_string title = HX_STRING_INIT, filename = HX_STRING_INIT;
 	hx_os_status status =
 		hx_os_text_lookup_load(NULL, "language.ini", &language, NULL);
+
 	if (status == HX_OS_OK)
 		status = hx_os_text_lookup_get_string(
 			language, "window.title", &title, NULL);
+
 	if (status == HX_OS_OK)
 		status = hx_os_filename_format_string(0,
 			"capture_%CCYY-%MM-%DD_%hh-%mm-%ss", "txt",
 			&filename, NULL);
+
 	if (status == HX_OS_OK)
 		printf("%s: %s\n", hx_string_c_str(&title),
 			hx_string_c_str(&filename));
+
 	hx_string_destroy(&filename);
 	hx_string_destroy(&title);
 	hx_os_text_lookup_destroy(&language);
+
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -1442,6 +1608,7 @@ static hx_os_status HX_OS_CALL answer(hx_os_calldata *data,
 	void *user, hx_os_error *error)
 {
 	(void)user;
+
 	return hx_os_calldata_set_i64(data, "answer", 42, error);
 }
 
@@ -1450,23 +1617,30 @@ int main(void)
 	hx_os_proc_handler *procedures = NULL;
 	hx_os_calldata data = HX_OS_CALLDATA_INIT;
 	int64_t value = 0;
+
 	hx_os_status status = hx_os_proc_create(NULL, &procedures, NULL);
 	if (status == HX_OS_OK)
 		status = hx_os_proc_register(
 			procedures, "answer", answer, NULL, NULL);
+
 	if (status == HX_OS_OK)
 		status = hx_os_proc_call(procedures, "answer", &data, NULL);
+
 	if (status == HX_OS_OK)
 		status = hx_os_calldata_get_i64(&data, "answer", &value, NULL);
+
 	if (status == HX_OS_OK)
 		printf("%" PRId64 "\n", value);
+
 	if (procedures) {
 		hx_os_status closed =
 			hx_os_proc_close_until(&procedures, HX_OS_DEADLINE_NOW,
 				NULL);
+
 		if (status == HX_OS_OK)
 			status = closed;
 	}
+
 	return status == HX_OS_OK && value == 42 ? 0 : 1;
 }
 ```
@@ -1482,34 +1656,46 @@ int main(void)
 ```c
 #include <hx_os.h>
 #include <stdio.h>
+
 int main(void)
 {
 	hx_os_profiler *profiler = NULL;
 	hx_string text = HX_STRING_INIT;
 	hx_os_error error;
+
 	hx_os_status status = hx_os_profiler_create(NULL, &profiler, &error);
 	if (status == HX_OS_OK)
 		status = hx_os_profiler_start_root(profiler, "frame", &error);
+
 	if (status == HX_OS_OK)
 		status = hx_os_profiler_reach(profiler, "work", &error);
+
 	if (status == HX_OS_OK)
 		status = hx_os_profiler_leave(profiler, &error);
+
 	if (status == HX_OS_OK)
 		status = hx_os_profiler_leave(profiler, &error);
+
 	if (status == HX_OS_OK)
 		status = hx_os_profiler_dump_string(profiler, &text, &error);
+
 	if (status == HX_OS_OK)
 		fputs(hx_string_c_str(&text), stdout);
+
 	if (profiler) {
 		hx_os_status closed;
+
 		(void)hx_os_profiler_restart_thread(profiler, NULL);
+
 		closed = hx_os_profiler_destroy(&profiler, NULL);
 		if (status == HX_OS_OK)
 			status = closed;
 	}
+
 	hx_string_destroy(&text);
 	if (status != HX_OS_OK)
 		fprintf(stderr, "%s\n", hx_os_status_name(status));
+
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -1531,20 +1717,25 @@ int main(void)
 	hx_os_lexer *lexer = NULL;
 	hx_os_token token;
 	hx_string value = HX_STRING_INIT;
+
 	hx_os_status status = hx_os_lexer_create(NULL,
 		hx_string_view_from_cstr("name = \"中文😀\"\nport = 8080"),
 		&lexer, NULL);
 	if (status != HX_OS_OK)
 		return 1;
+
 	while ((status = hx_os_lexer_next(lexer, &token, NULL)) == HX_OS_OK) {
 		status = hx_os_token_string(&token, &value, NULL);
 		if (status != HX_OS_OK)
 			break;
+
 		printf("%zu:%zu kind=%d bytes=%zu\n", token.line,
 			token.column, token.kind, hx_string_size_bytes(&value));
 	}
+
 	hx_string_destroy(&value);
 	hx_os_lexer_destroy(&lexer);
+
 	return status == HX_OS_EOF ? 0 : 1;
 }
 ```
@@ -1765,6 +1956,8 @@ TSan 在另一个目录配置 `HX_OS_SANITIZER=thread`，不与 ASan 混用。�
 ## 31. 工程规范、平台扩展与许可
 
 自有源码采用 UTF-8 无 BOM、LF、8 列 Tab，源码/脚本 80 列，全部 C 函数包括 static 和回调实现使用小写加下划线。警告只作用于自身目标，遵循已记录的 OBS 警告基线。第三方文件保持不变。成员布局考虑自然对齐、ABI 和访问模式，不机械地按字段大小排序。
+
+源码与文档示例用一行空白区分不同逻辑步骤，函数调用和对应错误检查保持相邻。CMake 按项目设置、依赖、目标、功能／平台块和安装等职责分段；字符串数据和宏续行保持原样。
 
 优先原生 API 与编译器内建；汇编用于有测量依据的局部优化，并保留受支持目标的正确回退。Apple 实现以 C 为主，仅可选性能请求适配使用 Objective-C/Foundation。 Linux 电源/性能请求明确返回 NOT_SUPPORTED，注册表是显式 Windows 扩展，系统无法提供时不承诺严格 CPU 亲和性。
 

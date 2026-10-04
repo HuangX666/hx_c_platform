@@ -6,8 +6,10 @@
 static size_t hx_os_format_points(const char *text, size_t bytes)
 {
 	size_t i, count = 0;
+
 	for (i = 0; i < bytes; ++i)
 		count += ((unsigned char)text[i] & 0xc0) != 0x80;
+
 	return count;
 }
 
@@ -17,18 +19,24 @@ static hx_os_status hx_os_format_pad(hx_string *out, hx_string_view fill,
 	char block[64];
 	size_t i, per = sizeof(block) / fill.size;
 	hx_os_status status;
+
 	if (count > (limit - out->size) / fill.size)
 		return hx_os_i_error(error, HX_OS_LIMIT, 0, 0);
+
 	for (i = 0; i < per; ++i)
 		memcpy(block + i * fill.size, fill.data, fill.size);
+
 	while (count) {
 		size_t part = count < per ? count : per;
+
 		status = hx_os_i_format_append(
 			out, block, part * fill.size, limit, error);
 		if (status != HX_OS_OK)
 			return status;
+
 		count -= part;
 	}
+
 	return HX_OS_OK;
 }
 
@@ -37,12 +45,15 @@ static hx_os_status hx_os_format_quote(
 {
 	static const char hex[] = "0123456789abcdef";
 	size_t i;
+
 	hx_os_status status = hx_os_i_format_append(out, "\"", 1, limit, error);
+
 	for (i = 0; i < text.size && status == HX_OS_OK;) {
 		unsigned char c = (unsigned char)text.data[i];
 		char escaped[6] = {'\\', 'u', '0', '0', '0', '0'};
 		const char *piece = text.data + i;
 		size_t bytes = 1;
+
 		if (c == '"' || c == '\\') {
 			escaped[1] = (char)c;
 			piece = escaped;
@@ -58,15 +69,19 @@ static hx_os_status hx_os_format_quote(
 		}
 		else {
 			uint32_t point;
+
 			status = hx_os_i_utf_decode(HX_OS_UTF8,
 				(const unsigned char *)piece, text.size - i,
 				&point, &bytes);
 			if (status != HX_OS_OK)
 				break;
+
 			i += bytes;
 		}
+
 		status = hx_os_i_format_append(out, piece, bytes, limit, error);
 	}
+
 	return status == HX_OS_OK
 		? hx_os_i_format_append(out, "\"", 1, limit, error)
 		: status;
@@ -85,11 +100,14 @@ static hx_os_status hx_os_format_integer(hx_string *out,
 	unsigned base = 10;
 	int negative = 0;
 	char type = spec->type;
+
 	if (spec->has_precision)
 		return hx_os_i_error(error, HX_OS_TYPE_MISMATCH, 0, 0);
+
 	if (arg->kind == HX_FORMAT_POINTER) {
 		if (type && type != 'p')
 			return hx_os_i_error(error, HX_OS_TYPE_MISMATCH, 0, 0);
+
 		value = (uintptr_t)arg->value.pointer;
 		type = 'x';
 	}
@@ -100,18 +118,22 @@ static hx_os_status hx_os_format_integer(hx_string *out,
 	}
 	else
 		value = arg->value.natural;
+
 	if (type == 'c' || (arg->kind == HX_FORMAT_CHAR && !type)) {
 		size_t bytes;
 		hx_os_status status;
+
 		if (negative || value > UINT32_MAX || spec->sign ||
 			spec->zero || spec->alternate || spec->grouping)
 			return hx_os_i_error(error, HX_OS_RANGE, 0, 0);
 		status = hx_os_i_utf_encode(HX_OS_UTF8, (uint32_t)value,
 			(unsigned char *)text, sizeof(text), &bytes);
+
 		return status == HX_OS_OK
 			? hx_os_i_format_append(out, text, bytes, limit, error)
 			: hx_os_i_error(error, status, 0, 0);
 	}
+
 	if (type == 'x' || type == 'X')
 		base = 16;
 	else if (type == 'b' || type == 'B')
@@ -120,20 +142,25 @@ static hx_os_status hx_os_format_integer(hx_string *out,
 		base = 8;
 	else if (type && type != 'd')
 		return hx_os_i_error(error, HX_OS_TYPE_MISMATCH, 0, 0);
+
 	if (negative)
 		text[prefix++] = '-';
 	else if (spec->sign == '+' || spec->sign == ' ')
 		text[prefix++] = spec->sign;
+
 	if ((spec->alternate || arg->kind == HX_FORMAT_POINTER) && base != 10) {
 		text[prefix++] = '0';
 		text[prefix++] = type;
 	}
+
 	do {
 		digits[count++] = alphabet[value % base];
 		value /= base;
 	} while (value);
+
 	while (count)
 		text[prefix++] = digits[--count];
+
 	return hx_os_i_format_append(out, text, prefix, limit, error);
 }
 
@@ -161,6 +188,7 @@ static hx_os_status hx_os_format_real(hx_string *out, const hx_format_arg *arg,
 		value *= 100;
 		type = 'f';
 	}
+
 	precision = spec->has_precision ? (int)spec->precision : 6;
 	capacity = (size_t)LDBL_MAX_10_EXP + 4096 + 64;
 	text = hx_os_i_alloc(out->context, capacity, 0);
@@ -173,22 +201,28 @@ static hx_os_status hx_os_format_real(hx_string *out, const hx_format_arg *arg,
 #endif
 	if (!locale) {
 		hx_os_memory_free(text);
+
 		return hx_os_i_error(error, HX_OS_NO_MEMORY, 0, 0);
 	}
 #if !defined(_WIN32)
 	previous = uselocale(locale);
 	if (!previous) {
 		int code = errno;
+
 		freelocale(locale);
+
 		hx_os_memory_free(text);
+
 		return hx_os_i_errno(error, code);
 	}
 #endif
 	format[p++] = '%';
 	if (spec->sign)
 		format[p++] = spec->sign;
+
 	if (spec->alternate)
 		format[p++] = '#';
+
 	format[p++] = '.';
 	format[p++] = '*';
 	format[p++] = 'L';
@@ -203,6 +237,7 @@ static hx_os_status hx_os_format_real(hx_string *out, const hx_format_arg *arg,
 		int max_precision = arg->kind == HX_FORMAT_F32 ? 9
 			: arg->kind == HX_FORMAT_F64	       ? 17
 							       : DECIMAL_DIG;
+
 		for (precision = 1; precision <= max_precision; ++precision) {
 			long double parsed;
 #if defined(_WIN32)
@@ -218,6 +253,7 @@ static hx_os_status hx_os_format_real(hx_string *out, const hx_format_arg *arg,
 				parsed = (float)parsed;
 			else if (arg->kind == HX_FORMAT_F64)
 				parsed = (double)parsed;
+
 			if (parsed == value || value != value)
 				break;
 		}
@@ -238,14 +274,19 @@ static hx_os_status hx_os_format_real(hx_string *out, const hx_format_arg *arg,
 #endif
 	if (count < 0 || (size_t)count >= capacity) {
 		hx_os_memory_free(text);
+
 		return hx_os_i_error(error, HX_OS_RANGE, 0, 0);
 	}
+
 	if (spec->type == '%')
 		text[count++] = '%';
+
 	{
 		hx_os_status status = hx_os_i_format_append(
 			out, text, (size_t)count, limit, error);
+
 		hx_os_memory_free(text);
+
 		return status;
 	}
 #else
@@ -253,6 +294,7 @@ static hx_os_status hx_os_format_real(hx_string *out, const hx_format_arg *arg,
 	(void)arg;
 	(void)spec;
 	(void)limit;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 #endif
 }
@@ -263,34 +305,45 @@ static hx_os_status hx_os_format_group(hx_string *text, char separator,
 	hx_string grouped;
 	size_t start = 0, end, i;
 	hx_os_status status;
+
 	if (text->size && strchr("+- ", text->data[0]))
 		++start;
+
 	if (start + 1 < text->size && text->data[start] == '0' &&
 		strchr("xXbBo", text->data[start + 1]))
 		start += 2;
 	for (end = start; end < text->size; ++end) {
 		char c = text->data[end];
+
 		if (group == 3 ? !(c >= '0' && c <= '9')
 			       : !strchr("0123456789abcdefABCDEF", c))
 			break;
 	}
+
 	hx_string_init(&grouped, text->context);
+
 	status = hx_os_i_format_append(
 		&grouped, text->data, start, limit, error);
+
 	for (i = start; i < end && status == HX_OS_OK; ++i) {
 		if (i > start && (end - i) % group == 0)
 			status = hx_os_i_format_append(
 				&grouped, &separator, 1, limit, error);
+
 		if (status == HX_OS_OK)
 			status = hx_os_i_format_append(
 				&grouped, text->data + i, 1, limit, error);
 	}
+
 	if (status == HX_OS_OK)
 		status = hx_os_i_format_append(&grouped, text->data + end,
 			text->size - end, limit, error);
+
 	if (status == HX_OS_OK)
 		hx_string_move(text, &grouped);
+
 	hx_string_destroy(&grouped);
+
 	return status;
 }
 
@@ -303,6 +356,7 @@ hx_os_status hx_os_i_format_value(hx_string *out, const hx_format_arg *arg,
 	int numeric = 1;
 	char align = spec->align;
 	hx_string_view fill = spec->fill;
+
 	hx_string_init(&text, out->context);
 	if (arg->kind == HX_FORMAT_TEXT ||
 		(arg->kind == HX_FORMAT_BOOL &&
@@ -313,6 +367,7 @@ hx_os_status hx_os_i_format_value(hx_string *out, const hx_format_arg *arg,
 			: hx_string_view_from_cstr(
 				  arg->value.integer ? "true" : "false");
 		size_t invalid;
+
 		numeric = 0;
 		if ((spec->type && spec->type != 's' && spec->type != '?') ||
 			spec->sign || spec->alternate || spec->zero ||
@@ -321,8 +376,10 @@ hx_os_status hx_os_i_format_value(hx_string *out, const hx_format_arg *arg,
 		else
 			status = hx_os_text_validate_utf8(
 				view.data, view.size, &invalid);
+
 		if (status == HX_OS_OK && spec->has_precision) {
 			size_t i = 0, count = 0;
+
 			while (i < view.size) {
 				if (((unsigned char)view.data[i] & 0xc0) !=
 						0x80 &&
@@ -330,8 +387,10 @@ hx_os_status hx_os_i_format_value(hx_string *out, const hx_format_arg *arg,
 					break;
 				++i;
 			}
+
 			view.size = i;
 		}
+
 		if (status == HX_OS_OK)
 			status = spec->type == '?'
 				? hx_os_format_quote(&text, view, limit, error)
@@ -351,6 +410,7 @@ hx_os_status hx_os_i_format_value(hx_string *out, const hx_format_arg *arg,
 	}
 	else
 		status = HX_OS_TYPE_MISMATCH;
+
 	if (status == HX_OS_OK && spec->grouping) {
 		int binary = spec->type && strchr("bBoxX", spec->type);
 		if (spec->grouping == ',' && binary)
@@ -359,16 +419,20 @@ hx_os_status hx_os_i_format_value(hx_string *out, const hx_format_arg *arg,
 			status = hx_os_format_group(&text, spec->grouping,
 				binary ? 4 : 3, limit, error);
 	}
+
 	if (status != HX_OS_OK)
 		goto done;
+
 	points = hx_os_format_points(hx_string_c_str(&text), text.size);
 	padding = spec->width > points ? spec->width - points : 0;
 	if (!align)
 		align = numeric ? '>' : '<';
+
 	if (numeric && spec->zero && !spec->align) {
 		align = '=';
 		fill = hx_string_view_from_cstr("0");
 	}
+
 	if (align == '<')
 		right = padding;
 	else if (align == '^') {
@@ -377,26 +441,33 @@ hx_os_status hx_os_i_format_value(hx_string *out, const hx_format_arg *arg,
 	}
 	else
 		left = padding;
+
 	if (align == '=') {
 		if (text.size && strchr("+- ", text.data[0]))
 			++prefix;
+
 		if (prefix + 1 < text.size && text.data[prefix] == '0' &&
 			strchr("xXbBo", text.data[prefix + 1]))
 			prefix += 2;
 		status = hx_os_i_format_append(
 			out, hx_string_c_str(&text), prefix, limit, error);
 	}
+
 	if (status == HX_OS_OK)
 		status = hx_os_format_pad(out, fill, left, limit, error);
+
 	if (status == HX_OS_OK)
 		status = hx_os_i_format_append(out,
 			hx_string_c_str(&text) + prefix, text.size - prefix,
 			limit, error);
+
 	if (status == HX_OS_OK)
 		status = hx_os_format_pad(out, fill, right, limit, error);
+
 done:
 	hx_string_destroy(&text);
 	if (status != HX_OS_OK && (!error || error->status == HX_OS_OK))
 		return hx_os_i_error(error, status, 0, 0);
+
 	return status;
 }

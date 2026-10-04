@@ -1,5 +1,6 @@
 #ifndef HX_C_PLATFORM_TEST_CPP_CHECK_HPP
 #define HX_C_PLATFORM_TEST_CPP_CHECK_HPP
+
 #include <hx/Values.hpp>
 #include <hx_os_atomic.h>
 #include <cstdio>
@@ -17,17 +18,20 @@ public:
 	{
 		hx_os_atomic_fetch_add(m_count_, 1, HX_OS_RELAXED);
 	}
+
 	CaptureProbe(const CaptureProbe &other) noexcept
 	    : m_count_(other.m_count_)
 	{
 		if (m_count_)
 			hx_os_atomic_fetch_add(m_count_, 1, HX_OS_RELAXED);
 	}
+
 	CaptureProbe(CaptureProbe &&other) noexcept
 	    : m_count_(other.m_count_)
 	{
 		other.m_count_ = NULL;
 	}
+
 	~CaptureProbe() noexcept
 	{
 		if (m_count_)
@@ -55,6 +59,7 @@ T TakeAt(hx::Result<T> &&result, const char *file, int line) noexcept
 			line, hx_os_status_name(result.status()));
 		std::exit(1);
 	}
+
 	return std::move(result).value();
 }
 

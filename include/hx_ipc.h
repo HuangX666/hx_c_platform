@@ -18,6 +18,7 @@ enum {
 	HX_IPC_DISCONNECTED,
 	HX_IPC_OVERFLOW
 };
+
 enum { HX_IPC_BINARY = 0, HX_IPC_UTF8 = 1 };
 
 /* Library-owned immutable message. Release once; do not copy ownership.
@@ -62,20 +63,26 @@ typedef struct hx_ipc_statistics {
 
 HX_OS_API hx_os_status HX_OS_CALL hx_ipc_options_init(
 	hx_ipc_options *options, size_t capacity);
+
 /* Common defaults: default context/options, five-second operation wait.
  * Close always takes an explicit deadline. The _until and _with_options
  * variants expose timing, allocation and capacity control.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_ipc_listen(
 	const char *address, hx_ipc **out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_ipc_connect(
 	const char *address, hx_ipc **out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_ipc_send_text(
 	hx_ipc *endpoint, const char *text, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_ipc_request_text(hx_ipc *endpoint,
 	const char *text, hx_ipc_message **reply, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_ipc_reply_text(hx_ipc *endpoint,
 	const hx_ipc_message *request, const char *text, hx_os_error *error);
+
 /* Each endpoint owns one I/O thread, shared by its bounded peer set. Linking
  * the library starts nothing. There are no user callbacks on that thread.
  * Supported addresses: tcp://127.0.0.1:port, udp://127.0.0.1:port,
@@ -88,6 +95,7 @@ HX_OS_API hx_os_status HX_OS_CALL hx_ipc_reply_text(hx_ipc *endpoint,
 HX_OS_API hx_os_status HX_OS_CALL hx_ipc_listen_with_options(
 	hx_os_context *context, const char *address,
 	const hx_ipc_options *options, hx_ipc **out, hx_os_error *error);
+
 /* Once the endpoint is created, *out remains owned even on a handshake error
  * or TIMEOUT: wait_connected_until() or close it. Earlier creation failures
  * leave *out NULL. Each reconnect establishes a fresh session; old pending
@@ -96,8 +104,10 @@ HX_OS_API hx_os_status HX_OS_CALL hx_ipc_listen_with_options(
 HX_OS_API hx_os_status HX_OS_CALL hx_ipc_connect_until(hx_os_context *context,
 	const char *address, const hx_ipc_options *options,
 	hx_os_deadline deadline, hx_ipc **out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_ipc_wait_connected_until(hx_ipc *endpoint,
 	hx_os_deadline deadline, hx_ipc_peer *peer, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_ipc_address(
 	hx_ipc *endpoint, hx_string *out, hx_os_error *error);
 
@@ -111,9 +121,11 @@ HX_OS_API hx_os_status HX_OS_CALL hx_ipc_address(
 HX_OS_API hx_os_status HX_OS_CALL hx_ipc_send_until(hx_ipc *endpoint,
 	hx_ipc_peer peer, uint64_t channel, const void *data, size_t bytes,
 	hx_os_deadline deadline, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_ipc_send_text_until(hx_ipc *endpoint,
 	hx_ipc_peer peer, uint64_t channel, const char *text,
 	hx_os_deadline deadline, hx_os_error *error);
+
 /* A request waits for its matching reply while both directions keep moving.
  * Concurrent requests may complete in any order. Replies bypass the ordinary
  * inbox but still obey the byte budget. Late replies are discarded after a
@@ -122,15 +134,19 @@ HX_OS_API hx_os_status HX_OS_CALL hx_ipc_send_text_until(hx_ipc *endpoint,
 HX_OS_API hx_os_status HX_OS_CALL hx_ipc_request_until(hx_ipc *endpoint,
 	hx_ipc_peer peer, uint64_t channel, const void *data, size_t bytes,
 	hx_os_deadline deadline, hx_ipc_message **reply, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_ipc_request_text_until(hx_ipc *endpoint,
 	hx_ipc_peer peer, uint64_t channel, const char *text,
 	hx_os_deadline deadline, hx_ipc_message **reply, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_ipc_reply_text_until(hx_ipc *endpoint,
 	const hx_ipc_message *request, const char *text,
 	hx_os_deadline deadline, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_ipc_reply_until(hx_ipc *endpoint,
 	const hx_ipc_message *request, const void *data, size_t bytes,
 	hx_os_deadline deadline, hx_os_error *error);
+
 /* One complete message or event per call. NOW is a nonblocking poll.
  * Multiple receivers distribute messages, they do not broadcast copies.
  * Full reliable inboxes explicitly reject admission; UDP may drop. A bounded
@@ -139,9 +155,12 @@ HX_OS_API hx_os_status HX_OS_CALL hx_ipc_reply_until(hx_ipc *endpoint,
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_ipc_receive_until(hx_ipc *endpoint,
 	hx_os_deadline deadline, hx_ipc_message **message, hx_os_error *error);
+
 HX_OS_API void HX_OS_CALL hx_ipc_message_release(hx_ipc_message *message);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_ipc_statistics_read(hx_ipc *endpoint,
 	hx_ipc_statistics *out, size_t capacity, hx_os_error *error);
+
 /* Serial owner close; prevent new calls from starting once close begins.
  * Already-running calls are cancelled and may finish concurrently. Timeout
  * retains *endpoint for retry, including native I/O buffers. No thread is

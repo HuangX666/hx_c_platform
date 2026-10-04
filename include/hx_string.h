@@ -35,46 +35,69 @@ typedef struct hx_string {
 
 HX_OS_API void HX_OS_CALL hx_string_init(
 	hx_string *string, hx_os_context *context);
+
 HX_OS_API void HX_OS_CALL hx_string_destroy(hx_string *string);
+
 HX_OS_API const char *HX_OS_CALL hx_string_c_str(const hx_string *string);
+
 HX_OS_API size_t HX_OS_CALL hx_string_size_bytes(const hx_string *string);
+
 HX_OS_API size_t HX_OS_CALL hx_string_codepoint_count(const hx_string *string);
+
 HX_OS_API hx_string_view HX_OS_CALL hx_string_view_of(const hx_string *string);
+
 HX_OS_API hx_string_view HX_OS_CALL hx_string_view_from_cstr(const char *text);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_string_reserve(
 	hx_string *string, size_t bytes, hx_os_error *error);
+
 HX_OS_API void HX_OS_CALL hx_string_clear(hx_string *string);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_string_assign(
 	hx_string *string, hx_string_view text, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_string_assign_cstr(
 	hx_string *string, const char *text, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_string_append(
 	hx_string *string, hx_string_view text, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_string_append_cstr(
 	hx_string *string, const char *text, hx_os_error *error);
+
 /* Offsets/counts are bytes and must lie on UTF-8 codepoint boundaries. */
 HX_OS_API hx_os_status HX_OS_CALL hx_string_insert(hx_string *string,
 	size_t offset, hx_string_view text, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_string_erase(
 	hx_string *string, size_t offset, size_t bytes, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_string_replace(hx_string *string,
 	size_t offset, size_t bytes, hx_string_view text, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_string_substring(hx_string *destination,
 	const hx_string *source, size_t offset, size_t bytes,
 	hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_string_copy(
 	hx_string *destination, const hx_string *source, hx_os_error *error);
+
 HX_OS_API void HX_OS_CALL hx_string_move(
 	hx_string *destination, hx_string *source);
+
 HX_OS_API size_t HX_OS_CALL hx_string_find(
 	const hx_string *string, hx_string_view needle, size_t start);
+
 HX_OS_API int HX_OS_CALL hx_string_compare(
 	const hx_string *string, hx_string_view other);
+
 /* printf formatting uses the caller's locale; resulting bytes must be UTF-8. */
 HX_OS_API hx_os_status HX_OS_CALL hx_string_vformat(hx_string *string,
 	hx_os_error *error, const char *format, va_list arguments);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_string_format(
 	hx_string *string, hx_os_error *error, const char *format, ...);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_string_append_format(
 	hx_string *string, hx_os_error *error, const char *format, ...);
 
@@ -82,6 +105,7 @@ HX_OS_API hx_os_status HX_OS_CALL hx_string_append_format(
 HX_OS_API hx_os_status HX_OS_CALL hx_string_assign_encoded(hx_string *string,
 	hx_os_encoding encoding, const void *input, size_t bytes,
 	hx_os_error *error);
+
 /* Encoding adds no terminator; the result reports exact byte progress. */
 HX_OS_API hx_os_status HX_OS_CALL hx_string_encode(const hx_string *string,
 	hx_os_encoding encoding, void *output, size_t capacity,
@@ -93,41 +117,56 @@ HX_OS_API hx_os_status HX_OS_CALL hx_string_encode(const hx_string *string,
  */
 HX_OS_API int HX_OS_CALL hx_string_starts_with(
 	const hx_string *string, hx_string_view prefix);
+
 HX_OS_API int HX_OS_CALL hx_string_ends_with(
 	const hx_string *string, hx_string_view suffix);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_string_trim_ascii(
 	hx_string *string, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_string_lower_ascii(
 	hx_string *string, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_string_upper_ascii(
 	hx_string *string, hx_os_error *error);
+
 /* Allocation-free edits on a valid initialized string. No Unicode folding.
  * string must be non-NULL; borrowed views may change after these calls.
  */
 HX_OS_API void HX_OS_CALL hx_string_trim_ascii_in_place(hx_string *string);
+
 HX_OS_API void HX_OS_CALL hx_string_lower_ascii_in_place(hx_string *string);
+
 HX_OS_API void HX_OS_CALL hx_string_upper_ascii_in_place(hx_string *string);
+
 /* Left-to-right nonoverlapping replacement; empty needle is INVALID.
  * Inputs may borrow from string. Failure preserves string and replaced.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_string_replace_all(hx_string *string,
 	hx_string_view needle, hx_string_view replacement, size_t *replaced,
 	hx_os_error *error);
+
 /* Owns a copy of the input; views remain valid until parts_destroy.
  * Embedded NUL is supported. Default: retain empty pieces, at most 4096.
  * ex max_parts is 1..65536; excess pieces fail with LIMIT, never truncate.
  * Empty separator is INVALID. Failure sets *out=NULL.
  */
 typedef struct hx_string_parts hx_string_parts;
+
 HX_OS_API hx_os_status HX_OS_CALL hx_string_split(const hx_string *string,
 	hx_string_view separator, hx_string_parts **out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_string_split_ex(const hx_string *string,
 	hx_string_view separator, size_t max_parts, int keep_empty,
 	hx_string_parts **out, hx_os_error *error);
+
 HX_OS_API size_t HX_OS_CALL hx_string_parts_count(const hx_string_parts *parts);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_string_parts_at(
 	const hx_string_parts *parts, size_t index, hx_string_view *out);
+
 HX_OS_API void HX_OS_CALL hx_string_parts_destroy(hx_string_parts **parts);
+
 /* Transactional, validates each UTF-8 view. Parts may borrow from out.
  * count=0 produces an empty string. Parts array and output object may not
  * overlap. No locale collation, Unicode normalization or case folding.

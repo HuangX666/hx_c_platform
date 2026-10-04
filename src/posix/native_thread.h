@@ -14,6 +14,7 @@ typedef struct hx_os_i_thread_native {
 	mach_port_t termination;
 #endif
 } hx_os_i_thread_native;
+
 typedef pthread_key_t hx_os_i_tls_native;
 
 #endif

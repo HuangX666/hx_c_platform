@@ -20,6 +20,7 @@ static void test_string(hx_os_context *context)
 	hx_string_view view;
 	unsigned char encoded[16];
 	hx_os_text_result result;
+
 	hx_string_init(&string, context);
 	hx_string_init(&copy, context);
 	CHECK(hx_os_context_destroy(&context, NULL) == HX_OS_BUSY);
@@ -39,10 +40,12 @@ static void test_string(hx_os_context *context)
 	CHECK(hx_string_append_cstr(&string, "\xc0\x80", NULL) ==
 		HX_OS_INVALID_ENCODING);
 	CHECK(!strcmp(hx_string_c_str(&string), "文中-42"));
+
 	view.data = "a\0b";
 	view.size = 3;
 	CHECK(hx_string_assign(&copy, view, NULL) == HX_OS_OK);
 	CHECK(hx_string_size_bytes(&copy) == 3);
+
 	hx_string_move(&string, &copy);
 	CHECK(hx_string_size_bytes(&string) == 3);
 	CHECK(hx_string_size_bytes(&copy) == 0);
@@ -56,6 +59,7 @@ static void test_string(hx_os_context *context)
 	CHECK(hx_string_assign_encoded(&string, HX_OS_UTF16LE, "\x00\xd8", 2,
 		      NULL) == HX_OS_TRUNCATED_INPUT);
 	CHECK(!strcmp(hx_string_c_str(&string), "中文"));
+
 	hx_string_destroy(&copy);
 	hx_string_destroy(&string);
 }
@@ -70,34 +74,44 @@ static void test_memory(hx_os_context *context)
 	void *blocks[128];
 	void *memory;
 	size_t i;
+
 	hx_os_memory_pool_options_init(&options);
 	options.block_bytes = 4096;
 	options.maximum_bytes = 65536;
 	options.cached_bytes = 8192;
 	CHECK(hx_os_memory_pool_create(context, &options, &pool, NULL) ==
 		HX_OS_OK);
+
 	for (i = 0; i < 128; ++i) {
 		CHECK(hx_os_memory_pool_alloc(pool, 33, 64, &blocks[i], NULL) ==
 			HX_OS_OK);
 		CHECK(((uintptr_t)blocks[i] & 63) == 0);
+
 		memset(blocks[i], (int)i, 33);
 	}
+
 	CHECK(hx_os_memory_pool_destroy(&pool, NULL) == HX_OS_BUSY);
 	CHECK(hx_os_memory_pool_alloc(pool, 1048576, 0, &memory, NULL) ==
 		HX_OS_LIMIT);
+
 	for (i = 0; i < 128; ++i) {
 		size_t j;
+
 		for (j = 0; j < 33; ++j)
 			CHECK(((unsigned char *)blocks[i])[j] ==
 				(unsigned char)i);
+
 		hx_os_memory_pool_free(pool, blocks[i]);
 	}
+
 	CHECK(hx_os_memory_pool_alloc(pool, 17, 128, &memory, NULL) ==
 		HX_OS_OK);
+
 	memset(memory, 0x47, 17);
 	CHECK(hx_os_memory_pool_realloc(pool, &memory, 4096, NULL) == HX_OS_OK);
 	CHECK(((uintptr_t)memory & 127) == 0);
 	CHECK(((unsigned char *)memory)[16] == 0x47);
+
 	hx_os_memory_pool_free(pool, memory);
 	hx_os_memory_pool_collect(pool);
 	hx_os_memory_pool_stats(pool, &stats);
@@ -109,6 +123,7 @@ static void test_memory(hx_os_context *context)
 	CHECK(hx_os_object_pool_acquire(objects, &memory, NULL) == HX_OS_OK);
 	CHECK(hx_os_object_pool_acquire(objects, &blocks[0], NULL) ==
 		HX_OS_LIMIT);
+
 	hx_os_object_pool_release(objects, memory);
 	CHECK(hx_os_object_pool_destroy(&objects, NULL) == HX_OS_OK);
 	CHECK(hx_os_arena_create(context, 1024, 4096, &arena, NULL) ==
@@ -116,8 +131,10 @@ static void test_memory(hx_os_context *context)
 	CHECK(hx_os_arena_alloc(arena, 100, 256, &memory, NULL) == HX_OS_OK);
 	CHECK(((uintptr_t)memory & 255) == 0);
 	CHECK(hx_os_arena_alloc(arena, 8192, 0, &memory, NULL) == HX_OS_LIMIT);
+
 	hx_os_arena_reset(arena);
 	CHECK(hx_os_arena_alloc(arena, 100, 64, &memory, NULL) == HX_OS_OK);
+
 	hx_os_arena_destroy(arena);
 }
 
@@ -128,6 +145,7 @@ static void test_encoding(void)
 	hx_os_text_converter *converter;
 	size_t required;
 	const char utf8[] = "中文";
+
 	CHECK(hx_os_text_measure(HX_OS_UTF8, HX_OS_UTF16LE, utf8,
 		      sizeof(utf8) - 1, &required, NULL) == HX_OS_OK);
 	CHECK(required == 4);
@@ -146,6 +164,7 @@ static void test_encoding(void)
 	CHECK(result.input_used == 3 && result.output_used == 2);
 	CHECK(hx_os_text_converter_update(converter, utf8 + 3, 3, output + 2, 2,
 		      1, &result, NULL) == HX_OS_OK);
+
 	hx_os_text_converter_destroy(converter);
 	CHECK(hx_os_text_convert(HX_OS_UTF8, HX_OS_ASCII, utf8, 6, output,
 		      sizeof(output), &result, NULL) == HX_OS_UNREPRESENTABLE);
@@ -156,6 +175,7 @@ static void test_encoding(void)
 		      sizeof(output), 1, &result, NULL) == HX_OS_OK);
 	CHECK(result.replacements == 2 && result.output_used == 2);
 	CHECK(!memcmp(output, "??", 2));
+
 	hx_os_text_converter_destroy(converter);
 	if (hx_os_capabilities() & HX_OS_CAP_LEGACY_TEXT) {
 		CHECK(hx_os_encoding_supported(HX_OS_GBK));
@@ -191,6 +211,7 @@ static void test_files(hx_os_context *context)
 	size_t count;
 	size_t required;
 	uint64_t size;
+
 	CHECK(hx_os_directory_create(directory_name, 1, NULL) == HX_OS_OK);
 	CHECK(hx_os_file_open(context, path,
 		      HX_OS_FILE_WRITE | HX_OS_FILE_CREATE |
@@ -218,12 +239,14 @@ static void test_files(hx_os_context *context)
 	CHECK(hx_os_file_close(&file, NULL) == HX_OS_OK);
 	CHECK(hx_os_directory_open(context, directory_name, &directory, NULL) ==
 		HX_OS_OK);
+
 	status = hx_os_directory_next(directory, name, 1, &required, NULL);
 	CHECK(status == HX_OS_OUTPUT_FULL);
 	CHECK(required == strlen("data.txt") + 1);
 	CHECK(hx_os_directory_next(directory, name, sizeof(name), &required,
 		      NULL) == HX_OS_OK);
 	CHECK(!strcmp(name, "data.txt"));
+
 	hx_os_directory_close(directory);
 	CHECK(hx_os_file_move(path, moved, 1, NULL) == HX_OS_OK);
 	CHECK(hx_os_file_remove(moved, NULL) == HX_OS_OK);
@@ -237,14 +260,18 @@ static void test_long_paths(hx_os_context *context)
 	size_t i;
 	hx_os_file *file;
 	hx_os_error error;
+
 	lengths[0] = strlen(path);
+
 	for (i = 1; i < 8; ++i) {
 		strcat(path,
 			"/abcdefghijklmnopqrstuvwxyz_0123456789_abcdefghij");
 		lengths[i] = strlen(path);
 	}
+
 	CHECK(strlen(path) > 260);
 	CHECK(hx_os_directory_create(path, 1, &error) == HX_OS_OK);
+
 	strcat(path, "/内容_😀.txt");
 	CHECK(hx_os_file_open(context, path,
 		      HX_OS_FILE_CREATE | HX_OS_FILE_WRITE |
@@ -252,10 +279,12 @@ static void test_long_paths(hx_os_context *context)
 		      &file, &error) == HX_OS_OK);
 	CHECK(hx_os_file_close(&file, &error) == HX_OS_OK);
 	CHECK(hx_os_file_remove(path, &error) == HX_OS_OK);
+
 	for (i = 8; i > 0; --i) {
 		path[lengths[i - 1]] = 0;
 		CHECK(hx_os_directory_remove(path, &error) == HX_OS_OK);
 	}
+
 	CHECK(hx_os_file_open(context, "bad\xc0\x80", HX_OS_FILE_READ, &file,
 		      &error) == HX_OS_INVALID_ENCODING);
 	CHECK(file == NULL && error.status == HX_OS_INVALID_ENCODING);
@@ -264,15 +293,20 @@ static void test_long_paths(hx_os_context *context)
 int main(void)
 {
 	hx_os_context *context;
+
 	CHECK(hx_os_context_create(NULL, &context, NULL) == HX_OS_OK);
+
 	test_string(context);
 	if (hx_os_capabilities() & HX_OS_CAP_MEMORY_POOLS)
 		test_memory(context);
+
 	test_encoding();
 	test_files(context);
 	test_long_paths(context);
 	CHECK(hx_os_context_allocations(context) == 0);
 	CHECK(hx_os_context_destroy(&context, NULL) == HX_OS_OK);
+
 	puts("string, memory, text and file contracts passed");
+
 	return 0;
 }

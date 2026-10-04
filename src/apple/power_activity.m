@@ -16,13 +16,16 @@ hx_os_status hx_os_i_activity_set(
 				id token = [[NSProcessInfo processInfo]
 					beginActivityWithOptions:options
 							  reason:reason];
+
 				if (!token)
 					return hx_os_i_error(
 						error, HX_OS_NO_MEMORY, 0, 0);
+
 				power->native = (uintptr_t)[token retain];
 			}
 			else {
 				id token = (id)power->native;
+
 				@try {
 					[[NSProcessInfo processInfo]
 						endActivity:token];
@@ -31,9 +34,11 @@ hx_os_status hx_os_i_activity_set(
 					[token release];
 				}
 			}
+
 			return hx_os_i_error(error, HX_OS_OK, 0, 0);
 		} @catch (NSException *exception) {
 			(void)exception;
+
 			return hx_os_i_error(error, HX_OS_IO_ERROR, 0, 0);
 		}
 	}

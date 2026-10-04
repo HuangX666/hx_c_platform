@@ -59,11 +59,14 @@ Complete sources: [server](../examples/ipc_server.c), [client](../examples/ipc_c
 hx_ipc *client = NULL;
 hx_ipc_message *reply = NULL;
 hx_os_error error = {0};
+
 hx_os_status status = hx_ipc_connect("local://demo", &client, &error);
 if (status == HX_OS_OK)
 	status = hx_ipc_request_text(client, "Hello from C", &reply, &error);
+
 if (status == HX_OS_OK)
 	printf("Reply: %.*s\n", (int)reply->bytes, (const char *)reply->data);
+
 hx_ipc_message_release(reply);
 /* Close client even when connect or request failed; see section 6. */
 ```
@@ -94,8 +97,10 @@ The [complete C++11 program](../examples/ipc_threads.cpp) creates four business 
 auto reply = connection.requestText("read temperature", device_id);
 if (!reply) {
 	std::fprintf(stderr, "Request failed: %d\n", reply.status());
+
 	return NULL;
 }
+
 std::printf("Reply: %s\n", reply.value().text());
 ```
 

@@ -47,7 +47,9 @@ typedef struct hx_os_text_result {
  * Output may contain a valid prefix on error. Input/output cannot overlap.
  */
 HX_OS_API const char *HX_OS_CALL hx_os_encoding_name(hx_os_encoding value);
+
 HX_OS_API int HX_OS_CALL hx_os_encoding_supported(hx_os_encoding value);
+
 /*
  * Detect the longest complete BOM in this complete prefix buffer (not a
  * streaming decoder). Recognizes UTF-8/16LE/16BE/32LE/32BE. No BOM returns
@@ -58,8 +60,10 @@ HX_OS_API int HX_OS_CALL hx_os_encoding_supported(hx_os_encoding value);
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_bom_detect(const void *data,
 	size_t bytes, hx_os_encoding *encoding, size_t *prefix_bytes);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_bom_bytes(
 	hx_os_encoding encoding, unsigned char out[4], size_t *bytes);
+
 /*
  * Locale-independent complete numeric token conversion. Parsing accepts the
  * existing configuration numeric grammar: decimal/exponent, underscores,
@@ -71,13 +75,17 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_text_bom_bytes(
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_parse_double(
 	const char *text, size_t bytes, double *out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_format_double(
 	double value, char *buffer, size_t capacity, size_t *required);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_validate_utf8(
 	const void *input, size_t bytes, size_t *error_offset);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_converter_create(
 	hx_os_context *context, hx_os_encoding source, hx_os_encoding target,
 	int policy, hx_os_text_converter **out, hx_os_error *error);
+
 /*
  * A converter is serialized by its caller. Unconsumed input must be
  * resubmitted, including an incomplete trailing sequence on NEED_INPUT.
@@ -88,13 +96,17 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_text_converter_update(
 	hx_os_text_converter *converter, const void *input, size_t bytes,
 	void *output, size_t capacity, int final_input,
 	hx_os_text_result *result, hx_os_error *error);
+
 HX_OS_API void HX_OS_CALL hx_os_text_converter_reset(
 	hx_os_text_converter *converter);
+
 HX_OS_API void HX_OS_CALL hx_os_text_converter_destroy(
 	hx_os_text_converter *converter);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_convert(hx_os_encoding source,
 	hx_os_encoding target, const void *input, size_t bytes, void *output,
 	size_t capacity, hx_os_text_result *result, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_measure(hx_os_encoding source,
 	hx_os_encoding target, const void *input, size_t bytes,
 	size_t *required, hx_os_error *error);

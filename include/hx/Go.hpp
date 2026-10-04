@@ -1,5 +1,6 @@
 #ifndef HX_C_PLATFORM_CPP_GO_HPP
 #define HX_C_PLATFORM_CPP_GO_HPP
+
 #include <hx/Coroutines.hpp>
 
 namespace hx {
@@ -10,31 +11,41 @@ public:
 	    : m_binding_(NULL)
 	{
 	}
+
 	Scope(Scope &&other) noexcept
 	    : m_binding_(other.m_binding_)
 	{
 		other.m_binding_ = NULL;
 	}
+
 	Scope(const Scope &) = delete;
+
 	Scope &operator=(const Scope &) = delete;
+
 	~Scope() noexcept
 	{
 		(void)hx_os_coro_binding_close(&m_binding_, NULL);
 	}
+
 	static Result<Scope> enter(const Runtime &runtime) noexcept
 	{
 		Scope value;
 		hx_os_error error = {};
+
 		auto status = hx_os_coro_binding_create(
 			runtime.nativeHandle(), &value.m_binding_, &error);
 		if (status != HX_OS_OK)
 			return Failure(status, error);
+
 		return value;
 	}
+
 	Result<void> close() noexcept
 	{
 		hx_os_error error = {};
+
 		auto status = hx_os_coro_binding_close(&m_binding_, &error);
+
 		return detail::Status(status, error);
 	}
 
@@ -51,6 +62,7 @@ public:
 	    : m_runtime_(runtime)
 	{
 	}
+
 	template <typename F>
 	Result<void> operator-(F &&function) const noexcept
 	{
@@ -60,16 +72,19 @@ public:
 private:
 	Owner &m_runtime_;
 };
+
 template <typename Owner> Go<Owner> makeGo(Owner &owner) noexcept
 {
 	return Go<Owner>(owner);
 }
+
 class CurrentGo {
 public:
 	template <typename F>
 	Result<void> operator-(F &&function) const noexcept
 	{
 		hx_os_coro_runtime *owner = hx_os_coro_current_runtime();
+
 		return Runtime(owner).spawn(std::forward<F>(function));
 	}
 };
@@ -83,27 +98,34 @@ public:
 	    : m_value_(create(capacity))
 	{
 	}
+
 	Chan(const Chan &other) noexcept
 	    : m_value_(copy(other))
 	{
 	}
+
 	Chan(Chan &&other) noexcept
 	    : m_value_(std::move(other.m_value_))
 	{
 	}
+
 	Chan &operator=(Chan other) noexcept
 	{
 		std::swap(m_value_, other.m_value_);
+
 		return *this;
 	}
+
 	explicit operator bool() const noexcept
 	{
 		return m_value_.ok();
 	}
+
 	const hx_os_error &error() const noexcept
 	{
 		return m_value_.error();
 	}
+
 	Result<void> send(const T &value,
 		hx_os_deadline deadline =
 			HX_OS_DEADLINE_INFINITE) const noexcept
@@ -111,6 +133,7 @@ public:
 		return m_value_ ? m_value_.value().send(value, deadline)
 				: Result<void>(Failure(m_value_.error()));
 	}
+
 	Result<void> send(T &&value,
 		hx_os_deadline deadline =
 			HX_OS_DEADLINE_INFINITE) const noexcept
@@ -119,25 +142,30 @@ public:
 			? m_value_.value().send(std::move(value), deadline)
 			: Result<void>(Failure(m_value_.error()));
 	}
+
 	Result<T> receive(hx_os_deadline deadline =
 				  HX_OS_DEADLINE_INFINITE) const noexcept
 	{
 		return m_value_ ? m_value_.value().receive(deadline)
 				: Result<T>(Failure(m_value_.error()));
 	}
+
 	Result<void> close() const noexcept
 	{
 		return m_value_ ? m_value_.value().close()
 				: Result<void>(Failure(m_value_.error()));
 	}
+
 	Result<void> operator<<(const T &value) const noexcept
 	{
 		return send(value);
 	}
+
 	Result<void> operator<<(T &&value) const noexcept
 	{
 		return send(std::move(value));
 	}
+
 	Result<void> operator>>(T &value) const noexcept
 	{
 		return m_value_ ? (m_value_.value() >> value)
@@ -149,12 +177,15 @@ private:
 	static Result<Channel<T>> create(size_t capacity) noexcept
 	{
 		hx_os_coro_runtime *owner = hx_os_coro_current_runtime();
+
 		return Channel<T>::create(Runtime(owner), capacity);
 	}
+
 	static Result<Channel<T>> copy(const Chan &other) noexcept
 	{
 		if (!other.m_value_)
 			return Failure(other.m_value_.error());
+
 		return other.m_value_.value();
 	}
 };

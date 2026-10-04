@@ -27,14 +27,18 @@ int main(void)
 	hx_string text = HX_STRING_INIT;
 	hx_os_status status =
 		hx_os_config_create(NULL, &root, NULL, &document, &error);
+
 	if (status == HX_OS_OK)
 		status = hx_os_config_serialize(
 			document, HX_OS_CONFIG_JSON, &text, NULL, NULL);
+
 	if (status == HX_OS_OK)
 		puts(hx_string_c_str(&text));
 	else
 		fprintf(stderr, "%s\n", hx_os_status_name(status));
+
 	hx_os_config_release(document);
 	hx_string_destroy(&text);
+
 	return status == HX_OS_OK ? 0 : 1;
 }

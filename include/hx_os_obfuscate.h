@@ -1,5 +1,6 @@
 #ifndef HX_C_PLATFORM_OBFUSCATE_H
 #define HX_C_PLATFORM_OBFUSCATE_H
+
 #include "hx_string.h"
 #ifdef __cplusplus
 extern "C" {
@@ -25,6 +26,7 @@ typedef struct hx_os_obfuscated {
 HX_OS_API hx_os_status HX_OS_CALL hx_os_obfuscate_decode(
 	const hx_os_obfuscated *value, char *buffer, size_t capacity,
 	size_t *required, hx_os_error *error);
+
 /* Strict UTF-8 result, transactional, using the output string's context.
  * Temporary plaintext is securely cleared; result lifetime is caller-owned.
  */

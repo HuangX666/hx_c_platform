@@ -18,17 +18,22 @@ typedef void(HX_OS_CALL *hx_os_tls_destructor)(void *value, void *user);
 
 HX_OS_API hx_os_status HX_OS_CALL hx_os_mutex_create(hx_os_context *context,
 	int recursive, hx_os_mutex **out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_mutex_lock(
 	hx_os_mutex *mutex, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_mutex_try_lock(
 	hx_os_mutex *mutex, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_mutex_unlock(
 	hx_os_mutex *mutex, hx_os_error *error);
+
 /* Destruction requires external exclusion of users, including waiters. */
 HX_OS_API void HX_OS_CALL hx_os_mutex_destroy(hx_os_mutex *mutex);
 
 HX_OS_API hx_os_status HX_OS_CALL hx_os_condition_create(
 	hx_os_context *context, hx_os_condition **out, hx_os_error *error);
+
 /*
  * Wait with a nonrecursive mutex locked once. Always recheck a predicate.
  * Returns with the mutex locked, including timeout. Reacquiring it can
@@ -37,24 +42,32 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_condition_create(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_condition_wait_until(
 	hx_os_condition *condition, hx_os_mutex *mutex, hx_os_deadline deadline,
 	hx_os_error *error);
+
 HX_OS_API void HX_OS_CALL hx_os_condition_notify_one(
 	hx_os_condition *condition);
+
 HX_OS_API void HX_OS_CALL hx_os_condition_notify_all(
 	hx_os_condition *condition);
+
 HX_OS_API void HX_OS_CALL hx_os_condition_destroy(hx_os_condition *condition);
 
 /* Auto-reset retains one signal; manual-reset stays set until reset. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_event_create(hx_os_context *context,
 	int manual_reset, int signaled, hx_os_event **out, hx_os_error *error);
+
 HX_OS_API void HX_OS_CALL hx_os_event_set(hx_os_event *event);
+
 HX_OS_API void HX_OS_CALL hx_os_event_reset(hx_os_event *event);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_event_wait_until(
 	hx_os_event *event, hx_os_deadline deadline, hx_os_error *error);
+
 HX_OS_API void HX_OS_CALL hx_os_event_destroy(hx_os_event *event);
 
 HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_create(hx_os_context *context,
 	hx_os_thread_fn function, void *user, hx_os_thread **out,
 	hx_os_error *error);
+
 typedef struct hx_os_thread_options {
 	uint32_t size;
 	uint32_t version;
@@ -70,10 +83,12 @@ typedef struct hx_os_thread_options {
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_options_init(
 	hx_os_thread_options *options, size_t capacity);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_create_with_options(
 	hx_os_context *context, const hx_os_thread_options *options,
 	hx_os_thread_fn function, void *user, hx_os_thread **out,
 	hx_os_error *error);
+
 /*
  * Names are borrowed UTF-8 and copied by the native call. Linux/macOS names
  * truncate to complete codepoints within 15/63 bytes. Windows 7 returns
@@ -82,6 +97,7 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_create_with_options(
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_set_name(
 	hx_os_thread *thread, const char *name, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_set_current_name(
 	const char *name, hx_os_error *error);
 enum {
@@ -89,6 +105,7 @@ enum {
 	HX_OS_THREAD_PRIORITY_NORMAL,
 	HX_OS_THREAD_PRIORITY_TIME_CRITICAL
 };
+
 /* Scheduling requests, not hard real-time guarantees. Linux uses
  * SCHED_IDLE / SCHED_OTHER / maximum SCHED_RR; privilege failures are
  * preserved. Windows priorities remain relative to the process class.
@@ -96,8 +113,10 @@ enum {
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_set_priority(
 	hx_os_thread *thread, int level, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_set_current_priority(
 	int level, hx_os_error *error);
+
 /* Nonzero mask: Linux CPU IDs 0..63; Windows current processor group,
  * native pointer-width bits (higher bits return NOT_SUPPORTED on x86).
  * Apple cannot provide strict binding and returns NOT_SUPPORTED.
@@ -108,17 +127,22 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_set_current_priority(
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_set_affinity(
 	hx_os_thread *thread, uint64_t mask, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_set_current_affinity(
 	uint64_t mask, hx_os_error *error);
+
 /*
  * One joiner at a time. Timeout leaves thread/user alive. Success includes
  * native TLS cleanup and may be repeated. Returned result is caller-owned.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_join_until(hx_os_thread *thread,
 	hx_os_deadline deadline, void **result, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_destroy(
 	hx_os_thread **thread, hx_os_error *error);
+
 HX_OS_API int HX_OS_CALL hx_os_thread_is_current(hx_os_thread *thread);
+
 /* Native identifiers may be reused after thread exit; not globally unique. */
 HX_OS_API uint64_t HX_OS_CALL hx_os_thread_id(void);
 
@@ -133,11 +157,14 @@ HX_OS_API uint64_t HX_OS_CALL hx_os_thread_id(void);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_semaphore_create(hx_os_context *context,
 	uint32_t initial, uint32_t maximum, hx_os_semaphore **out,
 	hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_semaphore_post(
 	hx_os_semaphore *semaphore, uint32_t count, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_semaphore_wait_until(
 	hx_os_semaphore *semaphore, hx_os_deadline deadline,
 	hx_os_error *error);
+
 HX_OS_API void HX_OS_CALL hx_os_semaphore_destroy(hx_os_semaphore *semaphore);
 
 /*
@@ -149,10 +176,14 @@ HX_OS_API void HX_OS_CALL hx_os_semaphore_destroy(hx_os_semaphore *semaphore);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_tls_key_create(hx_os_context *context,
 	hx_os_tls_destructor destructor, void *user, hx_os_tls_key **out,
 	hx_os_error *error);
+
 HX_OS_API void *HX_OS_CALL hx_os_tls_get(hx_os_tls_key *key);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_tls_set(
 	hx_os_tls_key *key, void *value, hx_os_error *error);
+
 HX_OS_API void HX_OS_CALL hx_os_tls_clear(hx_os_tls_key *key);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_tls_key_destroy(
 	hx_os_tls_key **key, hx_os_error *error);
 

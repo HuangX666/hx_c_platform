@@ -1,5 +1,6 @@
 #ifndef HX_EXAMPLE_SERIALIZATION_SCHEMA_H
 #define HX_EXAMPLE_SERIALIZATION_SCHEMA_H
+
 #include <hx_codec_macros.h>
 
 HX_CODEC_STRUCT(sample, HX_CODEC_STRING(unit), HX_CODEC_DOUBLE(value),

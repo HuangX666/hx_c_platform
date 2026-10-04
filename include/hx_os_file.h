@@ -20,12 +20,14 @@ enum {
 	HX_OS_FILE_APPEND = 16u,
 	HX_OS_FILE_EXCLUSIVE = 32u
 };
+
 enum {
 	HX_OS_FILE_REGULAR,
 	HX_OS_FILE_DIRECTORY,
 	HX_OS_FILE_LINK,
 	HX_OS_FILE_OTHER
 };
+
 enum { HX_OS_SEEK_BEGIN, HX_OS_SEEK_CURRENT, HX_OS_SEEK_END };
 
 typedef struct hx_os_file_info {
@@ -36,6 +38,7 @@ typedef struct hx_os_file_info {
 } hx_os_file_info;
 
 enum { HX_OS_PERMISSION_OWNER_READ = 1u, HX_OS_PERMISSION_OWNER_WRITE = 2u };
+
 typedef struct hx_os_file_info_extended {
 	uint32_t size;
 	uint32_t version;
@@ -64,6 +67,7 @@ typedef struct hx_os_file_info_extended {
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_info_extended_init(
 	hx_os_file_info_extended *info, size_t capacity);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_path_stat_extended(const char *path,
 	int follow_links, hx_os_file_info_extended *info, hx_os_error *error);
 
@@ -77,12 +81,16 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_path_stat_extended(const char *path,
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_open(hx_os_context *context,
 	const char *path, uint32_t flags, hx_os_file **out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_read_some(hx_os_file *file,
 	void *data, size_t bytes, size_t *completed, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_write_some(hx_os_file *file,
 	const void *data, size_t bytes, size_t *completed, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_write_all(hx_os_file *file,
 	const void *data, size_t bytes, size_t *completed, hx_os_error *error);
+
 /*
  * Positioned single-chunk I/O, at most INT_MAX bytes per call. Offset and
  * transfer size are bytes. Short progress is OK; read with no bytes is EOF.
@@ -94,37 +102,50 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_file_write_all(hx_os_file *file,
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_read_at(hx_os_file *file,
 	uint64_t offset, void *data, size_t bytes, size_t *completed,
 	hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_write_at(hx_os_file *file,
 	uint64_t offset, const void *data, size_t bytes, size_t *completed,
 	hx_os_error *error);
+
 /*
  * No user-space buffer is owned by this object. sync requests persistence
  * through fsync/FlushFileBuffers; it does not promise hardware durability.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_sync(
 	hx_os_file *file, hx_os_error *error);
+
 /* Consumes *file, including on a close error; never retry the native close. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_close(
 	hx_os_file **file, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_size(
 	hx_os_file *file, uint64_t *size, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_seek(hx_os_file *file,
 	int64_t offset, int origin, uint64_t *position, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_truncate(
 	hx_os_file *file, uint64_t size, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_path_stat(const char *path,
 	int follow_links, hx_os_file_info *info, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_remove(
 	const char *path, hx_os_error *error);
+
 /* Same-filesystem rename. No implicit copy. Unsupported atomic modes fail. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_move(
 	const char *from, const char *to, int replace, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_create(
 	const char *path, int parents, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_remove(
 	const char *path, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_open(hx_os_context *context,
 	const char *path, hx_os_directory **out, hx_os_error *error);
+
 /*
  * Names include a terminating NUL; required includes it. OUTPUT_FULL
  * retains the entry for retry. Invalid-encoding entries are consumed and
@@ -133,6 +154,7 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_open(hx_os_context *context,
 HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_next(
 	hx_os_directory *directory, char *name, size_t capacity,
 	size_t *required, hx_os_error *error);
+
 /* Like next, with the entry kind without following links. OUTPUT_FULL keeps
  * the pending entry and kind output unchanged. Native lookup failures also
  * retain the entry; legacy next may be used to skip such an entry.
@@ -140,7 +162,9 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_next(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_next_info(
 	hx_os_directory *directory, char *name, size_t capacity,
 	size_t *required, unsigned *kind, hx_os_error *error);
+
 HX_OS_API void HX_OS_CALL hx_os_directory_close(hx_os_directory *directory);
+
 /* Synchronous name-only traversal with one reusable buffer, no recursion.
  * Names borrow storage only during the callback. Callback receives a cleared,
  * non-NULL error record; OK continues, EOF stops successfully, other statuses
@@ -151,8 +175,10 @@ HX_OS_API void HX_OS_CALL hx_os_directory_close(hx_os_directory *directory);
  */
 typedef hx_os_status(HX_OS_CALL *hx_os_directory_visit_fn)(
 	hx_string_view name, void *user, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_visit(const char *path,
 	hx_os_directory_visit_fn visit, void *user, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_visit_ex(
 	hx_os_context *context, const char *path, size_t max_entries,
 	hx_os_directory_visit_fn visit, void *user, size_t *completed,
@@ -167,18 +193,23 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_visit_ex(
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_copy(
 	const char *from, const char *to, int replace, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_exists(
 	const char *path, int *exists, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_load(hx_os_context *context,
 	const char *path, size_t max_bytes, void **data, size_t *bytes,
 	hx_os_error *error);
+
 /* Output uses its own allocator and is unchanged on decoding/I/O failure. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_load_utf8(hx_os_context *context,
 	const char *path, size_t max_bytes, hx_string *out, int strip_bom,
 	hx_os_error *error);
+
 /* Strict UTF-8, removes UTF-8 BOM, 16 MiB input limit, output's context. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_read_text(
 	const char *path, hx_string *out, hx_os_error *error);
+
 /* Explicit encoding, 16 MiB input limit, transactional UTF-8 output.
  * With BOM enabled, a matching leading BOM is removed and a conflicting BOM
  * is INVALID_ENCODING; BOM=OFF preserves it through the selected converter.
@@ -187,9 +218,11 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_file_read_text(
 /* Ambiguous UTF-16LE BOM + NUL uses the explicit encoding, not guessing. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_read_text_encoded(const char *path,
 	hx_os_encoding encoding, hx_string *out, hx_os_error *error);
+
 /* Publishes an initialized UTF-8 string using the atomic-save contract. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_write_text(
 	const char *path, const hx_string *text, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_save(const char *path,
 	const void *data, size_t bytes, int replace, hx_os_error *error);
 
@@ -198,6 +231,7 @@ typedef struct hx_os_file_save_result {
 	int directory_synced;
 	hx_os_error durability_error;
 } hx_os_file_save_result;
+
 /*
  * Same-directory temporary, complete write, file sync, replace rename.
  * Success means publication, not power-loss durability. ex optionally reports
@@ -207,9 +241,11 @@ typedef struct hx_os_file_save_result {
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_save_atomic(
 	const char *path, const void *data, size_t bytes, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_save_atomic_ex(const char *path,
 	const void *data, size_t bytes, hx_os_file_save_result *result,
 	hx_os_error *error);
+
 /*
  * replace uses native replacement on Windows; POSIX backup + replacement is
  * two separate renames. Backup collisions fail before replacing it. There is
@@ -219,22 +255,28 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_file_save_atomic_ex(const char *path,
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_replace(const char *target,
 	const char *source, const char *backup, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_backup(const char *path,
 	const char *backup_path, int replace, hx_os_error *error);
 
 /* UTF-8 results; required includes NUL. No directory is created. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_path_current(
 	char *buffer, size_t capacity, size_t *required, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_path_current_string(
 	hx_string *out, hx_os_error *error);
+
 /* Explicit process-global change. Coordinate with all relative-path users. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_path_change_current(
 	const char *path, hx_os_error *error);
+
 /* Resolves an existing target, including links, to an absolute native path. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_path_absolute(const char *path,
 	char *buffer, size_t capacity, size_t *required, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_path_absolute_string(
 	const char *path, hx_string *out, hx_os_error *error);
+
 /*
  * Pure lexical views: recognize / and backslash on every platform. Views
  * borrow path or static dot/empty text. Trailing separators are ignored except
@@ -242,8 +284,10 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_path_absolute_string(
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_path_basename(
 	const char *path, hx_string_view *out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_path_dirname(
 	const char *path, hx_string_view *out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_path_extension(
 	const char *path, hx_string_view *out, hx_os_error *error);
 
@@ -272,10 +316,12 @@ typedef struct hx_os_walk_options {
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_path_glob(hx_os_context *context,
 	const char *pattern, hx_os_vector **matches, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_path_glob_with_options(
 	hx_os_context *context, const char *pattern,
 	const hx_os_walk_options *options, hx_os_vector **matches,
 	hx_os_error *error);
+
 /* Synchronous recursive file search, streamed without collecting results.
  * pattern matches a basename using glob's UTF-8 wildcards and leading-dot
  * rules; '?' matches one codepoint. Separators, [] and escaping are not
@@ -295,20 +341,25 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_path_glob_with_options(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_find_files(const char *root,
 	const char *pattern, hx_os_directory_visit_fn visit, void *user,
 	hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_find_files_ex(
 	hx_os_context *context, const char *root, const char *pattern,
 	const hx_os_walk_options *options, hx_os_directory_visit_fn visit,
 	void *user, size_t *completed, hx_os_error *error);
+
 /* Copies the first match using out's context, then stops. No match returns
  * NOT_FOUND. Failure preserves out. Traversal order is unspecified. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_find_first_file(
 	const char *root, const char *pattern, hx_string *out,
 	hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_find_first_file_ex(
 	const char *root, const char *pattern,
 	const hx_os_walk_options *options, hx_string *out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_remove_recursive(
 	const char *path, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_directory_remove_recursive_with_options(
 	const char *path, const hx_os_walk_options *options,
 	hx_os_error *error);

@@ -104,9 +104,11 @@ flowchart LR
 json_field fields[] = {
 	json_text("type", "get"), json_int("device_id", 101)
 };
+
 hx_string request = HX_STRING_INIT;
 hx_ipc_message *reply = NULL;
 hx_os_error error = {0};
+
 if (json_encode(fields, 2, &request)) {
 	hx_os_status status = hx_ipc_request_text_until(client, 0, 101,
 		hx_string_c_str(&request), hx_os_deadline_after_ms(5000),
@@ -114,6 +116,7 @@ if (json_encode(fields, 2, &request)) {
 	/* Check status, then parse reply->data and reply->bytes. */
 	(void)status;
 }
+
 hx_ipc_message_release(reply);
 hx_string_destroy(&request);
 ```

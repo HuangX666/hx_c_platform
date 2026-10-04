@@ -102,6 +102,7 @@ struct hx_ipc_connection {
 
 struct hx_ipc {
 	hx_os_atomic stop;
+
 	hx_os_context *context;
 	hx_os_network *network;
 	hx_os_loop *loop;
@@ -113,6 +114,7 @@ struct hx_ipc {
 	hx_os_loop_watch *local_watch;
 	hx_os_request *accepting;
 	hx_os_request *datagram_read;
+
 	hx_ipc_connection *peers;
 	hx_ipc_waiter *waiters;
 	hx_ipc_frame *outbox;
@@ -120,17 +122,21 @@ struct hx_ipc {
 	hx_ipc_received *inbox;
 	hx_ipc_received *inbox_last;
 	hx_ipc_message *events;
+
 	unsigned char *datagram;
 	unsigned char *kcp_message;
 	char *name;
 	hx_string address_text;
 	hx_os_address address;
+
 	hx_ipc_options options;
 	hx_ipc_statistics statistics;
 	hx_os_error error;
+
 	uint64_t serial;
 	uint64_t retry_at;
 	hx_os_deadline shutdown_deadline;
+
 	size_t users;
 	size_t wait_count;
 	size_t inbox_count;
@@ -139,6 +145,7 @@ struct hx_ipc {
 	size_t event_read;
 	size_t event_count;
 	size_t event_capacity;
+
 	uint32_t attempts;
 	int transport;
 	int server;
@@ -155,43 +162,65 @@ struct hx_ipc {
 
 hx_os_status hx_ipc_i_native_prepare(
 	hx_ipc *endpoint, const char *address, hx_os_error *error);
+
 hx_os_status hx_ipc_i_native_connect(
 	hx_ipc_connection *peer, hx_os_error *error);
+
 hx_os_status hx_ipc_i_native_accept(
 	hx_ipc *endpoint, int first, hx_os_error *error);
+
 void hx_ipc_i_native_cleanup(hx_ipc *endpoint);
+
 void hx_ipc_i_accepted(hx_ipc *endpoint, hx_os_socket *socket,
 	hx_os_pipe *reader, hx_os_pipe *writer);
+
 void HX_OS_CALL hx_ipc_i_pipe_accepted(
 	hx_os_request *request, const hx_os_completion *completion, void *user);
+
 hx_os_status hx_ipc_i_pipe_write_end(hx_ipc *endpoint, hx_os_pipe *reader,
 	hx_os_pipe **writer, hx_os_error *error);
+
 void hx_ipc_i_failed(hx_ipc *endpoint, const hx_os_error *error);
+
 void hx_ipc_i_peer_failed(
 	hx_ipc_connection *peer, hx_os_status status, const hx_os_error *error);
+
 hx_ipc_connection *hx_ipc_i_find(hx_ipc *endpoint, uint64_t id);
+
 hx_ipc_connection *hx_ipc_i_new_peer(
 	hx_ipc *endpoint, const hx_os_address *address);
+
 void hx_ipc_i_event(hx_ipc_connection *peer, int kind);
+
 void hx_ipc_i_encode(unsigned char *wire, const hx_ipc_header *header);
+
 int hx_ipc_i_decode(const unsigned char *wire, hx_ipc_header *header);
+
 hx_os_status hx_ipc_i_queue(hx_ipc_connection *peer,
 	const hx_ipc_header *header, const void *data, hx_os_deadline deadline,
 	int control, hx_os_error *error);
+
 void hx_ipc_i_control(hx_ipc_connection *peer, int kind, uint64_t id,
 	uint64_t auxiliary, hx_os_status status);
+
 void hx_ipc_i_frame_free(hx_ipc *endpoint, hx_ipc_frame *frame);
 void hx_ipc_i_received_free(
 	hx_ipc *endpoint, hx_ipc_received *message, int counted);
+
 void hx_ipc_i_complete(hx_ipc *endpoint, uint64_t peer, uint64_t id,
 	hx_os_status status, hx_ipc_message *reply);
+
 void hx_ipc_i_stream_input(
 	hx_ipc_connection *peer, const unsigned char *data, size_t bytes);
+
 void hx_ipc_i_datagram(hx_ipc *endpoint, const hx_os_address *address,
 	const unsigned char *data, size_t bytes);
+
 hx_os_status hx_ipc_i_kcp_output(
 	const void *packet, size_t bytes, void *user, hx_os_error *error);
+
 void *HX_OS_CALL hx_ipc_i_worker(void *user);
+
 void hx_ipc_i_dispose(hx_ipc *endpoint);
 
 static inline void hx_ipc_i_lock(hx_ipc *endpoint)

@@ -11,7 +11,9 @@ Common operations have direct C entry points. Optional C++11 headers wrap the sa
 ```c
 hx_string version = HX_STRING_INIT;
 hx_os_error error;
+
 hx_os_status status = hx_os_sys_version_string(&version, &error);
+
 /* Check status, then use hx_string_c_str(&version). */
 hx_string_destroy(&version);
 ```
@@ -34,10 +36,13 @@ hx::Result<double> sample_cpu() noexcept
 	auto cpu = hx::CpuUsage::create();
 	if (!cpu)
 		return hx::Failure(cpu.error());
+
 	hx_os_error error = {};
+
 	auto status = hx_os_sleep_until(hx_os_deadline_after_ms(10), &error);
 	if (status != HX_OS_OK)
 		return hx::Failure(status, error);
+
 	return cpu.value().query();
 }
 ```
@@ -56,10 +61,13 @@ hx::Result<uint32_t> plugin_abi(const char *path) noexcept
 	auto plugin = hx::Library::open(path);
 	if (!plugin)
 		return hx::Failure(plugin.error());
+
 	using Abi = uint32_t(HX_OS_CALL *)(void);
+
 	auto symbol = plugin.value().symbol<Abi>("hx_plugin_abi_version");
 	if (!symbol)
 		return hx::Failure(symbol.error());
+
 	return symbol.value()();
 }
 ```
@@ -95,12 +103,15 @@ hx::Result<void> list_directory(const char *path) noexcept
 	auto directory = hx::Directory::open(path);
 	if (!directory)
 		return hx::Failure(directory.error());
+
 	for (;;) {
 		auto entry = directory.value().next();
 		if (entry.status() == HX_OS_EOF)
 			return hx::Result<void>();
+
 		if (!entry)
 			return hx::Failure(entry.error());
+
 		std::puts(entry.value().name());
 	}
 }
@@ -239,6 +250,7 @@ A worker waiting for an unfinished task from its own pool gets DEADLOCK, includi
 
 ```c
 int inside;
+
 hx_os_status status = hx_os_thread_pool_inside(pool, &inside);
 if (status == HX_OS_OK && !inside)
 	status = hx_os_task_wait_until(task, deadline, &work_status, &error);
@@ -301,6 +313,7 @@ Caller-owned user state stays valid through the final callback and cleanup. The 
 
 ```c
 hx_os_loop_watch *watch = NULL;
+
 hx_os_status status = hx_os_loop_attach_fd(loop, fd, HX_OS_WAIT_READ,
 	ready_callback, user, &watch, &error);
 /* The callback can use hx_os_loop_watch_descriptor(watch), then request stop. */
@@ -334,12 +347,15 @@ C++ System returns Result<String>, Result<StringList> and scalar results. Proces
 ```c
 hx_os_process_capture *capture = NULL;
 const char *arguments[] = {"--version", NULL};
+
 hx_os_status status = hx_os_process_capture_run(NULL, executable, arguments,
 	NULL, hx_os_deadline_after_ms(2000), &capture, &error);
 if (status == HX_OS_OK) {
 	hx_string output = HX_STRING_INIT;
+
 	status = hx_os_process_capture_text(capture, HX_OS_PROCESS_STDOUT,
 		&output, &error);
+
 	/* Use output, then destroy it. */
 	hx_string_destroy(&output);
 }
@@ -368,6 +384,7 @@ With this module enabled, ordinary tasks add one nullable private pointer and br
 
 ```c
 hx_os_task *task = NULL;
+
 hx_os_status status = hx_os_thread_pool_submit_delayed(pool,
 	hx_os_deadline_after_ms(100), work, user, cleanup, &task, &error);
 /* On acceptance, wait/cancel/release through the ordinary task API. */
@@ -407,6 +424,7 @@ Socket setup/error/readiness code is shared by network and standalone duplex ada
 
 ```c
 hx_os_file *first = NULL, *second = NULL;
+
 hx_os_status status = hx_os_pipe_pair_socket(NULL, &first, &second, &error);
 /* Use file read/write; shutdown preserves the opposite direction. */
 ```
@@ -419,12 +437,15 @@ hx::Result<std::pair<hx::File, hx::File>> make_channel() noexcept
 	auto channel = hx::DuplexPipe::pair();
 	if (!channel)
 		return hx::Failure(channel.error());
+
 	auto written = channel.value().first.writeAll("hello", 5);
 	if (!written)
 		return hx::Failure(written.error());
+
 	auto stopped = hx::DuplexPipe::shutdown(channel.value().first);
 	if (!stopped)
 		return hx::Failure(stopped.error());
+
 	return channel;
 }
 ```

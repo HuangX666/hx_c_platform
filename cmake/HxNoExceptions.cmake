@@ -1,6 +1,7 @@
 # Applies only to explicitly selected first-party validation/example targets.
 # Public interface targets do not change unrelated consumer translation units.
 include_guard(GLOBAL)
+
 function(hx_disable_exceptions target)
 	if(MSVC)
 		target_compile_options(${target} PRIVATE

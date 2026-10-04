@@ -1,5 +1,6 @@
 #ifndef HX_C_PLATFORM_FORMAT_SYNTAX_H
 #define HX_C_PLATFORM_FORMAT_SYNTAX_H
+
 #include "hx_format.h"
 
 /* Enable these source markers with hx_enable_format_syntax(target SOURCES ...).

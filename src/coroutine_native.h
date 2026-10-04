@@ -9,7 +9,9 @@ typedef struct hx_os_i_coro_context {
 	uint64_t floating[10];
 #endif
 	struct hx_os_i_coro_context *caller;
+
 	void (*function)(void *user);
+
 	void *user;
 #if defined(_WIN32)
 	void *fiber;
@@ -28,12 +30,17 @@ typedef struct hx_os_i_coro_context {
 
 hx_os_status hx_os_i_coro_context_root(
 	hx_os_i_coro_context *context, hx_os_error *error);
+
 void hx_os_i_coro_context_root_close(hx_os_i_coro_context *context);
+
 hx_os_status hx_os_i_coro_stack_cost(
 	size_t bytes, size_t *cost, hx_os_error *error);
+
 hx_os_status hx_os_i_coro_context_create(hx_os_i_coro_context *context,
 	size_t bytes, void (*function)(void *), void *user, hx_os_error *error);
+
 void hx_os_i_coro_context_destroy(hx_os_i_coro_context *context);
+
 void hx_os_i_coro_context_switch(
 	hx_os_i_coro_context *from, hx_os_i_coro_context *to);
 

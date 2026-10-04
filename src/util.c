@@ -13,17 +13,22 @@ hx_os_status hx_os_random_bytes(void *buffer, size_t bytes, hx_os_error *error)
 {
 #if HX_OS_ENABLE_RANDOM
 	hx_os_status status;
+
 	if (!buffer && bytes)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+
 	if (!bytes)
 		return hx_os_i_error(error, HX_OS_OK, 0, 0);
+
 	status = hx_os_i_random_bytes(buffer, bytes, error);
 	if (status != HX_OS_OK)
 		hx_os_secure_zero(buffer, bytes);
+
 	return status;
 #else
 	(void)buffer;
 	(void)bytes;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 #endif
 }
@@ -32,15 +37,19 @@ hx_os_status hx_os_uuid_generate(unsigned char out[16], hx_os_error *error)
 {
 	unsigned char value[16];
 	hx_os_status status;
+
 	if (!out)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+
 	status = hx_os_random_bytes(value, sizeof(value), error);
 	if (status != HX_OS_OK)
 		return status;
+
 	value[6] = (unsigned char)((value[6] & 0x0f) | 0x40);
 	value[8] = (unsigned char)((value[8] & 0x3f) | 0x80);
 	memcpy(out, value, sizeof(value));
 	hx_os_secure_zero(value, sizeof(value));
+
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
 
@@ -49,16 +58,21 @@ hx_os_status hx_os_uuid_format(const unsigned char uuid[16], char out[37])
 	static const char digits[] = "0123456789abcdef";
 	char text[37];
 	size_t i, position = 0;
+
 	if (!uuid || !out)
 		return HX_OS_INVALID;
+
 	for (i = 0; i < 16; ++i) {
 		if (i == 4 || i == 6 || i == 8 || i == 10)
 			text[position++] = '-';
+
 		text[position++] = digits[uuid[i] >> 4];
 		text[position++] = digits[uuid[i] & 15];
 	}
+
 	text[position] = '\0';
 	memcpy(out, text, sizeof(text));
+
 	return HX_OS_OK;
 }
 
@@ -67,12 +81,16 @@ hx_os_status hx_os_uuid_generate_string(hx_string *out, hx_os_error *error)
 	unsigned char uuid[16];
 	char text[37];
 	hx_os_status status;
+
 	if (!out)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+
 	status = hx_os_uuid_generate(uuid, error);
 	if (status != HX_OS_OK)
 		return status;
+
 	(void)hx_os_uuid_format(uuid, text);
+
 	return hx_string_assign_cstr(out, text, error);
 }
 
@@ -87,11 +105,13 @@ uint32_t hx_os_crc32(uint32_t seed, const void *data, size_t bytes)
 	const unsigned char *input = data;
 	uint32_t crc = ~seed;
 	size_t i;
+
 	for (i = 0; i < bytes; ++i) {
 		crc ^= input[i];
 		crc = (crc >> 4) ^ table[crc & 15];
 		crc = (crc >> 4) ^ table[crc & 15];
 	}
+
 	return ~crc;
 }
 
@@ -107,6 +127,7 @@ void hx_os_secure_zero(void *buffer, size_t bytes)
 	/* Volatile applies only to required writes, never to thread ordering.
 	 */
 	volatile unsigned char *output = buffer;
+
 	while (bytes--)
 		*output++ = 0;
 #endif

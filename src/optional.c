@@ -23,6 +23,7 @@ hx_os_status hx_os_memory_pool_create(hx_os_context *context,
 	(void)options;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -34,6 +35,7 @@ hx_os_status hx_os_memory_pool_alloc(hx_os_memory_pool *pool, size_t bytes,
 	(void)alignment;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -43,6 +45,7 @@ hx_os_status hx_os_memory_pool_realloc(hx_os_memory_pool *pool, void **memory,
 	(void)pool;
 	(void)memory;
 	(void)bytes;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -68,6 +71,7 @@ hx_os_status hx_os_memory_pool_destroy(
 	hx_os_memory_pool **pool, hx_os_error *error)
 {
 	(void)pool;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -81,6 +85,7 @@ hx_os_status hx_os_object_pool_create(hx_os_context *context,
 	(void)maximum_objects;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -90,6 +95,7 @@ hx_os_status hx_os_object_pool_acquire(
 	(void)pool;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -103,6 +109,7 @@ hx_os_status hx_os_object_pool_destroy(
 	hx_os_object_pool **pool, hx_os_error *error)
 {
 	(void)pool;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -114,6 +121,7 @@ hx_os_status hx_os_arena_create(hx_os_context *context, size_t block_bytes,
 	(void)maximum_bytes;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -125,6 +133,7 @@ hx_os_status hx_os_arena_alloc(hx_os_arena *arena, size_t bytes,
 	(void)alignment;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -145,15 +154,18 @@ hx_os_status hx_os_thread_pool_submit_delayed(hx_os_thread_pool *pool,
 	hx_os_task_cleanup cleanup, hx_os_task **out, hx_os_error *error)
 {
 	(void)due;
+
 	return hx_os_thread_pool_submit(
 		pool, function, user, cleanup, out, error);
 }
+
 hx_os_status hx_os_thread_pool_submit_delayed_prepared(hx_os_thread_pool *pool,
 	hx_os_deadline due, hx_os_task_prepare_fn prepare, void *factory,
 	hx_os_task_fn function, hx_os_task_cleanup cleanup, hx_os_task **out,
 	hx_os_error *error)
 {
 	(void)due;
+
 	return hx_os_thread_pool_submit_prepared(
 		pool, prepare, factory, function, cleanup, out, error);
 }
@@ -161,6 +173,7 @@ hx_os_status hx_os_thread_pool_submit_delayed_prepared(hx_os_thread_pool *pool,
 hx_os_context *hx_os_thread_pool_context(const hx_os_thread_pool *pool)
 {
 	(void)pool;
+
 	return NULL;
 }
 
@@ -169,6 +182,7 @@ hx_os_status hx_os_thread_pool_inside(
 {
 	(void)pool;
 	(void)inside;
+
 	return HX_OS_NOT_SUPPORTED;
 }
 
@@ -183,6 +197,7 @@ hx_os_status hx_os_thread_pool_submit_prepared(hx_os_thread_pool *pool,
 	(void)cleanup;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -203,6 +218,7 @@ hx_os_status hx_os_thread_pool_create(hx_os_context *context,
 	(void)options;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -216,12 +232,14 @@ hx_os_status hx_os_thread_pool_submit(hx_os_thread_pool *pool,
 	(void)cleanup;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
 int hx_os_task_cancel_requested(hx_os_task *task)
 {
 	(void)task;
+
 	return 0;
 }
 
@@ -233,6 +251,7 @@ void hx_os_task_cancel(hx_os_task *task)
 int hx_os_task_state(hx_os_task *task)
 {
 	(void)task;
+
 	return HX_OS_NOT_SUPPORTED;
 }
 
@@ -242,6 +261,7 @@ hx_os_status hx_os_task_wait_until(hx_os_task *task, hx_os_deadline deadline,
 	(void)task;
 	(void)deadline;
 	(void)work_status;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -261,6 +281,7 @@ hx_os_status hx_os_thread_pool_close_until(hx_os_thread_pool *pool, int mode,
 	(void)pool;
 	(void)mode;
 	(void)deadline;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -268,6 +289,7 @@ hx_os_status hx_os_thread_pool_destroy(
 	hx_os_thread_pool **pool, hx_os_error *error)
 {
 	(void)pool;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 #endif
@@ -283,6 +305,7 @@ hx_os_status hx_os_socket_receive_until(hx_os_socket *socket, void *data,
 	(void)deadline;
 	if (completed)
 		*completed = 0;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -292,12 +315,14 @@ hx_os_status hx_os_network_create(
 	(void)context;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
 hx_os_status hx_os_network_destroy(hx_os_network **network, hx_os_error *error)
 {
 	(void)network;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -307,6 +332,7 @@ hx_os_status hx_os_address_parse(const char *numeric_host, uint16_t port,
 	(void)numeric_host;
 	(void)port;
 	(void)out;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -316,6 +342,7 @@ hx_os_status hx_os_address_format(const hx_os_address *address, char *buffer,
 	(void)address;
 	(void)buffer;
 	(void)capacity;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -329,12 +356,14 @@ hx_os_status hx_os_resolve(hx_os_network *network, const char *host,
 	(void)protocol;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
 size_t hx_os_address_list_count(const hx_os_address_list *list)
 {
 	(void)list;
+
 	return 0;
 }
 
@@ -343,6 +372,7 @@ const hx_os_address *hx_os_address_list_get(
 {
 	(void)list;
 	(void)index;
+
 	return NULL;
 }
 
@@ -359,6 +389,7 @@ hx_os_status hx_os_socket_create(hx_os_network *network, int family,
 	(void)protocol;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -367,6 +398,7 @@ hx_os_status hx_os_socket_bind(
 {
 	(void)socket;
 	(void)address;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -375,6 +407,7 @@ hx_os_status hx_os_socket_listen(
 {
 	(void)socket;
 	(void)backlog;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -383,6 +416,7 @@ hx_os_status hx_os_socket_local_address(
 {
 	(void)socket;
 	(void)address;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -392,7 +426,9 @@ hx_os_status hx_os_socket_accept(hx_os_socket *listener, hx_os_socket **out,
 	(void)listener;
 	if (out)
 		*out = NULL;
+
 	(void)peer;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -401,6 +437,7 @@ hx_os_status hx_os_socket_connect(
 {
 	(void)socket;
 	(void)address;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -411,6 +448,7 @@ hx_os_status hx_os_socket_connect_until(hx_os_socket *socket,
 	(void)socket;
 	(void)address;
 	(void)deadline;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -420,6 +458,7 @@ hx_os_status hx_os_socket_wait_until(hx_os_socket *socket, int events,
 	(void)socket;
 	(void)events;
 	(void)deadline;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -431,6 +470,7 @@ hx_os_status hx_os_socket_send_some(hx_os_socket *socket, const void *data,
 	(void)bytes;
 	if (completed)
 		*completed = 0;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -442,6 +482,7 @@ hx_os_status hx_os_socket_receive_some(hx_os_socket *socket, void *data,
 	(void)bytes;
 	if (completed)
 		*completed = 0;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -455,6 +496,7 @@ hx_os_status hx_os_socket_send_until(hx_os_socket *socket, const void *data,
 	(void)deadline;
 	if (completed)
 		*completed = 0;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -468,6 +510,7 @@ hx_os_status hx_os_socket_send_to(hx_os_socket *socket,
 	(void)bytes;
 	if (completed)
 		*completed = 0;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -481,6 +524,7 @@ hx_os_status hx_os_socket_receive_from(hx_os_socket *socket,
 	(void)bytes;
 	if (completed)
 		*completed = 0;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -489,12 +533,14 @@ hx_os_status hx_os_socket_shutdown(
 {
 	(void)socket;
 	(void)direction;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
 hx_os_status hx_os_socket_close(hx_os_socket **socket, hx_os_error *error)
 {
 	(void)socket;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 #endif
@@ -508,6 +554,7 @@ hx_os_status hx_os_loop_create_local(hx_os_context *context,
 	(void)options;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -539,6 +586,7 @@ hx_os_status hx_os_loop_create(hx_os_network *network,
 	(void)options;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -552,6 +600,7 @@ hx_os_status hx_os_loop_submit(hx_os_loop *loop,
 	(void)user;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -560,6 +609,7 @@ hx_os_status hx_os_loop_poll_until(
 {
 	(void)loop;
 	(void)deadline;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -568,12 +618,14 @@ hx_os_status hx_os_loop_run_until(
 {
 	(void)loop;
 	(void)deadline;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
 size_t hx_os_loop_pending(hx_os_loop *loop)
 {
 	(void)loop;
+
 	return 0;
 }
 
@@ -604,18 +656,21 @@ hx_os_status hx_os_request_wait_until(hx_os_request *request,
 	(void)request;
 	(void)deadline;
 	(void)completion;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
 hx_os_socket *hx_os_request_take_socket(hx_os_request *request)
 {
 	(void)request;
+
 	return NULL;
 }
 
 hx_os_address_list *hx_os_request_take_addresses(hx_os_request *request)
 {
 	(void)request;
+
 	return NULL;
 }
 
@@ -624,12 +679,14 @@ hx_os_status hx_os_loop_close_until(
 {
 	(void)loop;
 	(void)deadline;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
 hx_os_status hx_os_loop_destroy(hx_os_loop **loop, hx_os_error *error)
 {
 	(void)loop;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 #endif
@@ -640,6 +697,7 @@ hx_os_status hx_os_loop_destroy(hx_os_loop **loop, hx_os_error *error)
 hx_os_status hx_os_i_loop_detach(hx_os_socket *socket, hx_os_error *error)
 {
 	(void)socket;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 #endif

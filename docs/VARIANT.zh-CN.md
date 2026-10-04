@@ -68,39 +68,52 @@ int main(void)
 	hx_string_view text;
 	int32_t count;
 	hx_os_status status;
+
 	if (!(hx_os_capabilities() & HX_OS_CAP_VARIANT)) {
 		puts("Variant support is disabled");
+
 		return 0;
 	}
+
 	status = hx_variant_set_i32(&value, 42, NULL);
 	if (status != HX_OS_OK)
 		goto failed;
+
 	status = hx_variant_get_i32(&value, &count, NULL);
 	if (status != HX_OS_OK)
 		goto failed;
+
 	printf("Integer: %d\n", (int)count);
 
 	status = hx_variant_set_cstr(&value, "hello", NULL);
 	if (status != HX_OS_OK)
 		goto failed;
+
 	status = hx_variant_get_string_view(&value, &text, NULL);
 	if (status != HX_OS_OK)
 		goto failed;
+
 	printf("String: %.*s\n", (int)text.size, text.data);
 
 	status = hx_variant_set_custom(&value, &point_type, &position, NULL);
 	if (status != HX_OS_OK)
 		goto failed;
+
 	status = hx_variant_get_custom(&value, &point_type, &object, NULL);
 	if (status != HX_OS_OK)
 		goto failed;
+
 	printf("Point: %.1f, %.1f\n", ((const point *)object)->x,
 		((const point *)object)->y);
+
 	hx_variant_destroy(&value);
+
 	return 0;
+
 failed:
 	fprintf(stderr, "Variant failed: %s\n", hx_os_status_name(status));
 	hx_variant_destroy(&value);
+
 	return 1;
 }
 ```
@@ -170,21 +183,29 @@ static hx_os_status HX_OS_CALL record_copy(void *destination,
 	user_record *out = destination;
 	const user_record *input = source;
 	hx_os_status status;
+
 	(void)user;
 	hx_string_init(&out->name, context);
+
 	status = hx_string_copy(&out->name, &input->name, error);
 	if (status != HX_OS_OK) {
 		hx_string_destroy(&out->name);
+
 		return status;
 	}
+
 	out->age = input->age;
+
 	return HX_OS_OK;
 }
+
 static void HX_OS_CALL record_drop(void *object, void *user)
 {
 	(void)user;
+
 	hx_string_destroy(&((user_record *)object)->name);
 }
+
 static const hx_variant_type record_type = {
 	sizeof(user_record), 0, record_copy, record_drop, NULL, 0};
 
@@ -193,24 +214,31 @@ int main(void)
 	user_record input = {HX_STRING_INIT, 18};
 	hx_variant value = HX_VARIANT_INIT;
 	const void *object = NULL;
+
 	hx_os_status status = hx_string_assign_cstr(&input.name, "Alice", NULL);
 	if (status == HX_OS_OK)
 		status = hx_variant_set_custom(
 			&value, &record_type, &input, NULL);
+
 	if (status == HX_OS_OK)
 		status = hx_string_assign_cstr(&input.name, "Bob", NULL);
+
 	if (status == HX_OS_OK)
 		status = hx_variant_get_custom(
 			&value, &record_type, &object, NULL);
+
 	if (status == HX_OS_OK) {
 		const user_record *saved = object;
+
 		printf("Record: %s, %d\n", hx_string_c_str(&saved->name),
 			(int)saved->age);
 	}
 	else
 		fprintf(stderr, "%s\n", hx_os_status_name(status));
+
 	hx_variant_destroy(&value);
 	hx_string_destroy(&input.name);
+
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -246,29 +274,41 @@ int main()
 {
 	if (!(hx_os_capabilities() & HX_OS_CAP_VARIANT)) {
 		std::puts("Variant support is disabled");
+
 		return 0;
 	}
+
 	hx::TypedVariant<int32_t, double, hx::StringView, Point> value;
+
 	if (!value.set(int32_t(42)))
 		return 1;
+
 	auto count = value.get<int32_t>();
+
 	if (!count)
 		return 1;
+
 	std::printf("Integer: %d\n", static_cast<int>(count.value()));
 
 	if (!value.set("hello"))
 		return 1;
+
 	auto text = value.get<hx::StringView>();
+
 	if (!text)
 		return 1;
+
 	std::printf("String: %.*s\n", static_cast<int>(text.value().size()),
 		text.value().data());
 
 	if (!value.set(Point{2, 5}))
 		return 1;
+
 	auto position = value.get<Point>();
+
 	if (!position)
 		return 1;
+
 	std::printf(
 		"Point: %.1f, %.1f\n", position.value().x, position.value().y);
 }
@@ -305,18 +345,23 @@ struct PrintValue {
 	{
 		std::printf("Integer: %d\n", static_cast<int>(value));
 	}
+
 	void operator()(hx::StringView value) const noexcept
 	{
 		std::printf("String: %.*s\n", static_cast<int>(value.size()),
 			value.data());
 	}
 };
+
 int main()
 {
 	hx::TypedVariant<int32_t, hx::StringView> value;
+
 	if (!value.set("hello"))
 		return 1;
+
 	auto printed = value.visit(PrintValue{});
+
 	return printed ? 0 : 1;
 }
 ```
@@ -345,34 +390,47 @@ int main(void)
 	hx_string_view text;
 	int32_t number;
 	hx_os_status status;
+
 	hx_variant_container_options_init(&options, NULL);
 	options.max_items = 16;
+
 	status = hx_os_vector_create(NULL, &options, &values, NULL);
 	if (status == HX_OS_OK)
 		status = hx_variant_set_i32(&value, 42, NULL);
+
 	if (status == HX_OS_OK)
 		status = hx_os_vector_push_back(values, &value, NULL);
+
 	if (status == HX_OS_OK)
 		status = hx_variant_set_cstr(&value, "hello", NULL);
+
 	if (status == HX_OS_OK)
 		status = hx_os_vector_push_back(values, &value, NULL);
+
 	if (status == HX_OS_OK) {
 		saved = hx_os_sequence_at(values, 0);
+
 		status = hx_variant_get_i32(saved, &number, NULL);
 	}
+
 	if (status == HX_OS_OK) {
 		saved = hx_os_sequence_at(values, 1);
+
 		status = hx_variant_get_string_view(saved, &text, NULL);
 	}
+
 	if (status == HX_OS_OK)
 		printf("Values: %d, %.*s\n", (int)number, (int)text.size,
 			text.data);
+
 	hx_variant_destroy(&value);
 	hx_os_status closed = hx_os_sequence_destroy(&values, NULL);
 	if (status == HX_OS_OK)
 		status = closed;
+
 	if (status != HX_OS_OK)
 		fprintf(stderr, "%s\n", hx_os_status_name(status));
+
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```

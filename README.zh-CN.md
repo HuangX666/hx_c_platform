@@ -1,6 +1,6 @@
 # hx_c_platform
 
-[![CI 配置][ci-badge]](.github/workflows/build.yml) [![C99 核心][c-badge]](CMakeLists.txt) [![C++11 封装][cpp-badge]](docs/CPP_POOL.zh-CN.md) [![仅 C++ 封装为 header-only][header-badge]](docs/CPP_POOL.zh-CN.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![自有代码许可证待定][license-badge]](THIRD_PARTY_NOTICES.zh-CN.md) [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md) [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md) [![本地 Windows 131/131、Linux 133/133 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md) [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md) [![Android API 21 ARM 交叉编译通过][android-badge]](docs/ANDROID.zh-CN.md)
+[![CI 配置][ci-badge]](.github/workflows/build.yml) [![C99 核心][c-badge]](CMakeLists.txt) [![C++11 封装][cpp-badge]](docs/CPP_POOL.zh-CN.md) [![仅 C++ 封装为 header-only][header-badge]](docs/CPP_POOL.zh-CN.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![自有代码许可证待定][license-badge]](THIRD_PARTY_NOTICES.zh-CN.md) [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md) [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md) [![本地 Windows 134/134、Linux 134/134 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md) [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md) [![Android API 21 ARM 交叉编译通过][android-badge]](docs/ANDROID.zh-CN.md)
 
 [English](README.md) · [常用任务教程](docs/USAGE.zh-CN.md) · [详细参考](docs/REFERENCE.zh-CN.md)
 
@@ -77,13 +77,19 @@ Hello, hx_c_platform!
 ```cmake
 cmake_minimum_required(VERSION 3.16)
 project(hx_demo LANGUAGES C)
+
 set(HX_OS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(HX_OS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+
 add_subdirectory(external/hx_c_platform)
+
 add_executable(hx_demo main.c)
 target_link_libraries(hx_demo PRIVATE hx_c_platform::hx_c_platform)
 set_target_properties(hx_demo PROPERTIES
-	C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
+	C_STANDARD 99
+	C_STANDARD_REQUIRED YES
+	C_EXTENSIONS NO)
+
 configure_file(hello.txt hello.txt COPYONLY)
 configure_file(config.json config.json COPYONLY)
 ```
@@ -129,12 +135,15 @@ Linux 的 Makefile/Ninja 构建运行：
 int main(void)
 {
 	hx_string text = HX_STRING_INIT;
+
 	hx_os_status status = hx_os_file_read_text("hello.txt", &text, NULL);
 	if (status == HX_OS_OK)
 		puts(hx_string_c_str(&text));
 	else
 		fprintf(stderr, "Read failed: %s\n", hx_os_status_name(status));
+
 	hx_string_destroy(&text);
+
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -153,9 +162,12 @@ int main()
 	if (!text) {
 		std::fprintf(stderr, "Read failed: %s\n",
 			hx_os_status_name(text.status()));
+
 		return 1;
 	}
+
 	std::puts(text.value().c_str());
+
 	return 0;
 }
 ```
@@ -170,6 +182,7 @@ int main()
 auto text = hx::String::copy("  Hello  ");
 if (!text)
 	return 1;
+
 text.value().trimAscii().lowerAscii();
 std::puts(text.value().c_str());
 ```
@@ -184,9 +197,11 @@ std::puts(text.value().c_str());
 auto config = hx::ConfigDocument::load("config.json");
 if (!config)
 	return 1;
+
 auto port = config.value().integer("/port");
 if (!port)
 	return 1;
+
 std::printf("Port: %lld\n", static_cast<long long>(port.value()));
 ```
 
@@ -219,17 +234,22 @@ HX_OS_DECLARE_VECTOR(int_vector, int)
 
 ```c
 int_vector *numbers = NULL;
+
 hx_os_status status = int_vector_create(NULL, 16, &numbers, NULL);
 if (status == HX_OS_OK)
 	status = int_vector_push(numbers, 10, NULL);
+
 if (status == HX_OS_OK)
 	status = int_vector_push(numbers, 20, NULL);
+
 if (status == HX_OS_OK)
 	printf("Count: %zu, first: %d\n", int_vector_size(numbers),
 		*int_vector_at(numbers, 0));
+
 hx_os_status closed = int_vector_destroy(&numbers, NULL);
 if (status == HX_OS_OK)
 	status = closed;
+
 if (status != HX_OS_OK)
 	return 1;
 ```
@@ -263,13 +283,17 @@ else
 ```c
 hx_variant value = HX_VARIANT_INIT;
 hx_string_view text;
+
 hx_os_status status = hx_variant_set_i32(&value, 42, NULL);
 if (status == HX_OS_OK)
 	status = hx_variant_set_cstr(&value, "hello", NULL);
+
 if (status == HX_OS_OK)
 	status = hx_variant_get_string_view(&value, &text, NULL);
+
 if (status == HX_OS_OK)
 	printf("String: %.*s\n", (int)text.size, text.data);
+
 hx_variant_destroy(&value);
 if (status != HX_OS_OK)
 	return 1;
@@ -282,11 +306,15 @@ C++ 也可以直接保存你定义的结构体。包含 `<hx/Variant.hpp>` 和 `
 ```cpp
 struct Point { double x; double y; };
 hx::Variant value;
+
 if (!value.set(Point{2, 5}))
 	return 1;
+
 auto position = value.get<Point>();
+
 if (!position)
 	return 1;
+
 std::printf("Point: %.1f, %.1f\n", position.value().x,
 	position.value().y);
 ```
@@ -301,6 +329,7 @@ std::printf("Point: %.1f, %.1f\n", position.value().x,
 auto path = hx::Directory::findFirstFile("assets", "config.json");
 if (!path)
 	return 1;
+
 std::puts(path.value().c_str());
 ```
 
@@ -314,10 +343,13 @@ std::puts(path.value().c_str());
 co_chan<int> answers(1); // 可以暂存一个值。
 if (!answers)
 	return 1;
+
 go [answers]() noexcept { return answers << 6 * 7; };
+
 auto done = runtime.waitUntil(hx_os_deadline_after_ms(2000));
 if (!done)
 	return 1;
+
 auto answer = answers.receive(HX_OS_DEADLINE_NOW);
 if (answer)
 	std::printf("Answer: %d\n", answer.value());
@@ -393,9 +425,11 @@ auto document = hx::ConfigDocument::parse(
 	"{\"items\":[1,\"文字\",null,{\"children\":[true,2.5]}]}");
 if (!document)
 	return 1;
+
 auto yaml = document.value().serialize(HX_OS_CONFIG_YAML);
 if (!yaml)
 	return 1;
+
 std::puts(yaml.value().c_str());
 ```
 
@@ -453,7 +487,7 @@ HX_CODEC_STRUCT(connection,
 
 ## 7. 构建、验证与项目许可
 
-开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。2026-10-04 的全量测试为 Windows 131/131、WSL Linux 133/133；新增深层序列化、结构体映射及 C/C++ 示例通过内存检测与安装消费检查，Android API 21 两种 ARM ABI 编译通过，API 34 模拟器上的 x86_64 与 ARM64 各通过 3 项新增序列化测试。具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
+开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。2026-10-04 的全量测试为 Windows 134/134、WSL Linux 134/134；新增深层序列化、结构体映射及 C/C++ 示例通过内存检测与安装消费检查，Android API 21 两种 ARM ABI 编译通过，API 34 模拟器上的 x86_64 与 ARM64 各通过 3 项新增序列化测试。具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
 
 自有代码的发布许可证尚未确定，第三方许可证见[许可说明](THIRD_PARTY_NOTICES.zh-CN.md)。协程使用自研实现；hx_c_log 接入仍属于后续工作。
 
@@ -466,6 +500,6 @@ HX_CODEC_STRUCT(connection,
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%20131%2F131%20Linux%20133%2F133-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%20134%2F134%20Linux%20134%2F134-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

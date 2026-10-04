@@ -28,7 +28,9 @@ enum {
 typedef hx_os_status(HX_OS_CALL *hx_variant_copy_fn)(void *destination,
 	const void *source, hx_os_context *context, void *user,
 	hx_os_error *error);
+
 typedef void(HX_OS_CALL *hx_variant_drop_fn)(void *object, void *user);
+
 typedef hx_os_status(HX_OS_CALL *hx_variant_construct_fn)(void *destination,
 	hx_os_context *context, void *user, hx_os_error *error);
 enum { HX_VARIANT_TYPE_NO_COPY = 1 };
@@ -72,6 +74,7 @@ typedef union hx_variant_data {
 	double real64;
 	hx_string string;
 	void *pointer;
+
 	struct {
 		void *object;
 		const hx_variant_type *type;
@@ -96,6 +99,7 @@ typedef struct hx_variant {
 
 HX_OS_API void HX_OS_CALL hx_variant_init(
 	hx_variant *value, hx_os_context *context);
+
 /* Clear preserves the context. Destroy resets to default empty; repeated
  * destroy is valid. Move/swap transfer contexts with values and allocate
  * nothing; move resets the source to default empty. NULL clear/destroy are OK.
@@ -103,78 +107,109 @@ HX_OS_API void HX_OS_CALL hx_variant_init(
  * other arguments require live initialized storage; exclude concurrent use.
  */
 HX_OS_API void HX_OS_CALL hx_variant_clear(hx_variant *value);
+
 HX_OS_API void HX_OS_CALL hx_variant_destroy(hx_variant *value);
+
 HX_OS_API void HX_OS_CALL hx_variant_move(hx_variant *out, hx_variant *source);
+
 HX_OS_API void HX_OS_CALL hx_variant_swap(hx_variant *left, hx_variant *right);
+
 HX_OS_API int HX_OS_CALL hx_variant_kind(const hx_variant *value);
+
 HX_OS_API const hx_variant_type *HX_OS_CALL hx_variant_custom_type(
 	const hx_variant *value);
+
 /* Deep copy into out's context. All failing setters/copies preserve out.
  * Raw pointers are borrowed, never freed or extended by copying.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_copy(
 	hx_variant *out, const hx_variant *source, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_set_bool(
 	hx_variant *value, int input, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_get_bool(
 	const hx_variant *value, int *out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_set_i32(
 	hx_variant *value, int32_t input, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_get_i32(
 	const hx_variant *value, int32_t *out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_set_u32(
 	hx_variant *value, uint32_t input, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_get_u32(
 	const hx_variant *value, uint32_t *out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_set_i64(
 	hx_variant *value, int64_t input, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_get_i64(
 	const hx_variant *value, int64_t *out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_set_u64(
 	hx_variant *value, uint64_t input, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_get_u64(
 	const hx_variant *value, uint64_t *out, hx_os_error *error);
+
 /* Float/double retain their native values, including NaN/infinity. No casts. */
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_set_float(
 	hx_variant *value, float input, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_get_float(
 	const hx_variant *value, float *out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_set_double(
 	hx_variant *value, double input, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_get_double(
 	const hx_variant *value, double *out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_set_pointer(
 	hx_variant *value, void *input, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_get_pointer(
 	const hx_variant *value, void **out, hx_os_error *error);
+
 /* Strict UTF-8, byte length and embedded NUL supported. Input is call-borrowed.
  * take_string transfers ownership only on success, retaining its originating
  * allocator. The variant's context remains the default for future copies.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_set_string(
 	hx_variant *value, hx_string_view input, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_set_cstr(
 	hx_variant *value, const char *input, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_take_string(
 	hx_variant *value, hx_string *source, hx_os_error *error);
+
 /* view borrows until mutation/clear/destroy. get_string copies into out's
  * context. All failed getters preserve their output.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_get_string_view(
 	const hx_variant *value, hx_string_view *out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_get_string(
 	const hx_variant *value, hx_string *out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_set_custom(hx_variant *value,
 	const hx_variant_type *type, const void *source, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_emplace_custom(hx_variant *value,
 	const hx_variant_type *type, hx_variant_construct_fn construct,
 	void *user, hx_os_error *error);
+
 /* Exact descriptor identity, no structural match. Objects borrow the variant;
  * no raw free/destruction. Their address survives byte relocation of the
  * variant, but not its replacement/removal. Mutable access is host-serialized.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_get_custom(const hx_variant *value,
 	const hx_variant_type *type, const void **out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_get_custom_mut(hx_variant *value,
 	const hx_variant_type *type, void **out, hx_os_error *error);
 
@@ -184,10 +219,12 @@ HX_OS_API hx_os_status HX_OS_CALL hx_variant_get_custom_mut(hx_variant *value,
  */
 typedef hx_os_status(HX_OS_CALL *hx_variant_visit_fn)(
 	const hx_variant *value, void *user, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_variant_visit(const hx_variant *value,
 	hx_variant_visit_fn visit, void *user, hx_os_error *error);
 
 struct hx_os_container_options;
+
 /* Owned-element preset for vector/queue/map etc. context is borrowed for the
  * container lifetime. Nested value allocations are outside max_bytes, as with
  * other container callbacks. Do not use the POD container macros for owners.

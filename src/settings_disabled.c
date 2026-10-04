@@ -13,12 +13,14 @@ void hx_settings_value_release(hx_settings_value *value)
 int hx_settings_value_kind(const hx_settings_value *value)
 {
 	(void)value;
+
 	return -1;
 }
 
 size_t hx_settings_value_count(const hx_settings_value *value)
 {
 	(void)value;
+
 	return 0;
 }
 
@@ -29,6 +31,7 @@ hx_os_status hx_settings_value_null(
 	(void)out;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -40,6 +43,7 @@ hx_os_status hx_settings_value_bool(hx_os_context *context, int value,
 	(void)out;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -51,6 +55,7 @@ hx_os_status hx_settings_value_i64(hx_os_context *context, int64_t value,
 	(void)out;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -62,6 +67,7 @@ hx_os_status hx_settings_value_double(hx_os_context *context, double value,
 	(void)out;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -73,6 +79,7 @@ hx_os_status hx_settings_value_string(hx_os_context *context,
 	(void)out;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -84,6 +91,7 @@ hx_os_status hx_settings_value_pointer(hx_os_context *context, void *value,
 	(void)out;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -97,6 +105,7 @@ hx_os_status hx_settings_value_array(hx_os_context *context,
 	(void)out;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -110,6 +119,7 @@ hx_os_status hx_settings_value_object(hx_os_context *context,
 	(void)out;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -122,6 +132,7 @@ hx_os_status hx_settings_value_copy(hx_os_context *context,
 	(void)out;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -130,6 +141,7 @@ hx_os_status hx_settings_value_get_bool(
 {
 	(void)value;
 	(void)out;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -138,6 +150,7 @@ hx_os_status hx_settings_value_get_i64(
 {
 	(void)value;
 	(void)out;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -146,6 +159,7 @@ hx_os_status hx_settings_value_get_double(
 {
 	(void)value;
 	(void)out;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -154,6 +168,7 @@ hx_os_status hx_settings_value_get_string(
 {
 	(void)value;
 	(void)out;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -162,13 +177,16 @@ hx_os_status hx_settings_value_get_string_ref(const hx_settings_value *value,
 {
 	(void)value;
 	(void)out;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
+
 hx_os_status hx_settings_value_get_pointer(
 	const hx_settings_value *value, void **out, hx_os_error *error)
 {
 	(void)value;
 	(void)out;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -178,6 +196,7 @@ hx_os_status hx_settings_value_at(const hx_settings_value *value, size_t index,
 	(void)value;
 	(void)index;
 	(void)out;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -187,6 +206,7 @@ hx_os_status hx_settings_value_member(const hx_settings_value *value,
 	(void)value;
 	(void)name;
 	(void)out;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -196,6 +216,7 @@ hx_os_status hx_settings_value_name_at(const hx_settings_value *value,
 	(void)value;
 	(void)index;
 	(void)out;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -206,6 +227,7 @@ hx_os_status hx_settings_create(
 	(void)out;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -218,6 +240,7 @@ hx_os_status hx_settings_create_with_options(hx_os_context *context,
 	(void)out;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -229,6 +252,7 @@ hx_os_status hx_settings_copy(hx_os_context *context, hx_settings *source,
 	(void)out;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -238,6 +262,7 @@ hx_os_status hx_settings_set_value(hx_settings *settings, hx_string_view key,
 	(void)settings;
 	(void)key;
 	(void)value;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -247,6 +272,7 @@ hx_os_status hx_settings_set_default_value(hx_settings *settings,
 	(void)settings;
 	(void)key;
 	(void)value;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -256,6 +282,7 @@ hx_os_status hx_settings_get_value(hx_settings *settings, hx_string_view key,
 	(void)settings;
 	(void)key;
 	(void)out;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -265,6 +292,7 @@ hx_os_status hx_settings_unset(hx_settings *settings, hx_string_view key,
 	(void)settings;
 	(void)key;
 	(void)layer;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -274,6 +302,7 @@ hx_os_status hx_settings_snapshot(hx_settings *settings, int layer,
 	(void)settings;
 	(void)layer;
 	(void)out;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -283,6 +312,7 @@ hx_os_status hx_settings_set_bool(
 	(void)settings;
 	(void)key;
 	(void)value;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -292,6 +322,7 @@ hx_os_status hx_settings_set_i64(hx_settings *settings, const char *key,
 	(void)settings;
 	(void)key;
 	(void)value;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -301,6 +332,7 @@ hx_os_status hx_settings_set_double(hx_settings *settings, const char *key,
 	(void)settings;
 	(void)key;
 	(void)value;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -310,6 +342,7 @@ hx_os_status hx_settings_set_string(hx_settings *settings, const char *key,
 	(void)settings;
 	(void)key;
 	(void)value;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -319,6 +352,7 @@ hx_os_status hx_settings_set_pointer(
 	(void)settings;
 	(void)key;
 	(void)value;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -327,6 +361,7 @@ hx_os_status hx_settings_set_null(
 {
 	(void)settings;
 	(void)key;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -337,6 +372,7 @@ hx_os_status hx_settings_set_array(hx_settings *settings, const char *key,
 	(void)key;
 	(void)items;
 	(void)count;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -346,6 +382,7 @@ hx_os_status hx_settings_set_object(hx_settings *settings, const char *key,
 	(void)settings;
 	(void)key;
 	(void)object;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -355,6 +392,7 @@ hx_os_status hx_settings_set_default_bool(
 	(void)settings;
 	(void)key;
 	(void)value;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -364,6 +402,7 @@ hx_os_status hx_settings_set_default_i64(hx_settings *settings, const char *key,
 	(void)settings;
 	(void)key;
 	(void)value;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -373,6 +412,7 @@ hx_os_status hx_settings_set_default_double(hx_settings *settings,
 	(void)settings;
 	(void)key;
 	(void)value;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -382,6 +422,7 @@ hx_os_status hx_settings_set_default_string(hx_settings *settings,
 	(void)settings;
 	(void)key;
 	(void)value;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -391,6 +432,7 @@ hx_os_status hx_settings_set_default_pointer(
 	(void)settings;
 	(void)key;
 	(void)value;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -399,6 +441,7 @@ hx_os_status hx_settings_set_default_null(
 {
 	(void)settings;
 	(void)key;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -410,6 +453,7 @@ hx_os_status hx_settings_set_default_array(hx_settings *settings,
 	(void)key;
 	(void)items;
 	(void)count;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -419,6 +463,7 @@ hx_os_status hx_settings_set_default_object(hx_settings *settings,
 	(void)settings;
 	(void)key;
 	(void)object;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -428,6 +473,7 @@ hx_os_status hx_settings_get_bool(
 	(void)settings;
 	(void)key;
 	(void)out;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -437,6 +483,7 @@ hx_os_status hx_settings_get_i64(hx_settings *settings, const char *key,
 	(void)settings;
 	(void)key;
 	(void)out;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -446,6 +493,7 @@ hx_os_status hx_settings_get_double(
 	(void)settings;
 	(void)key;
 	(void)out;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -455,6 +503,7 @@ hx_os_status hx_settings_get_string(hx_settings *settings, const char *key,
 	(void)settings;
 	(void)key;
 	(void)out;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -464,6 +513,7 @@ hx_os_status hx_settings_get_pointer(
 	(void)settings;
 	(void)key;
 	(void)out;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -472,12 +522,14 @@ hx_os_status hx_settings_close_until(
 {
 	(void)settings;
 	(void)deadline;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
 hx_os_status hx_settings_destroy(hx_settings **settings, hx_os_error *error)
 {
 	(void)settings;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -486,6 +538,7 @@ hx_os_status hx_settings_import(hx_settings *settings,
 {
 	(void)settings;
 	(void)document;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -499,6 +552,7 @@ hx_os_status hx_settings_to_config(hx_settings *settings, int layer,
 	(void)out;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -515,6 +569,7 @@ hx_os_status hx_settings_load(hx_settings *settings, int format,
 		error->byte_offset = SIZE_MAX;
 		(void)hx_os_i_error(&error->detail, HX_OS_NOT_SUPPORTED, 0, 0);
 	}
+
 	return HX_OS_NOT_SUPPORTED;
 }
 
@@ -525,6 +580,7 @@ hx_os_status hx_settings_serialize(hx_settings *settings, int format,
 	(void)format;
 	(void)out;
 	(void)options;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -536,6 +592,7 @@ hx_os_status hx_settings_save(hx_settings *settings, int format,
 	(void)format;
 	(void)path;
 	(void)options;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -544,6 +601,7 @@ hx_os_status hx_settings_to_json(
 {
 	(void)settings;
 	(void)out;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -552,6 +610,7 @@ hx_os_status hx_settings_save_json(
 {
 	(void)settings;
 	(void)path;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -560,6 +619,7 @@ hx_os_status hx_settings_load_json(
 {
 	(void)settings;
 	(void)path;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -569,6 +629,7 @@ hx_os_status hx_settings_set_string_view(hx_settings *settings,
 	(void)settings;
 	(void)key;
 	(void)value;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -578,5 +639,6 @@ hx_os_status hx_settings_set_default_string_view(hx_settings *settings,
 	(void)settings;
 	(void)key;
 	(void)value;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }

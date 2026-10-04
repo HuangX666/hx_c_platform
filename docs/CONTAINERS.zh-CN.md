@@ -76,11 +76,14 @@ hx_os_status status;
 
 hx_os_string_container_options_init(&options, NULL);
 options.max_items = 32;
+
 status = hx_os_vector_create(NULL, &options, &names, NULL);
 if (status == HX_OS_OK)
 	status = hx_string_assign_cstr(&source, "中文", NULL);
+
 if (status == HX_OS_OK)
 	status = hx_os_sequence_push_back(names, &source, NULL);
+
 /* On OK the vector owns an independent copy. Inspect status in the host. */
 hx_string_destroy(&source);
 (void)hx_os_sequence_destroy(&names, NULL);
@@ -117,12 +120,16 @@ hx_os_map_insert(map, "b", 1, &value, 0, &error);
 ```c
 hx_os_sequence_iterator iterator;
 hx_os_status status;
+
 HX_OS_SEQUENCE_FOR_EACH(iterator, values, status)
+
 {
 	const void *value;
+
 	status = hx_os_sequence_value(&iterator, &value);
 	if (status != HX_OS_OK)
 		break;
+
 	printf("%d\n", *(const int *)value);
 }
 ```

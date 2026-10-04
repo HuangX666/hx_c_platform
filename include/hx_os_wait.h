@@ -1,5 +1,6 @@
 #ifndef HX_C_PLATFORM_WAIT_H
 #define HX_C_PLATFORM_WAIT_H
+
 #include "hx_os_base.h"
 #ifdef __cplusplus
 extern "C" {
@@ -15,10 +16,13 @@ extern "C" {
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sleep_until_precise(
 	hx_os_deadline deadline, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sleep_until_precise_ex(
 	hx_os_deadline deadline, uint64_t spin_ns, hx_os_error *error);
+
 typedef hx_os_status(HX_OS_CALL *hx_os_repeat_fn)(
 	void *user, hx_os_error *error);
+
 /* Synchronous periodic work on the calling thread; no loop, worker or heap.
  * Positive interval in milliseconds and positive tick limit. First call is
  * after one interval; missed periods coalesce. OK continues; EOF stops with
@@ -30,6 +34,7 @@ typedef hx_os_status(HX_OS_CALL *hx_os_repeat_fn)(
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_repeat(uint64_t interval_ms,
 	size_t ticks, hx_os_repeat_fn function, void *user, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_repeat_until(uint64_t interval_ms,
 	size_t ticks, hx_os_repeat_fn function, void *user,
 	hx_os_deadline deadline, size_t *completed, hx_os_error *error);

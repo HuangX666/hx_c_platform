@@ -77,64 +77,89 @@ extern "C" {
  */
 HX_OS_API int64_t HX_OS_CALL hx_os_atomic_load(
 	const hx_os_atomic *value, hx_os_memory_order order);
+
 HX_OS_API void HX_OS_CALL hx_os_atomic_store(
 	hx_os_atomic *value, int64_t desired, hx_os_memory_order order);
+
 HX_OS_API int64_t HX_OS_CALL hx_os_atomic_fetch_add(
 	hx_os_atomic *value, int64_t operand, hx_os_memory_order order);
+
 HX_OS_API int64_t HX_OS_CALL hx_os_atomic_fetch_sub(
 	hx_os_atomic *value, int64_t operand, hx_os_memory_order order);
+
 HX_OS_API int64_t HX_OS_CALL hx_os_atomic_fetch_or(
 	hx_os_atomic *value, int64_t operand, hx_os_memory_order order);
+
 HX_OS_API int64_t HX_OS_CALL hx_os_atomic_fetch_and(
 	hx_os_atomic *value, int64_t operand, hx_os_memory_order order);
+
 HX_OS_API int64_t HX_OS_CALL hx_os_atomic_fetch_xor(
 	hx_os_atomic *value, int64_t operand, hx_os_memory_order order);
+
 HX_OS_API int64_t HX_OS_CALL hx_os_atomic_exchange(
 	hx_os_atomic *value, int64_t operand, hx_os_memory_order order);
+
 HX_OS_API int HX_OS_CALL hx_os_atomic_compare_exchange(hx_os_atomic *value,
 	int64_t *expected, int64_t desired, hx_os_memory_order success,
 	hx_os_memory_order failure);
+
 HX_OS_API int HX_OS_CALL hx_os_atomic_compare_exchange_weak(hx_os_atomic *value,
 	int64_t *expected, int64_t desired, hx_os_memory_order success,
 	hx_os_memory_order failure);
+
 HX_OS_API int HX_OS_CALL hx_os_atomic_is_lock_free(void);
 
 HX_OS_API int32_t HX_OS_CALL hx_os_atomic32_load(
 	const hx_os_atomic32 *value, hx_os_memory_order order);
+
 HX_OS_API void HX_OS_CALL hx_os_atomic32_store(
 	hx_os_atomic32 *value, int32_t desired, hx_os_memory_order order);
+
 HX_OS_API int32_t HX_OS_CALL hx_os_atomic32_fetch_add(
 	hx_os_atomic32 *value, int32_t operand, hx_os_memory_order order);
+
 HX_OS_API int32_t HX_OS_CALL hx_os_atomic32_fetch_sub(
 	hx_os_atomic32 *value, int32_t operand, hx_os_memory_order order);
+
 HX_OS_API int32_t HX_OS_CALL hx_os_atomic32_fetch_or(
 	hx_os_atomic32 *value, int32_t operand, hx_os_memory_order order);
+
 HX_OS_API int32_t HX_OS_CALL hx_os_atomic32_fetch_and(
 	hx_os_atomic32 *value, int32_t operand, hx_os_memory_order order);
+
 HX_OS_API int32_t HX_OS_CALL hx_os_atomic32_fetch_xor(
 	hx_os_atomic32 *value, int32_t operand, hx_os_memory_order order);
+
 HX_OS_API int32_t HX_OS_CALL hx_os_atomic32_exchange(
 	hx_os_atomic32 *value, int32_t operand, hx_os_memory_order order);
+
 HX_OS_API int HX_OS_CALL hx_os_atomic32_compare_exchange(hx_os_atomic32 *value,
 	int32_t *expected, int32_t desired, hx_os_memory_order success,
 	hx_os_memory_order failure);
+
 HX_OS_API int HX_OS_CALL hx_os_atomic32_compare_exchange_weak(
 	hx_os_atomic32 *value, int32_t *expected, int32_t desired,
 	hx_os_memory_order success, hx_os_memory_order failure);
+
 HX_OS_API int HX_OS_CALL hx_os_atomic32_is_lock_free(void);
 
 HX_OS_API void *HX_OS_CALL hx_os_atomic_ptr_load(
 	const hx_os_atomic_ptr *value, hx_os_memory_order order);
+
 HX_OS_API void HX_OS_CALL hx_os_atomic_ptr_store(
 	hx_os_atomic_ptr *value, void *desired, hx_os_memory_order order);
+
 HX_OS_API void *HX_OS_CALL hx_os_atomic_ptr_exchange(
 	hx_os_atomic_ptr *value, void *desired, hx_os_memory_order order);
+
 HX_OS_API int HX_OS_CALL hx_os_atomic_ptr_compare_exchange(
 	hx_os_atomic_ptr *value, void **expected, void *desired,
 	hx_os_memory_order success, hx_os_memory_order failure);
+
 HX_OS_API int HX_OS_CALL hx_os_atomic_ptr_compare_exchange_weak(
 	hx_os_atomic_ptr *value, void **expected, void *desired,
 	hx_os_memory_order success, hx_os_memory_order failure);
+
 HX_OS_API int HX_OS_CALL hx_os_atomic_ptr_is_lock_free(void);
 
 /* Fences synchronize only in conjunction with atomic communication.

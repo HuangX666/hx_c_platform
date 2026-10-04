@@ -23,10 +23,13 @@ static hx_os_status work(hx_os_task *task, void *user)
 {
 	work_data *data = user;
 	hx_os_status result;
+
 	CHECK(hx_os_task_wait_until(task, HX_OS_DEADLINE_INFINITE, &result,
 		      NULL) == HX_OS_DEADLOCK);
+
 	(void)hx_os_atomic_fetch_add(&data->calls, 1, HX_OS_RELAXED);
 	hx_os_event_set(data->entered);
+
 	return hx_os_event_wait_until(
 		data->release, HX_OS_DEADLINE_INFINITE, NULL);
 }
@@ -34,6 +37,7 @@ static hx_os_status work(hx_os_task *task, void *user)
 static void cleanup(void *user)
 {
 	work_data *data = user;
+
 	(void)hx_os_atomic_fetch_add(&data->cleanups, 1, HX_OS_RELAXED);
 }
 
@@ -48,6 +52,7 @@ static hx_os_status finished_work(hx_os_task *task, void *user)
 {
 	(void)task;
 	(void)user;
+
 	return HX_OS_OK;
 }
 
@@ -55,6 +60,7 @@ static hx_os_status identity_work(hx_os_task *task, void *user)
 {
 	identity_test *state = user;
 	int inside = -1;
+
 	CHECK(hx_os_thread_pool_inside(state->own, &inside) == HX_OS_OK &&
 		inside == 1);
 	CHECK(hx_os_thread_pool_inside(state->other, &inside) == HX_OS_OK &&
@@ -65,6 +71,7 @@ static hx_os_status identity_work(hx_os_task *task, void *user)
 		      NULL) == HX_OS_OK);
 	CHECK(hx_os_thread_pool_close_until(state->own, HX_OS_POOL_DRAIN,
 		      HX_OS_DEADLINE_NOW, NULL) == HX_OS_DEADLOCK);
+
 	return HX_OS_OK;
 }
 
@@ -72,8 +79,10 @@ static void identity_cleanup(void *user)
 {
 	identity_test *state = user;
 	int inside = 0;
+
 	CHECK(hx_os_thread_pool_inside(state->own, &inside) == HX_OS_OK &&
 		inside == 1);
+
 	++state->cleanups;
 }
 
@@ -83,8 +92,10 @@ static void test_identity(void)
 	hx_os_thread_pool_options options;
 	hx_os_task *task = NULL;
 	int inside = -1;
+
 	CHECK(hx_os_thread_pool_inside(NULL, &inside) == HX_OS_INVALID);
 	CHECK(inside == -1);
+
 	hx_os_thread_pool_options_init(&options);
 	options.threads = 1;
 	CHECK(hx_os_thread_pool_create(NULL, &options, &state.own, NULL) ==
@@ -111,6 +122,7 @@ static void test_identity(void)
 	CHECK(hx_os_thread_pool_close_until(state.other, HX_OS_POOL_DRAIN,
 		      hx_os_deadline_after_ms(2000), NULL) == HX_OS_OK);
 	CHECK(hx_os_thread_pool_destroy(&state.other, NULL) == HX_OS_OK);
+
 	hx_os_task_release(state.finished);
 	hx_os_task_release(task);
 }
@@ -126,6 +138,7 @@ int main(void)
 	hx_os_task *rejected;
 	hx_os_status result;
 	work_data data;
+
 	test_identity();
 	memset(&data, 0, sizeof(data));
 	CHECK(hx_os_context_create(NULL, &context, NULL) == HX_OS_OK);
@@ -133,6 +146,7 @@ int main(void)
 		HX_OS_OK);
 	CHECK(hx_os_event_create(context, 1, 0, &data.release, NULL) ==
 		HX_OS_OK);
+
 	hx_os_thread_pool_options_init(&options);
 	options.threads = 1;
 	options.queue_capacity = 2;
@@ -153,6 +167,7 @@ int main(void)
 	CHECK(hx_os_thread_pool_destroy(&pool, NULL) == HX_OS_BUSY);
 	CHECK(hx_os_thread_pool_submit(pool, work, &data, cleanup, &rejected,
 		      NULL) == HX_OS_CLOSED);
+
 	hx_os_event_set(data.release);
 	CHECK(hx_os_thread_pool_close_until(pool, HX_OS_POOL_CANCEL_PENDING,
 		      hx_os_deadline_after_ms(1000), NULL) == HX_OS_OK);
@@ -163,12 +178,15 @@ int main(void)
 	CHECK(result == HX_OS_CANCELLED);
 	CHECK(hx_os_atomic_load(&data.calls, HX_OS_ACQUIRE) == 1);
 	CHECK(hx_os_atomic_load(&data.cleanups, HX_OS_ACQUIRE) == 3);
+
 	hx_os_task_release(first);
 	hx_os_task_release(second);
 	hx_os_task_release(third);
 	hx_os_event_destroy(data.entered);
 	hx_os_event_destroy(data.release);
 	CHECK(hx_os_context_destroy(&context, NULL) == HX_OS_OK);
+
 	puts("bounded task pool contracts passed");
+
 	return 0;
 }

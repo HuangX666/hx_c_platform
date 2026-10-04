@@ -8,6 +8,21 @@ This records development validation through 2026-10-04. A design, implemented ad
 
 The JSON entry below records the current examples. Earlier independent text examples, initial shared workflows, IPC/KCP implementation and other batches describe their historical versions.
 
+## 2026-10-04: Logical paragraphs in source and examples
+
+Baseline `4c68e88`, local `dev`. Reviewed the owned C/C++ sources, CMake files and Markdown source examples. Distinct preparation, execution/result checks, cleanup and return steps now have one separating blank line; related declarations, checks and data tables remain grouped. Target properties are easier to scan on separate lines. `.clang-format` preserves separation between definitions, and the local `cpp-qt-project-rules` skill records the same rules for future work.
+
+| Configuration | Evidence from this run |
+| --- | --- |
+| Windows MSVC x64 Release shared | Full build and CTest: 134/134 passed |
+| WSL Linux GCC x86_64 Release shared | Full build and CTest: 134/134 passed |
+| Installed Windows / WSL shared consumers | Each host: C++11-enabled 26/26, pure C 16/16 passed |
+| Source/layout checks | Source nonempty lines, literals and comments preserved; all 14 CMake token streams and embedded arguments preserved; Markdown prose/data preserved apart from these records, style guidance and refreshed test counts |
+| Engineering rules | 435 source/script files passed the 80-column checker; the Objective-C adapter was checked separately; changed files are UTF-8 without BOM and LF |
+| Third-party and skill scope | Tracked third-party/license bytes unchanged; only the requested skill entrypoint and its two formatting references changed; skill validation passed |
+
+Logs and read-only comparison reports are in ignored `build-formatting/`. This is a readability change, with no API, field-order, lifetime or performance redesign. Source line numbers and diagnostics naturally move. No new sanitizer, Android, macOS, Win7/8.1, ARM board or performance run was performed in this task.
+
 ## 2026-10-04: Single-declaration codec macros
 
 Baseline a48b51c, local dev. The standalone hx_codec_macros.h header adds HX_CODEC_STRUCT to declare a normal C99/C++11 value structure, fields and schema from one member list. Scalars, strings, nested objects, dynamic/fixed arrays, NODE, renaming, optional values and XML attributes are supported, with 1–32 fields. Existing codec implementation, public layouts and exported functions remain intact. The C++ facade includes the macro header. No source generator, target runtime dependency, runtime registration or background activity was added.

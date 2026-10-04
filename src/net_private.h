@@ -10,6 +10,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
+
 typedef SOCKET hx_os_i_socket;
 typedef int hx_os_i_socklen;
 #define HX_OS_I_BAD_SOCKET INVALID_SOCKET
@@ -21,6 +22,7 @@ typedef int hx_os_i_socklen;
 #include <poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
+
 typedef int hx_os_i_socket;
 typedef socklen_t hx_os_i_socklen;
 #define HX_OS_I_BAD_SOCKET (-1)
@@ -30,10 +32,12 @@ struct hx_os_network {
 	hx_os_context *context;
 	hx_os_atomic objects;
 };
+
 typedef struct hx_os_i_local_state {
 	hx_os_local_address address;
 	int connecting;
 } hx_os_i_local_state;
+
 struct hx_os_socket {
 	hx_os_network *network;
 	hx_os_i_socket native;
@@ -49,24 +53,34 @@ struct hx_os_socket {
 };
 
 hx_os_status hx_os_i_socket_error(hx_os_error *error, int code);
+
 int hx_os_i_socket_last_error(void);
+
 void hx_os_i_socket_close(hx_os_i_socket socket);
+
 hx_os_status hx_os_i_socket_configure(
 	hx_os_i_socket native, int nonblocking, hx_os_error *error);
+
 hx_os_status hx_os_i_socket_wait(hx_os_i_socket native, int events,
 	hx_os_deadline deadline, hx_os_error *error);
+
 static inline int hx_os_i_socket_stream(const hx_os_socket *socket)
 {
 	return socket->protocol == HX_OS_TCP ||
 		socket->protocol == HX_OS_LOCAL_STREAM;
 }
+
 hx_os_status hx_os_i_socket_wrap(hx_os_network *network, hx_os_i_socket native,
 	int family, int protocol, hx_os_socket **out, hx_os_error *error);
+
 hx_os_status hx_os_i_socket_connected(hx_os_socket *socket, hx_os_error *error);
+
 int hx_os_i_address_native(const hx_os_address *address,
 	struct sockaddr_storage *native, hx_os_i_socklen *length);
+
 int hx_os_i_address_public(
 	const struct sockaddr *native, hx_os_address *address);
+
 hx_os_status hx_os_i_loop_detach(hx_os_socket *socket, hx_os_error *error);
 
 #endif

@@ -23,10 +23,12 @@ static void *env_writer(void *user)
 {
 	env_state *state = user;
 	int i;
+
 	for (i = 0; i < 300; ++i)
 		if (hx_os_env_set(state->name, i % 2 ? "中文值" : "value", 1,
 			    NULL) != HX_OS_OK)
 			hx_os_atomic_store(&state->failed, 1, HX_OS_RELAXED);
+
 	return NULL;
 }
 
@@ -35,15 +37,19 @@ static void *env_reader(void *user)
 	env_state *state = user;
 	hx_string value = HX_STRING_INIT;
 	int i;
+
 	for (i = 0; i < 300; ++i) {
 		hx_os_status status =
 			hx_os_env_get_string(state->name, &value, NULL);
+
 		if (status != HX_OS_OK ||
 			(strcmp(hx_string_c_str(&value), "中文值") &&
 				strcmp(hx_string_c_str(&value), "value")))
 			hx_os_atomic_store(&state->failed, 1, HX_OS_RELAXED);
 	}
+
 	hx_string_destroy(&value);
+
 	return NULL;
 }
 
@@ -51,14 +57,17 @@ static void *env_allocate(size_t bytes, void *user)
 {
 	char value[8];
 	size_t required;
+
 	CHECK(hx_os_env_get(user, value, sizeof(value), &required, NULL) ==
 		HX_OS_OK);
+
 	return malloc(bytes);
 }
 
 static void env_deallocate(void *memory, void *user)
 {
 	(void)user;
+
 	free(memory);
 }
 
@@ -71,6 +80,7 @@ int main(void)
 	hx_os_context_options options;
 	char buffer[64];
 	size_t required;
+
 	memset(&state, 0, sizeof(state));
 	(void)snprintf(state.name, sizeof(state.name), "HX_OS_ENV_TEST_%llx",
 		(unsigned long long)hx_os_monotonic_ns());
@@ -83,8 +93,10 @@ int main(void)
 			HX_OS_NOT_SUPPORTED);
 		CHECK(hx_os_env_remove(state.name, NULL) ==
 			HX_OS_NOT_SUPPORTED);
+
 		return 0;
 	}
+
 	CHECK(hx_os_env_remove(state.name, NULL) == HX_OS_OK);
 	CHECK(hx_os_env_get_string(state.name, &value, NULL) ==
 		HX_OS_NOT_FOUND);
@@ -121,11 +133,13 @@ int main(void)
 	CHECK(hx_os_thread_destroy(&reader, NULL) == HX_OS_OK);
 	CHECK(!hx_os_atomic_load(&state.failed, HX_OS_RELAXED));
 	CHECK(hx_os_env_set(state.name, "short", 1, NULL) == HX_OS_OK);
+
 	hx_os_context_options_init(&options);
 	options.allocator.allocate = env_allocate;
 	options.allocator.deallocate = env_deallocate;
 	options.allocator.user = state.name;
 	CHECK(hx_os_context_create(&options, &context, NULL) == HX_OS_OK);
+
 	hx_string_destroy(&value);
 	hx_string_init(&value, context);
 	CHECK(hx_os_env_get_string(state.name, &value, NULL) == HX_OS_OK);
@@ -140,8 +154,11 @@ int main(void)
 	CHECK(hx_os_env_get_string(state.name, &value, NULL) ==
 		HX_OS_NOT_FOUND);
 	CHECK(!strcmp(hx_string_c_str(&value), "short"));
+
 	hx_string_destroy(&value);
 	CHECK(hx_os_context_destroy(&context, NULL) == HX_OS_OK);
+
 	puts("environment contracts passed");
+
 	return 0;
 }

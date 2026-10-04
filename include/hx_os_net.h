@@ -26,13 +26,17 @@ typedef struct hx_os_address {
 /* Network instances balance native initialization and own socket leases. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_network_create(
 	hx_os_context *context, hx_os_network **out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_network_destroy(
 	hx_os_network **network, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_address_parse(const char *numeric_host,
 	uint16_t port, hx_os_address *out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_address_format(
 	const hx_os_address *address, char *buffer, size_t capacity,
 	hx_os_error *error);
+
 /*
  * Blocking native DNS. Host is an ASCII/Punycode name; no implicit IDNA.
  * Use loop_resolve for deadline-aware asynchronous waiting. Results are
@@ -41,10 +45,13 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_address_format(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_resolve(hx_os_network *network,
 	const char *host, uint16_t port, int protocol, hx_os_address_list **out,
 	hx_os_error *error);
+
 HX_OS_API size_t HX_OS_CALL hx_os_address_list_count(
 	const hx_os_address_list *list);
+
 HX_OS_API const hx_os_address *HX_OS_CALL hx_os_address_list_get(
 	const hx_os_address_list *list, size_t index);
+
 HX_OS_API void HX_OS_CALL hx_os_address_list_destroy(hx_os_address_list *list);
 
 /*
@@ -56,12 +63,16 @@ HX_OS_API void HX_OS_CALL hx_os_address_list_destroy(hx_os_address_list *list);
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_create(hx_os_network *network,
 	int family, int protocol, hx_os_socket **out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_bind(
 	hx_os_socket *socket, const hx_os_address *address, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_listen(
 	hx_os_socket *socket, int backlog, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_local_address(
 	hx_os_socket *socket, hx_os_address *address, hx_os_error *error);
+
 /*
  * Native escape hatch: level/name and value layout come from this target's
  * socket headers, not portable numeric constants. Get takes capacity in
@@ -73,50 +84,67 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_local_address(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_option_set(hx_os_socket *socket,
 	int level, int name, const void *value, size_t bytes,
 	hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_option_get(hx_os_socket *socket,
 	int level, int name, void *value, size_t *bytes, hx_os_error *error);
+
 /* Portable common options; nonzero enables. Reuse is never implicit on bind. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_set_nodelay(
 	hx_os_socket *socket, int enabled, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_set_keepalive(
 	hx_os_socket *socket, int enabled, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_set_reuseaddr(
 	hx_os_socket *socket, int enabled, hx_os_error *error);
+
 /* Unconnected sockets report their native getpeername error; output is kept. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_peer_address(
 	hx_os_socket *socket, hx_os_address *address, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_accept(hx_os_socket *listener,
 	hx_os_socket **out, hx_os_address *peer, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_connect(
 	hx_os_socket *socket, const hx_os_address *address, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_connect_until(
 	hx_os_socket *socket, const hx_os_address *address,
 	hx_os_deadline deadline, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_wait_until(hx_os_socket *socket,
 	int events, hx_os_deadline deadline, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_send_some(hx_os_socket *socket,
 	const void *data, size_t bytes, size_t *completed, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_receive_some(
 	hx_os_socket *socket, void *data, size_t bytes, size_t *completed,
 	hx_os_error *error);
+
 /* Stream read + readiness wait; returns some bytes, EOF, error or timeout.
  * Timeout keeps the socket usable and completed=0. No hidden buffer.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_receive_until(
 	hx_os_socket *socket, void *data, size_t bytes, hx_os_deadline deadline,
 	size_t *completed, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_send_until(hx_os_socket *socket,
 	const void *data, size_t bytes, hx_os_deadline deadline,
 	size_t *completed, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_send_to(hx_os_socket *socket,
 	const hx_os_address *peer, const void *data, size_t bytes,
 	size_t *completed, hx_os_error *error);
+
 /* LIMIT means a truncated datagram; its remainder is discarded, not retried. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_receive_from(
 	hx_os_socket *socket, hx_os_address *peer, void *data, size_t bytes,
 	size_t *completed, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_shutdown(
 	hx_os_socket *socket, int direction, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_close(
 	hx_os_socket **socket, hx_os_error *error);
 

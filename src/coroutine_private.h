@@ -111,33 +111,55 @@ struct hx_os_coro_runtime {
  * it held. Wait completion never resumes a coroutine on a foreign worker.
  */
 void hx_os_i_coro_runtime_retain(hx_os_coro_runtime *runtime);
+
 void hx_os_i_coro_runtime_release(hx_os_coro_runtime *runtime);
+
 void hx_os_i_coro_enqueue(hx_os_coro *coroutine);
+
 void hx_os_i_coro_finish_wait(hx_os_coro *coroutine, const hx_os_error *result);
+
 void hx_os_i_coro_cancel_wait(hx_os_coro *coroutine, hx_os_status status);
+
 hx_os_status hx_os_i_coro_begin_wait(hx_os_coro *coroutine, int kind,
 	hx_os_deadline deadline, hx_os_error *error);
+
 hx_os_status hx_os_i_coro_suspend(hx_os_coro *coroutine, hx_os_error *error);
+
 hx_os_status hx_os_i_coro_consume(hx_os_coro *coroutine, hx_os_error *error);
+
 int hx_os_i_coro_wait_ready(hx_os_coro *coroutine, int kind);
+
 void hx_os_i_coro_clear_wait(hx_os_coro *coroutine);
+
 void hx_os_i_coro_channel_unlink(hx_os_coro *coroutine);
+
 void hx_os_i_coro_channel_dispose_wait(hx_os_coro *coroutine);
+
 void hx_os_i_coro_io_cancel(hx_os_coro *coroutine);
+
 void hx_os_i_coro_io_dispose_wait(hx_os_coro *coroutine);
+
 hx_os_status hx_os_i_coro_io_create(
 	hx_os_coro_runtime *runtime, hx_os_error *error);
+
 hx_os_status hx_os_i_coro_io_close(hx_os_coro_runtime *runtime,
 	hx_os_deadline deadline, hx_os_error *error);
 void hx_os_i_coro_io_destroy(hx_os_coro_runtime *runtime);
+
 int hx_os_i_coro_io_inside(void);
+
 int hx_os_i_coro_worker_inside(void);
+
 void *hx_os_i_coro_sync_alloc(hx_os_coro_runtime *runtime, size_t bytes,
 	size_t alignment, hx_os_error *error);
+
 void hx_os_i_coro_sync_free(hx_os_coro_runtime *runtime, void *memory);
+
 int hx_os_i_coro_sync_finish(hx_os_coro *coroutine, hx_os_error *result);
+
 void hx_os_i_coro_sync_dispose(hx_os_coro *coroutine);
 enum { HX_OS_CO_DIAL = 100, HX_OS_CO_LISTEN, HX_OS_CO_PIPE };
+
 hx_os_status hx_os_i_coro_io_call(hx_os_coro_stream *stream, int kind,
 	const hx_os_operation *input, int backlog, int reuse,
 	hx_os_coro_stream **output, hx_os_coro_stream **second,

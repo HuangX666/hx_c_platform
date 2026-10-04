@@ -1,5 +1,6 @@
 #ifndef HX_C_PLATFORM_CALENDAR_H
 #define HX_C_PLATFORM_CALENDAR_H
+
 #include "hx_string.h"
 #ifdef __cplusplus
 extern "C" {
@@ -14,9 +15,11 @@ extern "C" {
 HX_OS_API hx_os_status HX_OS_CALL hx_os_wall_time_format_utc(int64_t ms,
 	const char *spec, char *buffer, size_t capacity, size_t *required,
 	hx_os_error *error);
+
 /* Uses out's context; failure preserves out. spec may borrow from out. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_wall_time_format_utc_string(
 	int64_t ms, const char *spec, hx_string *out, hx_os_error *error);
+
 /* Current native local offset east of UTC, in whole minutes. dst is 0/1 or
  * -1 when the native runtime cannot determine it. Host controls timezone;
  * serialize external TZ/timezone changes. Fractional-minute offsets are
@@ -24,6 +27,7 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_wall_time_format_utc_string(
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_wall_time_local_offset_minutes(
 	int *minutes, int *dst, hx_os_error *error);
+
 /* Portable single-component UTF-8 filename using UTC calendar tokens.
  * Default pattern: %CCYY-%MM-%DD_%hh-%mm-%ss. Replaces controls and
  * <>:"/\|?* with _, repairs trailing spaces/dots, prefixes Windows reserved
@@ -35,9 +39,11 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_wall_time_local_offset_minutes(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_filename_format_string(
 	int64_t milliseconds, const char *pattern, const char *extension,
 	hx_string *out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_filename_format(int64_t milliseconds,
 	const char *pattern, const char *extension, char *buffer,
 	size_t capacity, size_t *required, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_filename_generate(
 	const char *extension, hx_string *out, hx_os_error *error);
 

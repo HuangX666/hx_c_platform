@@ -15,6 +15,7 @@ typedef struct hx_os_sys_disk_space_info {
 	uint64_t available_bytes;
 	uint64_t free_bytes;
 } hx_os_sys_disk_space_info;
+
 typedef struct hx_os_sys_proc_memory_info {
 	uint32_t size;
 	uint32_t version;
@@ -39,29 +40,39 @@ typedef struct hx_os_sys_proc_memory_info {
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sys_total_memory(
 	uint64_t *bytes, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sys_available_memory(
 	uint64_t *bytes, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sys_physical_cores(
 	int *count, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sys_logical_cores(
 	int *count, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sys_page_size(
 	size_t *bytes, hx_os_error *error);
+
 /* Initialize with the matching INIT macro. Paths are borrowed UTF-8. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sys_disk_space(
 	const char *path, hx_os_sys_disk_space_info *info, hx_os_error *error);
+
 /* virtual_bytes is committed + reserved address space, not commit charge. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sys_proc_memory(
 	hx_os_sys_proc_memory_info *info, hx_os_error *error);
+
 /* required includes NUL; OUTPUT_FULL permits retry with a larger buffer.
  * Linux/Android report the kernel release, not distribution/Android API.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sys_version(
 	char *buffer, size_t capacity, size_t *required, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sys_version_string(
 	hx_string *out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sys_version_numbers(
 	int *major, int *minor, int *patch, hx_os_error *error);
+
 /*
  * Owns a context allocation. Query/destroy require caller serialization.
  * Samples current-process user + kernel CPU, excluding child processes.
@@ -72,8 +83,10 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_sys_version_numbers(
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_cpu_usage_create(
 	hx_os_context *context, hx_os_cpu_usage **out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_cpu_usage_query(
 	hx_os_cpu_usage *usage, double *percent, hx_os_error *error);
+
 HX_OS_API void HX_OS_CALL hx_os_cpu_usage_destroy(hx_os_cpu_usage **usage);
 
 #ifdef __cplusplus

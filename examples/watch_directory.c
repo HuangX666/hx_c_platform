@@ -15,6 +15,7 @@ static void changed(
 	else
 		printf("%u: %s\n", event->kind, event->path);
 }
+
 static int hx_example_main(int argc, const char *const *argv)
 {
 	hx_os_watch *watch = NULL;
@@ -22,8 +23,10 @@ static int hx_example_main(int argc, const char *const *argv)
 	hx_os_status status;
 	char owned_path[128];
 	const char *path;
+
 	if (argc != 1 && argc != 2)
 		return 1;
+
 	if (argc == 1) {
 #if defined(_WIN32)
 		const char *pattern = "hx-watch-example-%llx";
@@ -34,21 +37,27 @@ static int hx_example_main(int argc, const char *const *argv)
 			(unsigned long long)hx_os_monotonic_ns());
 		if (hx_os_directory_create(owned_path, 0, &error) != HX_OS_OK)
 			return 1;
+
 		path = owned_path;
 	}
 	else
 		path = argv[1];
+
 	status = hx_os_watch_create(
 		NULL, path, 1, changed, NULL, &watch, &error);
 	if (status != HX_OS_OK) {
 		if (argc == 1)
 			(void)hx_os_directory_remove(owned_path, NULL);
+
 		return 1;
 	}
+
 	(void)hx_os_sleep_until(hx_os_deadline_after_ms(250), NULL);
+
 	status = hx_os_watch_close_until(
 		&watch, hx_os_deadline_after_ms(2000), &error);
 	if (argc == 1 && !watch)
 		(void)hx_os_directory_remove(owned_path, NULL);
+
 	return status == HX_OS_OK ? 0 : 1;
 }

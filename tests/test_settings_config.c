@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <locale.h>
+
 #define CHECK(value)                                                           \
 	do {                                                                   \
 		if (!(value)) {                                                \
@@ -14,11 +15,14 @@ static void import_json(
 	hx_settings *settings, const char *text, hx_os_status expected)
 {
 	hx_os_config_document *document = NULL;
+
 	CHECK(hx_os_config_parse(NULL, HX_OS_CONFIG_JSON, text, strlen(text),
 		      NULL, &document, NULL) == HX_OS_OK);
 	CHECK(hx_settings_import(settings, document, NULL) == expected);
+
 	hx_os_config_release(document);
 }
+
 int main(int argc, char **argv)
 {
 	hx_settings *settings = NULL, *loaded = NULL;
@@ -32,11 +36,14 @@ int main(int argc, char **argv)
 	char directory[96], path[256];
 	const char input[] = "{\"n\":9223372036854775807,\"x\":0.1,"
 			     "\"a\\u0000b\":[true,null,\"中文😀\"]}";
+
 	uint64_t capabilities = hx_os_capabilities();
 	if (argc > 1)
 		CHECK(setlocale(LC_NUMERIC, argv[1]) != NULL);
+
 	if (!(capabilities & HX_OS_CAP_SETTINGS))
 		return 0;
+
 	CHECK(hx_settings_create(NULL, &settings, NULL) == HX_OS_OK);
 	CHECK(hx_settings_set_default_i64(settings, "fallback", 9, NULL) ==
 		HX_OS_OK);
@@ -50,8 +57,10 @@ int main(int argc, char **argv)
 			      NULL, &detail) == HX_OS_NOT_SUPPORTED &&
 			detail.detail.status == HX_OS_NOT_SUPPORTED);
 		CHECK(hx_settings_destroy(&settings, NULL) == HX_OS_OK);
+
 		return 0;
 	}
+
 	CHECK(hx_os_config_parse(NULL, HX_OS_CONFIG_JSON, input,
 		      sizeof(input) - 1, NULL, &source, NULL) == HX_OS_OK);
 	CHECK(hx_settings_import(settings, source, NULL) == HX_OS_OK);
@@ -63,6 +72,7 @@ int main(int argc, char **argv)
 		      &document, NULL) == HX_OS_OK);
 	CHECK(hx_os_config_member(hx_os_config_root(document), "fallback", 8,
 		      &node) == HX_OS_NOT_FOUND);
+
 	hx_os_config_release(document);
 	document = NULL;
 	CHECK(hx_settings_to_config(settings, HX_SETTINGS_EFFECTIVE, NULL,
@@ -71,6 +81,7 @@ int main(int argc, char **argv)
 		      &node) == HX_OS_OK &&
 		hx_os_config_get_i64(node, &integer) == HX_OS_OK &&
 		integer == 9);
+
 	hx_os_config_release(document);
 	document = NULL;
 	CHECK(hx_settings_set_i64(settings, "n", 42, NULL) == HX_OS_OK);
@@ -78,6 +89,7 @@ int main(int argc, char **argv)
 			HX_OS_OK &&
 		hx_os_config_get_i64(node, &integer) == HX_OS_OK &&
 		integer == INT64_MAX);
+
 	hx_os_config_release(source);
 	source = NULL;
 	import_json(settings, "[]", HX_OS_TYPE_MISMATCH);
@@ -88,8 +100,10 @@ int main(int argc, char **argv)
 		CHECK(hx_settings_to_json(settings, &json, NULL) ==
 			HX_OS_NOT_SUPPORTED);
 		CHECK(hx_settings_destroy(&settings, NULL) == HX_OS_OK);
+
 		return 0;
 	}
+
 	CHECK(hx_settings_to_json(settings, &json, NULL) == HX_OS_OK);
 	CHECK(!strstr(hx_string_c_str(&json), "fallback"));
 	CHECK(strstr(hx_string_c_str(&json), "a\\u0000b") != NULL);
@@ -98,6 +112,7 @@ int main(int argc, char **argv)
 		      NULL) == HX_OS_OK);
 	CHECK(hx_settings_create(NULL, &loaded, NULL) == HX_OS_OK);
 	CHECK(hx_settings_import(loaded, document, NULL) == HX_OS_OK);
+
 	hx_os_config_release(document);
 	document = NULL;
 	CHECK(hx_settings_to_json(loaded, &copy, NULL) == HX_OS_OK &&
@@ -108,6 +123,7 @@ int main(int argc, char **argv)
 			HX_OS_UNREPRESENTABLE &&
 		!strcmp(hx_string_c_str(&json), hx_string_c_str(&copy)));
 	CHECK(hx_settings_destroy(&loaded, NULL) == HX_OS_OK);
+
 	import_json(settings,
 		"{\"section\":{\"name\":\"中文😀\"},\"global\":\"value\"}",
 		HX_OS_OK);
@@ -116,6 +132,7 @@ int main(int argc, char **argv)
 	CHECK(hx_os_config_parse(NULL, HX_OS_CONFIG_INI, hx_string_c_str(&copy),
 		      copy.size, NULL, &document, NULL) == HX_OS_OK);
 	CHECK(hx_settings_import(settings, document, NULL) == HX_OS_OK);
+
 	hx_os_config_release(document);
 	document = NULL;
 	import_json(settings, "{\"a\":\"中文😀\",\"b\":\"x=y\"}", HX_OS_OK);
@@ -125,12 +142,14 @@ int main(int argc, char **argv)
 		      hx_string_c_str(&copy), copy.size, NULL, &document,
 		      NULL) == HX_OS_OK);
 	CHECK(hx_settings_import(settings, document, NULL) == HX_OS_OK);
+
 	hx_os_config_release(document);
 	document = NULL;
 	{
 		const int formats[] = {
 			HX_OS_CONFIG_YAML, HX_OS_CONFIG_TOML, HX_OS_CONFIG_ENV};
 		size_t i;
+
 		for (i = 0; i < sizeof(formats) / sizeof(formats[0]); ++i) {
 			CHECK(hx_settings_serialize(settings, formats[i], &copy,
 				      NULL, NULL) == HX_OS_OK);
@@ -139,10 +158,12 @@ int main(int argc, char **argv)
 				      NULL) == HX_OS_OK);
 			CHECK(hx_settings_import(settings, document, NULL) ==
 				HX_OS_OK);
+
 			hx_os_config_release(document);
 			document = NULL;
 		}
 	}
+
 	CHECK(hx_settings_set_i64(settings, "number", 1, NULL) == HX_OS_OK);
 	CHECK(hx_settings_serialize(settings, HX_OS_CONFIG_PROPERTIES, &copy,
 		      NULL, NULL) == HX_OS_UNREPRESENTABLE);
@@ -150,6 +171,7 @@ int main(int argc, char **argv)
 		(void)snprintf(directory, sizeof(directory), "hx-settings-%llx",
 			(unsigned long long)hx_os_monotonic_ns());
 		CHECK(hx_os_directory_create(directory, 0, NULL) == HX_OS_OK);
+
 		(void)snprintf(
 			path, sizeof(path), "%s/%s", directory, "配置😀.json");
 		CHECK(hx_settings_save_json(settings, path, NULL) == HX_OS_OK);
@@ -174,13 +196,16 @@ int main(int argc, char **argv)
 		CHECK(hx_settings_destroy(&loaded, NULL) == HX_OS_OK);
 		CHECK(hx_os_directory_remove(directory, NULL) == HX_OS_OK);
 	}
+
 	CHECK(hx_settings_get_value(settings, hx_string_view_from_cstr("a"),
 		      &value, NULL) == HX_OS_OK);
 	CHECK(hx_settings_destroy(&settings, NULL) == HX_OS_OK);
 	CHECK(hx_settings_value_get_string(value, &copy, NULL) == HX_OS_OK &&
 		!strcmp(hx_string_c_str(&copy), "中文😀"));
+
 	hx_settings_value_release(value);
 	hx_string_destroy(&copy);
 	hx_string_destroy(&json);
+
 	return 0;
 }

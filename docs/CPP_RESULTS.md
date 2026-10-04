@@ -16,6 +16,7 @@ hx::Result<hx::String> load_configuration(const char *path) noexcept
 	auto result = hx::Files::readText(path);
 	if (!result)
 		return hx::Failure(result.error());
+
 	return std::move(result).value();
 }
 ~~~
@@ -93,6 +94,7 @@ The repository applies these settings privately to its C++ test/example targets.
 ~~~cmake
 target_link_libraries(my_app PRIVATE hx_c_platform::cpp)
 target_compile_features(my_app PRIVATE cxx_std_11)
+
 if(MSVC)
 	target_compile_options(my_app PRIVATE /EHs-c-)
 	target_compile_definitions(my_app PRIVATE _HAS_EXCEPTIONS=0)

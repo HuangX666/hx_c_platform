@@ -1,7 +1,9 @@
 #ifndef HX_C_PLATFORM_CPP_CALENDAR_HPP
 #define HX_C_PLATFORM_CPP_CALENDAR_HPP
+
 #include <hx_os_calendar.h>
 #include <hx/Values.hpp>
+
 namespace hx {
 class Calendar {
 public:
@@ -15,6 +17,7 @@ public:
 			},
 			context);
 	}
+
 	static Result<String> filename(int64_t milliseconds,
 		const char *extension = NULL, const char *pattern = NULL,
 		hx_os_context *context = NULL) noexcept
@@ -27,15 +30,18 @@ public:
 			},
 			context);
 	}
+
 	/* Offset east of UTC in minutes; DST 0/1/-1. */
 	static Result<std::pair<int, int>> localOffset() noexcept
 	{
 		int minutes = 0, dst = 0;
 		hx_os_error error = {};
+
 		auto status = hx_os_wall_time_local_offset_minutes(
 			&minutes, &dst, &error);
 		if (status != HX_OS_OK)
 			return Failure(status, error);
+
 		return std::make_pair(minutes, dst);
 	}
 };

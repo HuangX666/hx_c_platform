@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #define CHECK(value)                                                           \
 	do {                                                                   \
 		if (!(value)) {                                                \
@@ -13,47 +14,61 @@ static hx_os_deadline test_deadline(void)
 {
 	return hx_os_deadline_after_ms(5000);
 }
+
 typedef struct allocation_state {
 	size_t calls;
 	size_t fail_at;
 	size_t live;
 } allocation_state;
+
 static void *HX_OS_CALL test_allocate(size_t bytes, void *user)
 {
 	allocation_state *state = user;
 	void *memory;
+
 	if (++state->calls == state->fail_at)
 		return NULL;
+
 	memory = malloc(bytes);
 	if (memory)
 		++state->live;
+
 	return memory;
 }
+
 static void HX_OS_CALL test_deallocate(void *memory, void *user)
 {
 	allocation_state *state = user;
+
 	if (memory) {
 		CHECK(state->live);
+
 		--state->live;
+
 		free(memory);
 	}
 }
+
 static void allocation_failures(const char *path)
 {
 	hx_os_context_options options;
 	hx_os_context *context = NULL;
 	allocation_state state = {0, 0, 0};
 	size_t i;
+
 	hx_os_context_options_init(&options);
 	options.allocator.allocate = test_allocate;
 	options.allocator.deallocate = test_deallocate;
 	options.allocator.user = &state;
 	CHECK(hx_os_context_create(&options, &context, NULL) == HX_OS_OK);
+
 	for (i = 1; i <= 64; ++i) {
 		hx_os_process_capture *capture = NULL;
 		hx_os_status status;
+
 		state.calls = 0;
 		state.fail_at = i;
+
 		status = hx_os_process_capture_run(context, path, NULL, NULL,
 			test_deadline(), &capture, NULL);
 		state.fail_at = 0;
@@ -64,26 +79,32 @@ static void allocation_failures(const char *path)
 			CHECK(hx_os_process_capture_close_until(&capture,
 				      test_deadline(), NULL) == HX_OS_OK);
 		}
+
 		if (state.live != 1)
 			fprintf(stderr,
 				"allocation failure %lu: live=%lu calls=%lu\n",
 				(unsigned long)i, (unsigned long)state.live,
 				(unsigned long)state.calls);
+
 		CHECK(state.live == 1);
 		CHECK(hx_os_context_allocations(context) == 0);
 	}
+
 	CHECK(hx_os_context_destroy(&context, NULL) == HX_OS_OK);
 	CHECK(!state.live);
 }
+
 static void capture_check(hx_os_process_capture *capture, int stream,
 	const void *expected, size_t length)
 {
 	const void *data;
 	size_t bytes;
+
 	CHECK(hx_os_process_capture_view(capture, stream, &data, &bytes) ==
 		HX_OS_OK);
 	CHECK(bytes == length && (!length || !memcmp(data, expected, length)));
 }
+
 int main(int argc, char **argv)
 {
 	hx_os_process *process = NULL;
@@ -93,7 +114,9 @@ int main(int argc, char **argv)
 	hx_os_process_capture_options capture_options =
 		HX_OS_PROCESS_CAPTURE_OPTIONS_INIT;
 	hx_os_error error;
+
 	uint64_t caps = hx_os_capabilities();
+
 	const char *delay[] = {"delay", NULL};
 	const char *bulk[] = {"bulk", NULL};
 	const char *binary[] = {"binary", NULL};
@@ -109,6 +132,7 @@ int main(int argc, char **argv)
 	hx_string text = HX_STRING_INIT;
 	const void *data;
 	size_t bytes, i;
+
 	CHECK(argc == 2);
 	CHECK(hx_os_process_options_init(&options, sizeof(options) - 1) ==
 		HX_OS_INVALID);
@@ -121,8 +145,10 @@ int main(int argc, char **argv)
 		CHECK(hx_os_process_capture_run(NULL, argv[1], NULL, NULL,
 			      HX_OS_DEADLINE_NOW, &capture,
 			      NULL) == HX_OS_NOT_SUPPORTED);
+
 		return 0;
 	}
+
 	CHECK(hx_os_process_spawn(NULL, "hx-process-nonexistent-fixture", NULL,
 		      NULL, NULL, &process, &error) == HX_OS_NOT_FOUND);
 	CHECK(!process && error.domain != HX_OS_ERROR_NONE);
@@ -160,8 +186,10 @@ int main(int argc, char **argv)
 		CHECK(hx_os_process_capture_run(NULL, argv[1], NULL, NULL,
 			      HX_OS_DEADLINE_NOW, &capture,
 			      NULL) == HX_OS_NOT_SUPPORTED);
+
 		return 0;
 	}
+
 	if (caps & HX_OS_CAP_SYSTEM_UTILS) {
 		hx_os_status status = hx_os_process_capture_run(NULL, argv[1],
 			arguments, NULL, test_deadline(), &capture, &error);
@@ -169,7 +197,9 @@ int main(int argc, char **argv)
 			fprintf(stderr, "capture: %s, native %u:%lld\n",
 				hx_os_status_name(status), error.domain,
 				(long long)error.native_code);
+
 		CHECK(status == HX_OS_OK);
+
 		capture_check(capture, 0, expected, strlen(expected));
 		capture_check(capture, 1, NULL, 0);
 		CHECK(hx_os_process_capture_text(capture, 0, &text, NULL) ==
@@ -179,6 +209,7 @@ int main(int argc, char **argv)
 			      &capture, test_deadline(), NULL) == HX_OS_OK &&
 			!capture);
 	}
+
 	CHECK(hx_os_process_capture_run(NULL, argv[1], delay, NULL,
 		      HX_OS_DEADLINE_NOW, &capture, NULL) == HX_OS_TIMEOUT &&
 		capture);
@@ -188,22 +219,28 @@ int main(int argc, char **argv)
 	CHECK(hx_os_process_capture_wait_until(
 		      capture, test_deadline(), &result, NULL) == HX_OS_OK &&
 		result.exit_code == 7);
+
 	capture_check(capture, 0, "finished", 8);
 	CHECK(hx_os_process_capture_close_until(
 		      &capture, test_deadline(), NULL) == HX_OS_OK);
 	CHECK(hx_os_process_capture_run(NULL, argv[1], bulk, NULL,
 		      test_deadline(), &capture, NULL) == HX_OS_OK);
+
 	for (i = 0; i < 2; ++i) {
 		size_t index;
+
 		CHECK(hx_os_process_capture_view(
 			      capture, (int)i, &data, &bytes) == HX_OS_OK &&
 			bytes == 80 * 4096);
+
 		for (index = 0; index < bytes; ++index)
 			CHECK(((const char *)data)[index] ==
 				(int)('a' + (index / 4096) % 26));
 	}
+
 	CHECK(hx_os_process_capture_close_until(
 		      &capture, test_deadline(), NULL) == HX_OS_OK);
+
 	capture_options.stdout_limit = 512;
 	capture_options.stderr_limit = 512;
 	CHECK(hx_os_process_capture_run_with_options(NULL, argv[1], bulk, NULL,
@@ -227,11 +264,13 @@ int main(int argc, char **argv)
 	CHECK(hx_os_process_capture_run_with_options(NULL, argv[1], bulk, NULL,
 		      &capture_options, test_deadline(), &capture,
 		      NULL) == HX_OS_LIMIT);
+
 	/* Both streams can still have an accepted read. Retry discard after
 	 * another nonblocking poll if required; retained prefixes stay intact.
 	 */
 	for (i = 0; i < 2; ++i) {
 		hx_os_status status;
+
 		do {
 			status = hx_os_process_capture_discard(capture, (int)i);
 			if (status == HX_OS_BUSY)
@@ -240,6 +279,7 @@ int main(int argc, char **argv)
 		} while (status == HX_OS_BUSY);
 		CHECK(status == HX_OS_OK);
 	}
+
 	CHECK(hx_os_process_capture_close_until(
 		      &capture, test_deadline(), NULL) == HX_OS_OK);
 	CHECK(hx_os_process_capture_run(NULL, argv[1], binary, NULL,
@@ -263,13 +303,18 @@ int main(int argc, char **argv)
 	if (caps & HX_OS_CAP_ENV) {
 		const char *env[] = {"HX_PROCESS_TEST=中文😀", NULL};
 		const char *env_args[] = {"environment", NULL};
+
 		CHECK(hx_os_process_capture_run(NULL, argv[1], env_args, env,
 			      test_deadline(), &capture, NULL) == HX_OS_OK);
+
 		capture_check(capture, 0, "中文😀", 10);
 		CHECK(hx_os_process_capture_close_until(
 			      &capture, test_deadline(), NULL) == HX_OS_OK);
 	}
+
 	allocation_failures(argv[1]);
+
 	hx_string_destroy(&text);
+
 	return 0;
 }

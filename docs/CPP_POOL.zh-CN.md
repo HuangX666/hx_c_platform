@@ -61,8 +61,10 @@ start_work(hx::ThreadPool &pool) noexcept
 			}
 			return token.check();
 		});
+
 	if (!submitted)
 		return hx::Failure(submitted.error());
+
 	return submitted.value().cancellationSource();
 }
 ~~~

@@ -15,15 +15,19 @@ static inline int udp_send_text(
 	udp_endpoint *endpoint, const hx_os_address *peer, const char *text)
 {
 	hx_os_deadline deadline = hx_os_deadline_after_ms(1000);
+
 	size_t bytes = strlen(text);
 	if (bytes >= UDP_TEXT_CAPACITY)
 		return net_demo_check(HX_OS_LIMIT, NULL, "UDP payload");
+
 	for (;;) {
 		size_t completed = 0;
 		hx_os_error error = {0};
 		hx_os_status status;
+
 		if (hx_os_deadline_expired(deadline))
 			return net_demo_check(HX_OS_TIMEOUT, NULL, "UDP send");
+
 		if (!net_demo_check(hx_os_mutex_lock(endpoint->access, &error),
 			    &error, "UDP exclusion"))
 			return 0;
@@ -35,6 +39,7 @@ static inline int udp_send_text(
 				hx_os_deadline_after_ms(1), NULL);
 			continue;
 		}
+
 		return net_demo_check(status, &error, "UDP send") &&
 			completed == bytes;
 	}
@@ -50,11 +55,14 @@ static inline hx_os_status udp_receive_text(udp_endpoint *endpoint,
 	for (;;) {
 		size_t bytes = 0;
 		hx_os_status status;
+
 		if (hx_os_deadline_expired(deadline))
 			return HX_OS_TIMEOUT;
+
 		status = hx_os_mutex_lock(endpoint->access, error);
 		if (status != HX_OS_OK)
 			return status;
+
 		status = hx_os_socket_receive_from(endpoint->socket, peer, text,
 			UDP_TEXT_CAPACITY - 1, &bytes, error);
 		(void)hx_os_mutex_unlock(endpoint->access, NULL);
@@ -63,11 +71,15 @@ static inline hx_os_status udp_receive_text(udp_endpoint *endpoint,
 				hx_os_deadline_after_ms(1), NULL);
 			continue;
 		}
+
 		if (status != HX_OS_OK)
 			return status;
+
 		if (memchr(text, '\0', bytes))
 			return HX_OS_SYNTAX;
+
 		text[bytes] = '\0';
+
 		return HX_OS_OK;
 	}
 }

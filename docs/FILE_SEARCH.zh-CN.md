@@ -48,13 +48,16 @@ C：保存为 main.c，采用[教程的 C 构建配置](USAGE.zh-CN.md#c-project
 int main(void)
 {
 	hx_string path = HX_STRING_INIT;
+
 	hx_os_status status = hx_os_directory_find_first_file(
 		"assets", "config.json", &path, NULL);
 	if (status == HX_OS_OK)
 		puts(hx_string_c_str(&path));
 	else
 		fprintf(stderr, "%s\n", hx_os_status_name(status));
+
 	hx_string_destroy(&path);
+
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -70,8 +73,10 @@ int main()
 	auto path = hx::Directory::findFirstFile("assets", "config.json");
 	if (!path) {
 		std::fprintf(stderr, "%s\n", hx_os_status_name(path.status()));
+
 		return 1;
 	}
+
 	std::puts(path.value().c_str());
 }
 ```
@@ -94,14 +99,17 @@ static hx_os_status HX_OS_CALL show_path(
 	(void)user;
 	(void)error;
 	printf("%.*s\n", (int)path.size, path.data);
+
 	return HX_OS_OK;
 }
+
 int main(void)
 {
 	hx_os_status status = hx_os_directory_find_files(
 		"assets", "*.json", show_path, NULL, NULL);
 	if (status != HX_OS_OK)
 		fprintf(stderr, "%s\n", hx_os_status_name(status));
+
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -116,10 +124,13 @@ int main()
 			std::printf("%.*s\n", static_cast<int>(path.size()),
 				path.data());
 		});
+
 	if (!found) {
 		std::fprintf(stderr, "%s\n", hx_os_status_name(found.status()));
+
 		return 1;
 	}
+
 	std::printf("Files: %zu\n", found.value());
 }
 ```
@@ -151,6 +162,7 @@ flowchart LR
 auto root = hx::String::copy("assets");
 if (!root)
 	return hx::Failure(root.error());
+
 auto submitted = pool.submit(
 	[](hx::String folder) noexcept {
 		return hx::Directory::findFirstFile(
@@ -197,6 +209,7 @@ Linux 单配置构建：
 
 ```c
 hx_os_walk_options options = HX_OS_WALK_OPTIONS_INIT;
+
 options.max_depth = 128;
 options.max_entries = 2000000;
 options.max_results = 200000;

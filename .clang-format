@@ -20,6 +20,7 @@ IndentCaseLabels: false
 PointerAlignment: Right
 RemoveBracesLLVM: true
 SortIncludes: Never
+SeparateDefinitionBlocks: Always
 BreakConstructorInitializers: BeforeComma
 PackConstructorInitializers: Never
 AccessModifierOffset: -8

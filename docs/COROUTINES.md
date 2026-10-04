@@ -23,13 +23,17 @@ Create the runtime once, as in [go.cpp](../examples/go.cpp). Include `hx/GoKeywo
 auto scope = hx::coro::Scope::enter(runtime);
 if (!scope)
 	return hx::Failure(scope.error());
+
 co_chan<int> answers(1);
 if (!answers)
 	return hx::Failure(answers.error());
+
 go [answers]() noexcept { return answers << 6 * 7; };
+
 auto done = runtime.waitUntil(hx_os_deadline_after_ms(2000));
 if (!done)
 	return done;
+
 auto answer = answers.receive(HX_OS_DEADLINE_NOW);
 ```
 
@@ -47,9 +51,11 @@ Create a runtime explicitly:
 
 ```cpp
 hx_os_coro_runtime *owner = NULL;
+
 auto created = hx::coro::Runtime::create(owner);
 if (!created)
 	return 1;
+
 auto &runtime = created.value();
 ```
 
@@ -66,8 +72,10 @@ hx::coro::Routine<int> answer()
 		std::chrono::milliseconds(10));
 	if (!waited)
 		co_return hx::Result<int>(hx::Failure(waited.error()));
+
 	co_return 42;
 }
+
 // After creating runtime:
 auto task = runtime.go(answer());
 ```
@@ -84,13 +92,16 @@ Use named coroutine functions with value parameters and `runtime.go(function(arg
 auto created = hx::coro::Channel<int>::create(runtime, 8);
 if (!created)
 	return 1;
+
 auto channel = created.value();
+
 auto producer = runtime.go([channel]() noexcept {
 	auto sent = channel.send(42);
 	if (!sent)
 		return sent;
 	return channel.close();
 });
+
 auto consumer = runtime.go([channel]() noexcept {
 	return channel.receive();
 });
@@ -104,6 +115,7 @@ C++20 uses the same channels:
 
 ```cpp
 auto sent = co_await hx::coro::async::send(channel, 42);
+
 auto received = co_await hx::coro::async::receive(channel);
 ```
 
@@ -123,15 +135,20 @@ static hx_os_status count(hx_os_coro *self, void *user, hx_os_error *error)
 {
 	counter_state *state = user;
 	hx_os_status status;
+
 	(void)self;
 	HX_OS_CORO_BEGIN(state->step);
+
 	for (state->value = 1; state->value <= 3; ++state->value) {
 		HX_OS_CORO_AWAIT(state->step, status, hx_os_coro_yield(error));
 		if (status != HX_OS_OK)
 			return hx_os_coro_complete(status, error);
+
 		printf("Count: %d\n", state->value);
 	}
+
 	HX_OS_CORO_END(state->step);
+
 	return HX_OS_OK;
 }
 ```
@@ -181,6 +198,7 @@ Module byte budgets count their direct backing storage. User callbacks, nested v
 
 ```cmake
 find_package(hx_c_platform CONFIG REQUIRED)
+
 target_link_libraries(my_c_app PRIVATE hx_c_platform::hx_c_platform)
 target_link_libraries(my_cpp11_app PRIVATE hx_c_platform::cpp)
 target_link_libraries(my_cpp20_app PRIVATE hx_c_platform::cpp20)

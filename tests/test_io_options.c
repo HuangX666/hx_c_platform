@@ -29,10 +29,13 @@ static void *positioned_worker(void *user)
 	positioned_work *work = user;
 	uint32_t i;
 	size_t count;
+
 	CHECK(hx_os_event_wait_until(
 		      work->start, HX_OS_DEADLINE_INFINITE, NULL) == HX_OS_OK);
+
 	for (i = 1; i <= 100; ++i) {
 		uint32_t read_back = 0;
+
 		CHECK(hx_os_file_write_at(work->file, work->offset, &i,
 			      sizeof(i), &count, NULL) == HX_OS_OK &&
 			count == sizeof(i));
@@ -40,6 +43,7 @@ static void *positioned_worker(void *user)
 			      sizeof(read_back), &count, NULL) == HX_OS_OK);
 		CHECK(count == sizeof(read_back) && read_back == i);
 	}
+
 	return NULL;
 }
 
@@ -53,6 +57,7 @@ static void test_positioned(void)
 	uint64_t position, size;
 	size_t count;
 	int i;
+
 	if (!(hx_os_capabilities() & HX_OS_CAP_POSITIONED_IO)) {
 		CHECK(hx_os_file_read_at(NULL, 0, buffer, sizeof(buffer),
 			      &count, NULL) == HX_OS_NOT_SUPPORTED &&
@@ -60,8 +65,10 @@ static void test_positioned(void)
 		CHECK(hx_os_file_write_at(NULL, 0, "x", 1, &count, NULL) ==
 				HX_OS_NOT_SUPPORTED &&
 			!count);
+
 		return;
 	}
+
 	(void)snprintf(path, sizeof(path), "hx-positioned-%llx-中文.bin",
 		(unsigned long long)hx_os_monotonic_ns());
 	CHECK(hx_os_file_open(NULL, path,
@@ -74,6 +81,7 @@ static void test_positioned(void)
 	CHECK(hx_os_file_seek(file, 7, HX_OS_SEEK_BEGIN, &position, NULL) ==
 		HX_OS_OK);
 	CHECK(hx_os_event_create(NULL, 1, 0, &start, NULL) == HX_OS_OK);
+
 	for (i = 0; i < 4; ++i) {
 		work[i].file = file;
 		work[i].start = start;
@@ -81,15 +89,18 @@ static void test_positioned(void)
 		CHECK(hx_os_thread_create(NULL, positioned_worker, &work[i],
 			      &threads[i], NULL) == HX_OS_OK);
 	}
+
 	hx_os_event_set(start);
 	CHECK(hx_os_file_read_some(file, buffer, 1, &count, NULL) == HX_OS_OK);
 	CHECK(count == 1 && buffer[0] == '7');
+
 	for (i = 0; i < 4; ++i) {
 		CHECK(hx_os_thread_join_until(threads[i],
 			      hx_os_deadline_after_ms(3000), NULL,
 			      NULL) == HX_OS_OK);
 		CHECK(hx_os_thread_destroy(&threads[i], NULL) == HX_OS_OK);
 	}
+
 	hx_os_event_destroy(start);
 	CHECK(hx_os_file_read_at(file, 3, buffer, 3, &count, NULL) == HX_OS_OK);
 	CHECK(count == 3 && !memcmp(buffer, "345", 3));
@@ -135,8 +146,10 @@ static void socket_completed(
 	hx_os_request *request, const hx_os_completion *completion, void *user)
 {
 	int *calls = user;
+
 	(void)request;
 	CHECK(completion->error.status == HX_OS_OK);
+
 	++*calls;
 }
 
@@ -145,6 +158,7 @@ static int socket_option(hx_os_socket *socket, int level, int name)
 	int value = 0;
 	size_t size = sizeof(value);
 	hx_os_error error;
+
 	hx_os_status status = hx_os_socket_option_get(
 		socket, level, name, &value, &size, &error);
 	if (status != HX_OS_OK || !size || size > sizeof(value))
@@ -153,7 +167,9 @@ static int socket_option(hx_os_socket *socket, int level, int name)
 			"size=%zu value=%d\n",
 			level, name, (int)status, (long long)error.native_code,
 			size, value);
+
 	CHECK(status == HX_OS_OK && size > 0 && size <= sizeof(value));
+
 	return value;
 }
 
@@ -165,6 +181,7 @@ static void test_socket_options(void)
 	hx_os_error error;
 	int value = 1;
 	size_t size = sizeof(value);
+
 	if (!(hx_os_capabilities() & HX_OS_CAP_NET_OPTIONS)) {
 		CHECK(hx_os_socket_set_reuseaddr(NULL, 1, NULL) ==
 			HX_OS_NOT_SUPPORTED);
@@ -172,8 +189,10 @@ static void test_socket_options(void)
 			      &value, &size, NULL) == HX_OS_NOT_SUPPORTED);
 		CHECK(hx_os_socket_peer_address(NULL, &peer, NULL) ==
 			HX_OS_NOT_SUPPORTED);
+
 		return;
 	}
+
 	CHECK(hx_os_network_create(NULL, &network, NULL) == HX_OS_OK);
 	CHECK(hx_os_socket_create(network, HX_OS_IPV4, HX_OS_TCP, &client,
 		      NULL) == HX_OS_OK);
@@ -188,10 +207,12 @@ static void test_socket_options(void)
 	CHECK(socket_option(client, SOL_SOCKET, SO_KEEPALIVE) != 0);
 	CHECK(hx_os_socket_option_set(client, SOL_SOCKET, SO_REUSEADDR, &value,
 		      SIZE_MAX, NULL) == HX_OS_RANGE);
+
 	memset(&peer, 0xa5, sizeof(peer));
 	previous = peer;
 	CHECK(hx_os_socket_peer_address(client, &peer, &error) != HX_OS_OK);
 	CHECK(error.native_code && !memcmp(&peer, &previous, sizeof(peer)));
+
 	size = sizeof(value);
 	CHECK(hx_os_socket_option_get(client, SOL_SOCKET, 0x7fffffff, &value,
 		      &size, &error) != HX_OS_OK &&
@@ -217,8 +238,10 @@ static void test_socket_options(void)
 		hx_os_operation op;
 		hx_os_request *request = NULL;
 		int calls = 0;
+
 		CHECK(hx_os_loop_create(network, NULL, &loop, NULL) ==
 			HX_OS_OK);
+
 		hx_os_operation_init(&op, HX_OS_OP_READ);
 		op.socket = client;
 		CHECK(hx_os_loop_submit(loop, &op, socket_completed, &calls,
@@ -229,12 +252,14 @@ static void test_socket_options(void)
 			      NULL) == HX_OS_OK &&
 			calls == 1);
 		CHECK(hx_os_socket_set_nodelay(client, 0, NULL) == HX_OS_BUSY);
+
 		hx_os_request_release(request);
 		CHECK(hx_os_socket_close(&client, NULL) == HX_OS_OK);
 		CHECK(hx_os_loop_close_until(loop, HX_OS_DEADLINE_NOW, NULL) ==
 			HX_OS_OK);
 		CHECK(hx_os_loop_destroy(&loop, NULL) == HX_OS_OK);
 	}
+
 	CHECK(hx_os_socket_close(&client, NULL) == HX_OS_OK);
 	CHECK(hx_os_socket_close(&server, NULL) == HX_OS_OK);
 	CHECK(hx_os_socket_close(&listener, NULL) == HX_OS_OK);
@@ -246,5 +271,6 @@ int main(void)
 	test_positioned();
 	test_socket_options();
 	puts("positioned I/O and socket option contracts passed");
+
 	return 0;
 }

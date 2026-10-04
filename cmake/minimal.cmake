@@ -14,6 +14,7 @@ foreach(module IN ITEMS NETWORK LOOP IPC KCP THREAD_POOL DELAYED_TASKS
 	CJSON LIBYAML MINIXML INIH TOMLC)
 	set(HX_OS_ENABLE_${module} OFF CACHE BOOL "Excluded by minimal profile")
 endforeach()
+
 set(HX_OS_BUILD_TESTS OFF CACHE BOOL "Build contract tests")
 set(HX_OS_BUILD_EXAMPLES OFF CACHE BOOL "Build examples")
 set(HX_OS_BUILD_BENCHMARKS OFF CACHE BOOL "Build microbenchmarks")

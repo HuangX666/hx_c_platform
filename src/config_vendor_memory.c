@@ -10,6 +10,7 @@ union hx_os_cfg_vendor_block {
 		size_t bytes;
 		size_t cost;
 	} fields;
+
 	hx_os_i_alignment alignment;
 };
 
@@ -25,7 +26,9 @@ static __thread hx_os_cfg_parser *hx_os_cfg_vendor_parser;
 hx_os_cfg_parser *hx_os_cfg_vendor_enter(hx_os_cfg_parser *parser)
 {
 	hx_os_cfg_parser *previous = hx_os_cfg_vendor_parser;
+
 	hx_os_cfg_vendor_parser = parser;
+
 	return previous;
 }
 
@@ -34,8 +37,10 @@ void hx_os_cfg_vendor_free(void *memory)
 	hx_os_cfg_vendor_block *block;
 	hx_os_cfg_parser *owner;
 	size_t cost;
+
 	if (!memory)
 		return;
+
 	block = (hx_os_cfg_vendor_block *)memory - 1;
 	owner = block->fields.owner;
 	cost = block->fields.cost;
@@ -43,8 +48,10 @@ void hx_os_cfg_vendor_free(void *memory)
 		block->fields.previous->fields.next = block->fields.next;
 	else
 		owner->vendor_blocks = block->fields.next;
+
 	if (block->fields.next)
 		block->fields.next->fields.previous = block->fields.previous;
+
 	hx_os_memory_free(block);
 	owner->document->memory -= cost;
 }
@@ -55,6 +62,7 @@ void hx_os_cfg_vendor_leave(
 	while (parser->vendor_blocks)
 		hx_os_cfg_vendor_free(
 			(hx_os_cfg_vendor_block *)parser->vendor_blocks + 1);
+
 	hx_os_cfg_vendor_parser = previous;
 }
 
@@ -63,10 +71,13 @@ void *hx_os_cfg_vendor_malloc(size_t bytes)
 	hx_os_cfg_parser *parser = hx_os_cfg_vendor_parser;
 	hx_os_cfg_vendor_block *block;
 	size_t total, cost;
+
 	if (!parser || parser->status != HX_OS_OK)
 		return NULL;
+
 	if (!hx_os_i_add_size(sizeof(*block), bytes, &total))
 		goto limit;
+
 	cost = hx_os_i_allocation_cost(total, 0);
 	if (!cost ||
 		cost > parser->document->options.max_memory_bytes -
@@ -76,8 +87,10 @@ void *hx_os_cfg_vendor_malloc(size_t bytes)
 	if (!block) {
 		(void)hx_os_cfg_fail(parser, HX_OS_NO_MEMORY, SIZE_MAX,
 			"Configuration backend allocation failed");
+
 		return NULL;
 	}
+
 	parser->document->memory += cost;
 	block->fields.owner = parser;
 	block->fields.bytes = bytes;
@@ -86,8 +99,11 @@ void *hx_os_cfg_vendor_malloc(size_t bytes)
 	block->fields.next = parser->vendor_blocks;
 	if (block->fields.next)
 		block->fields.next->fields.previous = block;
+
 	parser->vendor_blocks = block;
+
 	return block + 1;
+
 limit:
 	(void)hx_os_cfg_fail(parser, HX_OS_LIMIT, SIZE_MAX,
 		"Configuration backend memory limit exceeded");
@@ -97,16 +113,20 @@ limit:
 void *hx_os_cfg_vendor_calloc(size_t count, size_t bytes)
 {
 	void *memory;
+
 	if (count && bytes > SIZE_MAX / count) {
 		if (hx_os_cfg_vendor_parser)
 			(void)hx_os_cfg_fail(hx_os_cfg_vendor_parser,
 				HX_OS_LIMIT, SIZE_MAX,
 				"Configuration backend size overflow");
+
 		return NULL;
 	}
+
 	memory = hx_os_cfg_vendor_malloc(count * bytes);
 	if (memory)
 		memset(memory, 0, count * bytes);
+
 	return memory;
 }
 
@@ -114,31 +134,41 @@ void *hx_os_cfg_vendor_realloc(void *memory, size_t bytes)
 {
 	hx_os_cfg_vendor_block *block;
 	void *replacement;
+
 	if (!bytes) {
 		hx_os_cfg_vendor_free(memory);
+
 		return NULL;
 	}
+
 	if (!memory)
 		return hx_os_cfg_vendor_malloc(bytes);
+
 	block = (hx_os_cfg_vendor_block *)memory - 1;
 	if (bytes <= block->fields.bytes) {
 		block->fields.bytes = bytes;
+
 		return memory;
 	}
+
 	replacement = hx_os_cfg_vendor_malloc(bytes);
 	if (replacement) {
 		memcpy(replacement, memory, block->fields.bytes);
+
 		hx_os_cfg_vendor_free(memory);
 	}
+
 	return replacement;
 }
 
 char *hx_os_cfg_vendor_strdup(const char *text)
 {
 	size_t bytes = strlen(text) + 1;
+
 	char *copy = hx_os_cfg_vendor_malloc(bytes);
 	if (copy)
 		memcpy(copy, text, bytes);
+
 	return copy;
 }
 
@@ -148,12 +178,15 @@ double hx_os_cfg_vendor_strtod(const char *text, char **end)
 	int native_error;
 	hx_os_status status =
 		hx_os_i_strtod_c(text, end, &result, &native_error);
+
 	if (status != HX_OS_OK && hx_os_cfg_vendor_parser)
 		(void)hx_os_cfg_fail(hx_os_cfg_vendor_parser, status, SIZE_MAX,
 			status == HX_OS_NO_MEMORY
 				? "Numeric locale allocation failed"
 				: "A per-call numeric locale is unavailable");
+
 	errno = native_error;
+
 	return result;
 }
 

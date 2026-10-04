@@ -1,5 +1,6 @@
 #ifndef HX_C_PLATFORM_PROFILER_H
 #define HX_C_PLATFORM_PROFILER_H
+
 #include "hx_string.h"
 #ifdef __cplusplus
 extern "C" {
@@ -22,6 +23,7 @@ typedef struct hx_os_profiler_options {
 	}
 HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_options_init(
 	hx_os_profiler_options *options, size_t capacity);
+
 /* Explicit interval tree, no native stack capture or worker thread.
  * Counters aggregate identical (parent path, UTF-8 name) across threads.
  * Inclusive/exclusive wall durations use the library's monotonic clock.
@@ -34,9 +36,11 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_options_init(
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_create(
 	hx_os_context *context, hx_os_profiler **out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_create_with_options(
 	hx_os_context *context, const hx_os_profiler_options *options,
 	hx_os_profiler **out, hx_os_error *error);
+
 /* Thread-bound balanced scopes; names are copied strict UTF-8, nonempty.
  * start_root requires no current scope (otherwise BUSY); reach requires a
  * current parent (otherwise INVALID). Only successful entries need leave.
@@ -49,23 +53,28 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_create_with_options(
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_start_root(
 	hx_os_profiler *profiler, const char *name, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_reach(
 	hx_os_profiler *profiler, const char *name, hx_os_error *error);
+
 /* Completed children subtract from exclusive time. A failed clock read keeps
  * the frame for retry; clock errors mark the record's flags in a later dump.
  * Statistics saturate at UINT64_MAX and set overflow flag value 1.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_leave(
 	hx_os_profiler *profiler, hx_os_error *error);
+
 /* Abort open frames and detach this thread's TLS cache. Completed records
  * remain. Normal thread exit does the same automatically. Call on idle
  * long-lived threads before plugin unload; another thread cannot clear TLS.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_restart_thread(
 	hx_os_profiler *profiler, hx_os_error *error);
+
 /* Stop new entries, allow leave/restart/dump. Existing scopes are not killed.
  */
 HX_OS_API void HX_OS_CALL hx_os_profiler_stop(hx_os_profiler *profiler);
+
 /* Auto-detaches caller's idle cache; an open caller scope gives DEADLOCK
  * without stopping. Waits for accepted API calls and all foreign TLS caches.
  * NOW/INFINITE allowed; timeout retains *profiler. If native TLS retirement
@@ -77,8 +86,10 @@ HX_OS_API void HX_OS_CALL hx_os_profiler_stop(hx_os_profiler *profiler);
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_close_until(
 	hx_os_profiler **profiler, hx_os_deadline deadline, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_destroy(
 	hx_os_profiler **profiler, hx_os_error *error);
+
 /* Consistent bounded snapshot of completed/aborted statistics. Open intervals
  * contribute only on leave/abort. Output is UTF-8 TSV with JSON-quoted names:
  * id,parent,depth,name,completed,aborted,inclusive_ns,exclusive_ns,min_ns,
@@ -89,8 +100,10 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_destroy(
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_dump(hx_os_profiler *profiler,
 	char *buffer, size_t capacity, size_t *required, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_dump_string(
 	hx_os_profiler *profiler, hx_string *out, hx_os_error *error);
+
 /* Dump and atomically publish, using FILE_UTILS; otherwise NOT_SUPPORTED.
  * Synchronous I/O follows the existing atomic-save durability contract.
  */

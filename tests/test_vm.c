@@ -20,9 +20,11 @@ static void *fail_allocate(size_t bytes, void *user)
 {
 	return *(int *)user ? NULL : malloc(bytes);
 }
+
 static void fail_free(void *memory, void *user)
 {
 	(void)user;
+
 	free(memory);
 }
 
@@ -40,6 +42,7 @@ int main(void)
 	char path[128];
 #if defined(_WIN32)
 	SYSTEM_INFO info;
+
 	GetSystemInfo(&info);
 	page = info.dwPageSize;
 #else
@@ -52,15 +55,19 @@ int main(void)
 		CHECK(hx_os_file_map_open("unused", HX_OS_MAP_READ, &map,
 			      NULL) == HX_OS_NOT_SUPPORTED &&
 			!map);
+
 		return 0;
 	}
+
 	CHECK(hx_os_context_create(NULL, &context, NULL) == HX_OS_OK);
+
 	hx_os_context_options_init(&options);
 	options.allocator.allocate = fail_allocate;
 	options.allocator.deallocate = fail_free;
 	options.allocator.user = &fail;
 	CHECK(hx_os_context_create(&options, &failed_context, NULL) ==
 		HX_OS_OK);
+
 	fail = 1;
 	CHECK(hx_os_pages_alloc(failed_context, 1, HX_OS_PAGE_READ, &pages,
 		      NULL) == HX_OS_NO_MEMORY &&
@@ -75,31 +82,40 @@ int main(void)
 		      HX_OS_PAGE_READ | HX_OS_PAGE_WRITE, &pages,
 		      NULL) == HX_OS_OK);
 	CHECK(hx_os_pages_size(pages) == page * 2);
+
 	view = hx_os_pages_data(pages);
 	CHECK((uintptr_t)view % page == 0);
+
 	for (i = 0; i < page * 2; ++i)
 		CHECK(view[i] == 0);
+
 	memset(view, 0x5a, page * 2);
 	CHECK(hx_os_context_destroy(&context, NULL) == HX_OS_BUSY);
 	CHECK(hx_os_pages_protect(pages, HX_OS_PAGE_READ, NULL) == HX_OS_OK);
 	CHECK(view[page] == 0x5a);
+
 	{
 		hx_os_error native;
+
 		hx_os_status executable = hx_os_pages_protect(
 			pages, HX_OS_PAGE_READ | HX_OS_PAGE_EXECUTE, &native);
 		CHECK(executable == HX_OS_OK ||
 			native.domain != HX_OS_ERROR_NONE);
 	}
+
 	CHECK(hx_os_pages_protect(pages, HX_OS_PAGE_NONE, NULL) == HX_OS_OK);
 	CHECK(hx_os_pages_protect(pages, HX_OS_PAGE_READ | HX_OS_PAGE_WRITE,
 		      NULL) == HX_OS_OK);
 	CHECK(view[page] == 0x5a);
 	CHECK(hx_os_pages_free(&pages, NULL) == HX_OS_OK && !pages);
 	CHECK(hx_os_pages_free(&pages, NULL) == HX_OS_OK);
+
 	(void)snprintf(path, sizeof(path), "hx-map-%llx-中文.bin",
 		(unsigned long long)hx_os_monotonic_ns());
+
 	for (i = 0; i < sizeof(data); ++i)
 		data[i] = (unsigned char)(i % 251);
+
 	CHECK(hx_os_file_open(context, path,
 		      HX_OS_FILE_READ | HX_OS_FILE_WRITE | HX_OS_FILE_CREATE |
 			      HX_OS_FILE_EXCLUSIVE,
@@ -139,8 +155,10 @@ int main(void)
 	CHECK(hx_os_file_map_create(context, file, 1, 33,
 		      HX_OS_MAP_PRIVATE_COPY, &map, NULL) == HX_OS_OK);
 	CHECK(hx_os_file_close(&file, NULL) == HX_OS_OK);
+
 	view = hx_os_file_map_write_view(map);
 	CHECK(view);
+
 	memset(view, 0xee, 33);
 	CHECK(hx_os_file_map_flush(map, 1, NULL) == HX_OS_NOT_SUPPORTED);
 	CHECK(hx_os_file_map_destroy(&map, NULL) == HX_OS_OK);
@@ -153,12 +171,14 @@ int main(void)
 	CHECK(hx_os_file_map_create(context, file, 2, 10,
 		      HX_OS_MAP_SHARED_WRITE, &map, NULL) == HX_OS_OK);
 	CHECK(hx_os_file_close(&file, NULL) == HX_OS_OK);
+
 	memset(hx_os_file_map_write_view(map), 0xdd, 10);
 	CHECK(hx_os_file_map_flush(map, 1, NULL) == HX_OS_OK);
 	CHECK(hx_os_file_map_destroy(&map, NULL) == HX_OS_OK);
 	CHECK(hx_os_file_map_open(path, HX_OS_MAP_READ, &map, NULL) ==
 		HX_OS_OK);
 	CHECK(hx_os_file_map_size(map) == sizeof(data));
+
 	view = (unsigned char *)hx_os_file_map_view(map);
 	CHECK(view[1] == data[1] && view[2] == 0xdd && view[11] == 0xdd &&
 		view[12] == data[12]);
@@ -178,9 +198,12 @@ int main(void)
 		CHECK(hx_os_file_close(&pipe_reader, NULL) == HX_OS_OK);
 		CHECK(hx_os_file_close(&pipe_writer, NULL) == HX_OS_OK);
 	}
+
 	CHECK(hx_os_file_remove(path, NULL) == HX_OS_OK);
 	CHECK(hx_os_context_destroy(&context, NULL) == HX_OS_OK);
 	CHECK(hx_os_context_destroy(&failed_context, NULL) == HX_OS_OK);
+
 	puts("pages and file mapping contracts passed");
+
 	return 0;
 }

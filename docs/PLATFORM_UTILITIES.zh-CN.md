@@ -11,7 +11,9 @@
 ```c
 hx_string version = HX_STRING_INIT;
 hx_os_error error;
+
 hx_os_status status = hx_os_sys_version_string(&version, &error);
+
 /* Check status, then use hx_string_c_str(&version). */
 hx_string_destroy(&version);
 ```
@@ -34,10 +36,13 @@ hx::Result<double> sample_cpu() noexcept
 	auto cpu = hx::CpuUsage::create();
 	if (!cpu)
 		return hx::Failure(cpu.error());
+
 	hx_os_error error = {};
+
 	auto status = hx_os_sleep_until(hx_os_deadline_after_ms(10), &error);
 	if (status != HX_OS_OK)
 		return hx::Failure(status, error);
+
 	return cpu.value().query();
 }
 ```
@@ -56,10 +61,13 @@ hx::Result<uint32_t> plugin_abi(const char *path) noexcept
 	auto plugin = hx::Library::open(path);
 	if (!plugin)
 		return hx::Failure(plugin.error());
+
 	using Abi = uint32_t(HX_OS_CALL *)(void);
+
 	auto symbol = plugin.value().symbol<Abi>("hx_plugin_abi_version");
 	if (!symbol)
 		return hx::Failure(symbol.error());
+
 	return symbol.value()();
 }
 ```
@@ -95,12 +103,15 @@ hx::Result<void> list_directory(const char *path) noexcept
 	auto directory = hx::Directory::open(path);
 	if (!directory)
 		return hx::Failure(directory.error());
+
 	for (;;) {
 		auto entry = directory.value().next();
 		if (entry.status() == HX_OS_EOF)
 			return hx::Result<void>();
+
 		if (!entry)
 			return hx::Failure(entry.error());
+
 		std::puts(entry.value().name());
 	}
 }
@@ -239,6 +250,7 @@ hx_os_thread_pool_inside(pool, &inside) 查询当前线程是否属于指定的�
 
 ```c
 int inside;
+
 hx_os_status status = hx_os_thread_pool_inside(pool, &inside);
 if (status == HX_OS_OK && !inside)
 	status = hx_os_task_wait_until(task, deadline, &work_status, &error);
@@ -301,6 +313,7 @@ LOOP_FD 是单独默认开启的 POSIX 扩展，依赖 LOOP。attach_fd 持有 C
 
 ```c
 hx_os_loop_watch *watch = NULL;
+
 hx_os_status status = hx_os_loop_attach_fd(loop, fd, HX_OS_WAIT_READ,
 	ready_callback, user, &watch, &error);
 /* The callback can use hx_os_loop_watch_descriptor(watch), then request stop. */
@@ -349,6 +362,7 @@ DELAYED_TASKS 默认开启，依赖 THREAD_POOL，独立于 LOOP／TIMER／NETWO
 
 ```c
 hx_os_task *task = NULL;
+
 hx_os_status status = hx_os_thread_pool_submit_delayed(pool,
 	hx_os_deadline_after_ms(100), work, user, cleanup, &task, &error);
 /* On acceptance, use the ordinary task wait/cancel/release API. */
@@ -388,6 +402,7 @@ C++ DuplexPipe::pair 返回两个可移动 File 所有者；LocalSocket 引用�
 
 ```c
 hx_os_file *first = NULL, *second = NULL;
+
 hx_os_status status = hx_os_pipe_pair_socket(NULL, &first, &second, &error);
 ```
 
@@ -399,12 +414,15 @@ hx::Result<std::pair<hx::File, hx::File>> make_channel() noexcept
 	auto channel = hx::DuplexPipe::pair();
 	if (!channel)
 		return hx::Failure(channel.error());
+
 	auto written = channel.value().first.writeAll("hello", 5);
 	if (!written)
 		return hx::Failure(written.error());
+
 	auto stopped = hx::DuplexPipe::shutdown(channel.value().first);
 	if (!stopped)
 		return hx::Failure(stopped.error());
+
 	return channel;
 }
 ```

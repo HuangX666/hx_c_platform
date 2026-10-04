@@ -7,6 +7,7 @@ hx_os_status hx_os_profiler_create(
 	(void)out;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -19,6 +20,7 @@ hx_os_status hx_os_profiler_create_with_options(hx_os_context *context,
 	(void)out;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -27,6 +29,7 @@ hx_os_status hx_os_profiler_start_root(
 {
 	(void)profiler;
 	(void)name;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -35,12 +38,14 @@ hx_os_status hx_os_profiler_reach(
 {
 	(void)profiler;
 	(void)name;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
 hx_os_status hx_os_profiler_leave(hx_os_profiler *profiler, hx_os_error *error)
 {
 	(void)profiler;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -48,6 +53,7 @@ hx_os_status hx_os_profiler_restart_thread(
 	hx_os_profiler *profiler, hx_os_error *error)
 {
 	(void)profiler;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -61,6 +67,7 @@ hx_os_status hx_os_profiler_close_until(
 {
 	(void)profiler;
 	(void)deadline;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -68,6 +75,7 @@ hx_os_status hx_os_profiler_destroy(
 	hx_os_profiler **profiler, hx_os_error *error)
 {
 	(void)profiler;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -78,6 +86,7 @@ hx_os_status hx_os_profiler_dump(hx_os_profiler *profiler, char *buffer,
 	(void)buffer;
 	(void)capacity;
 	(void)required;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -86,6 +95,7 @@ hx_os_status hx_os_profiler_dump_string(
 {
 	(void)profiler;
 	(void)out;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -94,5 +104,6 @@ hx_os_status hx_os_profiler_save(
 {
 	(void)profiler;
 	(void)path;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }

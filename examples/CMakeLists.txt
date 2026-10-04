@@ -2,19 +2,23 @@ function(hx_add_serialization_interop)
 	if(CMAKE_CROSSCOMPILING)
 		return()
 	endif()
+
 	find_package(Python3 QUIET COMPONENTS Interpreter)
 	if(NOT Python3_Interpreter_FOUND)
 		return()
 	endif()
+
 	set(hx_serialization_program
 		"${PROJECT_SOURCE_DIR}/tests/test_serialization_interop.py")
 	set(hx_serialization_args
 		--example $<TARGET_FILE:hx_os_serialization>
 		--nested $<TARGET_FILE:hx_os_nested_document>)
+
 	if(BUILD_SHARED_LIBS AND NOT HX_OS_SANITIZER)
 		list(APPEND hx_serialization_args
 			--library $<TARGET_FILE:hx_c_platform>)
 	endif()
+
 	add_test(NAME serialization_interop
 		COMMAND "${Python3_EXECUTABLE}"
 		"${hx_serialization_program}" ${hx_serialization_args})
@@ -35,15 +39,19 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 	add_executable(hx_os_${example} ${example}.c)
 	target_link_libraries(hx_os_${example} PRIVATE hx_c_platform)
 	set_target_properties(hx_os_${example} PROPERTIES
-		C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO
+		C_STANDARD 99
+		C_STANDARD_REQUIRED YES
+		C_EXTENSIONS NO
 		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 	hx_apply_warnings(hx_os_${example})
 endforeach()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_CONFIG AND HX_OS_ENABLE_CODEC
 	AND HX_OS_ENABLE_CONFIG_SERIALIZE)
 	add_test(NAME codec_macros_example COMMAND hx_os_codec_macros)
 	set_tests_properties(codec_macros_example PROPERTIES TIMEOUT 20)
 endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_HAVE_IPC AND NOT CMAKE_CROSSCOMPILING)
 	find_package(Python3 QUIET COMPONENTS Interpreter)
 	if(Python3_Interpreter_FOUND)
@@ -52,23 +60,28 @@ if(HX_OS_BUILD_TESTS AND HX_OS_HAVE_IPC AND NOT CMAKE_CROSSCOMPILING)
 			--client $<TARGET_FILE:hx_os_ipc_client>
 			--python-peer
 			"${CMAKE_CURRENT_SOURCE_DIR}/ipc_python.py")
+
 		if(CMAKE_CXX_COMPILER_LOADED)
 			list(APPEND hx_ipc_example_args
 				--threads $<TARGET_FILE:hx_os_ipc_threads>)
 		endif()
+
 		if(HX_OS_ENABLE_KCP)
 			list(APPEND hx_ipc_example_args --kcp)
 		endif()
+
 		if((WIN32 AND HX_OS_ENABLE_PIPE) OR
 			(HX_OS_ENABLE_LOCAL_SOCKETS AND HX_OS_ENABLE_LOOP_FD))
 			list(APPEND hx_ipc_example_args --local)
 		endif()
+
 		add_test(NAME ipc_examples COMMAND "${Python3_EXECUTABLE}"
 			"${PROJECT_SOURCE_DIR}/tests/test_ipc_examples.py"
 			${hx_ipc_example_args})
 		set_tests_properties(ipc_examples PROPERTIES TIMEOUT 90)
 	endif()
 endif()
+
 if(HX_OS_BUILD_TESTS AND NOT CMAKE_CROSSCOMPILING AND HX_OS_ENABLE_CONFIG
 		AND HX_OS_ENABLE_CONFIG_SERIALIZE AND HX_OS_ENABLE_SETTINGS)
 	find_package(Python3 QUIET COMPONENTS Interpreter)
@@ -79,11 +92,13 @@ if(HX_OS_BUILD_TESTS AND NOT CMAKE_CROSSCOMPILING AND HX_OS_ENABLE_CONFIG
 				--bin-dir $<TARGET_FILE_DIR:${target}> ${ARGN})
 			set_tests_properties(${name} PROPERTIES TIMEOUT 45)
 		endfunction()
+
 		if(HX_OS_HAVE_IPC AND ((WIN32 AND HX_OS_ENABLE_PIPE) OR
 			(HX_OS_ENABLE_LOCAL_SOCKETS AND HX_OS_ENABLE_LOOP_FD)))
 			hx_add_business_test(ipc_business_local
 				run_ipc_business.py hx_os_ipc_device_server)
 		endif()
+
 		if(HX_OS_ENABLE_NETWORK)
 			hx_add_business_test(tcp_business_orders
 				run_tcp_business.py hx_os_tcp_order_server)
@@ -98,6 +113,7 @@ if(HX_OS_BUILD_TESTS AND NOT CMAKE_CROSSCOMPILING AND HX_OS_ENABLE_CONFIG
 			hx_add_business_test(udp_business_gaps
 				run_udp_business.py hx_os_udp_dashboard
 				--simulate-gaps)
+
 			if(HX_OS_ENABLE_KCP)
 				hx_add_business_test(kcp_business_transfer
 					run_kcp_business.py
@@ -110,6 +126,7 @@ if(HX_OS_BUILD_TESTS AND NOT CMAKE_CROSSCOMPILING AND HX_OS_ENABLE_CONFIG
 		endif()
 	endif()
 endif()
+
 if(HX_OS_BUILD_TESTS)
 	add_test(NAME format_example COMMAND hx_os_format)
 	set_tests_properties(format_example PROPERTIES TIMEOUT 20)
@@ -125,20 +142,25 @@ if(HX_OS_BUILD_TESTS)
 		COMMAND hx_os_atomic_publication)
 	set_tests_properties(atomic_publication_example PROPERTIES TIMEOUT 20)
 endif()
+
 if(HX_OS_TEST_FORMAT_SYNTAX)
 	add_executable(hx_os_format_syntax format_syntax.c)
 	target_link_libraries(hx_os_format_syntax PRIVATE hx_c_platform)
 	set_target_properties(hx_os_format_syntax PROPERTIES
-		C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO
+		C_STANDARD 99
+		C_STANDARD_REQUIRED YES
+		C_EXTENSIONS NO
 		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 	hx_apply_warnings(hx_os_format_syntax)
 	hx_enable_format_syntax(hx_os_format_syntax SOURCES format_syntax.c)
+
 	if(HX_OS_BUILD_TESTS)
 		add_test(NAME format_syntax_example COMMAND hx_os_format_syntax)
 		set_tests_properties(format_syntax_example
 			PROPERTIES TIMEOUT 20)
 	endif()
 endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_FILE_UTILS
 		AND HX_OS_ENABLE_SYSTEM_UTILS)
 	set(hx_search_fixture "${CMAKE_CURRENT_BINARY_DIR}/find-中文")
@@ -150,17 +172,20 @@ if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_FILE_UTILS
 	set_tests_properties(find_files_example PROPERTIES
 		TIMEOUT 20 PASS_REGULAR_EXPRESSION "Files: 2")
 endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_LIBRARY)
 	add_test(NAME plugin_example COMMAND hx_os_load_plugin
 		$<TARGET_FILE:hx_os_test_library_module>)
 	set_tests_properties(plugin_example PROPERTIES TIMEOUT 20)
 endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_FILE_UTILS)
 	file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/text-fixture.txt"
 		"UTF-8 example: 中文\n")
 	add_test(NAME text_file_example COMMAND hx_os_text_file
 		"${CMAKE_CURRENT_BINARY_DIR}/text-fixture.txt")
 	set_tests_properties(text_file_example PROPERTIES TIMEOUT 20)
+
 	if(HX_OS_ENABLE_SYSTEM_UTILS)
 		set(hx_unicode_fixture
 			"${CMAKE_CURRENT_BINARY_DIR}/配置-😀.txt")
@@ -171,24 +196,29 @@ if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_FILE_UTILS)
 			TIMEOUT 20)
 	endif()
 endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_ENV)
 	add_test(NAME environment_example COMMAND hx_os_environment
 		HX_PLATFORM_EXAMPLE)
 	set_tests_properties(environment_example PROPERTIES TIMEOUT 20
 		ENVIRONMENT "HX_PLATFORM_EXAMPLE=UTF-8 example")
 endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_PATHS)
 	add_test(NAME special_paths_example COMMAND hx_os_special_paths)
 	set_tests_properties(special_paths_example PROPERTIES TIMEOUT 20)
 endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_THREAD_EX)
 	add_test(NAME thread_options_example COMMAND hx_os_thread_options)
 	set_tests_properties(thread_options_example PROPERTIES TIMEOUT 20)
 endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_PIPE AND HX_OS_ENABLE_LOOP)
 	add_test(NAME pipe_transfer_example COMMAND hx_os_pipe_transfer)
 	set_tests_properties(pipe_transfer_example PROPERTIES TIMEOUT 20)
 endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_POSITIONED_IO)
 	file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/positioned-fixture.bin"
 		"0123456789")
@@ -196,24 +226,29 @@ if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_POSITIONED_IO)
 		"${CMAKE_CURRENT_BINARY_DIR}/positioned-fixture.bin")
 	set_tests_properties(positioned_read_example PROPERTIES TIMEOUT 20)
 endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_FILE_INFO)
 	file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/info-fixture.txt" "hello")
 	add_test(NAME file_info_example COMMAND hx_os_file_info
 		"${CMAKE_CURRENT_BINARY_DIR}/info-fixture.txt")
 	set_tests_properties(file_info_example PROPERTIES TIMEOUT 20)
 endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_CONFIG AND HX_OS_ENABLE_CONFIG_SERIALIZE)
 	add_test(NAME config_serialize_example COMMAND hx_os_config_save)
 	set_tests_properties(config_serialize_example PROPERTIES TIMEOUT 20)
 endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_TIMER AND HX_OS_ENABLE_LOOP)
 	add_test(NAME periodic_timer_example COMMAND hx_os_periodic_timer)
 	set_tests_properties(periodic_timer_example PROPERTIES TIMEOUT 20)
 endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_RANDOM)
 	add_test(NAME random_uuid_example COMMAND hx_os_random_uuid)
 	set_tests_properties(random_uuid_example PROPERTIES TIMEOUT 20)
 endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_VIRTUAL_MEMORY)
 	file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/mapped-fixture.txt"
 		"mapped data")
@@ -221,6 +256,7 @@ if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_VIRTUAL_MEMORY)
 		"${CMAKE_CURRENT_BINARY_DIR}/mapped-fixture.txt")
 	set_tests_properties(mapped_file_example PROPERTIES TIMEOUT 20)
 endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_FILE_EXTRA)
 	file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/attributes-fixture.txt"
 		"attribute example")
@@ -228,83 +264,106 @@ if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_FILE_EXTRA)
 		"${CMAKE_CURRENT_BINARY_DIR}/attributes-fixture.txt")
 	set_tests_properties(file_attributes_example PROPERTIES TIMEOUT 20)
 endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_WATCH)
 	add_test(NAME watch_directory_example COMMAND hx_os_watch_directory)
 	set_tests_properties(watch_directory_example PROPERTIES TIMEOUT 20)
 endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_PROCESS AND HX_OS_ENABLE_PIPE
 		AND HX_OS_ENABLE_LOOP)
 	add_test(NAME process_capture_example COMMAND hx_os_capture_process
 		$<TARGET_FILE:hx_os_process_fixture> empty)
 	set_tests_properties(process_capture_example PROPERTIES TIMEOUT 20)
 endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_THREAD_POOL
 		AND HX_OS_ENABLE_DELAYED_TASKS)
 	add_test(NAME delayed_task_example COMMAND hx_os_delayed_task)
 	set_tests_properties(delayed_task_example PROPERTIES TIMEOUT 20)
 endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_DUPLEX_PIPE)
 	add_test(NAME duplex_message_example COMMAND hx_os_duplex_message)
 	set_tests_properties(duplex_message_example PROPERTIES TIMEOUT 20)
 endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_OBFUSCATION)
 	add_test(NAME obfuscated_string_example COMMAND hx_os_obfuscated_string)
 	set_tests_properties(obfuscated_string_example PROPERTIES TIMEOUT 20)
 endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_CALENDAR AND HX_OS_ENABLE_TEXT_LOOKUP)
 	add_test(NAME localized_time_example COMMAND hx_os_localized_time)
 	set_tests_properties(localized_time_example PROPERTIES TIMEOUT 20)
 endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_SIGNALS)
 	add_test(NAME signal_notifications_example
 		COMMAND hx_os_signal_notifications)
 	set_tests_properties(signal_notifications_example PROPERTIES TIMEOUT 20)
 endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_SETTINGS)
 	add_test(NAME settings_example COMMAND hx_os_settings)
 	set_tests_properties(settings_example PROPERTIES TIMEOUT 20)
 endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_PROFILER)
 	add_test(NAME profile_intervals_example COMMAND hx_os_profile_intervals)
 	set_tests_properties(profile_intervals_example PROPERTIES TIMEOUT 20)
 endif()
+
 if(CMAKE_CXX_COMPILER_LOADED)
 	add_executable(hx_os_ipc_threads ipc_threads.cpp)
 	target_link_libraries(hx_os_ipc_threads PRIVATE hx_c_platform::cpp)
 	set_target_properties(hx_os_ipc_threads PROPERTIES
-		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		CXX_STANDARD 11
+		CXX_STANDARD_REQUIRED YES
+		CXX_EXTENSIONS NO
 		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 	hx_apply_warnings(hx_os_ipc_threads)
+
 	add_executable(hx_os_go go.cpp)
 	target_link_libraries(hx_os_go PRIVATE hx_c_platform::cpp)
 	set_target_properties(hx_os_go PROPERTIES
-		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		CXX_STANDARD 11
+		CXX_STANDARD_REQUIRED YES
+		CXX_EXTENSIONS NO
 		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 	hx_apply_warnings(hx_os_go)
+
 	if(HX_OS_BUILD_TESTS)
 		add_test(NAME go_example COMMAND hx_os_go)
 		set_tests_properties(go_example PROPERTIES TIMEOUT 20)
 	endif()
+
 	add_executable(hx_os_cpp_coroutine coroutine.cpp)
 	target_link_libraries(hx_os_cpp_coroutine PRIVATE hx_c_platform::cpp)
 	set_target_properties(hx_os_cpp_coroutine PROPERTIES
-		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		CXX_STANDARD 11
+		CXX_STANDARD_REQUIRED YES
+		CXX_EXTENSIONS NO
 		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 	hx_apply_warnings(hx_os_cpp_coroutine)
+
 	if(HX_OS_BUILD_TESTS)
 		add_test(NAME cpp_coroutine_example COMMAND hx_os_cpp_coroutine)
 		set_tests_properties(cpp_coroutine_example
 			PROPERTIES TIMEOUT 20)
 	endif()
+
 	if(HX_OS_HAVE_CPP20_COROUTINES)
 		add_executable(hx_os_cpp_coroutine20 coroutine20.cpp)
 		target_link_libraries(hx_os_cpp_coroutine20 PRIVATE
 			hx_c_platform::cpp20)
 		set_target_properties(hx_os_cpp_coroutine20 PROPERTIES
-			CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES
+			CXX_STANDARD 20
+			CXX_STANDARD_REQUIRED YES
 			CXX_EXTENSIONS NO
 			RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 		hx_apply_warnings(hx_os_cpp_coroutine20)
+
 		if(HX_OS_BUILD_TESTS)
 			add_test(NAME cpp_coroutine20_example
 				COMMAND hx_os_cpp_coroutine20)
@@ -312,12 +371,16 @@ if(CMAKE_CXX_COMPILER_LOADED)
 				PROPERTIES TIMEOUT 20)
 		endif()
 	endif()
+
 	add_executable(hx_os_cpp_find_files find_files_async.cpp)
 	target_link_libraries(hx_os_cpp_find_files PRIVATE hx_c_platform::cpp)
 	set_target_properties(hx_os_cpp_find_files PROPERTIES
-		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		CXX_STANDARD 11
+		CXX_STANDARD_REQUIRED YES
+		CXX_EXTENSIONS NO
 		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 	hx_apply_warnings(hx_os_cpp_find_files)
+
 	if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_FILE_UTILS
 			AND HX_OS_ENABLE_SYSTEM_UTILS
 			AND HX_OS_ENABLE_THREAD_POOL AND HX_OS_HAVE_TIMED_JOIN)
@@ -327,29 +390,40 @@ if(CMAKE_CXX_COMPILER_LOADED)
 		set_tests_properties(cpp_find_files_example PROPERTIES
 			TIMEOUT 20 PASS_REGULAR_EXPRESSION "Files: 2")
 	endif()
+
 	add_executable(hx_os_cpp_variant variant.cpp)
 	target_link_libraries(hx_os_cpp_variant PRIVATE hx_c_platform::cpp)
 	set_target_properties(hx_os_cpp_variant PROPERTIES
-		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		CXX_STANDARD 11
+		CXX_STANDARD_REQUIRED YES
+		CXX_EXTENSIONS NO
 		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 	hx_apply_warnings(hx_os_cpp_variant)
+
 	if(HX_OS_BUILD_TESTS)
 		add_test(NAME cpp_variant_example COMMAND hx_os_cpp_variant)
 		set_tests_properties(cpp_variant_example PROPERTIES TIMEOUT 20)
 	endif()
+
 	add_executable(hx_os_cpp_thread_pool thread_pool.cpp)
 	target_link_libraries(hx_os_cpp_thread_pool PRIVATE hx_c_platform::cpp)
 	set_target_properties(hx_os_cpp_thread_pool PROPERTIES
-		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		CXX_STANDARD 11
+		CXX_STANDARD_REQUIRED YES
+		CXX_EXTENSIONS NO
 		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 	hx_apply_warnings(hx_os_cpp_thread_pool)
+
 	add_executable(hx_os_cpp_serialization serialization.cpp)
 	target_link_libraries(hx_os_cpp_serialization PRIVATE
 		hx_c_platform::cpp)
 	set_target_properties(hx_os_cpp_serialization PROPERTIES
-		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		CXX_STANDARD 11
+		CXX_STANDARD_REQUIRED YES
+		CXX_EXTENSIONS NO
 		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 	hx_apply_warnings(hx_os_cpp_serialization)
+
 	if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_CONFIG AND HX_OS_ENABLE_CODEC
 		AND HX_OS_ENABLE_CONFIG_SERIALIZE)
 		add_test(NAME cpp_serialization_example
@@ -357,17 +431,22 @@ if(CMAKE_CXX_COMPILER_LOADED)
 		add_test(NAME nested_document_example
 			COMMAND hx_os_nested_document)
 		hx_add_serialization_interop()
+
 		foreach(format IN ITEMS json yaml xml toml)
 			add_test(NAME serialization_${format}_example
 				COMMAND hx_os_serialization ${format})
 		endforeach()
 	endif()
+
 	add_executable(hx_os_cpp_direct_calls direct_calls.cpp)
 	target_link_libraries(hx_os_cpp_direct_calls PRIVATE hx_c_platform::cpp)
 	set_target_properties(hx_os_cpp_direct_calls PROPERTIES
-		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		CXX_STANDARD 11
+		CXX_STANDARD_REQUIRED YES
+		CXX_EXTENSIONS NO
 		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 	hx_apply_warnings(hx_os_cpp_direct_calls)
+
 	if(HX_OS_BUILD_TESTS)
 		add_test(NAME cpp_direct_calls_example
 			COMMAND hx_os_cpp_direct_calls)

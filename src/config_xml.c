@@ -3,6 +3,7 @@
 static int hx_os_cfg_xml_prefix(hx_os_cfg_parser *parser, const char *text)
 {
 	size_t bytes = strlen(text);
+
 	return bytes <= parser->length - parser->position &&
 		!memcmp(parser->text + parser->position, text, bytes);
 }
@@ -30,11 +31,14 @@ static int hx_os_cfg_xml_name_start(uint32_t c)
 int hx_os_cfg_xml_valid(hx_os_config_slice text, int name)
 {
 	size_t offset = 0;
+
 	if (name && !text.bytes)
 		return 0;
+
 	while (offset < text.bytes) {
 		uint32_t c;
 		size_t used;
+
 		if (hx_os_i_utf_decode(HX_OS_UTF8,
 			    (const unsigned char *)text.data + offset,
 			    text.bytes - offset, &c, &used) != HX_OS_OK)
@@ -51,18 +55,22 @@ int hx_os_cfg_xml_valid(hx_os_config_slice text, int name)
 		}
 		else if (!hx_os_cfg_xml_char(c))
 			return 0;
+
 		offset += used;
 	}
+
 	return 1;
 }
 
 static int hx_os_cfg_xml_name(hx_os_cfg_parser *parser, hx_os_config_slice *out)
 {
 	size_t start = parser->position;
+
 	while (parser->position < parser->length) {
 		uint32_t point;
 		size_t used;
 		int first = parser->position == start;
+
 		if (hx_os_i_utf_decode(HX_OS_UTF8,
 			    (const unsigned char *)parser->text +
 				    parser->position,
@@ -79,11 +87,14 @@ static int hx_os_cfg_xml_name(hx_os_cfg_parser *parser, hx_os_config_slice *out)
 			break;
 		parser->position += used;
 	}
+
 	if (parser->position == start)
 		return hx_os_cfg_reject(
 			parser, HX_OS_SYNTAX, "XML name expected");
+
 	*out = hx_os_cfg_copy(
 		parser, parser->text + start, parser->position - start);
+
 	return out->data != NULL;
 }
 
@@ -91,6 +102,7 @@ static int hx_os_cfg_xml_entity(hx_os_cfg_parser *parser, const char *text,
 	size_t bytes, uint32_t *point)
 {
 	hx_os_config_slice value = {text, bytes};
+
 	if (hx_os_cfg_equal(value, "lt"))
 		*point = '<';
 	else if (hx_os_cfg_equal(value, "gt"))
@@ -105,30 +117,39 @@ static int hx_os_cfg_xml_entity(hx_os_cfg_parser *parser, const char *text,
 		size_t i = 1;
 		unsigned base = 10;
 		uint32_t result = 0;
+
 		if (text[i] == 'x') {
 			base = 16;
 			++i;
 		}
+
 		if (i == bytes)
 			goto invalid;
+
 		for (; i < bytes; ++i) {
 			unsigned c = (unsigned char)text[i];
 			unsigned digit = c >= '0' && c <= '9' ? c - '0'
 				: c >= 'a' && c <= 'f'	      ? c - 'a' + 10
 				: c >= 'A' && c <= 'F'	      ? c - 'A' + 10
 							      : 99;
+
 			if (digit >= base || result > (0x10ffff - digit) / base)
 				goto invalid;
+
 			result = result * base + digit;
 		}
+
 		if (!hx_os_cfg_xml_char(result))
 			goto invalid;
+
 		*point = result;
 	}
 	else
 		return hx_os_cfg_reject(parser, HX_OS_NOT_SUPPORTED,
 			"XML named entity is not predefined");
+
 	return 1;
+
 invalid:
 	return hx_os_cfg_reject(
 		parser, HX_OS_SYNTAX, "Invalid XML character reference");
@@ -138,19 +159,26 @@ static int hx_os_cfg_xml_text(hx_os_cfg_parser *parser, const char *text,
 	size_t bytes, int attribute, int cdata, hx_os_config_slice *out)
 {
 	char *buffer = hx_os_cfg_alloc(parser, bytes + 1);
+
 	size_t i = 0, written = 0;
+
 	if (!buffer || !hx_os_cfg_work(parser, bytes))
 		return 0;
+
 	while (i < bytes) {
 		char c = text[i++];
+
 		if (!cdata && c == '&') {
 			size_t start = i, used;
 			uint32_t point;
+
 			while (i < bytes && text[i] != ';')
 				++i;
+
 			if (i == bytes)
 				return hx_os_cfg_reject(parser, HX_OS_SYNTAX,
 					"Unterminated XML entity reference");
+
 			if (!hx_os_cfg_xml_entity(
 				    parser, text + start, i - start, &point))
 				return 0;
@@ -167,6 +195,7 @@ static int hx_os_cfg_xml_text(hx_os_cfg_parser *parser, const char *text,
 				return hx_os_cfg_reject(parser, HX_OS_SYNTAX,
 					"Less-than sign in XML attribute "
 					"value");
+
 			if (!cdata && !attribute && c == ']' && i + 1 < bytes &&
 				text[i] == ']' && text[i + 1] == '>')
 				return hx_os_cfg_reject(parser, HX_OS_SYNTAX,
@@ -176,14 +205,18 @@ static int hx_os_cfg_xml_text(hx_os_cfg_parser *parser, const char *text,
 				if (i < bytes && text[i] == '\n')
 					++i;
 			}
+
 			if (attribute && (c == '\n' || c == '\t'))
 				c = ' ';
+
 			buffer[written++] = c;
 		}
 	}
+
 	buffer[written] = 0;
 	out->data = buffer;
 	out->bytes = written;
+
 	return 1;
 }
 
@@ -192,8 +225,10 @@ static int hx_os_cfg_xml_attribute(hx_os_cfg_parser *parser,
 {
 	size_t start;
 	char quote;
+
 	if (!hx_os_cfg_xml_name(parser, name))
 		return 0;
+
 	hx_os_cfg_skip(parser, 1, 0);
 	if (parser->position == parser->length ||
 		parser->text[parser->position++] != '=')
@@ -203,17 +238,21 @@ static int hx_os_cfg_xml_attribute(hx_os_cfg_parser *parser,
 	if (parser->position == parser->length)
 		return hx_os_cfg_reject(
 			parser, HX_OS_SYNTAX, "XML attribute quote expected");
+
 	quote = parser->text[parser->position++];
 	if (quote != '\'' && quote != '"')
 		return hx_os_cfg_reject(
 			parser, HX_OS_SYNTAX, "XML attribute quote expected");
+
 	start = parser->position;
+
 	while (parser->position < parser->length &&
 		parser->text[parser->position] != quote)
 		++parser->position;
 	if (parser->position == parser->length)
 		return hx_os_cfg_reject(
 			parser, HX_OS_SYNTAX, "Unterminated XML attribute");
+
 	if (declaration &&
 		memchr(parser->text + start, '&', parser->position - start))
 		return hx_os_cfg_reject(parser, HX_OS_SYNTAX,
@@ -222,6 +261,7 @@ static int hx_os_cfg_xml_attribute(hx_os_cfg_parser *parser,
 		    parser->position - start, 1, 0, value))
 		return 0;
 	++parser->position;
+
 	return 1;
 }
 
@@ -229,11 +269,14 @@ static int hx_os_cfg_xml_declaration(hx_os_cfg_parser *parser)
 {
 	hx_os_config_slice name, value;
 	int stage = 0;
+
 	while (!hx_os_cfg_xml_prefix(parser, "?>")) {
 		size_t before = parser->position;
+
 		hx_os_cfg_skip(parser, 1, 0);
 		if (hx_os_cfg_xml_prefix(parser, "?>"))
 			break;
+
 		if (before == parser->position ||
 			!hx_os_cfg_xml_attribute(parser, &name, &value, 1))
 			return hx_os_cfg_reject(parser, HX_OS_SYNTAX,
@@ -244,15 +287,20 @@ static int hx_os_cfg_xml_declaration(hx_os_cfg_parser *parser)
 		else if (stage == 1 && hx_os_cfg_equal(name, "encoding")) {
 			size_t i;
 			static const char utf8[] = "utf-8";
+
 			if (value.bytes != 5)
 				goto encoding;
+
 			for (i = 0; i < 5; ++i) {
 				unsigned c = (unsigned char)value.data[i];
+
 				if (c >= 'A' && c <= 'Z')
 					c += 'a' - 'A';
+
 				if (c != (unsigned char)utf8[i])
 					goto encoding;
 			}
+
 			stage = 2;
 		}
 		else if ((stage == 1 || stage == 2) &&
@@ -264,11 +312,15 @@ static int hx_os_cfg_xml_declaration(hx_os_cfg_parser *parser)
 			return hx_os_cfg_reject(parser, HX_OS_NOT_SUPPORTED,
 				"Unsupported XML declaration");
 	}
+
 	if (!stage)
 		return hx_os_cfg_reject(parser, HX_OS_SYNTAX,
 			"XML version declaration expected");
+
 	parser->position += 2;
+
 	return 1;
+
 encoding:
 	return hx_os_cfg_reject(parser, HX_OS_INVALID_ENCODING,
 		"XML declaration must specify UTF-8");
@@ -278,22 +330,28 @@ static int hx_os_cfg_xml_misc(hx_os_cfg_parser *parser, int declaration)
 {
 	if (hx_os_cfg_xml_prefix(parser, "<!--")) {
 		parser->position += 4;
+
 		while (parser->position < parser->length) {
 			if (hx_os_cfg_xml_prefix(parser, "-->")) {
 				parser->position += 3;
+
 				return 1;
 			}
+
 			if (hx_os_cfg_xml_prefix(parser, "--"))
 				return hx_os_cfg_reject(parser, HX_OS_SYNTAX,
 					"Double hyphen inside XML comment");
+
 			++parser->position;
 		}
 	}
 	else if (hx_os_cfg_xml_prefix(parser, "<?")) {
 		hx_os_config_slice target;
+
 		parser->position += 2;
 		if (!hx_os_cfg_xml_name(parser, &target))
 			return 0;
+
 		if (target.bytes == 3 &&
 			(target.data[0] == 'x' || target.data[0] == 'X') &&
 			(target.data[1] == 'm' || target.data[1] == 'M') &&
@@ -301,8 +359,10 @@ static int hx_os_cfg_xml_misc(hx_os_cfg_parser *parser, int declaration)
 			if (!declaration || !hx_os_cfg_equal(target, "xml"))
 				return hx_os_cfg_reject(parser, HX_OS_SYNTAX,
 					"Misplaced XML declaration");
+
 			return hx_os_cfg_xml_declaration(parser);
 		}
+
 		if (!hx_os_cfg_xml_prefix(parser, "?>") &&
 			(parser->position == parser->length ||
 				!hx_os_cfg_space(
@@ -314,14 +374,17 @@ static int hx_os_cfg_xml_misc(hx_os_cfg_parser *parser, int declaration)
 		while (parser->position < parser->length) {
 			if (hx_os_cfg_xml_prefix(parser, "?>")) {
 				parser->position += 2;
+
 				return 1;
 			}
+
 			++parser->position;
 		}
 	}
 	else
 		return hx_os_cfg_reject(parser, HX_OS_NOT_SUPPORTED,
 			"DTD and XML declarations are not supported here");
+
 	return hx_os_cfg_reject(parser, HX_OS_SYNTAX,
 		"Unterminated XML comment or processing instruction");
 }
@@ -330,6 +393,7 @@ static int hx_os_cfg_xml_element(
 	hx_os_cfg_parser *parser, size_t depth, hx_os_config_node **out)
 {
 	hx_os_config_node *element;
+
 	if (parser->position == parser->length ||
 		parser->text[parser->position++] != '<')
 		return hx_os_cfg_reject(
@@ -337,25 +401,32 @@ static int hx_os_cfg_xml_element(
 	element = hx_os_cfg_node(parser, HX_OS_CONFIG_ELEMENT, depth);
 	if (!element || !hx_os_cfg_xml_name(parser, &element->name))
 		return 0;
+
 	for (;;) {
 		size_t before = parser->position;
 		hx_os_config_node *attribute;
+
 		hx_os_cfg_skip(parser, 1, 0);
 		if (hx_os_cfg_xml_prefix(parser, "/>")) {
 			parser->position += 2;
 			*out = element;
+
 			return 1;
 		}
+
 		if (hx_os_cfg_xml_prefix(parser, ">")) {
 			++parser->position;
 			break;
 		}
+
 		if (before == parser->position)
 			return hx_os_cfg_reject(parser, HX_OS_SYNTAX,
 				"XML attribute separator expected");
+
 		if (!element->attributes)
 			element->attributes = hx_os_cfg_node(
 				parser, HX_OS_CONFIG_OBJECT, depth);
+
 		attribute = hx_os_cfg_node(
 			parser, HX_OS_CONFIG_ATTRIBUTE, depth + 1);
 		if (!element->attributes || !attribute ||
@@ -365,13 +436,17 @@ static int hx_os_cfg_xml_element(
 				attribute, HX_OS_CONFIG_DUPLICATE_ERROR))
 			return 0;
 	}
+
 	while (parser->position < parser->length) {
 		hx_os_config_node *child;
+
 		if (hx_os_cfg_xml_prefix(parser, "</")) {
 			hx_os_config_slice name;
+
 			parser->position += 2;
 			if (!hx_os_cfg_xml_name(parser, &name))
 				return 0;
+
 			hx_os_cfg_skip(parser, 1, 0);
 			if (!hx_os_cfg_xml_prefix(parser, ">") ||
 				name.bytes != element->name.bytes ||
@@ -381,18 +456,23 @@ static int hx_os_cfg_xml_element(
 					"XML closing element does not match");
 			++parser->position;
 			*out = element;
+
 			return 1;
 		}
+
 		if (hx_os_cfg_xml_prefix(parser, "<![CDATA[")) {
 			size_t start;
+
 			parser->position += 9;
 			start = parser->position;
+
 			while (parser->position < parser->length &&
 				!hx_os_cfg_xml_prefix(parser, "]]>"))
 				++parser->position;
 			if (parser->position == parser->length)
 				return hx_os_cfg_reject(parser, HX_OS_SYNTAX,
 					"Unterminated XML CDATA");
+
 			child = hx_os_cfg_node(
 				parser, HX_OS_CONFIG_TEXT, depth + 1);
 			if (!child ||
@@ -407,6 +487,7 @@ static int hx_os_cfg_xml_element(
 			hx_os_cfg_xml_prefix(parser, "<!")) {
 			if (!hx_os_cfg_xml_misc(parser, 0))
 				return 0;
+
 			continue;
 		}
 		else if (parser->text[parser->position] == '<') {
@@ -415,6 +496,7 @@ static int hx_os_cfg_xml_element(
 		}
 		else {
 			size_t start = parser->position;
+
 			while (parser->position < parser->length &&
 				parser->text[parser->position] != '<')
 				++parser->position;
@@ -427,10 +509,12 @@ static int hx_os_cfg_xml_element(
 					&child->value))
 				return 0;
 		}
+
 		if (!hx_os_cfg_append(parser, element, child,
 			    HX_OS_CONFIG_DUPLICATE_ERROR))
 			return 0;
 	}
+
 	return hx_os_cfg_reject(
 		parser, HX_OS_SYNTAX, "Unterminated XML element");
 }
@@ -438,38 +522,51 @@ static int hx_os_cfg_xml_element(
 int hx_os_cfg_xml(hx_os_cfg_parser *parser, hx_os_config_node **out)
 {
 	size_t position = parser->position, first = position;
+
 	while (position < parser->length) {
 		uint32_t point;
 		size_t used;
+
 		if (hx_os_i_utf_decode(HX_OS_UTF8,
 			    (const unsigned char *)parser->text + position,
 			    parser->length - position, &point,
 			    &used) != HX_OS_OK ||
 			!hx_os_cfg_xml_char(point)) {
 			parser->position = position;
+
 			return hx_os_cfg_reject(
 				parser, HX_OS_SYNTAX, "Invalid XML character");
 		}
+
 		position += used;
 	}
+
 	hx_os_cfg_skip(parser, 1, 0);
+
 	while (hx_os_cfg_xml_prefix(parser, "<?") ||
 		hx_os_cfg_xml_prefix(parser, "<!")) {
 		if (!hx_os_cfg_xml_misc(parser, parser->position == first))
 			return 0;
+
 		hx_os_cfg_skip(parser, 1, 0);
 	}
+
 	if (!hx_os_cfg_xml_element(parser, 1, out))
 		return 0;
+
 	hx_os_cfg_skip(parser, 1, 0);
+
 	while (hx_os_cfg_xml_prefix(parser, "<?") ||
 		hx_os_cfg_xml_prefix(parser, "<!")) {
 		if (!hx_os_cfg_xml_misc(parser, 0))
 			return 0;
+
 		hx_os_cfg_skip(parser, 1, 0);
 	}
+
 	if (parser->position != parser->length)
 		return hx_os_cfg_reject(parser, HX_OS_SYNTAX,
 			"Trailing content after XML root element");
+
 	return 1;
 }

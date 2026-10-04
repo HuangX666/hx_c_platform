@@ -1,5 +1,6 @@
 #ifndef HX_C_PLATFORM_POSIX_H
 #define HX_C_PLATFORM_POSIX_H
+
 #include "hx_os_base.h"
 
 struct timespec;
@@ -12,6 +13,7 @@ extern "C" {
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_posix_duration_to_timespec(
 	uint64_t nanoseconds, struct timespec *out, hx_os_error *error);
+
 /*
  * Explicit native clock domain: CLOCK_MONOTONIC or CLOCK_REALTIME only.
  * Samples both clocks; never treats the library epoch as a native epoch.

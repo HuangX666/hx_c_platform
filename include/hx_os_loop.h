@@ -21,6 +21,7 @@ enum {
 	HX_OS_OP_RECEIVE_FROM,
 	HX_OS_OP_RESOLVE
 };
+
 enum { HX_OS_SEND_COPY, HX_OS_SEND_BORROW };
 
 typedef struct hx_os_loop_options {
@@ -56,8 +57,10 @@ typedef void(HX_OS_CALL *hx_os_completion_fn)(
 	hx_os_request *request, const hx_os_completion *completion, void *user);
 
 HX_OS_API void HX_OS_CALL hx_os_loop_options_init(hx_os_loop_options *options);
+
 HX_OS_API void HX_OS_CALL hx_os_operation_init(
 	hx_os_operation *operation, int kind);
+
 /*
  * Creator thread owns polling, I/O submission, socket close and destruction.
  * That thread must remain alive until loop destruction.
@@ -68,12 +71,14 @@ HX_OS_API void HX_OS_CALL hx_os_operation_init(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_loop_create(hx_os_network *network,
 	const hx_os_loop_options *options, hx_os_loop **out,
 	hx_os_error *error);
+
 /* Context-only loop for posts, timers and local I/O. No network/DNS startup.
  * Network operations require the original network-backed factory.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_loop_create_local(
 	hx_os_context *context, const hx_os_loop_options *options,
 	hx_os_loop **out, hx_os_error *error);
+
 /*
  * Accepted operations call completion once on the polling thread, never
  * inline in submit. Rejection transfers nothing and calls no callback.
@@ -85,20 +90,29 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_loop_create_local(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_loop_submit(hx_os_loop *loop,
 	const hx_os_operation *operation, hx_os_completion_fn completion,
 	void *user, hx_os_request **out, hx_os_error *error);
+
 /* Poll performs one batch. run drains until idle. Neither starts a thread. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_loop_poll_until(
 	hx_os_loop *loop, hx_os_deadline deadline, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_loop_run_until(
 	hx_os_loop *loop, hx_os_deadline deadline, hx_os_error *error);
+
 HX_OS_API size_t HX_OS_CALL hx_os_loop_pending(hx_os_loop *loop);
+
 HX_OS_API const char *HX_OS_CALL hx_os_loop_backend(void);
+
 HX_OS_API void HX_OS_CALL hx_os_request_cancel(hx_os_request *request);
+
 HX_OS_API void HX_OS_CALL hx_os_request_retain(hx_os_request *request);
+
 HX_OS_API void HX_OS_CALL hx_os_request_release(hx_os_request *request);
+
 /* Success includes callback return; waiting does not drive the loop. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_request_wait_until(
 	hx_os_request *request, hx_os_deadline deadline,
 	hx_os_completion *completion, hx_os_error *error);
+
 /*
  * Take functions transfer ownership once, in the callback or after wait.
  * Untaken results are released with the request. Returned sockets have
@@ -106,8 +120,10 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_request_wait_until(
  */
 HX_OS_API hx_os_socket *HX_OS_CALL hx_os_request_take_socket(
 	hx_os_request *request);
+
 HX_OS_API hx_os_address_list *HX_OS_CALL hx_os_request_take_addresses(
 	hx_os_request *request);
+
 /*
  * Close rejects new submissions and cancels outstanding operations. Timeout
  * retains all live objects and can be retried. Close may invoke callbacks.
@@ -115,6 +131,7 @@ HX_OS_API hx_os_address_list *HX_OS_CALL hx_os_request_take_addresses(
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_loop_close_until(
 	hx_os_loop *loop, hx_os_deadline deadline, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_loop_destroy(
 	hx_os_loop **loop, hx_os_error *error);
 

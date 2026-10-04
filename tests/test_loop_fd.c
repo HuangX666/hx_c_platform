@@ -28,6 +28,7 @@ static void ready(hx_os_loop_watch *watch, int events, void *user)
 	fd_test *state = user;
 #if !defined(_WIN32)
 	char data[8];
+
 	CHECK(events & HX_OS_WAIT_READ);
 	CHECK(read(hx_os_loop_watch_descriptor(watch), data, sizeof(data)) ==
 		4);
@@ -41,12 +42,15 @@ static void ready(hx_os_loop_watch *watch, int events, void *user)
 #endif
 	++state->calls;
 }
+
 static void cleanup(void *user)
 {
 	fd_test *state = user;
+
 	++state->cleanups;
 	CHECK(hx_os_loop_detach_fd(&state->watch, NULL) == HX_OS_DEADLOCK);
 }
+
 static void posted(
 	hx_os_request *request, const hx_os_completion *result, void *user)
 {
@@ -59,10 +63,12 @@ static void posted(
 int main(void)
 {
 	fd_test state = {NULL, 0, 0};
+
 	if (!(hx_os_capabilities() & HX_OS_CAP_LOOP_FD)) {
 		CHECK(hx_os_loop_attach_fd(NULL, 0, HX_OS_WAIT_READ, ready,
 			      &state, &state.watch,
 			      NULL) == HX_OS_NOT_SUPPORTED);
+
 		return 0;
 	}
 #if !defined(_WIN32)
@@ -74,11 +80,14 @@ int main(void)
 		hx_os_loop_options options;
 		hx_os_operation operation;
 		size_t baseline;
+
 		CHECK(hx_os_context_create(NULL, &context, NULL) == HX_OS_OK);
+
 		hx_os_loop_options_init(&options);
 		options.max_requests = 1;
 		CHECK(hx_os_loop_create_local(context, &options, &loop, NULL) ==
 			HX_OS_OK);
+
 		baseline = hx_os_context_allocations(context);
 		CHECK(pipe(descriptors) == 0);
 		CHECK(fcntl(descriptors[0], F_SETFL, O_NONBLOCK) == 0);
@@ -89,6 +98,7 @@ int main(void)
 		CHECK(hx_os_loop_watch_descriptor(state.watch) !=
 			descriptors[0]);
 		CHECK(close(descriptors[0]) == 0);
+
 		hx_os_operation_init(&operation, HX_OS_OP_POST);
 		CHECK(hx_os_loop_submit(loop, &operation, posted, NULL,
 			      &request, NULL) == HX_OS_LIMIT &&
@@ -107,7 +117,9 @@ int main(void)
 #if defined(__linux__)
 		{
 			int regular = open("/dev/null", O_RDONLY);
+
 			hx_os_error error;
+
 			CHECK(regular >= 0);
 			CHECK(hx_os_loop_attach_fd(loop, regular,
 				      HX_OS_WAIT_READ, ready, &state,
@@ -136,5 +148,6 @@ int main(void)
 	}
 #endif
 	puts("external descriptor lifecycle contracts passed");
+
 	return 0;
 }

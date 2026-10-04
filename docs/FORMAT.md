@@ -36,7 +36,9 @@ HX_PRINTLN("{name}: {count}", HX_NAMED("name", user.name),
 	HX_NAMED("count", count));
 
 hx_string text = HX_STRING_INIT;
+
 hx_os_status status = HX_FFORMAT(&text, "Total: {price * count:.2f}");
+
 /* Use text only after checking status; release it even on failure. */
 hx_string_destroy(&text);
 ```
@@ -48,14 +50,20 @@ Enable the build step on a target after setting its sources, dependencies, inclu
 ```cmake
 cmake_minimum_required(VERSION 3.16)
 project(format_demo LANGUAGES C)
+
 find_package(hx_c_platform CONFIG REQUIRED)
+
 add_executable(format_demo main.c)
 target_link_libraries(format_demo PRIVATE hx_c_platform::hx_c_platform)
 set_target_properties(format_demo PROPERTIES
-	C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
+	C_STANDARD 99
+	C_STANDARD_REQUIRED YES
+	C_EXTENSIONS NO)
+
 if(MSVC)
 	target_compile_options(format_demo PRIVATE /utf-8)
 endif()
+
 hx_enable_format_syntax(format_demo SOURCES main.c)
 ```
 
@@ -81,7 +89,9 @@ Expressions use C scope and C semantics. Parenthesize a ternary expression conta
 
 ```c
 hx_format_arg args[] = {hx_fmt_str("张三"), hx_fmt_f64(3.75)};
+
 hx_os_error error;
+
 hx_os_status status = hx_print_args(HX_PRINT_STDOUT, 1,
 	hx_string_view_from_cstr("{}: {:.2f}"), args, 2, &error);
 ```
@@ -98,6 +108,7 @@ Use `hx_format` for an `hx_string`, `hx_format_with_options` to set bounds, and 
 auto printed = hx::println("{}: {:.2f}", "张三", 3.75);
 if (!printed)
 	return 1;
+
 auto text = hx::format("Answer: {:04d}", 42);
 if (!text)
 	return 1;

@@ -1,6 +1,6 @@
 # hx_c_platform
 
-[![CI configuration][ci-badge]](.github/workflows/build.yml) [![C99 core][c-badge]](CMakeLists.txt) [![C++11 facade][cpp-badge]](docs/CPP_POOL.md) [![Header-only C++ facade][header-badge]](docs/CPP_POOL.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![First-party license pending][license-badge]](THIRD_PARTY_NOTICES.md) [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md) [![macOS validation pending][macos-badge]](docs/VALIDATION.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.md) [![Windows 131/131 and Linux 133/133 local suites passed][tests-badge]](docs/VALIDATION.md) [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md) [![Android API 21 ARM cross-build passed][android-badge]](docs/ANDROID.md)
+[![CI configuration][ci-badge]](.github/workflows/build.yml) [![C99 core][c-badge]](CMakeLists.txt) [![C++11 facade][cpp-badge]](docs/CPP_POOL.md) [![Header-only C++ facade][header-badge]](docs/CPP_POOL.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![First-party license pending][license-badge]](THIRD_PARTY_NOTICES.md) [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md) [![macOS validation pending][macos-badge]](docs/VALIDATION.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.md) [![Windows 134/134 and Linux 134/134 local suites passed][tests-badge]](docs/VALIDATION.md) [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md) [![Android API 21 ARM cross-build passed][android-badge]](docs/ANDROID.md)
 
 [简体中文](README.zh-CN.md) · [Task tutorials](docs/USAGE.md) · [Detailed reference](docs/REFERENCE.md)
 
@@ -77,13 +77,19 @@ Use this `CMakeLists.txt`. The two switches disable the library's own tests and 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
 project(hx_demo LANGUAGES C)
+
 set(HX_OS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(HX_OS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+
 add_subdirectory(external/hx_c_platform)
+
 add_executable(hx_demo main.c)
 target_link_libraries(hx_demo PRIVATE hx_c_platform::hx_c_platform)
 set_target_properties(hx_demo PROPERTIES
-	C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
+	C_STANDARD 99
+	C_STANDARD_REQUIRED YES
+	C_EXTENSIONS NO)
+
 configure_file(hello.txt hello.txt COPYONLY)
 configure_file(config.json config.json COPYONLY)
 ```
@@ -129,12 +135,15 @@ Read `hello.txt` from section 3 and display its contents. The entry point opens,
 int main(void)
 {
 	hx_string text = HX_STRING_INIT;
+
 	hx_os_status status = hx_os_file_read_text("hello.txt", &text, NULL);
 	if (status == HX_OS_OK)
 		puts(hx_string_c_str(&text));
 	else
 		fprintf(stderr, "Read failed: %s\n", hx_os_status_name(status));
+
 	hx_string_destroy(&text);
+
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -153,9 +162,12 @@ int main()
 	if (!text) {
 		std::fprintf(stderr, "Read failed: %s\n",
 			hx_os_status_name(text.status()));
+
 		return 1;
 	}
+
 	std::puts(text.value().c_str());
+
 	return 0;
 }
 ```
@@ -170,6 +182,7 @@ Turn `"  Hello  "` into `"hello"`. Include `<hx/Values.hpp>` and `<cstdio>` and 
 auto text = hx::String::copy("  Hello  ");
 if (!text)
 	return 1;
+
 text.value().trimAscii().lowerAscii();
 std::puts(text.value().c_str());
 ```
@@ -184,9 +197,11 @@ Read `8080` from `config.json`, whose content is `{"port":8080}`. Include `<hx/C
 auto config = hx::ConfigDocument::load("config.json");
 if (!config)
 	return 1;
+
 auto port = config.value().integer("/port");
 if (!port)
 	return 1;
+
 std::printf("Port: %lld\n", static_cast<long long>(port.value()));
 ```
 
@@ -219,17 +234,22 @@ The macro generates functions such as `int_vector_create/push/at/destroy`. Put t
 
 ```c
 int_vector *numbers = NULL;
+
 hx_os_status status = int_vector_create(NULL, 16, &numbers, NULL);
 if (status == HX_OS_OK)
 	status = int_vector_push(numbers, 10, NULL);
+
 if (status == HX_OS_OK)
 	status = int_vector_push(numbers, 20, NULL);
+
 if (status == HX_OS_OK)
 	printf("Count: %zu, first: %d\n", int_vector_size(numbers),
 		*int_vector_at(numbers, 0));
+
 hx_os_status closed = int_vector_destroy(&numbers, NULL);
 if (status == HX_OS_OK)
 	status = closed;
+
 if (status != HX_OS_OK)
 	return 1;
 ```
@@ -263,13 +283,17 @@ Store integer 42, then replace it with hello. Include `<hx_variant.h>` and `<std
 ```c
 hx_variant value = HX_VARIANT_INIT;
 hx_string_view text;
+
 hx_os_status status = hx_variant_set_i32(&value, 42, NULL);
 if (status == HX_OS_OK)
 	status = hx_variant_set_cstr(&value, "hello", NULL);
+
 if (status == HX_OS_OK)
 	status = hx_variant_get_string_view(&value, &text, NULL);
+
 if (status == HX_OS_OK)
 	printf("String: %.*s\n", (int)text.size, text.data);
+
 hx_variant_destroy(&value);
 if (status != HX_OS_OK)
 	return 1;
@@ -282,11 +306,15 @@ C++ can store your own structure directly. Include `<hx/Variant.hpp>` and `<cstd
 ```cpp
 struct Point { double x; double y; };
 hx::Variant value;
+
 if (!value.set(Point{2, 5}))
 	return 1;
+
 auto position = value.get<Point>();
+
 if (!position)
 	return 1;
+
 std::printf("Point: %.1f, %.1f\n", position.value().x,
 	position.value().y);
 ```
@@ -301,6 +329,7 @@ Find the first config.json under assets recursively. Include `<hx/Files.hpp>` an
 auto path = hx::Directory::findFirstFile("assets", "config.json");
 if (!path)
 	return 1;
+
 std::puts(path.value().c_str());
 ```
 
@@ -314,10 +343,13 @@ A coroutine pauses during a library wait so its worker can run another task. Aft
 co_chan<int> answers(1); // One buffered value.
 if (!answers)
 	return 1;
+
 go [answers]() noexcept { return answers << 6 * 7; };
+
 auto done = runtime.waitUntil(hx_os_deadline_after_ms(2000));
 if (!done)
 	return 1;
+
 auto answer = answers.receive(HX_OS_DEADLINE_NOW);
 if (answer)
 	std::printf("Answer: %d\n", answer.value());
@@ -393,9 +425,11 @@ auto document = hx::ConfigDocument::parse(
 	"{\"items\":[1,\"text\",null,{\"children\":[true,2.5]}]}");
 if (!document)
 	return 1;
+
 auto yaml = document.value().serialize(HX_OS_CONFIG_YAML);
 if (!yaml)
 	return 1;
+
 std::puts(yaml.value().c_str());
 ```
 
@@ -453,7 +487,7 @@ The meaning of `NULL` depends on its position: allocator/options parameters sele
 
 ## 7. Builds, validation and licensing
 
-See the [build reference](docs/REFERENCE.md#section-27) for development builds, tests, static/shared installation and optional dependencies. Full tests on 2026-10-04 passed Windows 131/131 and WSL Linux 133/133. New nested serialization, object mapping and C/C++ examples passed memory and installed-consumer checks; both Android API 21 ARM ABIs cross-compiled, and native x86_64/translated ARM64 each passed three new serialization suites on the API 34 emulator. [Validation records](docs/VALIDATION.md) identify exact configurations and pending targets. Documentation-example checks are separate from target-platform validation.
+See the [build reference](docs/REFERENCE.md#section-27) for development builds, tests, static/shared installation and optional dependencies. Full tests on 2026-10-04 passed Windows 134/134 and WSL Linux 134/134. New nested serialization, object mapping and C/C++ examples passed memory and installed-consumer checks; both Android API 21 ARM ABIs cross-compiled, and native x86_64/translated ARM64 each passed three new serialization suites on the API 34 emulator. [Validation records](docs/VALIDATION.md) identify exact configurations and pending targets. Documentation-example checks are separate from target-platform validation.
 
 The first-party distribution license is pending; see [third-party licensing](THIRD_PARTY_NOTICES.md). The coroutine implementation is self-developed; hx_c_log integration remains future work.
 
@@ -466,6 +500,6 @@ The first-party distribution license is pending; see [third-party licensing](THI
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%20131%2F131%20Linux%20133%2F133-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%20134%2F134%20Linux%20134%2F134-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

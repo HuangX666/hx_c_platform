@@ -81,16 +81,24 @@ struct hx_os_loop {
 };
 
 hx_os_status hx_os_i_loop_native_create(hx_os_loop *loop, hx_os_error *error);
+
 void hx_os_i_loop_native_destroy(hx_os_loop *loop);
+
 void hx_os_i_loop_wake(hx_os_loop *loop);
+
 hx_os_status hx_os_i_loop_wait(
 	hx_os_loop *loop, hx_os_deadline deadline, hx_os_error *error);
+
 hx_os_status hx_os_i_loop_attach(
 	hx_os_loop *loop, hx_os_socket *socket, hx_os_error *error);
+
 hx_os_status hx_os_i_loop_refresh(hx_os_socket *socket, hx_os_error *error);
+
 void hx_os_i_loop_step(hx_os_request *request);
+
 hx_os_status hx_os_i_loop_cancel_until(hx_os_loop *loop, hx_os_request *request,
 	hx_os_deadline deadline, int *close_running, hx_os_error *error);
+
 hx_os_status hx_os_i_loop_submit(hx_os_loop *loop,
 	const hx_os_operation *operation, hx_os_pipe *pipe,
 	hx_os_loop_watch *watch, hx_os_completion_fn completion, void *user,

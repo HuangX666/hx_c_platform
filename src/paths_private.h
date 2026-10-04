@@ -1,5 +1,6 @@
 #ifndef HX_C_PLATFORM_PATHS_PRIVATE_H
 #define HX_C_PLATFORM_PATHS_PRIVATE_H
+
 #include "internal.h"
 
 enum hx_os_i_path_kind {

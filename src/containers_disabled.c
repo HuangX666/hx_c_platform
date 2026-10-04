@@ -10,6 +10,7 @@ hx_os_status hx_os_vector_create(hx_os_context *context,
 	(void)error;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -23,6 +24,7 @@ hx_os_status hx_os_deque_create(hx_os_context *context,
 	(void)error;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -36,6 +38,7 @@ hx_os_status hx_os_list_create(hx_os_context *context,
 	(void)error;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -49,24 +52,28 @@ hx_os_status hx_os_heap_create(hx_os_context *context,
 	(void)error;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
 size_t hx_os_sequence_size(const hx_os_sequence *sequence)
 {
 	(void)sequence;
+
 	return 0;
 }
 
 size_t hx_os_sequence_capacity(const hx_os_sequence *sequence)
 {
 	(void)sequence;
+
 	return 0;
 }
 
 size_t hx_os_sequence_memory(const hx_os_sequence *sequence)
 {
 	(void)sequence;
+
 	return 0;
 }
 
@@ -74,12 +81,14 @@ const void *hx_os_sequence_at(const hx_os_sequence *sequence, size_t index)
 {
 	(void)sequence;
 	(void)index;
+
 	return NULL;
 }
 
 void *hx_os_vector_data(hx_os_vector *vector)
 {
 	(void)vector;
+
 	return NULL;
 }
 
@@ -89,6 +98,7 @@ hx_os_status hx_os_sequence_reserve(
 	(void)sequence;
 	(void)capacity;
 	(void)error;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -99,6 +109,7 @@ hx_os_status hx_os_sequence_insert(hx_os_sequence *sequence, size_t index,
 	(void)index;
 	(void)value;
 	(void)error;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -109,6 +120,7 @@ hx_os_status hx_os_sequence_insert_take(
 	(void)index;
 	(void)value;
 	(void)error;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -118,6 +130,7 @@ hx_os_status hx_os_sequence_push_back(
 	(void)sequence;
 	(void)value;
 	(void)error;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -127,6 +140,7 @@ hx_os_status hx_os_sequence_push_back_take(
 	(void)sequence;
 	(void)value;
 	(void)error;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -136,6 +150,7 @@ hx_os_status hx_os_sequence_push_front(
 	(void)sequence;
 	(void)value;
 	(void)error;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -145,6 +160,7 @@ hx_os_status hx_os_sequence_pop_back(
 	(void)sequence;
 	(void)out;
 	(void)error;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -154,6 +170,7 @@ hx_os_status hx_os_sequence_pop_front(
 	(void)sequence;
 	(void)out;
 	(void)error;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -164,6 +181,7 @@ hx_os_status hx_os_sequence_erase(
 	(void)index;
 	(void)out;
 	(void)error;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -171,6 +189,7 @@ hx_os_status hx_os_sequence_clear(hx_os_sequence *sequence, hx_os_error *error)
 {
 	(void)sequence;
 	(void)error;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -181,6 +200,7 @@ hx_os_status hx_os_sequence_destroy(
 	(void)error;
 	if (sequence && !*sequence)
 		return hx_os_i_error(error, HX_OS_OK, 0, 0);
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -188,6 +208,7 @@ hx_os_status hx_os_vector_sort(hx_os_vector *vector, hx_os_error *error)
 {
 	(void)vector;
 	(void)error;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -198,6 +219,7 @@ hx_os_status hx_os_vector_lower_bound(
 	(void)key;
 	(void)index;
 	(void)found;
+
 	return HX_OS_NOT_SUPPORTED;
 }
 
@@ -206,12 +228,14 @@ hx_os_status hx_os_sequence_begin(
 {
 	(void)sequence;
 	(void)iterator;
+
 	return HX_OS_NOT_SUPPORTED;
 }
 
 hx_os_status hx_os_sequence_next(hx_os_sequence_iterator *iterator)
 {
 	(void)iterator;
+
 	return HX_OS_NOT_SUPPORTED;
 }
 
@@ -220,6 +244,7 @@ hx_os_status hx_os_sequence_value(
 {
 	(void)iterator;
 	(void)value;
+
 	return HX_OS_NOT_SUPPORTED;
 }
 
@@ -235,18 +260,21 @@ hx_os_status hx_os_map_create(hx_os_context *context, int kind,
 	(void)error;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
 size_t hx_os_map_size(const hx_os_map *map)
 {
 	(void)map;
+
 	return 0;
 }
 
 size_t hx_os_map_memory(const hx_os_map *map)
 {
 	(void)map;
+
 	return 0;
 }
 
@@ -259,6 +287,7 @@ hx_os_status hx_os_map_insert(hx_os_map *map, const void *key, size_t key_bytes,
 	(void)value;
 	(void)replace;
 	(void)error;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -271,6 +300,7 @@ hx_os_status hx_os_map_insert_take(hx_os_map *map, const void *key,
 	(void)value;
 	(void)replace;
 	(void)error;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -281,6 +311,7 @@ hx_os_status hx_os_map_find(const hx_os_map *map, const void *key,
 	(void)key;
 	(void)key_bytes;
 	(void)value;
+
 	return HX_OS_NOT_SUPPORTED;
 }
 
@@ -292,6 +323,7 @@ hx_os_status hx_os_map_erase(hx_os_map *map, const void *key, size_t key_bytes,
 	(void)key_bytes;
 	(void)out;
 	(void)error;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -299,12 +331,14 @@ hx_os_status hx_os_map_begin(const hx_os_map *map, hx_os_map_iterator *iterator)
 {
 	(void)map;
 	(void)iterator;
+
 	return HX_OS_NOT_SUPPORTED;
 }
 
 hx_os_status hx_os_map_next(hx_os_map_iterator *iterator)
 {
 	(void)iterator;
+
 	return HX_OS_NOT_SUPPORTED;
 }
 
@@ -315,6 +349,7 @@ hx_os_status hx_os_map_entry(const hx_os_map_iterator *iterator,
 	(void)key;
 	(void)key_bytes;
 	(void)value;
+
 	return HX_OS_NOT_SUPPORTED;
 }
 
@@ -322,6 +357,7 @@ hx_os_status hx_os_map_clear(hx_os_map *map, hx_os_error *error)
 {
 	(void)map;
 	(void)error;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -331,6 +367,7 @@ hx_os_status hx_os_map_destroy(hx_os_map **map, hx_os_error *error)
 	(void)error;
 	if (map && !*map)
 		return hx_os_i_error(error, HX_OS_OK, 0, 0);
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -341,6 +378,7 @@ hx_os_status hx_os_map_lower_bound(const hx_os_map *map, const void *key,
 	(void)key;
 	(void)bytes;
 	(void)iterator;
+
 	return HX_OS_NOT_SUPPORTED;
 }
 
@@ -354,6 +392,7 @@ hx_os_status hx_os_map_equal_range(const hx_os_map *map, const void *key,
 	size_t bytes, hx_os_map_iterator *first, hx_os_map_iterator *last)
 {
 	(void)last;
+
 	return hx_os_map_lower_bound(map, key, bytes, first);
 }
 
@@ -361,6 +400,7 @@ hx_os_status hx_os_map_count(
 	const hx_os_map *map, const void *key, size_t bytes, size_t *count)
 {
 	(void)count;
+
 	return hx_os_map_lower_bound(map, key, bytes, NULL);
 }
 
@@ -378,6 +418,7 @@ hx_os_status hx_os_map_erase_at(hx_os_map *map, hx_os_map_iterator *iterator,
 	void *out, hx_os_error *error)
 {
 	(void)iterator;
+
 	return hx_os_map_erase(map, NULL, 0, out, error);
 }
 
@@ -385,12 +426,14 @@ hx_os_status hx_os_map_erase_all(hx_os_map *map, const void *key, size_t bytes,
 	size_t *count, hx_os_error *error)
 {
 	(void)count;
+
 	return hx_os_map_erase(map, key, bytes, NULL, error);
 }
 
 hx_os_status hx_os_map_validate(const hx_os_map *map)
 {
 	(void)map;
+
 	return HX_OS_NOT_SUPPORTED;
 }
 
@@ -409,6 +452,7 @@ hx_os_status hx_os_sequence_erase_at(hx_os_sequence *sequence,
 	hx_os_sequence_iterator *iterator, void *out, hx_os_error *error)
 {
 	(void)iterator;
+
 	return hx_os_sequence_erase(sequence, 0, out, error);
 }
 
@@ -418,6 +462,7 @@ hx_os_status hx_os_sequence_find_if(const hx_os_sequence *sequence,
 {
 	(void)predicate;
 	(void)user;
+
 	return hx_os_sequence_begin(sequence, iterator);
 }
 
@@ -425,6 +470,7 @@ hx_os_status hx_os_sequence_count_if(const hx_os_sequence *sequence,
 	hx_os_value_predicate_fn predicate, void *user, size_t *count)
 {
 	(void)count;
+
 	return hx_os_sequence_find_if(sequence, predicate, user, NULL);
 }
 
@@ -437,6 +483,7 @@ hx_os_status hx_os_sequence_visit(hx_os_sequence *sequence,
 	(void)user;
 	if (completed)
 		*completed = 0;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -448,6 +495,7 @@ hx_os_status hx_os_sequence_remove_if(hx_os_sequence *sequence,
 	(void)predicate;
 	(void)user;
 	(void)removed;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -467,6 +515,7 @@ hx_os_status hx_os_sequence_rotate(
 	hx_os_sequence *sequence, size_t left_count, hx_os_error *error)
 {
 	(void)left_count;
+
 	return hx_os_sequence_reverse(sequence, error);
 }
 
@@ -488,6 +537,7 @@ hx_os_status hx_os_list_splice(hx_os_list *destination, size_t position,
 	(void)source;
 	(void)first;
 	(void)count;
+
 	return hx_os_sequence_rotate(destination, position, error);
 }
 
@@ -509,6 +559,7 @@ hx_os_status hx_os_sequence_clone(
 	(void)source;
 	if (out)
 		*out = NULL;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -518,6 +569,7 @@ hx_os_status hx_os_sequence_copy_if(const hx_os_sequence *source,
 {
 	(void)predicate;
 	(void)user;
+
 	return hx_os_sequence_clone(source, out, error);
 }
 
@@ -529,6 +581,7 @@ hx_os_status hx_os_sequence_transform(const hx_os_sequence *source,
 	(void)options;
 	(void)transform;
 	(void)user;
+
 	return hx_os_sequence_clone(source, out, error);
 }
 
@@ -542,6 +595,7 @@ hx_os_status hx_os_sequence_fold(const hx_os_sequence *source,
 	(void)user;
 	if (completed)
 		*completed = 0;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -551,6 +605,7 @@ hx_os_status hx_os_sequence_merge(const hx_os_sequence *left,
 {
 	(void)right;
 	(void)operation;
+
 	return hx_os_sequence_clone(left, out, error);
 }
 
@@ -561,6 +616,7 @@ hx_os_status hx_os_sequence_any_of(const hx_os_sequence *sequence,
 	(void)predicate;
 	(void)user;
 	(void)result;
+
 	return HX_OS_NOT_SUPPORTED;
 }
 
@@ -571,6 +627,7 @@ hx_os_status hx_os_sequence_all_of(const hx_os_sequence *sequence,
 	(void)predicate;
 	(void)user;
 	(void)result;
+
 	return HX_OS_NOT_SUPPORTED;
 }
 
@@ -581,6 +638,7 @@ hx_os_status hx_os_sequence_none_of(const hx_os_sequence *sequence,
 	(void)predicate;
 	(void)user;
 	(void)result;
+
 	return HX_OS_NOT_SUPPORTED;
 }
 
@@ -592,6 +650,7 @@ hx_os_status hx_os_sequence_partition(hx_os_sequence *sequence,
 	(void)predicate;
 	(void)user;
 	(void)boundary;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -604,5 +663,6 @@ hx_os_status hx_os_sequence_replace_if(hx_os_sequence *sequence,
 	(void)user;
 	(void)replacement;
 	(void)replaced;
+
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }

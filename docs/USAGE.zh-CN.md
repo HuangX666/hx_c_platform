@@ -63,13 +63,19 @@ Hello, hx_c_platform!
 ```cmake
 cmake_minimum_required(VERSION 3.16)
 project(hx_demo LANGUAGES C)
+
 set(HX_OS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(HX_OS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+
 add_subdirectory(external/hx_c_platform)
+
 add_executable(hx_demo main.c)
 target_link_libraries(hx_demo PRIVATE hx_c_platform::hx_c_platform)
 set_target_properties(hx_demo PROPERTIES
-	C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
+	C_STANDARD 99
+	C_STANDARD_REQUIRED YES
+	C_EXTENSIONS NO)
+
 configure_file(hello.txt hello.txt COPYONLY)
 configure_file(config.json config.json COPYONLY)
 ```
@@ -107,19 +113,26 @@ Linux 的 Makefile/Ninja 构建运行：
 ```cmake
 cmake_minimum_required(VERSION 3.16)
 project(hx_demo LANGUAGES CXX)
+
 set(HX_OS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(HX_OS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+
 add_subdirectory(external/hx_c_platform)
+
 add_executable(hx_demo main.cpp)
 target_link_libraries(hx_demo PRIVATE hx_c_platform::cpp)
 set_target_properties(hx_demo PROPERTIES
-	CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO)
+	CXX_STANDARD 11
+	CXX_STANDARD_REQUIRED YES
+	CXX_EXTENSIONS NO)
+
 if(MSVC)
 	target_compile_options(hx_demo PRIVATE /EHs-c- /utf-8)
 	target_compile_definitions(hx_demo PRIVATE _HAS_EXCEPTIONS=0)
 else()
 	target_compile_options(hx_demo PRIVATE -fno-exceptions)
 endif()
+
 configure_file(hello.txt hello.txt COPYONLY)
 configure_file(config.json config.json COPYONLY)
 ```
@@ -149,12 +162,15 @@ cd build-cpp
 int main(void)
 {
 	hx_string text = HX_STRING_INIT;
+
 	hx_os_status status = hx_os_file_read_text("hello.txt", &text, NULL);
 	if (status == HX_OS_OK)
 		puts(hx_string_c_str(&text));
 	else
 		fprintf(stderr, "Read failed: %s\n", hx_os_status_name(status));
+
 	hx_string_destroy(&text);
+
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -179,9 +195,12 @@ int main()
 	if (!text) {
 		std::fprintf(stderr, "Read failed: %s\n",
 			hx_os_status_name(text.status()));
+
 		return 1;
 	}
+
 	std::puts(text.value().c_str());
+
 	return 0;
 }
 ```
@@ -211,6 +230,7 @@ Hello, hx_c_platform!
 int main(void)
 {
 	hx_string text = HX_STRING_INIT;
+
 	hx_os_status status = hx_string_assign_cstr(&text, "  Hello  ", NULL);
 	if (status == HX_OS_OK) {
 		hx_string_trim_ascii_in_place(&text);
@@ -219,7 +239,9 @@ int main(void)
 	}
 	else
 		fprintf(stderr, "%s\n", hx_os_status_name(status));
+
 	hx_string_destroy(&text);
+
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -235,10 +257,13 @@ int main()
 	auto text = hx::String::copy("  Hello  ");
 	if (!text) {
 		std::fprintf(stderr, "%s\n", hx_os_status_name(text.status()));
+
 		return 1;
 	}
+
 	text.value().trimAscii().lowerAscii();
 	std::puts(text.value().c_str());
+
 	return 0;
 }
 ```
@@ -270,18 +295,23 @@ int main(void)
 	hx_os_config_document *document = NULL;
 	const hx_os_config_node *node = NULL;
 	int64_t port = 0;
+
 	hx_os_status status = hx_os_config_load(
 		NULL, HX_OS_CONFIG_JSON, "config.json", NULL, &document, NULL);
 	if (status == HX_OS_OK)
 		status = hx_os_config_pointer(
 			hx_os_config_root(document), "/port", &node);
+
 	if (status == HX_OS_OK)
 		status = hx_os_config_get_i64(node, &port);
+
 	if (status == HX_OS_OK)
 		printf("Port: %lld\n", (long long)port);
 	else
 		fprintf(stderr, "%s\n", hx_os_status_name(status));
+
 	hx_os_config_release(document);
+
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -300,14 +330,19 @@ int main()
 	if (!config) {
 		std::fprintf(
 			stderr, "%s\n", hx_os_status_name(config.status()));
+
 		return 1;
 	}
+
 	auto port = config.value().integer("/port");
 	if (!port) {
 		std::fprintf(stderr, "%s\n", hx_os_status_name(port.status()));
+
 		return 1;
 	}
+
 	std::printf("Port: %lld\n", static_cast<long long>(port.value()));
+
 	return 0;
 }
 ```
@@ -338,18 +373,24 @@ int main(void)
 {
 	hx_settings *settings = NULL;
 	int64_t port = 0;
+
 	hx_os_status status = hx_settings_create(NULL, &settings, NULL);
 	if (status == HX_OS_OK)
 		status = hx_settings_set_i64(settings, "port", 8080, NULL);
+
 	if (status == HX_OS_OK)
 		status = hx_settings_get_i64(settings, "port", &port, NULL);
+
 	if (status == HX_OS_OK)
 		printf("Port: %lld\n", (long long)port);
+
 	hx_os_status closed = hx_settings_destroy(&settings, NULL);
 	if (status == HX_OS_OK)
 		status = closed;
+
 	if (status != HX_OS_OK)
 		fprintf(stderr, "%s\n", hx_os_status_name(status));
+
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -365,14 +406,19 @@ int main(void)
 int main()
 {
 	hx_settings *owner = NULL;
+
 	hx::Settings settings(owner);
+
 	auto created = settings.create();
 	if (!created) {
 		std::fprintf(
 			stderr, "%s\n", hx_os_status_name(created.status()));
+
 		return 1;
 	}
+
 	int exit_code = 1;
+
 	auto changed = settings.setInt("port", 8080);
 	if (changed) {
 		auto port = settings.integer("port");
@@ -388,12 +434,15 @@ int main()
 	else
 		std::fprintf(
 			stderr, "%s\n", hx_os_status_name(changed.status()));
+
 	auto closed = settings.closeUntil(HX_OS_DEADLINE_NOW);
 	if (!closed) {
 		std::fprintf(
 			stderr, "%s\n", hx_os_status_name(closed.status()));
+
 		return 1;
 	}
+
 	return exit_code;
 }
 ```
@@ -440,19 +489,25 @@ HX_OS_DECLARE_VECTOR(int_vector, int)
 int main(void)
 {
 	int_vector *numbers = NULL;
+
 	hx_os_status status = int_vector_create(NULL, 16, &numbers, NULL);
 	if (status == HX_OS_OK)
 		status = int_vector_push(numbers, 10, NULL);
+
 	if (status == HX_OS_OK)
 		status = int_vector_push(numbers, 20, NULL);
+
 	if (status == HX_OS_OK)
 		printf("Count: %zu, first: %d\n", int_vector_size(numbers),
 			*int_vector_at(numbers, 0));
+
 	hx_os_status closed = int_vector_destroy(&numbers, NULL);
 	if (status == HX_OS_OK)
 		status = closed;
+
 	if (status != HX_OS_OK)
 		fprintf(stderr, "%s\n", hx_os_status_name(status));
+
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -479,21 +534,28 @@ int main(void)
 {
 	int_queue *queue = NULL;
 	int value = 0;
+
 	hx_os_status status = int_queue_create(NULL, 16, &queue, NULL);
 	if (status == HX_OS_OK)
 		status = int_queue_push(queue, 10, NULL);
+
 	if (status == HX_OS_OK)
 		status = int_queue_push(queue, 20, NULL);
+
 	if (status == HX_OS_OK)
 		status = int_queue_pop(queue, &value, NULL);
+
 	if (status == HX_OS_OK)
 		printf("Removed: %d, remaining: %zu\n", value,
 			int_queue_size(queue));
+
 	hx_os_status closed = int_queue_destroy(&queue, NULL);
 	if (status == HX_OS_OK)
 		status = closed;
+
 	if (status != HX_OS_OK)
 		fprintf(stderr, "%s\n", hx_os_status_name(status));
+
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```
@@ -528,16 +590,21 @@ flowchart LR
 int main()
 {
 	hx_os_thread_pool *owner = NULL;
+
 	auto created = hx::ThreadPool::withThreads(owner, 2);
 	if (!created) {
 		std::fprintf(
 			stderr, "%s\n", hx_os_status_name(created.status()));
+
 		return 1;
 	}
+
 	auto &pool = created.value();
+
 	auto submitted =
 		pool.submit([](int value) noexcept { return value * 2; }, 21);
 	int exit_code = 1;
+
 	if (submitted) {
 		auto answer = submitted.value().getUntil(
 			hx_os_deadline_after_ms(2000));
@@ -552,13 +619,16 @@ int main()
 	else
 		std::fprintf(
 			stderr, "%s\n", hx_os_status_name(submitted.status()));
+
 	auto closed = pool.shutdownUntil(
 		hx_os_deadline_after_ms(2000), HX_OS_POOL_CANCEL_PENDING);
 	if (!closed) {
 		std::fprintf(stderr, "Close pending: %s\n",
 			hx_os_status_name(closed.status()));
+
 		return 1;
 	}
+
 	return exit_code;
 }
 ```
@@ -605,39 +675,52 @@ int main(void)
 	hx_string_view text;
 	int32_t count;
 	hx_os_status status;
+
 	if (!(hx_os_capabilities() & HX_OS_CAP_VARIANT)) {
 		puts("Variant support is disabled");
+
 		return 0;
 	}
+
 	status = hx_variant_set_i32(&value, 42, NULL);
 	if (status != HX_OS_OK)
 		goto failed;
+
 	status = hx_variant_get_i32(&value, &count, NULL);
 	if (status != HX_OS_OK)
 		goto failed;
+
 	printf("Integer: %d\n", (int)count);
 
 	status = hx_variant_set_cstr(&value, "hello", NULL);
 	if (status != HX_OS_OK)
 		goto failed;
+
 	status = hx_variant_get_string_view(&value, &text, NULL);
 	if (status != HX_OS_OK)
 		goto failed;
+
 	printf("String: %.*s\n", (int)text.size, text.data);
 
 	status = hx_variant_set_custom(&value, &point_type, &position, NULL);
 	if (status != HX_OS_OK)
 		goto failed;
+
 	status = hx_variant_get_custom(&value, &point_type, &object, NULL);
 	if (status != HX_OS_OK)
 		goto failed;
+
 	printf("Point: %.1f, %.1f\n", ((const point *)object)->x,
 		((const point *)object)->y);
+
 	hx_variant_destroy(&value);
+
 	return 0;
+
 failed:
 	fprintf(stderr, "Variant failed: %s\n", hx_os_status_name(status));
 	hx_variant_destroy(&value);
+
 	return 1;
 }
 ```
@@ -657,29 +740,41 @@ int main()
 {
 	if (!(hx_os_capabilities() & HX_OS_CAP_VARIANT)) {
 		std::puts("Variant support is disabled");
+
 		return 0;
 	}
+
 	hx::TypedVariant<int32_t, double, hx::StringView, Point> value;
+
 	if (!value.set(int32_t(42)))
 		return 1;
+
 	auto count = value.get<int32_t>();
+
 	if (!count)
 		return 1;
+
 	std::printf("Integer: %d\n", static_cast<int>(count.value()));
 
 	if (!value.set("hello"))
 		return 1;
+
 	auto text = value.get<hx::StringView>();
+
 	if (!text)
 		return 1;
+
 	std::printf("String: %.*s\n", static_cast<int>(text.value().size()),
 		text.value().data());
 
 	if (!value.set(Point{2, 5}))
 		return 1;
+
 	auto position = value.get<Point>();
+
 	if (!position)
 		return 1;
+
 	std::printf(
 		"Point: %.1f, %.1f\n", position.value().x, position.value().y);
 }

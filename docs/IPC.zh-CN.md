@@ -59,11 +59,14 @@ cmake --build build-ipc --config Release --parallel 4
 hx_ipc *client = NULL;
 hx_ipc_message *reply = NULL;
 hx_os_error error = {0};
+
 hx_os_status status = hx_ipc_connect("local://demo", &client, &error);
 if (status == HX_OS_OK)
 	status = hx_ipc_request_text(client, "Hello from C", &reply, &error);
+
 if (status == HX_OS_OK)
 	printf("Reply: %.*s\n", (int)reply->bytes, (const char *)reply->data);
+
 hx_ipc_message_release(reply);
 /* Close client even when connect or request failed; see section 6. */
 ```
@@ -94,8 +97,10 @@ Linux/macOS 对应命令是 `./build-ipc/bin/hx_os_ipc_server local://demo 20` �
 auto reply = connection.requestText("读取温度", device_id);
 if (!reply) {
 	std::fprintf(stderr, "Request failed: %d\n", reply.status());
+
 	return NULL;
 }
+
 std::printf("Reply: %s\n", reply.value().text());
 ```
 

@@ -35,6 +35,7 @@ enum {
 	HX_OS_CODEC_FIXED_ARRAY,
 	HX_OS_CODEC_NODE
 };
+
 enum { HX_OS_CODEC_OPTIONAL = 1, HX_OS_CODEC_XML_ATTRIBUTE = 2 };
 
 typedef struct hx_os_codec_array {
@@ -122,21 +123,27 @@ struct hx_os_codec_schema {
  * check native node types. Unrepresentable shapes fail, never flatten.
  */
 HX_OS_API int HX_OS_CALL hx_os_codec_available(void);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_codec_encode(
 	const hx_os_codec_schema *schema, const void *object, int format,
 	hx_string *out, const hx_os_config_options *options,
 	hx_os_config_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_codec_decode(hx_os_context *context,
 	const hx_os_codec_schema *schema, int format, const void *text,
 	size_t bytes, const hx_os_config_options *options,
 	hx_os_codec_result **out, hx_os_config_error *error);
+
 HX_OS_API const void *HX_OS_CALL hx_os_codec_data(
 	const hx_os_codec_result *result);
+
 HX_OS_API void HX_OS_CALL hx_os_codec_release(hx_os_codec_result *result);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_codec_save(
 	const hx_os_codec_schema *schema, const void *object, int format,
 	const char *path, const hx_os_config_options *options,
 	hx_os_config_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_codec_load(hx_os_context *context,
 	const hx_os_codec_schema *schema, int format, const char *path,
 	const hx_os_config_options *options, hx_os_codec_result **out,

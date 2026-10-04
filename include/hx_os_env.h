@@ -18,16 +18,21 @@ extern "C" {
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_env_get(const char *name, char *buffer,
 	size_t capacity, size_t *required, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_env_get_string(
 	const char *name, hx_string *out, hx_os_error *error);
+
 /* replace=0 preserves an existing value and succeeds. NULL is not a value. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_env_set(
 	const char *name, const char *value, int replace, hx_os_error *error);
+
 /* Removing a missing name succeeds. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_env_remove(
 	const char *name, hx_os_error *error);
+
 typedef hx_os_status(HX_OS_CALL *hx_os_env_visit_fn)(
 	const char *name, const char *value, void *user);
+
 /* Snapshot bounded to 4 MiB/65536 entries. Validate before calling visitors;
  * callbacks run outside the environment lock and may modify the environment.
  * Name/value pointers are borrowed only for that invocation. A callback's

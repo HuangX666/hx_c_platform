@@ -24,8 +24,10 @@ static void complete(
 	hx_os_request *request, const hx_os_completion *result, void *user)
 {
 	post_state *state = user;
+
 	(void)request;
 	CHECK(result->error.status == HX_OS_OK);
+
 	(void)hx_os_atomic_fetch_add(&state->completed, 1, HX_OS_RELAXED);
 }
 
@@ -33,10 +35,12 @@ static void *worker(void *user)
 {
 	post_state *state = user;
 	size_t i;
+
 	for (i = 0; i < 500; ++i) {
 		hx_os_operation op;
 		hx_os_request *request;
 		hx_os_status status;
+
 		hx_os_operation_init(&op, HX_OS_OP_POST);
 		do {
 			status = hx_os_loop_submit(state->loop, &op, complete,
@@ -47,9 +51,12 @@ static void *worker(void *user)
 				(void)hx_os_sleep_until(
 					hx_os_deadline_after_ms(1), NULL);
 		} while (status == HX_OS_LIMIT);
+
 		hx_os_request_release(request);
 	}
+
 	(void)hx_os_atomic_fetch_add(&state->workers_done, 1, HX_OS_RELEASE);
+
 	return NULL;
 }
 
@@ -57,8 +64,10 @@ static void cancelled(
 	hx_os_request *request, const hx_os_completion *result, void *user)
 {
 	size_t *calls = user;
+
 	(void)request;
 	CHECK(result->error.status == HX_OS_CANCELLED);
+
 	++*calls;
 }
 
@@ -76,18 +85,23 @@ int main(void)
 	hx_os_request *rejected;
 	size_t calls = 0;
 	size_t i;
+
 	memset(&state, 0, sizeof(state));
 	CHECK(hx_os_context_create(NULL, &context, NULL) == HX_OS_OK);
 	CHECK(hx_os_network_create(context, &network, NULL) == HX_OS_OK);
+
 	hx_os_loop_options_init(&options);
 	options.max_requests = 32;
 	options.dns_threads = 0;
 	CHECK(hx_os_loop_create(network, &options, &state.loop, NULL) ==
 		HX_OS_OK);
+
 	state.limit = hx_os_deadline_after_ms(10000);
+
 	for (i = 0; i < 4; ++i)
 		CHECK(hx_os_thread_create(context, worker, &state, &threads[i],
 			      NULL) == HX_OS_OK);
+
 	while (hx_os_atomic_load(&state.workers_done, HX_OS_ACQUIRE) < 4 ||
 		hx_os_loop_pending(state.loop)) {
 		hx_os_status status = hx_os_loop_poll_until(
@@ -96,11 +110,13 @@ int main(void)
 		CHECK(!hx_os_deadline_expired(state.limit));
 		CHECK(hx_os_loop_pending(state.loop) <= 32);
 	}
+
 	for (i = 0; i < 4; ++i) {
 		CHECK(hx_os_thread_join_until(
 			      threads[i], state.limit, NULL, NULL) == HX_OS_OK);
 		CHECK(hx_os_thread_destroy(&threads[i], NULL) == HX_OS_OK);
 	}
+
 	CHECK(hx_os_atomic_load(&state.completed, HX_OS_ACQUIRE) == 2000);
 	CHECK(hx_os_loop_close_until(state.loop, state.limit, NULL) ==
 		HX_OS_OK);
@@ -108,6 +124,7 @@ int main(void)
 
 	options.max_requests = 2;
 	CHECK(hx_os_loop_create(network, &options, &bounded, NULL) == HX_OS_OK);
+
 	hx_os_operation_init(&op, HX_OS_OP_TIMER);
 	CHECK(hx_os_loop_submit(bounded, &op, cancelled, &calls, &first,
 		      NULL) == HX_OS_OK);
@@ -125,11 +142,14 @@ int main(void)
 	CHECK(hx_os_loop_submit(bounded, &op, cancelled, &calls, &rejected,
 		      NULL) == HX_OS_CLOSED);
 	CHECK(hx_os_loop_destroy(&bounded, NULL) == HX_OS_OK);
+
 	hx_os_request_release(first);
 	hx_os_request_release(second);
 	CHECK(hx_os_network_destroy(&network, NULL) == HX_OS_OK);
 	CHECK(hx_os_context_allocations(context) == 0);
 	CHECK(hx_os_context_destroy(&context, NULL) == HX_OS_OK);
+
 	puts("bounded concurrent loop posting passed");
+
 	return 0;
 }

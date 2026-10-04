@@ -31,55 +31,70 @@ static hx_os_deadline test_deadline(void)
 {
 	return hx_os_deadline_after_ms(5000);
 }
+
 static void test_local_drop(void *value, void *user)
 {
 	test_state *state = user;
+
 	CHECK(value == &state->value);
+
 	(void)hx_os_atomic_fetch_add(&state->drops, 1, HX_OS_RELAXED);
 }
+
 static hx_os_status test_reader(
 	hx_os_coro *self, void *user, hx_os_error *error)
 {
 	test_state *state = user;
 	hx_os_status status;
+
 	(void)self;
 	HX_OS_CORO_BEGIN(state->step);
 	CHECK(hx_os_coro_local_get(state->key) == NULL);
 	CHECK(hx_os_coro_local_set(state->key, &state->value, error) ==
 		HX_OS_OK);
+
 	HX_OS_CORO_AWAIT(state->step, status,
 		hx_os_coro_mutex_lock_until(
 			state->mutex, test_deadline(), error));
 	CHECK(status == HX_OS_OK);
+
 	while (!state->value) {
 		HX_OS_CORO_AWAIT(state->step, status,
 			hx_os_coro_condition_wait_until(state->condition,
 				state->mutex, test_deadline(), error));
 		CHECK(status == HX_OS_OK);
 	}
+
 	CHECK(hx_os_coro_mutex_unlock(state->mutex, error) == HX_OS_OK);
+
 	HX_OS_CORO_AWAIT(state->step, status,
 		hx_os_coro_semaphore_wait_until(
 			state->semaphore, test_deadline(), error));
 	CHECK(status == HX_OS_OK);
+
 	HX_OS_CORO_AWAIT(state->step, status,
 		hx_os_coro_event_wait_until(
 			state->event, test_deadline(), error));
 	CHECK(status == HX_OS_OK);
 	CHECK(hx_os_coro_local_get(state->key) == &state->value);
+
 	HX_OS_CORO_END(state->step);
+
 	return HX_OS_OK;
 }
+
 static hx_os_status test_writer(
 	hx_os_coro *self, void *user, hx_os_error *error)
 {
 	test_state *state = user;
+
 	(void)self;
 	CHECK(hx_os_coro_local_get(state->key) == NULL);
 	CHECK(hx_os_coro_mutex_lock_until(
 		      state->mutex, test_deadline(), error) == HX_OS_OK);
 	CHECK(hx_os_coro_mutex_lock_until(state->mutex, HX_OS_DEADLINE_NOW,
 		      error) == HX_OS_DEADLOCK);
+
 	state->value = 42;
 	CHECK(hx_os_coro_condition_notify_all(state->condition, error) ==
 		HX_OS_OK);
@@ -88,50 +103,65 @@ static hx_os_status test_writer(
 	CHECK(hx_os_coro_semaphore_post(state->semaphore, 1, error) ==
 		HX_OS_OK);
 	CHECK(hx_os_coro_event_set(state->event, error) == HX_OS_OK);
+
 	return HX_OS_OK;
 }
+
 static hx_os_status test_cancelled(
 	hx_os_coro *self, void *user, hx_os_error *error)
 {
 	test_state *state = user;
+
 	(void)self;
 	CHECK(hx_os_coro_mutex_lock_until(
 		      state->mutex, test_deadline(), error) == HX_OS_OK);
+
 	hx_os_event_set(state->entered);
 	CHECK(hx_os_coro_condition_wait_until(state->condition, state->mutex,
 		      HX_OS_DEADLINE_INFINITE, error) == HX_OS_CANCELLED);
 	CHECK(hx_os_coro_mutex_unlock(state->mutex, error) == HX_OS_OK);
+
 	return HX_OS_OK;
 }
+
 static hx_os_status test_holder(
 	hx_os_coro *self, void *user, hx_os_error *error)
 {
 	test_state *state = user;
+
 	(void)self;
 	CHECK(hx_os_coro_mutex_lock_until(
 		      state->mutex, test_deadline(), error) == HX_OS_OK);
+
 	hx_os_event_set(state->holding);
 	CHECK(hx_os_event_wait_until(state->release, test_deadline(), error) ==
 		HX_OS_OK);
 	CHECK(hx_os_coro_mutex_unlock(state->mutex, error) == HX_OS_OK);
+
 	return HX_OS_OK;
 }
+
 static hx_os_status test_failure(
 	hx_os_coro *self, void *user, hx_os_error *error)
 {
 	(void)self;
 	(void)user;
 	*error = (hx_os_error){HX_OS_IO_ERROR, HX_OS_ERROR_ERRNO, 13, 7};
+
 	return HX_OS_IO_ERROR;
 }
+
 static void test_wait(hx_os_coro *task)
 {
 	hx_os_error result;
+
 	CHECK(hx_os_coro_wait_until(task, test_deadline(), &result, NULL) ==
 		HX_OS_OK);
 	CHECK(result.status == HX_OS_OK);
+
 	hx_os_coro_release(task);
 }
+
 int main(void)
 {
 	test_state state;
@@ -140,9 +170,11 @@ int main(void)
 	hx_os_coro *reader, *writer;
 	hx_os_coro_errors errors;
 	hx_os_deadline deadline;
+
 	if (!(hx_os_capabilities() & HX_OS_CAP_COROUTINES)) {
 		hx_os_coro_mutex *mutex = NULL;
 		hx_os_coro_local_key *key = NULL;
+
 		CHECK(hx_os_coro_mutex_create(NULL, &mutex, NULL) ==
 			HX_OS_NOT_SUPPORTED);
 		CHECK(!mutex);
@@ -153,10 +185,13 @@ int main(void)
 		CHECK(hx_os_coro_spawn(NULL, HX_OS_CORO_STACKLESS,
 			      test_failure, NULL, NULL, NULL) ==
 			HX_OS_NOT_SUPPORTED);
+
 		return 0;
 	}
+
 	if (!(hx_os_capabilities() & HX_OS_CAP_STACKFUL_COROUTINES))
 		return 0;
+
 	memset(&state, 0, sizeof(state));
 	options.max_io_handles = 0;
 	CHECK(hx_os_context_create(NULL, &context, NULL) == HX_OS_OK);
@@ -178,6 +213,7 @@ int main(void)
 		      &state, NULL, &reader, NULL) == HX_OS_OK);
 	CHECK(hx_os_coro_go(state.runtime, HX_OS_CORO_STACKFUL, test_writer,
 		      &state, NULL, &writer, NULL) == HX_OS_OK);
+
 	test_wait(reader);
 	test_wait(writer);
 	CHECK(hx_os_atomic_load(&state.drops, HX_OS_RELAXED) == 1);
@@ -215,9 +251,11 @@ int main(void)
 		      &state, NULL, &writer, NULL) == HX_OS_OK);
 	CHECK(hx_os_event_wait_until(state.holding, test_deadline(), NULL) ==
 		HX_OS_OK);
+
 	hx_os_coro_cancel(reader);
 	CHECK(hx_os_coro_wait_until(reader, HX_OS_DEADLINE_NOW, NULL, NULL) ==
 		HX_OS_TIMEOUT);
+
 	hx_os_event_set(state.release);
 	test_wait(reader);
 	test_wait(writer);
@@ -237,6 +275,7 @@ int main(void)
 	CHECK(hx_os_coro_errors_read(state.runtime, 1, &errors, NULL) ==
 		HX_OS_OK);
 	CHECK(errors.count == 1 && errors.first.status == HX_OS_INVALID);
+
 	hx_os_coro_sync_release(state.mutex);
 	hx_os_coro_sync_release(state.condition);
 	hx_os_coro_sync_release(state.event);
@@ -254,6 +293,8 @@ int main(void)
 	CHECK(hx_os_coro_runtime_destroy(&state.runtime, NULL) == HX_OS_OK);
 	CHECK(hx_os_context_allocations(context) == 0);
 	CHECK(hx_os_context_destroy(&context, NULL) == HX_OS_OK);
+
 	puts("coroutine sync, CLS and managed task errors passed");
+
 	return 0;
 }

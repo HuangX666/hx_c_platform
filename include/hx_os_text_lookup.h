@@ -1,5 +1,6 @@
 #ifndef HX_C_PLATFORM_TEXT_LOOKUP_H
 #define HX_C_PLATFORM_TEXT_LOOKUP_H
+
 #include "hx_string.h"
 #ifdef __cplusplus
 extern "C" {
@@ -17,6 +18,7 @@ typedef struct hx_os_text_lookup_options {
 	}
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_lookup_options_init(
 	hx_os_text_lookup_options *options, size_t capacity);
+
 /* Independent mutable table. Default limits: 4096 entries, 1 MiB combined
  * key/value bytes including NULs. Allocates on demand; metadata is additional.
  * Concurrent reads allowed; host excludes mutation/destruction. No locks,
@@ -24,9 +26,11 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_text_lookup_options_init(
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_lookup_create(
 	hx_os_context *context, hx_os_text_lookup **out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_lookup_create_with_options(
 	hx_os_context *context, const hx_os_text_lookup_options *options,
 	hx_os_text_lookup **out, hx_os_error *error);
+
 /* Copies strict UTF-8 key and translation. Keys are exact, case-sensitive
  * UTF-8 bytes (no normalization). Replaces an existing key transactionally.
  * Empty strings are valid. Replacement may temporarily retain old+new text,
@@ -35,6 +39,7 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_text_lookup_create_with_options(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_lookup_add(
 	hx_os_text_lookup *lookup, const char *fallback, const char *translated,
 	hx_os_error *error);
+
 /* A missing key returns fallback itself, with OK. Only absence falls back;
  * invalid UTF-8 and output allocation/capacity errors are reported.
  * required includes NUL; insufficient capacity preserves buffer.
@@ -44,9 +49,11 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_text_lookup_add(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_lookup_get(
 	const hx_os_text_lookup *lookup, const char *fallback, char *buffer,
 	size_t capacity, size_t *required, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_lookup_get_string(
 	const hx_os_text_lookup *lookup, const char *fallback, hx_string *out,
 	hx_os_error *error);
+
 /* Allocation-free view. A hit borrows the table until any mutation/destroy;
  * a missing key borrows fallback itself. Exclude mutation during use.
  * Failure preserves out; the caller keeps fallback alive when it is used.
@@ -54,6 +61,7 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_text_lookup_get_string(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_lookup_get_view(
 	const hx_os_text_lookup *lookup, const char *fallback,
 	hx_string_view *out, hx_os_error *error);
+
 /* OBS-style flat language catalog: UTF-8/BOM, key=value, # comments,
  * quoted strings with JSON escapes, or trimmed unquoted text. No sections,
  * includes, interpolation or process locale changes. Duplicate keys use last.
@@ -63,10 +71,13 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_text_lookup_get_view(
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_lookup_load(hx_os_context *context,
 	const char *path, hx_os_text_lookup **out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_lookup_add_file(
 	hx_os_text_lookup *lookup, const char *path, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_lookup_add_text(
 	hx_os_text_lookup *lookup, hx_string_view text, hx_os_error *error);
+
 HX_OS_API void HX_OS_CALL hx_os_text_lookup_destroy(hx_os_text_lookup **lookup);
 #ifdef __cplusplus
 }

@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 typedef struct hx_os_pipe hx_os_pipe;
+
 enum { HX_OS_PIPE_READ, HX_OS_PIPE_WRITE };
 
 /*
@@ -25,6 +26,7 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_pipe_pair_anonymous(
 /* Dedicated asynchronous endpoints, never usable as synchronous files. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_pipe_pair_async(hx_os_context *context,
 	hx_os_pipe **read_end, hx_os_pipe **write_end, hx_os_error *error);
+
 /* Parent is async, child is synchronous; neither is initially inheritable. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_pipe_pair_child(hx_os_context *context,
 	int parent_reads, hx_os_pipe **parent, hx_os_file **child,
@@ -40,11 +42,14 @@ typedef struct hx_os_pipe_operation {
 	int kind;
 	int send_mode;
 } hx_os_pipe_operation;
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_pipe_operation_init(
 	hx_os_pipe_operation *operation, size_t capacity, int kind);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_loop_submit_pipe(hx_os_loop *loop,
 	const hx_os_pipe_operation *operation, hx_os_completion_fn completion,
 	void *user, hx_os_request **out, hx_os_error *error);
+
 /* Read completes with any bytes or EOF. Write completes all bytes or reports
  * partial progress on failure/cancel. Default write copies; explicit BORROW
  * and read storage remain valid until callback returns. Both share the
@@ -54,10 +59,12 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_pipe_read_async(hx_os_loop *loop,
 	hx_os_pipe *pipe, void *data, size_t bytes, hx_os_deadline deadline,
 	hx_os_completion_fn completion, void *user, hx_os_request **out,
 	hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_pipe_write_async(hx_os_loop *loop,
 	hx_os_pipe *pipe, const void *data, size_t bytes,
 	hx_os_deadline deadline, hx_os_completion_fn completion, void *user,
 	hx_os_request **out, hx_os_error *error);
+
 /*
  * On first submit the endpoint belongs to that loop/owner until close.
  * Close rejects submissions, cancels its request and drives native retirement

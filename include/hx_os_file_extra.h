@@ -26,11 +26,13 @@ extern "C" {
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_lock_at(hx_os_file *file,
 	uint64_t offset, uint64_t bytes, int shared, hx_os_deadline deadline,
 	hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_unlock_at(
 	hx_os_file *file, uint64_t offset, uint64_t bytes, hx_os_error *error);
 
 enum { HX_OS_TIME_ACCESSED = 1u, HX_OS_TIME_MODIFIED = 2u };
 enum { HX_OS_PERMISSION_OWNER_EXECUTE = 4u };
+
 typedef struct hx_os_file_times {
 	uint32_t size;
 	uint32_t version;
@@ -47,6 +49,7 @@ typedef struct hx_os_file_times {
 	}
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_times_init(
 	hx_os_file_times *times, size_t capacity);
+
 /*
  * Unix seconds plus [0,1e9) ns. fields selects access/modify; omitted fields
  * remain unchanged, fields=0 is a no-op without an existence/access check.
@@ -55,6 +58,7 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_file_times_init(
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_file_set_times(const char *path,
 	const hx_os_file_times *times, int follow_links, hx_os_error *error);
+
 /*
  * POSIX: replace owner read/write/execute mode, preserve group/other mode.
  * Windows: READ is required, EXECUTE unsupported; WRITE toggles the

@@ -8,11 +8,17 @@
 #include <ctype.h>
 
 void *hx_os_cfg_vendor_malloc(size_t bytes);
+
 void *hx_os_cfg_vendor_calloc(size_t count, size_t bytes);
+
 void *hx_os_cfg_vendor_realloc(void *memory, size_t bytes);
+
 void hx_os_cfg_vendor_free(void *memory);
+
 char *hx_os_cfg_vendor_strdup(const char *text);
+
 double hx_os_cfg_vendor_strtod(const char *text, char **end);
+
 int hx_os_cfg_vendor_isspace(int character);
 
 #define malloc hx_os_cfg_vendor_malloc

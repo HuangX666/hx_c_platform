@@ -26,13 +26,16 @@ static void test_bom(void)
 	size_t bytes, prefix;
 	hx_os_encoding encoding;
 	int i;
+
 	if (!(hx_os_capabilities() & HX_OS_CAP_BOM)) {
 		CHECK(hx_os_text_bom_bytes(HX_OS_UTF8, data, &bytes) ==
 			HX_OS_NOT_SUPPORTED);
 		CHECK(hx_os_text_bom_detect("x", 1, &encoding, &prefix) ==
 			HX_OS_NOT_SUPPORTED);
+
 		return;
 	}
+
 	for (i = HX_OS_UTF8; i <= HX_OS_UTF32BE; ++i) {
 		memset(data, 0xa5, sizeof(data));
 		CHECK(hx_os_text_bom_bytes((hx_os_encoding)i, data, &bytes) ==
@@ -42,9 +45,11 @@ static void test_bom(void)
 			HX_OS_OK);
 		CHECK(encoding == (hx_os_encoding)i && prefix == bytes);
 	}
+
 	CHECK(hx_os_text_bom_detect("\xff\xfe\0\0", 4, &encoding, &prefix) ==
 			HX_OS_OK &&
 		encoding == HX_OS_UTF32LE && prefix == 4);
+
 	encoding = HX_OS_ASCII;
 	CHECK(hx_os_text_bom_detect("\xef\xbb", 2, &encoding, &prefix) ==
 			HX_OS_NOT_FOUND &&
@@ -53,6 +58,7 @@ static void test_bom(void)
 		HX_OS_NOT_FOUND);
 	CHECK(hx_os_text_bom_detect(NULL, 1, &encoding, &prefix) ==
 		HX_OS_INVALID);
+
 	memset(data, 0xa5, sizeof(data));
 	bytes = 99;
 	CHECK(hx_os_text_bom_bytes(HX_OS_GBK, data, &bytes) ==
@@ -64,10 +70,12 @@ static void test_metadata(void)
 {
 	hx_os_file_info_extended info = HX_OS_FILE_INFO_EXTENDED_INIT;
 	hx_os_file_info_extended previous;
+
 	struct {
 		hx_os_file_info_extended value;
 		unsigned char guard[8];
 	} capacity;
+
 	hx_os_file *file = NULL;
 	hx_os_directory *directory = NULL;
 	char root[96], path[128], subdir[128], name[256];
@@ -75,6 +83,7 @@ static void test_metadata(void)
 	unsigned kind;
 	int seen_file = 0, seen_directory = 0;
 	hx_os_status status;
+
 	memset(&capacity, 0xa5, sizeof(capacity));
 	CHECK(hx_os_file_info_extended_init(&capacity.value,
 		      sizeof(capacity.value) - 1) == HX_OS_INVALID);
@@ -87,8 +96,10 @@ static void test_metadata(void)
 			HX_OS_NOT_SUPPORTED);
 		CHECK(hx_os_directory_next_info(NULL, name, sizeof(name),
 			      &required, &kind, NULL) == HX_OS_NOT_SUPPORTED);
+
 		return;
 	}
+
 	(void)snprintf(root, sizeof(root),
 #if defined(_WIN32)
 		"hx-metadata-%llx",
@@ -113,8 +124,10 @@ static void test_metadata(void)
 	CHECK(info.changed_nanoseconds < 1000000000);
 #if defined(_WIN32)
 	CHECK(info.known_permissions == 0);
+
 	{
 		wchar_t wide[128];
+
 		CHECK(MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path,
 			      -1, wide, 128) > 0);
 		CHECK(SetFileAttributesW(wide, FILE_ATTRIBUTE_READONLY));
@@ -131,8 +144,10 @@ static void test_metadata(void)
 	CHECK(info.read_only &&
 		info.owner_permissions == HX_OS_PERMISSION_OWNER_READ);
 	CHECK(chmod(path, 0600) == 0);
+
 	{
 		char link[128];
+
 		(void)snprintf(link, sizeof(link), "%s/link", root);
 		CHECK(symlink("中文.txt", link) == 0);
 		CHECK(hx_os_path_stat_extended(link, 0, &info, NULL) ==
@@ -151,28 +166,35 @@ static void test_metadata(void)
 		HX_OS_INVALID_ENCODING);
 	CHECK(!memcmp(&info, &previous, sizeof(info)));
 	CHECK(hx_os_directory_open(NULL, root, &directory, NULL) == HX_OS_OK);
+
 	for (;;) {
 		kind = 99;
+
 		status = hx_os_directory_next_info(
 			directory, NULL, 0, &required, &kind, NULL);
 		if (status == HX_OS_EOF)
 			break;
+
 		CHECK(status == HX_OS_OUTPUT_FULL && kind == 99);
 		CHECK(required <= sizeof(name));
 		CHECK(hx_os_directory_next_info(directory, name, sizeof(name),
 			      &required, &kind, NULL) == HX_OS_OK);
 		if (!strcmp(name, "中文.txt")) {
 			CHECK(kind == HX_OS_FILE_REGULAR);
+
 			++seen_file;
 		}
 		else if (!strcmp(name, "sub")) {
 			CHECK(kind == HX_OS_FILE_DIRECTORY);
+
 			++seen_directory;
 		}
 		else
 			CHECK(0);
 	}
+
 	CHECK(seen_file == 1 && seen_directory == 1);
+
 	hx_os_directory_close(directory);
 	CHECK(hx_os_file_remove(path, NULL) == HX_OS_OK);
 	CHECK(hx_os_path_stat_extended(path, 0, &info, NULL) ==
@@ -187,5 +209,6 @@ int main(void)
 	test_bom();
 	test_metadata();
 	puts("file information and BOM contracts passed");
+
 	return 0;
 }

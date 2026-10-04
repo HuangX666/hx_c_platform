@@ -95,12 +95,15 @@ json_field fields[] = {
 	json_int("sku", 101), json_int("quantity", 2),
 	json_text("note", "桌面设备")
 };
+
 hx_string wire = HX_STRING_INIT;
+
 if (json_encode(fields, 5, &wire)) {
 	int sent = tcp_send_text(stream, hx_string_c_str(&wire));
 	/* Check sent before continuing the business operation. */
 	(void)sent;
 }
+
 hx_string_destroy(&wire);
 ```
 

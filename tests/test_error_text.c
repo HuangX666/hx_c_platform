@@ -29,6 +29,7 @@ static void check_message(hx_os_error error, int expect_text)
 {
 	char text[4096], prefix[256], limited[5];
 	size_t required, measured, invalid;
+
 	(void)snprintf(prefix, sizeof(prefix),
 		"%s [domain=%u code=%" PRId64 "]",
 		hx_os_status_name(error.status), error.domain,
@@ -45,6 +46,7 @@ static void check_message(hx_os_error error, int expect_text)
 			  : !strcmp(prefix, text));
 	CHECK(hx_os_text_validate_utf8(text, strlen(text), &invalid) ==
 		HX_OS_OK);
+
 	memset(limited, 0xa5, sizeof(limited));
 	CHECK(hx_os_error_message(&error, limited, 4, &measured) ==
 			HX_OS_OUTPUT_FULL &&
@@ -56,13 +58,16 @@ static void *check_worker(void *user)
 {
 	hx_os_error error = {HX_OS_NOT_FOUND, HX_OS_ERROR_GAI, EAI_NONAME, 0};
 	int i;
+
 	(void)user;
+
 	for (i = 0; i < 500; ++i) {
 		check_message(error, 1);
 		error.native_code = error.native_code == EAI_NONAME
 			? EAI_AGAIN
 			: EAI_NONAME;
 	}
+
 	return NULL;
 }
 
@@ -71,6 +76,7 @@ int main(void)
 	hx_os_error error = {HX_OS_IO_ERROR, HX_OS_ERROR_NONE, 123, 0};
 	hx_os_thread *threads[4] = {NULL, NULL, NULL, NULL};
 	size_t i;
+
 	check_message(error, 0);
 	error.domain = HX_OS_ERROR_ERRNO;
 	error.native_code = EINVAL;
@@ -90,15 +96,19 @@ int main(void)
 #endif
 	error.domain = UINT32_MAX;
 	check_message(error, 0);
+
 	for (i = 0; i < 4; ++i)
 		CHECK(hx_os_thread_create(NULL, check_worker, NULL, &threads[i],
 			      NULL) == HX_OS_OK);
+
 	for (i = 0; i < 4; ++i) {
 		CHECK(hx_os_thread_join_until(threads[i],
 			      hx_os_deadline_after_ms(2000), NULL,
 			      NULL) == HX_OS_OK);
 		CHECK(hx_os_thread_destroy(&threads[i], NULL) == HX_OS_OK);
 	}
+
 	puts("native error text contracts passed");
+
 	return 0;
 }
