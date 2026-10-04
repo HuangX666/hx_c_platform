@@ -2,7 +2,7 @@
 
 [English](IPC.md) · [README](../README.zh-CN.md) · [公开 C 接口](../include/hx_ipc.h) · [C++11 接口](../include/hx/Ipc.hpp)
 
-**想直接看业务怎么写，先读[多线程业务示例](IPC_BUSINESS.zh-CN.md)。** 它用两个设备的查询、修改与主动通知演示本地 IPC、TCP、KCP，用传感器上报和反馈演示普通 UDP；每种传输都有独立的自动测试入口，也能手工运行两个进程。下文保留最小回显示例，并详细说明接口、生命周期和跨语言协议。
+**业务示例按通信方式独立组织：**[本地 IPC 设备控制](IPC_BUSINESS.zh-CN.md)、[TCP 订单](TCP_BUSINESS.zh-CN.md)、[UDP 采样](UDP_BUSINESS.zh-CN.md)、[KCP 数据块](KCP_BUSINESS.zh-CN.md)。每套都有自己的 C 程序和运行器；TCP／UDP／KCP 业务使用 socket/KCP 接口，不调用 IPC 设备程序。下文的最小回显示例用于验证 IPC 接口连通性，并说明其生命周期和跨语言协议。
 
 ## 1. 先选一种地址
 

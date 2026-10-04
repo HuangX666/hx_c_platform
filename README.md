@@ -347,15 +347,25 @@ Need ordered or duplicate keys? The [red-black multimap example](examples/ordere
 
 ### 4.11 Communicate with another process: C / C++
 
-Start with the [threaded application examples](docs/IPC_BUSINESS.md): two request threads query and change device parameters while a separate receiver processes server notifications. The UDP workflow publishes sensor samples while receiving feedback. The guide includes builds, two-terminal commands, expected output and complete sources.
+Each transport has its own business programs, runner and tutorial. Open the corresponding sources to adapt the workflow:
 
-After building as described in the guide, run both processes and verify the workflow with one Windows command. Replace `tcp` with `local`, `udp` or `kcp` to change transport:
+| Transport | Business and threads | Guide |
+| --- | --- | --- |
+| Native IPC: named pipes / Unix domain sockets | Two device request threads and a notification receiver | [Device control](docs/IPC_BUSINESS.md) |
+| TCP | Order sender and receipt receiver; length framing and partial I/O | [Orders](docs/TCP_BUSINESS.md) |
+| UDP | Sensor publisher and feedback receiver; gaps, duplicates and late data | [Samples](docs/UDP_BUSINESS.md) |
+| KCP | Block producer and KCP I/O thread; retransmission and business confirmation | [Reliable transfer](docs/KCP_BUSINESS.md) |
+
+After building as described in the guides, run each separate Windows entry point. Every command starts two processes and verifies their results:
 
 ```powershell
-python examples/run_ipc_business.py tcp --bin-dir build-ipc/bin/Release
+python examples/run_ipc_business.py --bin-dir build-net/bin/Release
+python examples/run_tcp_business.py --bin-dir build-net/bin/Release
+python examples/run_udp_business.py --bin-dir build-net/bin/Release
+python examples/run_kcp_business.py --bin-dir build-net/bin/Release
 ```
 
-Once the client has created `connection` and opened device `101` with `OPEN`, C++11 queries its sampling interval with:
+In the native IPC device example, once the client has created `connection` and opened device `101` with `OPEN`, C++11 queries its interval with:
 
 ```cpp
 auto reply = connection.requestText("GET", 101);
@@ -363,9 +373,9 @@ if (reply)
 	std::printf("Reply: %s\n", reply.value().text());
 ```
 
-`GET` is the example server's query command and `101` is an application-defined device ID; the library manages individual request IDs. C uses `hx_ipc_request_text`, or `hx_ipc_request_text_until` with a device ID. Receives deliver complete messages, so callers need neither partial-frame assembly nor an extra concurrent-send lock.
+`GET` is the native IPC server's query command and `101` its device channel. The library manages request IDs; C uses `hx_ipc_request_text_until`. These IPC calls provide complete messages, request matching and concurrent sending internally.
 
-`local://` selects Windows named pipes or Unix domain sockets. You can also choose `tcp://127.0.0.1:port`, ordinary `udp://`, or reliable `kcp://`. The [four-thread shared-connection example](examples/ipc_threads.cpp) and [independent Python peer](examples/ipc_python.py) have automated tests. Check deadlines, capacity and disconnect errors, and close connections explicitly. These IPC waits use ordinary threads.
+TCP/UDP business code directly calls `hx_os_socket_*`; KCP uses `hx_os_kcp_*` with UDP. None of these three network workflows calls `hx_ipc_*`, and they run with IPC disabled. Full IPC contracts and the cross-language HXIP protocol are in the [IPC reference](docs/IPC.md). All examples use ordinary threads with explicit timeout, disconnect and resource handling.
 
 <a id="section-5"></a>
 
@@ -384,7 +394,10 @@ The meaning of `NULL` depends on its position: allocator/options parameters sele
 
 | What you need | Where to start |
 | --- | --- |
-| Threaded local IPC, TCP, UDP and KCP application tests | [Device control and sensor publishing](docs/IPC_BUSINESS.md) |
+| Native IPC device control | [Independent IPC example](docs/IPC_BUSINESS.md) |
+| TCP order submission and receipts | [Independent TCP example](docs/TCP_BUSINESS.md) |
+| UDP samples and feedback | [Independent UDP example](docs/UDP_BUSINESS.md) |
+| KCP reliable block transfer | [Independent KCP example](docs/KCP_BUSINESS.md) |
 | IPC, duplex messages, concurrent callers and other languages | [IPC tutorial and protocol](docs/IPC.md) |
 | Brace formatting, automatic C arguments and expressions | [Formatting](docs/FORMAT.md) |
 | Complete text, configuration, container and pool programs | [Task tutorials](docs/USAGE.md) |
@@ -402,7 +415,7 @@ The meaning of `NULL` depends on its position: allocator/options parameters sele
 
 ## 7. Builds, validation and licensing
 
-See the [build reference](docs/REFERENCE.md#section-27) for development builds, tests, static/shared installation and optional dependencies. The latest full-suite record for the library implementation is Windows 113/113 and WSL Linux 115/115 from 2026-10-03. The five subsequently added communication workflows passed separately on Windows, WSL and WSL memory/race detection builds. [Validation records](docs/VALIDATION.md) identify exact configurations and pending targets. Documentation-example checks are separate from target-platform validation.
+See the [build reference](docs/REFERENCE.md#section-27) for development builds, tests, static/shared installation and optional dependencies. The latest full-suite record for the library implementation is Windows 113/113 and WSL Linux 115/115 from 2026-10-03. The seven separated communication workflows passed on Windows, WSL and WSL memory/race detection builds; an IPC-disabled WSL build also passed six network business cases. [Validation records](docs/VALIDATION.md) identify exact configurations and pending targets. Documentation-example checks are separate from target-platform validation.
 
 The first-party distribution license is pending; see [third-party licensing](THIRD_PARTY_NOTICES.md). The coroutine implementation is self-developed; hx_c_log integration remains future work.
 

@@ -6,7 +6,8 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 	signal_notifications settings profile_intervals atomic_publication
 	common_tasks variant find_files coroutine ordered_map format
 	ipc_server ipc_client ipc_device_server ipc_device_client
-	ipc_udp_dashboard ipc_udp_sensor)
+	tcp_order_server tcp_order_client udp_dashboard udp_sensor
+	kcp_transfer_server kcp_transfer_client)
 	add_executable(hx_os_${example} ${example}.c)
 	target_link_libraries(hx_os_${example} PRIVATE hx_c_platform)
 	set_target_properties(hx_os_${example} PROPERTIES
@@ -37,32 +38,43 @@ if(HX_OS_BUILD_TESTS AND HX_OS_HAVE_IPC AND NOT CMAKE_CROSSCOMPILING)
 			"${PROJECT_SOURCE_DIR}/tests/test_ipc_examples.py"
 			${hx_ipc_example_args})
 		set_tests_properties(ipc_examples PROPERTIES TIMEOUT 90)
-		set(hx_ipc_business_script
-			"${CMAKE_CURRENT_SOURCE_DIR}/run_ipc_business.py")
-		set(hx_ipc_business_bin
-			$<TARGET_FILE_DIR:hx_os_ipc_device_server>)
-		set(hx_ipc_business_transports tcp udp)
-		if(HX_OS_ENABLE_KCP)
-			list(APPEND hx_ipc_business_transports kcp)
+	endif()
+endif()
+if(HX_OS_BUILD_TESTS AND NOT CMAKE_CROSSCOMPILING)
+	find_package(Python3 QUIET COMPONENTS Interpreter)
+	if(Python3_Interpreter_FOUND)
+		function(hx_add_business_test name script target)
+			add_test(NAME ${name} COMMAND "${Python3_EXECUTABLE}"
+				"${CMAKE_CURRENT_SOURCE_DIR}/${script}"
+				--bin-dir $<TARGET_FILE_DIR:${target}> ${ARGN})
+			set_tests_properties(${name} PROPERTIES TIMEOUT 45)
+		endfunction()
+		if(HX_OS_HAVE_IPC AND ((WIN32 AND HX_OS_ENABLE_PIPE) OR
+			(HX_OS_ENABLE_LOCAL_SOCKETS AND HX_OS_ENABLE_LOOP_FD)))
+			hx_add_business_test(ipc_business_local
+				run_ipc_business.py hx_os_ipc_device_server)
 		endif()
-		if((WIN32 AND HX_OS_ENABLE_PIPE) OR
-			(HX_OS_ENABLE_LOCAL_SOCKETS AND HX_OS_ENABLE_LOOP_FD))
-			list(APPEND hx_ipc_business_transports local)
+		if(HX_OS_ENABLE_NETWORK)
+			hx_add_business_test(tcp_business_orders
+				run_tcp_business.py hx_os_tcp_order_server)
+			hx_add_business_test(tcp_business_framing
+				run_tcp_business.py hx_os_tcp_order_server
+				--fragmented)
+			hx_add_business_test(udp_business_samples
+				run_udp_business.py hx_os_udp_dashboard)
+			hx_add_business_test(udp_business_gaps
+				run_udp_business.py hx_os_udp_dashboard
+				--simulate-gaps)
+			if(HX_OS_ENABLE_KCP)
+				hx_add_business_test(kcp_business_transfer
+					run_kcp_business.py
+					hx_os_kcp_transfer_server)
+				hx_add_business_test(kcp_business_loss
+					run_kcp_business.py
+					hx_os_kcp_transfer_server
+					--drop-first)
+			endif()
 		endif()
-		foreach(transport IN LISTS hx_ipc_business_transports)
-			add_test(NAME ipc_business_${transport}
-				COMMAND "${Python3_EXECUTABLE}"
-				"${hx_ipc_business_script}" ${transport}
-				--bin-dir "${hx_ipc_business_bin}")
-			set_tests_properties(ipc_business_${transport}
-				PROPERTIES TIMEOUT 45)
-		endforeach()
-		add_test(NAME ipc_business_udp_gaps
-			COMMAND "${Python3_EXECUTABLE}"
-			"${hx_ipc_business_script}"
-			udp --simulate-gaps --bin-dir "${hx_ipc_business_bin}")
-		set_tests_properties(ipc_business_udp_gaps
-			PROPERTIES TIMEOUT 45)
 	endif()
 endif()
 if(HX_OS_BUILD_TESTS)

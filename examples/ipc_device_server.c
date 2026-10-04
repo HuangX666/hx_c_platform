@@ -100,7 +100,7 @@ static hx_os_status handle_request(hx_ipc *server,
 
 int main(int argc, char **argv)
 {
-	const char *address = argc > 1 ? argv[1] : "tcp://127.0.0.1:39001";
+	const char *address = argc > 1 ? argv[1] : "local://device-demo";
 	hx_ipc *server = NULL;
 	hx_string actual = HX_STRING_INIT;
 	hx_os_error error = {0};
@@ -110,8 +110,9 @@ int main(int argc, char **argv)
 	unsigned int requests = 0;
 	int finished = 0, ok;
 	hx_os_status status;
-	if (!strncmp(address, "udp://", 6)) {
-		fputs("Use ipc_udp_sensor/dashboard for ordinary UDP.\n",
+	if (strncmp(address, "local://", 8) && strncmp(address, "pipe://", 7) &&
+		strncmp(address, "unix://", 7)) {
+		fputs("This device demo only accepts native local IPC.\n",
 			stderr);
 		return 2;
 	}

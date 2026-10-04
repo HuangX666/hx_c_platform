@@ -2,7 +2,7 @@
 
 [简体中文](IPC.zh-CN.md) · [README](../README.md) · [C API](../include/hx_ipc.h) · [C++11 facade](../include/hx/Ipc.hpp)
 
-**For application code, start with the [threaded business examples](IPC_BUSINESS.md).** They demonstrate device queries, parameter changes and unsolicited notifications over local IPC, TCP and KCP, plus sensor publishing and feedback over ordinary UDP. Each transport has a separate automated test entry and can also run manually in two processes. This guide retains the minimal echo example and explains API contracts, lifetime and the cross-language protocol.
+**Business workflows are separate:** [native IPC devices](IPC_BUSINESS.md), [TCP orders](TCP_BUSINESS.md), [UDP samples](UDP_BUSINESS.md), and [KCP blocks](KCP_BUSINESS.md). Each has its own C programs and runner; TCP/UDP/KCP business code uses socket/KCP APIs without invoking the IPC device program. The minimal echo example below checks IPC connectivity and introduces its lifetime and cross-language protocol.
 
 ## 1. Choose an address
 

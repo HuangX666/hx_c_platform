@@ -347,15 +347,25 @@ hx_os_status status = HX_FPRINTLN("{user.name}: {price * count:.2f}");
 
 ### 4.11 和另一个进程通信：C / C++
 
-先跑[多线程业务示例](docs/IPC_BUSINESS.zh-CN.md)：两个请求线程分别查询和修改设备参数，一个独立接收线程处理服务端主动通知。UDP 则演示传感器持续上报，同时接收服务端反馈。教程包含构建、两个终端手工运行、预期输出和完整源码。
+四种通信分别提供独立的业务程序、运行器和教程，打开对应文件即可修改自己的业务：
 
-按教程构建后，Windows 上用一条命令启动两个进程并检查完整流程；将 `tcp` 换成 `local`、`udp` 或 `kcp` 即可切换：
+| 想用什么 | 实际业务与线程 | 教程 |
+| --- | --- | --- |
+| 本地 IPC：命名管道 / Unix 域套接字 | 两个设备请求线程与一个主动通知接收线程 | [设备控制](docs/IPC_BUSINESS.zh-CN.md) |
+| TCP | 订单发送线程与回执接收线程，处理消息长度与短读短写 | [订单业务](docs/TCP_BUSINESS.zh-CN.md) |
+| UDP | 传感器发送线程与反馈接收线程，处理缺号、重复、晚到 | [采样业务](docs/UDP_BUSINESS.zh-CN.md) |
+| KCP | 数据块生产线程与 KCP I/O 线程，检查重传与业务完成确认 | [可靠传输](docs/KCP_BUSINESS.zh-CN.md) |
+
+按教程构建后，Windows 上分别执行对应入口，每条命令自动运行两个进程并检查结果：
 
 ```powershell
-python examples/run_ipc_business.py tcp --bin-dir build-ipc/bin/Release
+python examples/run_ipc_business.py --bin-dir build-net/bin/Release
+python examples/run_tcp_business.py --bin-dir build-net/bin/Release
+python examples/run_udp_business.py --bin-dir build-net/bin/Release
+python examples/run_kcp_business.py --bin-dir build-net/bin/Release
 ```
 
-客户端创建好 `connection` 并通过 `OPEN` 打开设备 `101` 后，C++11 查询该设备的采样间隔只需：
+在本地 IPC 设备示例中，客户端创建好 `connection` 并通过 `OPEN` 打开设备 `101` 后，C++11 查询采样间隔只需：
 
 ```cpp
 auto reply = connection.requestText("GET", 101);
@@ -363,9 +373,9 @@ if (reply)
 	std::printf("Reply: %s\n", reply.value().text());
 ```
 
-`GET` 是示例服务端定义的查询命令，`101` 是应用定义的设备编号；每次请求的编号由库自动管理。C 对应使用 `hx_ipc_request_text` 或带设备编号的 `hx_ipc_request_text_until`。收发都按完整消息处理，不需要自己拼半包或给多线程发送加锁。
+`GET` 是本地 IPC 服务端定义的查询命令，`101` 是设备通道；请求编号由库自动管理。C 对应使用 `hx_ipc_request_text_until`。这组 IPC 封装按完整消息收发，内部处理请求匹配与多线程发送。
 
-`local://` 使用 Windows 命名管道或 Unix 域套接字；也可以选择 `tcp://127.0.0.1:端口`、普通 `udp://` 或带可靠传送的 `kcp://`。[四线程共享连接示例](examples/ipc_threads.cpp) 和[独立 Python 对端](examples/ipc_python.py) 都有配套自动测试。超时、队列满、断开仍需要检查结果，连接需要显式关闭；本版 IPC 等待使用普通线程。
+TCP／UDP 业务直接使用 `hx_os_socket_*`，KCP 业务使用 `hx_os_kcp_*` 与 UDP；三个网络示例均不调用 `hx_ipc_*`，关闭 IPC 模块也能运行。完整接口契约与跨语言 HXIP 协议见 [IPC 参考](docs/IPC.zh-CN.md)。这些示例使用普通线程，超时、断开与资源释放都需要明确处理。
 
 <a id="section-5"></a>
 
@@ -384,7 +394,10 @@ if (reply)
 
 | 想做什么 | 先看哪里 |
 | --- | --- |
-| 本地 IPC、TCP、UDP、KCP 的多线程业务与运行测试 | [设备控制与传感器上报示例](docs/IPC_BUSINESS.zh-CN.md) |
+| 本地 IPC 的设备控制业务 | [IPC 独立示例](docs/IPC_BUSINESS.zh-CN.md) |
+| TCP 的订单发送与回执 | [TCP 独立示例](docs/TCP_BUSINESS.zh-CN.md) |
+| UDP 的采样发送与反馈 | [UDP 独立示例](docs/UDP_BUSINESS.zh-CN.md) |
+| KCP 的可靠数据块传输 | [KCP 独立示例](docs/KCP_BUSINESS.zh-CN.md) |
 | 进程通信、双向消息、多线程、其他语言对端 | [IPC 教程与协议](docs/IPC.zh-CN.md) |
 | 花括号格式化、C 自动实参与表达式 | [格式化教程](docs/FORMAT.zh-CN.md) |
 | 文本、配置、容器和线程池的完整程序 | [常用任务教程](docs/USAGE.zh-CN.md) |
@@ -402,7 +415,7 @@ if (reply)
 
 ## 7. 构建、验证与项目许可
 
-开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。库实现最近一次全量记录为 2026-10-03 的 Windows 113/113、WSL Linux 115/115；之后新增的 5 个通信业务用例在 Windows、WSL 及 WSL 内存/竞态检测下分别通过。具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
+开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。库实现最近一次全量记录为 2026-10-03 的 Windows 113/113、WSL Linux 115/115；拆分后的 7 个通信业务用例在 Windows、WSL 及 WSL 内存/竞态检测下分别通过，关闭 IPC 的 WSL 构建另通过 6 个网络业务用例。具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
 
 自有代码的发布许可证尚未确定，第三方许可证见[许可说明](THIRD_PARTY_NOTICES.zh-CN.md)。协程使用自研实现；hx_c_log 接入仍属于后续工作。
 

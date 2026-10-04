@@ -6,9 +6,31 @@
 
 本文记录截至 2026-10-04 的开发验证。设计覆盖、已有适配源码、编译成功、目标运行成功是不同状态。本机测试不能证明所有系统版本、文件系统、 CPU、libc 或网络提供方均已通过。
 
-当前新增业务示例见 2026-10-04 记录；IPC／KCP 实现、简洁 go、格式化、容器、递归文件查询、variant 和此前各批记录对应各自当时的版本。
+当前独立业务示例见下方拆分记录；初版共用示例、IPC／KCP 实现、简洁 go、格式化、容器、递归文件查询、variant 和此前各批记录对应各自当时的版本。
+
+## 2026-10-04：IPC、TCP、UDP、KCP 业务独立拆分
+
+源码起点 `f89b566`，本地 `dev`。本地 IPC 的设备程序只接受命名管道/Unix 域套接字；新增独立 TCP 订单程序、改写为原始 UDP 的采样程序、新增独立 KCP 数据块程序。TCP/UDP 使用 `hx_os_socket_*`，KCP 使用 `hx_os_kcp_*` 与 UDP，三个网络业务不调用 `hx_ipc_*` 或 IPC 设备业务。运行器、CTest 名称和中英文教程也分别独立。库实现、公共 ABI 与第三方源码没有修改。
+
+| 配置 | 本次证据 |
+| --- | --- |
+| Windows MSVC x64 Release，共享库 | 八个 C99 程序构建；7/7 业务测试通过 |
+| WSL Linux GCC x86_64 Release，共享库 | 同八个程序；7/7 通过 |
+| WSL ASan + UBSan，`detect_leaks=1` | 7/7，未报告内存错误、未定义行为或泄漏 |
+| WSL TSan，`halt_on_error=1` | 7/7，未报告数据竞态 |
+| WSL Release，`HX_OS_ENABLE_IPC=OFF` | 六个网络程序构建；TCP/UDP/KCP 的 6/6 用例通过，不注册本地 IPC 用例 |
+
+用例为 `ipc_business_local`、`tcp_business_orders`、`tcp_business_framing`、`udp_business_samples`、`udp_business_gaps`、`kcp_business_transfer`、`kcp_business_loss`。TCP 检查两单金额合计 11500 分、第三单拒绝、两个发货通知；标准库 Python 对端分段写第一个头/正文，再合并后续请求，验证独立 TCP 长度帧。UDP 检查两个设备的最新状态和双向反馈，包括受控缺号/重复/晚到。KCP 在两端各主动丢弃首个输出数据报，仍收到三次数据块确认及完成消息，服务端只应用三块、合计 60。
+
+新网络示例只复用 `network_demo.h` 的初始化/诊断/回收，以及 `business_runner.py` 的子进程启动/日志；业务协议、发送接收函数和断言由各自文件负责。原始 socket 非阻塞调用按现有契约串行；TCP/UDP 重试休眠在互斥区外。KCP 单个 I/O 线程驱动更新，生产者在短互斥区提交有界消息。
+
+独立性验证在 `build-transport-no-ipc` 中配置 `-DHX_OS_ENABLE_IPC=OFF` 并实际运行，不能只以文件改名证明独立。日志分别为 `build-shared-msvc/transport-business-tests.log`、`build-shared-linux/transport-business-tests.log`、`build-sanitize-linux/transport-business-tests.log`、`build-tsan-linux/transport-business-tests.log`、`build-transport-no-ipc/transport-business-tests.log`。
+
+本轮只运行受影响的业务用例；全量、安装消费和其他平台仍参照此前记录。新示例的 Android、macOS、Win7/8.1、ARM 真机和嵌入式运行待验证。原始网络示例的单次会话限制写入各自教程，不继承 HXIP 的会话重建保证；没有性能提升或跨重启 exactly-once 承诺。
 
 ## 2026-10-04：多线程通信业务示例
+
+本节是 `f89b566` 初版的历史记录；其共用业务入口已由上方独立拆分取代。
 
 源码起点 `0689517`，在本地 `dev` 补充四个 C99 业务程序、一个 Python 标准库运行器及[中英文业务教程](IPC_BUSINESS.zh-CN.md)。本次没有修改库实现、公共接口或第三方源码。
 

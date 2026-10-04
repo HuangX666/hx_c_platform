@@ -105,7 +105,7 @@ static void *HX_OS_CALL receive_notifications(void *user)
 
 int main(int argc, char **argv)
 {
-	const char *address = argc > 1 ? argv[1] : "tcp://127.0.0.1:39001";
+	const char *address = argc > 1 ? argv[1] : "local://device-demo";
 	hx_ipc *client = NULL;
 	hx_os_error error = {0};
 	hx_os_thread *threads[3] = {NULL};
@@ -114,8 +114,9 @@ int main(int argc, char **argv)
 	hx_os_status status;
 	unsigned int index, started = 0;
 	int ok;
-	if (!strncmp(address, "udp://", 6)) {
-		fputs("Use ipc_udp_sensor/dashboard for ordinary UDP.\n",
+	if (strncmp(address, "local://", 8) && strncmp(address, "pipe://", 7) &&
+		strncmp(address, "unix://", 7)) {
+		fputs("This device demo only accepts native local IPC.\n",
 			stderr);
 		return 2;
 	}

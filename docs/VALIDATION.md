@@ -6,9 +6,31 @@ Entries below describe the versions tested at the time. Historical C++ exception
 
 This records development validation through 2026-10-04. A design, implemented adapter, successful compile and successful target run are different states. Local tests do not certify every operating-system release, filesystem, CPU, libc or network provider.
 
-The 2026-10-04 entry records the new business examples. IPC/KCP implementation, simple go, formatting, containers, recursive search, variant and earlier batch entries describe their respective historical versions.
+The separation entry below records the current independent examples. The initial shared examples, IPC/KCP implementation, simple go, formatting, containers, recursive search, variant and earlier batches describe their historical versions.
+
+## 2026-10-04: Separate IPC, TCP, UDP and KCP workflows
+
+Starting from `f89b566` on local `dev`, native IPC device programs now accept only named pipes/Unix sockets. TCP has new order programs, UDP samples use raw datagrams, and KCP has independent block-transfer programs. TCP/UDP use `hx_os_socket_*`; KCP uses `hx_os_kcp_*` with UDP. These network workflows never call `hx_ipc_*` or the IPC device business code. Runners, CTest names and bilingual tutorials are separate. Library implementation, public ABI and third-party sources are unchanged.
+
+| Configuration | Evidence |
+| --- | --- |
+| Windows MSVC x64 Release shared | Eight C99 programs built; 7/7 business cases passed |
+| WSL Linux GCC x86_64 Release shared | Same eight programs; 7/7 passed |
+| WSL ASan + UBSan, `detect_leaks=1` | 7/7; no memory error, undefined behavior or leak reported |
+| WSL TSan, `halt_on_error=1` | 7/7; no data race reported |
+| WSL Release, `HX_OS_ENABLE_IPC=OFF` | Six network programs built; TCP/UDP/KCP 6/6 passed, no native IPC case registered |
+
+Cases are `ipc_business_local`, `tcp_business_orders`, `tcp_business_framing`, `udp_business_samples`, `udp_business_gaps`, `kcp_business_transfer` and `kcp_business_loss`. TCP checks two orders totaling 11500 cents, a rejected third order and two shipping notifications. A standard-library Python peer splits the first header/body across writes and combines subsequent requests to exercise TCP framing. UDP verifies latest state and feedback for two devices, including controlled gaps/duplicates/late samples. KCP discards the first outgoing datagram on each side yet delivers three applied-block replies and completion; the server applies only three blocks totaling 60.
+
+Network examples share only setup/diagnostics/cleanup in `network_demo.h` and process/log handling in `business_runner.py`. Protocols, business I/O and assertions stay in their own files. Nonblocking raw socket calls are serialized as required by the existing contract; TCP/UDP retry sleeps occur outside mutexes. One KCP I/O thread drives updates while a producer enqueues bounded messages under short exclusion.
+
+Independence was tested by configuring `build-transport-no-ipc` with `-DHX_OS_ENABLE_IPC=OFF` and running it, not inferred from renamed files. Logs: `build-shared-msvc/transport-business-tests.log`, `build-shared-linux/transport-business-tests.log`, `build-sanitize-linux/transport-business-tests.log`, `build-tsan-linux/transport-business-tests.log`, and `build-transport-no-ipc/transport-business-tests.log`.
+
+This turn ran affected business tests, not the full suite or install-consumer matrix. Android, macOS, Win7/8.1, physical ARM and embedded execution of these new examples remains pending. Their single-session limits are documented separately and do not inherit HXIP session-replacement guarantees. No performance gain or exactly-once guarantee across restarts is claimed.
 
 ## 2026-10-04: Threaded communication workflows
+
+This is the historical `f89b566` record. Its shared business entry points are superseded by the independent workflows above.
 
 Starting from `0689517` on local `dev`, this change adds four C99 application programs, a Python standard-library runner and a [bilingual business tutorial](IPC_BUSINESS.md). Library implementation, public interfaces and third-party sources are unchanged.
 
