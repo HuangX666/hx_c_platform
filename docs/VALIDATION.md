@@ -4,9 +4,30 @@ Entries below describe the versions tested at the time. Historical C++ exception
 
 [简体中文](VALIDATION.zh-CN.md) · [README](../README.md)
 
-This records development validation through 2026-10-03. A design, implemented adapter, successful compile and successful target run are different states. Local tests do not certify every operating-system release, filesystem, CPU, libc or network provider.
+This records development validation through 2026-10-04. A design, implemented adapter, successful compile and successful target run are different states. Local tests do not certify every operating-system release, filesystem, CPU, libc or network provider.
 
-The IPC/KCP entry records the current addition. Simple go, formatting, containers, recursive search, variant and earlier batch entries describe their respective historical versions.
+The 2026-10-04 entry records the new business examples. IPC/KCP implementation, simple go, formatting, containers, recursive search, variant and earlier batch entries describe their respective historical versions.
+
+## 2026-10-04: Threaded communication workflows
+
+Starting from `0689517` on local `dev`, this change adds four C99 application programs, a Python standard-library runner and a [bilingual business tutorial](IPC_BUSINESS.md). Library implementation, public interfaces and third-party sources are unchanged.
+
+| Configuration | Evidence |
+| --- | --- |
+| Windows MSVC x64 Release shared | Four business programs compiled; `ipc_business_*` 5/5 passed |
+| WSL Linux GCC x86_64 Release shared | Same four programs compiled; same five workflows 5/5 |
+| WSL ASan + UBSan with leak detection | Five workflows 5/5; no memory/undefined-behavior error or leak reported |
+| WSL TSan | Five workflows 5/5; no data race reported |
+
+Local IPC, TCP and KCP launch separate device-service and controller processes. Two client request threads operate devices 101/102 while an independent receiver handles unsolicited notifications. Checks cover open, initial state, changed-state readback, rejected parameters preserving the prior value, notification matching, device close and service shutdown. The library routes request replies to their callers; the business receiver obtains independent messages.
+
+Ordinary UDP publishes two devices' samples while a separate thread receives feedback; the dashboard keeps the latest state by sequence. `ipc_business_udp_gaps` deliberately omits 3/7, duplicates 4 and resends 6 after 8. It checks eight accepted updates per device, newest sequence 10, two gaps, two stale/duplicate samples and final temperatures. This is a controlled application-input demonstration, not a measurement of network loss or a reliable-UDP promise.
+
+The runner checks payloads, final business state and successful exits of both processes. Failures print diagnostics and clean up only its own child processes. Manual runs expose device operations, separate receives and UDP summaries. Programs use C99 and existing thread/IPC entry points; C++11 continues to use the existing exception-free facade.
+
+Validation is scoped to the example/CMake changes. This turn did not rerun the full suite, installation matrix or Android emulator. The 2026-10-03 full-suite and target records remain below; running the new examples on macOS, Android, Win7/8.1, physical ARM devices and embedded boards is pending. These results provide neither a performance benchmark nor proof that leaks are impossible.
+
+Logs are under ignored build directories: `build-shared-msvc/ipc-business-tests.log`, `build-shared-linux/ipc-business-tests.log`, `build-sanitize-linux/ipc-business-tests.log`, and `build-tsan-linux/ipc-business-tests.log`. Reproduce with `ctest --test-dir <build-directory> -C Release -R "^ipc_business_" --output-on-failure`; all default modules yield five cases.
 
 ## 2026-10-03: Local IPC, KCP and runnable examples
 

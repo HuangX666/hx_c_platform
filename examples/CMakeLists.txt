@@ -5,7 +5,8 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 	delayed_task duplex_message obfuscated_string localized_time
 	signal_notifications settings profile_intervals atomic_publication
 	common_tasks variant find_files coroutine ordered_map format
-	ipc_server ipc_client)
+	ipc_server ipc_client ipc_device_server ipc_device_client
+	ipc_udp_dashboard ipc_udp_sensor)
 	add_executable(hx_os_${example} ${example}.c)
 	target_link_libraries(hx_os_${example} PRIVATE hx_c_platform)
 	set_target_properties(hx_os_${example} PROPERTIES
@@ -36,6 +37,32 @@ if(HX_OS_BUILD_TESTS AND HX_OS_HAVE_IPC AND NOT CMAKE_CROSSCOMPILING)
 			"${PROJECT_SOURCE_DIR}/tests/test_ipc_examples.py"
 			${hx_ipc_example_args})
 		set_tests_properties(ipc_examples PROPERTIES TIMEOUT 90)
+		set(hx_ipc_business_script
+			"${CMAKE_CURRENT_SOURCE_DIR}/run_ipc_business.py")
+		set(hx_ipc_business_bin
+			$<TARGET_FILE_DIR:hx_os_ipc_device_server>)
+		set(hx_ipc_business_transports tcp udp)
+		if(HX_OS_ENABLE_KCP)
+			list(APPEND hx_ipc_business_transports kcp)
+		endif()
+		if((WIN32 AND HX_OS_ENABLE_PIPE) OR
+			(HX_OS_ENABLE_LOCAL_SOCKETS AND HX_OS_ENABLE_LOOP_FD))
+			list(APPEND hx_ipc_business_transports local)
+		endif()
+		foreach(transport IN LISTS hx_ipc_business_transports)
+			add_test(NAME ipc_business_${transport}
+				COMMAND "${Python3_EXECUTABLE}"
+				"${hx_ipc_business_script}" ${transport}
+				--bin-dir "${hx_ipc_business_bin}")
+			set_tests_properties(ipc_business_${transport}
+				PROPERTIES TIMEOUT 45)
+		endforeach()
+		add_test(NAME ipc_business_udp_gaps
+			COMMAND "${Python3_EXECUTABLE}"
+			"${hx_ipc_business_script}"
+			udp --simulate-gaps --bin-dir "${hx_ipc_business_bin}")
+		set_tests_properties(ipc_business_udp_gaps
+			PROPERTIES TIMEOUT 45)
 	endif()
 endif()
 if(HX_OS_BUILD_TESTS)

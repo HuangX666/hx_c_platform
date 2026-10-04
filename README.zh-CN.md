@@ -347,17 +347,23 @@ hx_os_status status = HX_FPRINTLN("{user.name}: {price * count:.2f}");
 
 ### 4.11 和另一个进程通信：C / C++
 
-先在一个终端运行 `hx_os_ipc_server local://demo 1`，再在另一个终端运行 `hx_os_ipc_client local://demo`。客户端会输出 `Reply: Hello from C`，服务端处理一条消息后退出。[IPC 教程](docs/IPC.zh-CN.md) 给出了完整的 Windows/Linux 构建命令和可直接运行的程序。
+先跑[多线程业务示例](docs/IPC_BUSINESS.zh-CN.md)：两个请求线程分别查询和修改设备参数，一个独立接收线程处理服务端主动通知。UDP 则演示传感器持续上报，同时接收服务端反馈。教程包含构建、两个终端手工运行、预期输出和完整源码。
 
-客户端创建好 `connection` 后，C++11 发送请求并取得对应回复只需：
+按教程构建后，Windows 上用一条命令启动两个进程并检查完整流程；将 `tcp` 换成 `local`、`udp` 或 `kcp` 即可切换：
+
+```powershell
+python examples/run_ipc_business.py tcp --bin-dir build-ipc/bin/Release
+```
+
+客户端创建好 `connection` 并通过 `OPEN` 打开设备 `101` 后，C++11 查询该设备的采样间隔只需：
 
 ```cpp
-auto reply = connection.requestText("读取设备状态", 7);
+auto reply = connection.requestText("GET", 101);
 if (reply)
 	std::printf("Reply: %s\n", reply.value().text());
 ```
 
-`7` 是应用定义的设备编号；每次请求的编号由库自动管理。C 对应使用 `hx_ipc_request_text` 或带设备编号的 `hx_ipc_request_text_until`。收发都按完整消息处理，不需要自己拼半包或给多线程发送加锁。
+`GET` 是示例服务端定义的查询命令，`101` 是应用定义的设备编号；每次请求的编号由库自动管理。C 对应使用 `hx_ipc_request_text` 或带设备编号的 `hx_ipc_request_text_until`。收发都按完整消息处理，不需要自己拼半包或给多线程发送加锁。
 
 `local://` 使用 Windows 命名管道或 Unix 域套接字；也可以选择 `tcp://127.0.0.1:端口`、普通 `udp://` 或带可靠传送的 `kcp://`。[四线程共享连接示例](examples/ipc_threads.cpp) 和[独立 Python 对端](examples/ipc_python.py) 都有配套自动测试。超时、队列满、断开仍需要检查结果，连接需要显式关闭；本版 IPC 等待使用普通线程。
 
@@ -378,6 +384,7 @@ if (reply)
 
 | 想做什么 | 先看哪里 |
 | --- | --- |
+| 本地 IPC、TCP、UDP、KCP 的多线程业务与运行测试 | [设备控制与传感器上报示例](docs/IPC_BUSINESS.zh-CN.md) |
 | 进程通信、双向消息、多线程、其他语言对端 | [IPC 教程与协议](docs/IPC.zh-CN.md) |
 | 花括号格式化、C 自动实参与表达式 | [格式化教程](docs/FORMAT.zh-CN.md) |
 | 文本、配置、容器和线程池的完整程序 | [常用任务教程](docs/USAGE.zh-CN.md) |
@@ -395,7 +402,7 @@ if (reply)
 
 ## 7. 构建、验证与项目许可
 
-开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。当前代码的本地全量测试记录为 Windows 113/113、WSL Linux 115/115；具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
+开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。库实现最近一次全量记录为 2026-10-03 的 Windows 113/113、WSL Linux 115/115；之后新增的 5 个通信业务用例在 Windows、WSL 及 WSL 内存/竞态检测下分别通过。具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
 
 自有代码的发布许可证尚未确定，第三方许可证见[许可说明](THIRD_PARTY_NOTICES.zh-CN.md)。协程使用自研实现；hx_c_log 接入仍属于后续工作。
 

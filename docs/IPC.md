@@ -2,6 +2,8 @@
 
 [简体中文](IPC.zh-CN.md) · [README](../README.md) · [C API](../include/hx_ipc.h) · [C++11 facade](../include/hx/Ipc.hpp)
 
+**For application code, start with the [threaded business examples](IPC_BUSINESS.md).** They demonstrate device queries, parameter changes and unsolicited notifications over local IPC, TCP and KCP, plus sensor publishing and feedback over ordinary UDP. Each transport has a separate automated test entry and can also run manually in two processes. This guide retains the minimal echo example and explains API contracts, lifetime and the cross-language protocol.
+
 ## 1. Choose an address
 
 Two processes using the same transport and HXIP v1 protocol can send in both directions and match concurrent requests with their replies. The peer may use another language without linking hx_c_platform. Section 8 specifies the protocol; an independent Python peer is included.

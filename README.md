@@ -347,17 +347,23 @@ Need ordered or duplicate keys? The [red-black multimap example](examples/ordere
 
 ### 4.11 Communicate with another process: C / C++
 
-Run `hx_os_ipc_server local://demo 1` in one terminal, then `hx_os_ipc_client local://demo` in another. The client prints `Reply: Hello from C`; the server exits after handling one message. The [IPC tutorial](docs/IPC.md) provides complete Windows/Linux build commands and runnable programs.
+Start with the [threaded application examples](docs/IPC_BUSINESS.md): two request threads query and change device parameters while a separate receiver processes server notifications. The UDP workflow publishes sensor samples while receiving feedback. The guide includes builds, two-terminal commands, expected output and complete sources.
 
-Once the client has created `connection`, C++11 sends a request and receives its matching reply with:
+After building as described in the guide, run both processes and verify the workflow with one Windows command. Replace `tcp` with `local`, `udp` or `kcp` to change transport:
+
+```powershell
+python examples/run_ipc_business.py tcp --bin-dir build-ipc/bin/Release
+```
+
+Once the client has created `connection` and opened device `101` with `OPEN`, C++11 queries its sampling interval with:
 
 ```cpp
-auto reply = connection.requestText("read device status", 7);
+auto reply = connection.requestText("GET", 101);
 if (reply)
 	std::printf("Reply: %s\n", reply.value().text());
 ```
 
-Here `7` is an application-defined device ID; the library manages individual request IDs. C uses `hx_ipc_request_text`, or `hx_ipc_request_text_until` with a device ID. Receives deliver complete messages, so callers need neither partial-frame assembly nor an extra concurrent-send lock.
+`GET` is the example server's query command and `101` is an application-defined device ID; the library manages individual request IDs. C uses `hx_ipc_request_text`, or `hx_ipc_request_text_until` with a device ID. Receives deliver complete messages, so callers need neither partial-frame assembly nor an extra concurrent-send lock.
 
 `local://` selects Windows named pipes or Unix domain sockets. You can also choose `tcp://127.0.0.1:port`, ordinary `udp://`, or reliable `kcp://`. The [four-thread shared-connection example](examples/ipc_threads.cpp) and [independent Python peer](examples/ipc_python.py) have automated tests. Check deadlines, capacity and disconnect errors, and close connections explicitly. These IPC waits use ordinary threads.
 
@@ -378,6 +384,7 @@ The meaning of `NULL` depends on its position: allocator/options parameters sele
 
 | What you need | Where to start |
 | --- | --- |
+| Threaded local IPC, TCP, UDP and KCP application tests | [Device control and sensor publishing](docs/IPC_BUSINESS.md) |
 | IPC, duplex messages, concurrent callers and other languages | [IPC tutorial and protocol](docs/IPC.md) |
 | Brace formatting, automatic C arguments and expressions | [Formatting](docs/FORMAT.md) |
 | Complete text, configuration, container and pool programs | [Task tutorials](docs/USAGE.md) |
@@ -395,7 +402,7 @@ The meaning of `NULL` depends on its position: allocator/options parameters sele
 
 ## 7. Builds, validation and licensing
 
-See the [build reference](docs/REFERENCE.md#section-27) for development builds, tests, static/shared installation and optional dependencies. The code's local full-suite record is Windows 113/113 and WSL Linux 115/115; [validation records](docs/VALIDATION.md) identify exact configurations and pending targets. Documentation-example checks are separate from target-platform validation.
+See the [build reference](docs/REFERENCE.md#section-27) for development builds, tests, static/shared installation and optional dependencies. The latest full-suite record for the library implementation is Windows 113/113 and WSL Linux 115/115 from 2026-10-03. The five subsequently added communication workflows passed separately on Windows, WSL and WSL memory/race detection builds. [Validation records](docs/VALIDATION.md) identify exact configurations and pending targets. Documentation-example checks are separate from target-platform validation.
 
 The first-party distribution license is pending; see [third-party licensing](THIRD_PARTY_NOTICES.md). The coroutine implementation is self-developed; hx_c_log integration remains future work.
 
