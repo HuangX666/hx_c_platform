@@ -13,7 +13,7 @@ jobs:
         shared: [ON, OFF]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - run: python3 tools/fetch_iconv.py
         if: runner.os != 'Windows'
       - run: python tools/fetch_iconv.py
@@ -38,8 +38,8 @@ jobs:
         os: [windows-2022, ubuntu-24.04, macos-14]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12'
       - run: python tools/fetch_parsers.py
@@ -65,7 +65,7 @@ jobs:
   minimal:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - run: >-
           cmake -C cmake/minimal.cmake -S . -B build
           -DCMAKE_BUILD_TYPE=Release -DHX_OS_BUILD_TESTS=ON
@@ -79,7 +79,7 @@ jobs:
       matrix:
         sanitizer: ["address,undefined", "thread"]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - run: >-
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
           -DHX_OS_SANITIZER=${{ matrix.sanitizer }}
@@ -89,7 +89,7 @@ jobs:
   musl:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Run native musl contracts
         run: |
           docker run --rm -v "$PWD:/src:ro" alpine:3.22 sh -ec '
@@ -114,7 +114,7 @@ jobs:
             emulator: qemu-arm
             exclude: '^process$|^sysinfo$'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Install cross compiler and emulator
         run: |
           sudo apt-get update
@@ -147,7 +147,7 @@ jobs:
         abi: [arm64-v8a, armeabi-v7a]
         api: [21, 28]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Install pinned Android NDK
         run: sdkmanager "ndk;28.2.13676358"
       - name: Build Android C99 and C++11 contracts
@@ -161,7 +161,7 @@ jobs:
           python3 tools/verify_android.py
           --ndk "$ANDROID_HOME/ndk/28.2.13676358"
           --abi ${{ matrix.abi }} --api 21 --minimal
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: android-${{ matrix.abi }}-api${{ matrix.api }}
@@ -172,7 +172,7 @@ jobs:
   independent_procedures:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - run: >-
           cmake -S . -B build -C cmake/minimal.cmake
           -DHX_OS_ENABLE_PROCEDURES=ON -DHX_OS_BUILD_TESTS=ON
@@ -183,7 +183,7 @@ jobs:
   independent_variant:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - run: >-
           cmake -S . -B build -C cmake/minimal.cmake
           -DHX_OS_ENABLE_VARIANT=ON -DHX_OS_BUILD_TESTS=ON

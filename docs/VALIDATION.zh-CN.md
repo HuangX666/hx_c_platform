@@ -4,9 +4,32 @@
 
 [English](VALIDATION.md) · [README](../README.zh-CN.md)
 
-本文记录截至 2026-10-04 的开发验证。设计覆盖、已有适配源码、编译成功、目标运行成功是不同状态。本机测试不能证明所有系统版本、文件系统、 CPU、libc 或网络提供方均已通过。
+本文记录截至 2026-10-05 的开发验证。设计覆盖、已有适配源码、编译成功、目标运行成功是不同状态。本机测试不能证明所有系统版本、文件系统、 CPU、libc 或网络提供方均已通过。
 
 当前业务示例见下方 JSON 记录；此前独立文本示例、初版共用示例、IPC／KCP 实现及其他各批记录对应各自当时的版本。
+
+## 2026-10-05：错误文本、IPC 重入与协程边界
+
+源码起点 `13b10ec`，本地 `dev`。Windows 原生错误文本检查 UTF-8 转换结果，失败或文本不完整时丢弃这段文本，保留原始数字错误信息。IPC 在端点锁外分配事件消息、释放未使用的存储，利用已有在途调用计数保护生命周期。接收会重新检查队列和关闭状态；分配失败保留事件，并发关闭优先返回关闭结果。连接等待保留原生错误详情。公共声明、结构体布局和导出 API 未改。
+
+| 配置 | 本轮结果 |
+| --- | --- |
+| Windows MSVC x64 Release 共享库 | 相关 CTest 10/10：core、error_text、error_text_windows、ipc、ipc_allocator、coroutine、coroutine_sync、format、cpp_coroutine、cpp_format |
+| WSL Linux GCC x86_64 Release 共享库 | 对应九项测试 9/9 通过；不包含 Windows 专用原生文本用例 |
+| WSL 静态库，ASan + UBSan | error_text、ipc_allocator、ipc_wait_error、coroutine、coroutine_sync、format，6/6；启用泄漏检查，未报告内存错误或泄漏 |
+| WSL 静态库，TSan | 同样六项测试 6/6，未报告竞态 |
+| 公共头 | Windows、WSL 现有 C99/C++11 独立公共头目标编译通过 |
+| 源码检查 | 十个修改的 C／头文件／CMake 文件通过 80 列检查，Tab 宽度为 8；修改文件保持 UTF-8 无 BOM、LF，空白检查通过 |
+
+Windows 用例编译实际错误格式化实现，提供受控的 `FormatMessageW` 文本，并调用真实 `WideCharToMultiByte`。覆盖有效文本、需要 2052 个 UTF-8 字节的 685 单元消息、无效 UTF-16，以及原生消息获取失败，检查 Win32／Winsock／HRESULT／GAI 错误域。转换失败保留状态、错误域和错误码，不输出截断的 UTF-8 前缀。这是受控失败测试，没有声称用系统已安装的长错误消息复现了崩溃。
+
+IPC 分配器用例使用真实回环连接，覆盖分配／释放回调查询统计、分配失败重试、两个接收者竞争、分配期间关闭及分配失败、关闭超时保留资源后重试、溢出事件保留和事件顺序。每个用例都释放 context，并检查保留分配数量归零。普通数据消息在接收线程的分配失败已开启时仍能接收，确认该接收路径没有新增分配。静态等待错误用例编译实际 IPC 实现，注入受控的原生等待失败，检查状态、错误域、原生错误码和附加原因。
+
+协程同步用例覆盖宿主线程等待条件变量时，由另一宿主持有互斥锁直到截止时间已过；运行时及同步对象关闭后，该线程仍在重新加锁，拥有者解锁后它带着锁返回 `TIMEOUT`，最终回收全部资源。文档明确持锁退出的后果，以及无栈协程直接返回 `WOULD_BLOCK` 会重新排队的行为。调度和锁所有权语义保留。格式化辅助函数补充已验证填充字符与输出上限的不变式说明，没有添加热路径检查。
+
+CI Action 使用完整 SHA，分别从官方 checkout v6、setup-python v6、upload-artifact v4 标签解析。以后更新需要核实新的上游提交，同时修改固定值和版本注释。本轮本地验证不代表已经执行 GitHub 托管 CI。
+
+日志为 `build-shared-msvc/`、`build-shared-linux/`、`build-parsers-asan/`、`build-tsan-linux/` 下的 `review-fixes-build-final.log` 和 `review-fixes-ctest-final.log`；共享库公共头编译日志为 `review-fixes-headers.log`。本轮运行相关测试，没有重跑全量 CTest、安装消费或旧消费者兼容检查。未新增 macOS、Win7/8.1、Android、ARM 板卡以及吞吐／延迟基准。没有修改第三方源码。
 
 ## 2026-10-04：源码与示例按逻辑分段
 

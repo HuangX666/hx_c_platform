@@ -4,9 +4,32 @@ Entries below describe the versions tested at the time. Historical C++ exception
 
 [简体中文](VALIDATION.zh-CN.md) · [README](../README.md)
 
-This records development validation through 2026-10-04. A design, implemented adapter, successful compile and successful target run are different states. Local tests do not certify every operating-system release, filesystem, CPU, libc or network provider.
+This records development validation through 2026-10-05. A design, implemented adapter, successful compile and successful target run are different states. Local tests do not certify every operating-system release, filesystem, CPU, libc or network provider.
 
 The JSON entry below records the current examples. Earlier independent text examples, initial shared workflows, IPC/KCP implementation and other batches describe their historical versions.
+
+## 2026-10-05: Error text, IPC reentry and coroutine boundaries
+
+Baseline `13b10ec`, local `dev`. Windows native error text now checks UTF-8 conversion and discards failed or incomplete text while preserving the original numeric error. IPC event allocation and unused-storage release run outside the endpoint mutex, with the existing in-flight caller retaining its lifetime. Receive rechecks queues and closure; allocation failure retains events, and concurrent closure takes precedence. Connection waits preserve native error details. Public declarations, layouts and exported APIs remain unchanged.
+
+| Configuration | Evidence from this run |
+| --- | --- |
+| Windows MSVC x64 Release shared | Related CTest 10/10: core, error_text, error_text_windows, ipc, ipc_allocator, coroutine, coroutine_sync, format, cpp_coroutine and cpp_format |
+| WSL Linux GCC x86_64 Release shared | The corresponding nine tests passed 9/9; the Windows-only native-text fixture is excluded |
+| WSL static ASan + UBSan | error_text, ipc_allocator, ipc_wait_error, coroutine, coroutine_sync and format passed 6/6; leak detection enabled, no reported memory errors or leaks |
+| WSL static TSan | The same six tests passed 6/6; no reported races |
+| Public headers | Existing independent C99/C++11 header targets built on Windows and WSL |
+| Source checks | Ten changed C/header/CMake files passed the 80-column checker with Tab width 8; changed files use UTF-8 without BOM and LF; whitespace checks passed |
+
+The Windows fixture compiles the real error formatter with controlled `FormatMessageW` text and the real `WideCharToMultiByte`. It covers valid text, a 685-unit message requiring 2052 UTF-8 bytes, invalid UTF-16, and native-message failure across Win32/Winsock/HRESULT/GAI domains. Failed text falls back to the unchanged status/domain/code; it does not emit a truncated UTF-8 prefix. This is a controlled failure test, not a crash reproduced from an installed long Windows system message.
+
+The IPC allocator fixture uses real loopback connections and checks allocator/deallocator statistics reentry, allocation-failure retry, competing receivers, closure during allocation including allocation failure, close-timeout retention/retry, overflow-event retention and event order. Every fixture releases its context and verifies zero retained allocations. A data-message receive succeeds with allocation failure armed, confirming no new allocation on that receive path. The static wait-error fixture compiles the real IPC code with a controlled native wait failure and checks status, domain, native code and cause code.
+
+The coroutine synchronization test now covers a caller-owned native thread whose condition deadline expires while another host owns its mutex. Runtime/synchronization close leaves it waiting; unlocking lets it return `TIMEOUT` with the mutex reacquired, then all resources are reclaimed. Documentation clarifies abandoned-lock consequences and bare stackless `WOULD_BLOCK` requeue behavior. Scheduling and lock ownership are preserved. The formatting helper's validated-fill/output-limit invariant is documented without adding hot-path checks.
+
+CI actions are pinned to full SHAs resolved from the official checkout v6, setup-python v6 and upload-artifact v4 tags. Updating them requires verifying a new upstream commit and changing the pin and version comment together. No hosted CI run is claimed by this local verification.
+
+Logs are `review-fixes-build-final.log` and `review-fixes-ctest-final.log` under `build-shared-msvc/`, `build-shared-linux/`, `build-parsers-asan/` and `build-tsan-linux/`; shared header builds use `review-fixes-headers.log`. This task ran related suites, not full CTest or install/old-consumer compatibility checks. No new macOS, Win7/8.1, Android, ARM board or throughput/latency benchmark was run. Third-party sources were not edited.
 
 ## 2026-10-04: Logical paragraphs in source and examples
 

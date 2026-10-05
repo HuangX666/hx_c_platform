@@ -155,6 +155,8 @@ static hx_os_status count(hx_os_coro *self, void *user, hx_os_error *error)
 
 Start with `step=0`. Put each `AWAIT` on its own source line. Values and buffers used across suspension belong in persistent state. These macros use switch/case and cannot cross a VLA declaration or an unrelated nested switch. They pause execution but do not silently handle failures. `hx_os_coro_complete` distinguishes a final `WOULD_BLOCK` error from a callback asking to be scheduled again. A raw stackless callback can implement the same protocol without macros.
 
+Returning `WOULD_BLOCK` without a registered wait puts the task back on its worker's ready queue. Repeating this can consume a CPU core; it does not wait for an external event. Use the coroutine sleep, channel, synchronization or I/O entries with `AWAIT` to suspend until their result is ready. Keep `yield` for deliberately sharing the worker during computation. Existing explicit requeue behavior is preserved.
+
 ## 6. Network and pipe I/O
 
 The C entries are `hx_os_coro_listen`, `dial`, `accept`, `read`, `write`, `resolve` and `pipe_pair`. Addresses use existing `hx_os_address`; DNS returns an owned `hx_os_address_list`. `listen` can return an ephemeral bound port. Address reuse is explicitly selected, never silently enabled. Dial uses one numeric address; DNS results can be tried by the caller under one absolute deadline.
@@ -223,6 +225,10 @@ Include `hx/CoroutineSync.hpp`. `Mutex::create(runtime)`, `Semaphore::create(run
 Uncontended acquisition uses the runtime lock without allocating a waiter. Contention allocates a bounded waiter. Native hosts block and coroutines suspend; cross-runtime coroutine waits return `NOT_SUPPORTED`. `NOW` reports `WOULD_BLOCK` when unavailable. Objects must remain referenced for a call; accepted waits retain what they use. Closing rejects/wakes waits, while owned locks can still be unlocked. Closing a mutex is not a way to forcibly revoke its owner.
 
 A condition wait reacquires its mutex **before returning**, including after timeout, cancellation or condition close. Reacquisition can pass the deadline and is not interrupted by repeated cancellation; the mutex must eventually be released by its owner. This is a mutex-ownership guarantee, not a hard cutoff. Keep guards in the acquiring coroutine/thread, unlock before completing the task, and never copy a guard to a different execution context. Destruction of a guard unlocks without blocking.
+
+Task exit does not automatically unlock a coroutine mutex or write lock. An owner that exits without unlocking can leave other callers blocked indefinitely; another thread or coroutine cannot unlock an owner-checked mutex on its behalf. Automatic unlock could expose partially updated shared data. C callbacks must unlock on every exit path after acquisition; C++ guards must stay in the owning execution context and cover error/cancellation returns.
+
+Closing a runtime or synchronization object does not interrupt condition-wait reacquisition or revoke the current lock owner. A caller-owned native thread can still be reacquiring after runtime close succeeds, because runtime close joins only its own workers. Let the lock owner finish and unlock, join the host thread, release synchronization handles, then destroy the runtime. A hard deadline for this whole sequence is not provided by the current return-with-lock contract.
 
 C++20 adds `async::acquire(mutex)`, `async::wait(event/semaphore)`, `async::readLock/writeLock(lock)` and `async::wait(condition, guard)`. The guard used with a condition must remain alive across the await. These waits use the same C scheduler; they do not create one thread per wait.
 

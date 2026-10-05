@@ -48,7 +48,15 @@ set(hx_test_suites data options lifecycle config containers sysinfo file_utils
 	settings settings_concurrency settings_config profiler atomic
 	string_tools lexer wide_wait catalog_filename procedure
 	android_baseline convenience variant file_search stl
-	coroutine coroutine_io coroutine_sync format kcp ipc)
+	coroutine coroutine_io coroutine_sync format kcp ipc ipc_allocator)
+
+if(WIN32)
+	list(APPEND hx_test_suites error_text_windows)
+endif()
+
+if(NOT BUILD_SHARED_LIBS)
+	list(APPEND hx_test_suites ipc_wait_error)
+endif()
 
 if(HX_OS_ENABLE_THREAD_POOL)
 	list(APPEND hx_test_suites pool)
@@ -71,7 +79,18 @@ foreach(suite IN LISTS hx_test_suites)
 	set_tests_properties(${suite} PROPERTIES TIMEOUT 20)
 endforeach()
 
+if(WIN32)
+	target_include_directories(hx_os_test_error_text_windows PRIVATE
+		"${PROJECT_BINARY_DIR}/private")
+endif()
+
+if(NOT BUILD_SHARED_LIBS)
+	target_include_directories(hx_os_test_ipc_wait_error PRIVATE
+		"${PROJECT_BINARY_DIR}/private")
+endif()
+
 set_tests_properties(ipc PROPERTIES TIMEOUT 60)
+set_tests_properties(ipc_allocator PROPERTIES TIMEOUT 30)
 
 target_sources(hx_os_test_variant PRIVATE variant_fixture.c)
 

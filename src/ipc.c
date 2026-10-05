@@ -737,17 +737,15 @@ hx_os_status hx_ipc_wait_connected_until(hx_ipc *endpoint,
 			break;
 		}
 
-		status = hx_os_condition_wait_until(
-			endpoint->condition, endpoint->mutex, deadline, error);
+		status = hx_os_condition_wait_until(endpoint->condition,
+			endpoint->mutex, deadline, &detail);
 	}
 
 	hx_ipc_i_unlock(endpoint);
 	hx_ipc_leave(endpoint);
+	detail.status = status;
 	if (error)
 		*error = detail;
-
-	if (error)
-		error->status = status;
 
 	return status;
 }
@@ -963,6 +961,7 @@ hx_os_status hx_ipc_receive_until(hx_ipc *endpoint, hx_os_deadline deadline,
 	hx_os_status status;
 	hx_os_error detail = {0};
 	hx_ipc_received *message = NULL;
+	hx_ipc_received *event = NULL;
 
 	if (!out)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
@@ -975,48 +974,66 @@ hx_os_status hx_ipc_receive_until(hx_ipc *endpoint, hx_os_deadline deadline,
 
 	hx_ipc_i_lock(endpoint);
 
-	while (!endpoint->inbox && !endpoint->event_count &&
-		!endpoint->overflow && !endpoint->closing &&
-		!endpoint->finished && status == HX_OS_OK)
-		status = hx_os_condition_wait_until(
-			endpoint->condition, endpoint->mutex, deadline, error);
-	if (status != HX_OS_OK && error)
-		detail = *error;
+	for (;;) {
+		while (!endpoint->inbox && !endpoint->event_count &&
+			!endpoint->overflow && !endpoint->closing &&
+			!endpoint->finished && status == HX_OS_OK)
+			status = hx_os_condition_wait_until(endpoint->condition,
+				endpoint->mutex, deadline, &detail);
 
-	if (endpoint->closing)
-		status = endpoint->error.status ? endpoint->error.status
-						: HX_OS_CLOSED;
-	else if (endpoint->overflow || endpoint->event_count) {
-		message = hx_os_i_zero(endpoint->context, sizeof(*message));
-		if (!message)
-			status = HX_OS_NO_MEMORY;
-		else if (endpoint->overflow) {
-			message->message.kind = HX_IPC_OVERFLOW;
-			message->message.error.status = HX_OS_LIMIT;
-			endpoint->overflow = 0;
+		if (endpoint->closing)
+			status = endpoint->error.status ? endpoint->error.status
+							: HX_OS_CLOSED;
+		else if (endpoint->overflow || endpoint->event_count) {
+			if (!event) {
+				/* enter() retains the endpoint while
+				 * allocating. Recheck queues and close after
+				 * user code runs.
+				 */
+				hx_ipc_i_unlock(endpoint);
+				event = hx_os_i_zero(
+					endpoint->context, sizeof(*event));
+				hx_ipc_i_lock(endpoint);
+				if (!event && !endpoint->closing) {
+					status = HX_OS_NO_MEMORY;
+					break;
+				}
+
+				continue;
+			}
+
+			message = event;
+			event = NULL;
+			if (endpoint->overflow) {
+				message->message.kind = HX_IPC_OVERFLOW;
+				message->message.error.status = HX_OS_LIMIT;
+				endpoint->overflow = 0;
+			}
+			else {
+				message->message =
+					endpoint->events[endpoint->event_read];
+				endpoint->event_read =
+					(endpoint->event_read + 1) %
+					endpoint->event_capacity;
+				--endpoint->event_count;
+			}
 		}
-		else {
-			message->message =
-				endpoint->events[endpoint->event_read];
-			endpoint->event_read = (endpoint->event_read + 1) %
-				endpoint->event_capacity;
-			--endpoint->event_count;
+		else if (endpoint->inbox) {
+			message = endpoint->inbox;
+			endpoint->inbox = message->next;
+			if (!endpoint->inbox)
+				endpoint->inbox_last = NULL;
+
+			endpoint->statistics.pending_bytes -=
+				message->message.bytes;
+			--endpoint->inbox_count;
 		}
-	}
-	else if (endpoint->inbox) {
-		message = endpoint->inbox;
-		endpoint->inbox = message->next;
-		if (!endpoint->inbox)
-			endpoint->inbox_last = NULL;
+		else if (endpoint->finished)
+			status = endpoint->error.status ? endpoint->error.status
+							: HX_OS_CLOSED;
 
-		endpoint->statistics.pending_bytes -= message->message.bytes;
-		--endpoint->inbox_count;
-
-		status = HX_OS_OK;
+		break;
 	}
-	else if (endpoint->finished)
-		status = endpoint->error.status ? endpoint->error.status
-						: HX_OS_CLOSED;
 
 	if (message)
 		status = HX_OS_OK;
@@ -1028,12 +1045,12 @@ hx_os_status hx_ipc_receive_until(hx_ipc *endpoint, hx_os_deadline deadline,
 		detail = endpoint->error;
 
 	hx_ipc_i_unlock(endpoint);
+	if (event)
+		hx_os_memory_free(event);
 	hx_ipc_leave(endpoint);
+	detail.status = status;
 	if (error)
 		*error = detail;
-
-	if (error)
-		error->status = status;
 
 	return status;
 }

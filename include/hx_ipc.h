@@ -84,7 +84,8 @@ HX_OS_API hx_os_status HX_OS_CALL hx_ipc_reply_text(hx_ipc *endpoint,
 	const hx_ipc_message *request, const char *text, hx_os_error *error);
 
 /* Each endpoint owns one I/O thread, shared by its bounded peer set. Linking
- * the library starts nothing. There are no user callbacks on that thread.
+ * the library starts nothing. Business callbacks do not run on that thread.
+ * Custom allocator callbacks can run there or on an application caller.
  * Supported addresses: tcp://127.0.0.1:port, udp://127.0.0.1:port,
  * kcp://127.0.0.1:port (also [::1]), local://simple-name, and POSIX-only
  * unix:///absolute/path. Port 0 is allowed for listeners; address() reports
@@ -152,12 +153,18 @@ HX_OS_API hx_os_status HX_OS_CALL hx_ipc_reply_until(hx_ipc *endpoint,
  * Full reliable inboxes explicitly reject admission; UDP may drop. A bounded
  * event ring reports overflow instead of silently promising all lifecycle
  * events. Empty messages are valid. Destruction wakes all waiting callers.
+ * Event allocation failure retains the event for retry. Allocator callbacks
+ * run outside the endpoint mutex; queues/closure are rechecked afterward.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_ipc_receive_until(hx_ipc *endpoint,
 	hx_os_deadline deadline, hx_ipc_message **message, hx_os_error *error);
 
 HX_OS_API void HX_OS_CALL hx_ipc_message_release(hx_ipc_message *message);
 
+/* Allocators may query statistics of a published, live endpoint. They must
+ * not close it or make blocking IPC calls: they can run inside an active call
+ * or on its I/O worker. Creation/disposal callbacks cannot use the endpoint.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_ipc_statistics_read(hx_ipc *endpoint,
 	hx_ipc_statistics *out, size_t capacity, hx_os_error *error);
 

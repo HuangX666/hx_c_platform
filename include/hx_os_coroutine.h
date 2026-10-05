@@ -44,6 +44,7 @@ typedef struct hx_os_coro_options {
 	size_t max_io_handles;
 	size_t max_io_bytes;
 } hx_os_coro_options;
+
 #define HX_OS_CORO_OPTIONS_INIT                                                \
 	{                                                                      \
 		sizeof(hx_os_coro_options), 1, 2, 1024, 128 * 1024,            \
@@ -66,8 +67,10 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_runtime_create(
 
 /* Rejection transfers nothing. Accepted user data lives through cleanup,
  * which runs exactly once, including cancellation before the first call.
- * Stackless callbacks return WOULD_BLOCK only while yielding or waiting;
- * persistent state belongs in user, never in automatic local variables.
+ * Stackless callbacks return WOULD_BLOCK after yielding or registering a
+ * wait. Without a registered wait, they are requeued and can spin. Use the
+ * coroutine wait APIs to suspend. Persistent state belongs in user, never in
+ * automatic local variables.
  * A stackful callback returns its final status; nested waits suspend its stack.
  * The callback's coroutine/current pointers are borrowed; retain before owning.
  * Lazy native stack creation failures arrive as the task result after
@@ -219,6 +222,7 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_local_set(
  * are refcounted; active waits retain them. No user callback runs under locks.
  * Mutexes are non-recursive and ownership checked. RW read-unlock requires a
  * read share held by the caller. Never finish a task while owning a lock.
+ * Task exit does not unlock it; an abandoned owner can block waiters forever.
  * Close rejects new acquisitions and wakes waiters; existing owners can unlock.
  */
 HX_OS_API void HX_OS_CALL hx_os_coro_sync_retain(hx_os_coro_sync *sync);
@@ -282,9 +286,11 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_condition_create(
 	hx_os_error *error);
 
 /* Atomically releases the owned mutex before waiting, and reacquires it even
- * on timeout/cancellation/close. Reacquisition can exceed the deadline. Always
- * recheck the application predicate while holding the mutex. In a stackless
- * callback repeat this call after WOULD_BLOCK until a terminal result arrives.
+ * on timeout/cancellation/close. Reacquisition can exceed the deadline and
+ * runtime close; its owner must eventually unlock. Host threads must be joined
+ * by the host before runtime destruction. Always recheck the predicate while
+ * holding the mutex. In a stackless callback, repeat this call after
+ * WOULD_BLOCK until a terminal result arrives.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_condition_wait_until(
 	hx_os_coro_condition *condition, hx_os_coro_mutex *mutex,
@@ -334,6 +340,7 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_value_alloc(
 	hx_os_error *error);
 
 HX_OS_API void HX_OS_CALL hx_os_coro_value_free(void *memory);
+
 /* Wait on several sends/receives; exactly one commits. Case metadata and sent
  * values are copied; receive output storage stays live through completion.
  * The selected index is valid on a selected OK/EOF/CLOSED branch.

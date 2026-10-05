@@ -270,9 +270,11 @@ hx_os_status hx_os_error_message(const hx_os_error *error, char *buffer,
 		DWORD count = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM |
 				FORMAT_MESSAGE_IGNORE_INSERTS,
 			NULL, (DWORD)error->native_code, 0, wide, 1024, NULL);
-		if (count)
-			(void)WideCharToMultiByte(CP_UTF8, 0, wide, -1, native,
-				(int)sizeof(native), NULL, NULL);
+		if (count &&
+			!WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+				wide, -1, native, (int)sizeof(native), NULL,
+				NULL))
+			native[0] = '\0';
 	}
 #endif
 	if (error->domain == HX_OS_ERROR_ERRNO) {

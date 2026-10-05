@@ -162,6 +162,78 @@ static void test_wait(hx_os_coro *task)
 	hx_os_coro_release(task);
 }
 
+static void *test_native_waiter(void *user)
+{
+	test_state *state = user;
+
+	CHECK(hx_os_coro_mutex_lock_until(
+		      state->mutex, test_deadline(), NULL) == HX_OS_OK);
+	hx_os_event_set(state->entered);
+	state->value = hx_os_coro_condition_wait_until(state->condition,
+		state->mutex, hx_os_deadline_after_ms(500), NULL);
+	CHECK(hx_os_coro_mutex_unlock(state->mutex, NULL) == HX_OS_OK);
+	hx_os_event_set(state->holding);
+
+	return NULL;
+}
+
+static void test_native_relock(void)
+{
+	test_state state = {0};
+	hx_os_coro_options options = HX_OS_CORO_OPTIONS_INIT;
+	hx_os_context *context = NULL;
+	hx_os_thread *thread = NULL;
+	hx_os_deadline close_deadline;
+
+	options.workers = 1;
+	options.max_io_handles = 0;
+	CHECK(hx_os_context_create(NULL, &context, NULL) == HX_OS_OK);
+	CHECK(hx_os_coro_runtime_create(
+		      context, &options, &state.runtime, NULL) == HX_OS_OK);
+	CHECK(hx_os_coro_mutex_create(state.runtime, &state.mutex, NULL) ==
+		HX_OS_OK);
+	CHECK(hx_os_coro_condition_create(
+		      state.runtime, &state.condition, NULL) == HX_OS_OK);
+	CHECK(hx_os_event_create(context, 1, 0, &state.entered, NULL) ==
+		HX_OS_OK);
+	CHECK(hx_os_event_create(context, 1, 0, &state.holding, NULL) ==
+		HX_OS_OK);
+	CHECK(hx_os_thread_create(context, test_native_waiter, &state, &thread,
+		      NULL) == HX_OS_OK);
+	CHECK(hx_os_event_wait_until(state.entered, test_deadline(), NULL) ==
+		HX_OS_OK);
+	CHECK(hx_os_coro_mutex_lock_until(state.mutex, test_deadline(), NULL) ==
+		HX_OS_OK);
+
+	/* The condition deadline expires while this host still owns the lock.
+	 */
+	CHECK(hx_os_event_wait_until(state.holding,
+		      hx_os_deadline_after_ms(600), NULL) == HX_OS_TIMEOUT);
+	close_deadline = hx_os_capabilities() & HX_OS_CAP_TIMED_JOIN
+		? test_deadline()
+		: HX_OS_DEADLINE_INFINITE;
+	CHECK(hx_os_coro_runtime_close_until(
+		      state.runtime, close_deadline, NULL) == HX_OS_OK);
+	CHECK(hx_os_coro_sync_close(state.condition, NULL) == HX_OS_OK);
+	CHECK(hx_os_coro_sync_close(state.mutex, NULL) == HX_OS_OK);
+	CHECK(hx_os_event_wait_until(state.holding, HX_OS_DEADLINE_NOW, NULL) ==
+		HX_OS_TIMEOUT);
+	CHECK(hx_os_context_destroy(&context, NULL) == HX_OS_BUSY);
+
+	CHECK(hx_os_coro_mutex_unlock(state.mutex, NULL) == HX_OS_OK);
+	CHECK(hx_os_thread_join_until(thread, test_deadline(), NULL, NULL) ==
+		HX_OS_OK);
+	CHECK(state.value == HX_OS_TIMEOUT);
+	CHECK(hx_os_thread_destroy(&thread, NULL) == HX_OS_OK);
+	hx_os_coro_sync_release(state.mutex);
+	hx_os_coro_sync_release(state.condition);
+	hx_os_event_destroy(state.entered);
+	hx_os_event_destroy(state.holding);
+	CHECK(hx_os_coro_runtime_destroy(&state.runtime, NULL) == HX_OS_OK);
+	CHECK(hx_os_context_allocations(context) == 0);
+	CHECK(hx_os_context_destroy(&context, NULL) == HX_OS_OK);
+}
+
 int main(void)
 {
 	test_state state;
@@ -178,17 +250,16 @@ int main(void)
 		CHECK(hx_os_coro_mutex_create(NULL, &mutex, NULL) ==
 			HX_OS_NOT_SUPPORTED);
 		CHECK(!mutex);
-		CHECK(hx_os_coro_local_key_create(
-			      NULL, NULL, NULL, &key, NULL) ==
-			HX_OS_NOT_SUPPORTED);
+		CHECK(hx_os_coro_local_key_create(NULL, NULL, NULL, &key,
+			      NULL) == HX_OS_NOT_SUPPORTED);
 		CHECK(!key);
-		CHECK(hx_os_coro_spawn(NULL, HX_OS_CORO_STACKLESS,
-			      test_failure, NULL, NULL, NULL) ==
-			HX_OS_NOT_SUPPORTED);
+		CHECK(hx_os_coro_spawn(NULL, HX_OS_CORO_STACKLESS, test_failure,
+			      NULL, NULL, NULL) == HX_OS_NOT_SUPPORTED);
 
 		return 0;
 	}
 
+	test_native_relock();
 	if (!(hx_os_capabilities() & HX_OS_CAP_STACKFUL_COROUTINES))
 		return 0;
 

@@ -179,6 +179,10 @@ Ordinary UDP bodies must fit `65507 - 64` bytes or sending returns `HX_OS_LIMIT`
 
 Control frames also share an endpoint-wide `max_peers * 64 KiB` limit. Frames retained from previous sessions remain charged during reconnect, so changing sessions cannot bypass the bound.
 
+Receiving a lifecycle or overflow event allocates its owned message outside the endpoint mutex, then rechecks queues and closure. Allocation failure leaves the event pending for retry. Another receiver may take it meanwhile; the original call then observes the current queue state and its original deadline. The endpoint remains retained throughout allocation and release of unused message storage.
+
+Custom allocator callbacks run synchronously on application callers or the I/O worker. They may query statistics of a published, live endpoint, but must not close it or perform blocking IPC calls: doing so can wait for the very call or worker running the allocator. During endpoint creation/disposal, or after endpoint destruction, allocator callbacks must not access that endpoint. Keep callbacks thread-safe and bounded, and retain their context while any received message still exists.
+
 ## 6. Deadlines and closure
 
 `send_until`, `request_until`, `receive_until` and `close_until` accept this library's **absolute monotonic deadline**. `hx_os_deadline_after_ms(200)` creates one 200 ms from now. `HX_OS_DEADLINE_NOW` polls without waiting; `HX_OS_DEADLINE_INFINITE` explicitly requests an unlimited wait and is not the close default. Deadlines do not provide hard real-time guarantees.

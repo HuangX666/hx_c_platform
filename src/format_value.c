@@ -13,6 +13,7 @@ static size_t hx_os_format_points(const char *text, size_t bytes)
 	return count;
 }
 
+/* fill is one validated UTF-8 codepoint; append keeps out->size <= limit. */
 static hx_os_status hx_os_format_pad(hx_string *out, hx_string_view fill,
 	size_t count, size_t limit, hx_os_error *error)
 {
