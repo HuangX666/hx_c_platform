@@ -90,6 +90,8 @@ option(HX_OS_ENABLE_REGISTRY "Build Windows registry access" ON)
 option(HX_OS_ENABLE_WINDOWS_VERSION "Build Windows version resource queries" ON)
 option(HX_OS_ENABLE_WINDOWS_DESKTOP "Build Windows window and GPU helpers" ON)
 
+option(HX_OS_ENABLE_NATIVE_INTEROP "Build borrowed native object queries" ON)
+
 option(HX_OS_ENABLE_SLEEP_INHIBIT "Build native idle-sleep requests" ON)
 option(HX_OS_ENABLE_PERFORMANCE_REQUEST "Build native execution activities" ON)
 
@@ -336,7 +338,8 @@ add_library(hx_c_platform
 	src/watch.c src/loop_fd.c
 	src/system.c src/cpu_features.c src/time_posix.c
 	src/process.c src/process_capture.c src/local.c src/duplex_pipe.c
-	src/registry.c src/windows_util.c src/power.c src/obfuscate.c
+	src/registry.c src/windows_util.c src/native_interop.c
+	src/power.c src/obfuscate.c
 	src/calendar.c src/filename.c src/text_lookup.c src/bitstream.c
 	src/calldata.c src/params.c src/dispatch.c src/signal.c src/procedure.c
 	src/settings.c

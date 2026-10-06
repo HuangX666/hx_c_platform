@@ -28,6 +28,7 @@ endfunction()
 foreach(example IN ITEMS hello async_timer configuration containers system_info
 	load_plugin text_file environment special_paths thread_options
 	windows_info
+	native_file
 	binary_stream buffered_file config_edit
 	serialization nested_document codec_macros
 	pipe_transfer positioned_read file_info config_save periodic_timer
@@ -51,6 +52,13 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 	hx_apply_warnings(hx_os_${example})
 endforeach()
+
+if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_NATIVE_INTEROP
+	AND HX_OS_ENABLE_SYSTEM_UTILS)
+	add_test(NAME native_file_example COMMAND hx_os_native_file
+		"${CMAKE_CURRENT_SOURCE_DIR}/hello.c")
+	set_tests_properties(native_file_example PROPERTIES TIMEOUT 20)
+endif()
 
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_STREAM)
 	add_test(NAME binary_stream_example COMMAND hx_os_binary_stream)

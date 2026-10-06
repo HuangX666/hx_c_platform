@@ -11,6 +11,7 @@
 #include <hx/Parameters.hpp>
 #include <hx/Preprocessor.hpp>
 #include <hx/Windows.hpp>
+#include <hx/Native.hpp>
 #include "cpp_check.hpp"
 
 static void TestResults() noexcept
@@ -425,6 +426,26 @@ static void TestDirectoryCalls()
 
 int main()
 {
+	if (hx_os_native_interop_available()) {
+		hx_os_thread *thread = NULL;
+
+		CHECK(hx::Native::file(NULL).status() == HX_OS_INVALID);
+		CHECK(hx::Native::thread(NULL).status() == HX_OS_INVALID);
+		CHECK(hx_os_thread_create(
+			      NULL,
+			      [](void *) noexcept -> void * { return NULL; },
+			      NULL, &thread, NULL) == HX_OS_OK);
+		CHECK(hx::Native::thread(thread));
+		CHECK(hx_os_thread_join_until(thread, TestJoinDeadline(), NULL,
+			      NULL) == HX_OS_OK);
+		CHECK(hx::Native::thread(thread).status() == HX_OS_CLOSED);
+		CHECK(hx_os_thread_destroy(&thread, NULL) == HX_OS_OK);
+	}
+	else {
+		CHECK(hx::Native::file(NULL).status() == HX_OS_NOT_SUPPORTED);
+		CHECK(hx::Native::thread(NULL).status() == HX_OS_NOT_SUPPORTED);
+	}
+
 	if (hx_os_windows_desktop_available()) {
 		CHECK(hx::Windows::window(0).status() == HX_OS_INVALID);
 		CHECK(hx::Windows::monitor(0).status() == HX_OS_INVALID);

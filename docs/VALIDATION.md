@@ -8,6 +8,16 @@ This records development validation through 2026-10-07. A design, implemented ad
 
 The JSON entry below records the current examples. Earlier independent text examples, initial shared workflows, IPC/KCP implementation and other batches describe their historical versions.
 
+## 2026-10-07: Borrowed native object interoperability
+
+Baseline `367c314`. Added independently selectable NATIVE_INTEROP queries for file/socket/process values and representation-preserving HANDLE/pthread_t copies. Values remain borrowed, without duplication, adoption or a retained owner reference. Callers exclude competing operations through native use. Attached/pending sockets return BUSY; joined threads and recorded/reaped child exits return CLOSED. The C++11 facade returns borrowed values through Result and exposes the correct native thread type. No existing public object layout changed.
+
+Windows MSVC x64 shared full CTest passed 161/161; WSL GCC shared passed 162/162. Installed C++11/pure C consumers passed 40/40 and 30/30 on both hosts; installed Win32 static consumers passed 39/39 and 29/29 without the optional format-generator case. Win32 static native/C++ utility suites passed 2/2 and public C99/C++11 headers compiled independently. WSL ASan/UBSan with leak detection and TSan each passed 2/2. Native MSVC ASan with networking/process modules disabled passed 2/2 with interop enabled and 2/2 disabled; Windows socket/process behavior is covered by ordinary native shared/Win32 runs, not this minimal ASan configuration. WSL builds with networking/process disabled also passed interop enabled/disabled checks 2/2 each. C++20 header syntax passed with exceptions disabled.
+
+Tests inspect/write through the native file then read through the library, compare live native thread identity, preserve short-buffer/extra storage, reject completed joins, inspect socket type, reject pending and idle attached sockets, and query a controlled child's native object before normal library waiting/reclamation. A thousand file-handle queries left the injected allocation counter unchanged; context allocations returned to zero. Queries add only field/atomic reads and output copies, with no new lock, allocation, worker or system call. No throughput improvement or lifetime extension is claimed. The native file example is compiled and run by the full suites.
+
+Logs use `native-*` under the relevant build trees. The minimal Linux and MSVC ASan configurations finish with NATIVE_INTEROP disabled. macOS, Win7/8.1, Android and embedded target validation remains pending; pthread_t is copied as its actual native type, not assumed to be an integer. Remaining signal, Linux desktop inhibition, crypto/TLS and archive work is not marked complete here.
+
 ## 2026-10-07: Windows resources and desktop identifiers
 
 Baseline `219f18a`. Added separately selectable WINDOWS_VERSION and WINDOWS_DESKTOP adapters, UTF-8 version strings, capacity-checked version/window/monitor/GPU records and an exception-free C++11 facade. Version resources are read without executing the target binary; HWND/HMONITOR remain borrowed. A title request for another thread in the same process returns WOULD_BLOCK before sending a message. Text buffers grow within a fixed limit; DXGI queries release all interfaces before return. No existing public layout or hot path changed.

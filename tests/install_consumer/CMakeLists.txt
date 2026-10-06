@@ -16,7 +16,7 @@ enable_testing()
 
 foreach(suite IN ITEMS ipc kcp config_tree codec stream buffered_file
 	byte_queue text_interop settings_apply config_backup ini calendar
-	params parser preprocess windows_util)
+	params parser preprocess windows_util native_interop)
 	add_executable(consumer_${suite} ../test_${suite}.c)
 	target_link_libraries(consumer_${suite} PRIVATE
 		hx_c_platform::hx_c_platform)
@@ -36,6 +36,7 @@ endforeach()
 if(WIN32)
 	target_sources(consumer_windows_util PRIVATE ../windows_fixture.rc)
 	target_link_libraries(consumer_windows_util PRIVATE user32)
+	target_link_libraries(consumer_native_interop PRIVATE ws2_32)
 endif()
 
 set(hx_search_fixture "${CMAKE_CURRENT_BINARY_DIR}/find-中文")

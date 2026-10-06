@@ -45,7 +45,8 @@ set(hx_test_suites data options lifecycle config containers sysinfo file_utils
 	env paths thread_extra pipe io_options file_info
 	config_serialize config_tree config_backup ini codec timer
 	error_text util vm file_extra watch loop_fd system delayed local duplex
-	registry windows_util power obfuscate calendar calendar_dst
+	registry windows_util native_interop power obfuscate
+	calendar calendar_dst
 	text_lookup bitstream
 	calldata params signal
 	settings settings_concurrency settings_config settings_apply
@@ -93,6 +94,7 @@ if(WIN32)
 	enable_language(RC)
 	target_sources(hx_os_test_windows_util PRIVATE windows_fixture.rc)
 	target_link_libraries(hx_os_test_windows_util PRIVATE user32)
+	target_link_libraries(hx_os_test_native_interop PRIVATE ws2_32)
 endif()
 
 if(HX_OS_ENABLE_THREAD_POOL)
