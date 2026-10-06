@@ -15,6 +15,7 @@
 #include "hx_os_lexer.h"
 #include "hx_os_procedure.h"
 #include "hx_os_params.h"
+#include "hx_os_windows.h"
 #include "hx_variant.h"
 #include "signal_private.h"
 #include "settings_private.h"
@@ -100,6 +101,10 @@ int main(void)
 	HX_OS_LAYOUT(hx_os_local_address);
 	HX_OS_LAYOUT(hx_os_i_local_state);
 	HX_OS_LAYOUT(hx_os_i_power);
+	HX_OS_LAYOUT(hx_os_windows_version_info);
+	HX_OS_LAYOUT(hx_os_windows_window_info);
+	HX_OS_LAYOUT(hx_os_windows_monitor_info);
+	HX_OS_LAYOUT(hx_os_windows_gpu_info);
 
 	HX_OS_LAYOUT(hx_os_obfuscated);
 	HX_OS_LAYOUT(hx_os_bit_reader);

@@ -27,6 +27,7 @@ endfunction()
 
 foreach(example IN ITEMS hello async_timer configuration containers system_info
 	load_plugin text_file environment special_paths thread_options
+	windows_info
 	binary_stream buffered_file config_edit
 	serialization nested_document codec_macros
 	pipe_transfer positioned_read file_info config_save periodic_timer

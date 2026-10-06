@@ -4,6 +4,10 @@ project(hx_platform_consumer LANGUAGES C)
 option(HX_CONSUMER_CPP "Also validate the optional C++ interface" ON)
 option(HX_CONSUMER_FORMAT_SYNTAX "Validate installed format generator" OFF)
 
+if(WIN32)
+	enable_language(RC)
+endif()
+
 find_package(hx_c_platform 0.1 CONFIG REQUIRED)
 
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/HxNoExceptions.cmake")
@@ -12,7 +16,7 @@ enable_testing()
 
 foreach(suite IN ITEMS ipc kcp config_tree codec stream buffered_file
 	byte_queue text_interop settings_apply config_backup ini calendar
-	params parser preprocess)
+	params parser preprocess windows_util)
 	add_executable(consumer_${suite} ../test_${suite}.c)
 	target_link_libraries(consumer_${suite} PRIVATE
 		hx_c_platform::hx_c_platform)
@@ -28,6 +32,11 @@ foreach(suite IN ITEMS ipc kcp config_tree codec stream buffered_file
 	add_test(NAME installed_${suite} COMMAND consumer_${suite})
 	set_tests_properties(installed_${suite} PROPERTIES TIMEOUT 60)
 endforeach()
+
+if(WIN32)
+	target_sources(consumer_windows_util PRIVATE ../windows_fixture.rc)
+	target_link_libraries(consumer_windows_util PRIVATE user32)
+endif()
 
 set(hx_search_fixture "${CMAKE_CURRENT_BINARY_DIR}/find-中文")
 file(MAKE_DIRECTORY "${hx_search_fixture}/nested")

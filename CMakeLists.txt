@@ -87,6 +87,9 @@ option(HX_OS_ENABLE_DUPLEX_PIPE "Build synchronous duplex socket pairs" ON)
 
 option(HX_OS_ENABLE_REGISTRY "Build Windows registry access" ON)
 
+option(HX_OS_ENABLE_WINDOWS_VERSION "Build Windows version resource queries" ON)
+option(HX_OS_ENABLE_WINDOWS_DESKTOP "Build Windows window and GPU helpers" ON)
+
 option(HX_OS_ENABLE_SLEEP_INHIBIT "Build native idle-sleep requests" ON)
 option(HX_OS_ENABLE_PERFORMANCE_REQUEST "Build native execution activities" ON)
 
@@ -333,7 +336,7 @@ add_library(hx_c_platform
 	src/watch.c src/loop_fd.c
 	src/system.c src/cpu_features.c src/time_posix.c
 	src/process.c src/process_capture.c src/local.c src/duplex_pipe.c
-	src/registry.c src/power.c src/obfuscate.c
+	src/registry.c src/windows_util.c src/power.c src/obfuscate.c
 	src/calendar.c src/filename.c src/text_lookup.c src/bitstream.c
 	src/calldata.c src/params.c src/dispatch.c src/signal.c src/procedure.c
 	src/settings.c
@@ -418,6 +421,16 @@ endif()
 
 if(WIN32 AND HX_OS_ENABLE_REGISTRY)
 	target_link_libraries(hx_c_platform PRIVATE advapi32)
+endif()
+
+if(WIN32 AND HX_OS_ENABLE_WINDOWS_VERSION)
+	target_sources(hx_c_platform PRIVATE src/windows/version_resource.c)
+	target_link_libraries(hx_c_platform PRIVATE version)
+endif()
+
+if(WIN32 AND HX_OS_ENABLE_WINDOWS_DESKTOP)
+	target_sources(hx_c_platform PRIVATE src/windows/desktop_info.c)
+	target_link_libraries(hx_c_platform PRIVATE user32 dxgi dxguid)
 endif()
 
 if(HX_OS_ENABLE_SLEEP_INHIBIT OR HX_OS_ENABLE_PERFORMANCE_REQUEST)
@@ -819,6 +832,14 @@ install(FILES
 	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/hx_c_platform)
 
 set(HX_OS_PC_LIBS_PRIVATE "")
+
+if(WIN32 AND HX_OS_ENABLE_WINDOWS_VERSION)
+	string(APPEND HX_OS_PC_LIBS_PRIVATE " -lversion")
+endif()
+
+if(WIN32 AND HX_OS_ENABLE_WINDOWS_DESKTOP)
+	string(APPEND HX_OS_PC_LIBS_PRIVATE " -luser32 -ldxgi -ldxguid")
+endif()
 
 if(APPLE AND HX_OS_ENABLE_WATCH)
 	string(APPEND HX_OS_PC_LIBS_PRIVATE

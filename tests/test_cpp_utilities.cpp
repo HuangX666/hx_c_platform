@@ -10,6 +10,7 @@
 #include <hx/Settings.hpp>
 #include <hx/Parameters.hpp>
 #include <hx/Preprocessor.hpp>
+#include <hx/Windows.hpp>
 #include "cpp_check.hpp"
 
 static void TestResults() noexcept
@@ -424,6 +425,31 @@ static void TestDirectoryCalls()
 
 int main()
 {
+	if (hx_os_windows_desktop_available()) {
+		CHECK(hx::Windows::window(0).status() == HX_OS_INVALID);
+		CHECK(hx::Windows::monitor(0).status() == HX_OS_INVALID);
+		CHECK(hx::Windows::monitorGpu(0).status() == HX_OS_INVALID);
+		CHECK(hx::Windows::gpu(256).status() == HX_OS_LIMIT);
+		CHECK(hx::Windows::windowTitle(0).status() == HX_OS_INVALID);
+		CHECK(hx::Windows::windowClass(0).status() == HX_OS_INVALID);
+		CHECK(hx::Windows::windowProcessPath(0).status() ==
+			HX_OS_INVALID);
+	}
+	else {
+		CHECK(hx::Windows::gpu().status() == HX_OS_NOT_SUPPORTED);
+		CHECK(hx::Windows::windowTitle(0).status() ==
+			HX_OS_NOT_SUPPORTED);
+	}
+	if (hx_os_windows_version_available()) {
+		CHECK(hx::Windows::fileVersion("\xff").status() ==
+			HX_OS_INVALID_ENCODING);
+		CHECK(hx::Windows::versionString("x", "../x").status() ==
+			HX_OS_INVALID);
+	}
+	else
+		CHECK(hx::Windows::fileVersion("x").status() ==
+			HX_OS_NOT_SUPPORTED);
+
 	TestResults();
 	if (hx_os_preprocess_available()) {
 		hx::PreprocessDiagnostic diagnostic;
