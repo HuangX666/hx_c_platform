@@ -166,6 +166,44 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_config_replace(
 	const hx_os_config_value *value, const hx_os_config_options *options,
 	hx_os_config_document **out, hx_os_config_error *error);
 
+/* Section/key convenience for INI's string-only tree. section=NULL or ""
+ * selects global keys; other names are literal case-sensitive UTF-8, not
+ * JSON pointers. get preserves the output string on failure.
+ * Edits build a new immutable document in the owner's context and replace
+ * *owner only on success. Retained old documents/nodes remain valid; other
+ * borrowed nodes expire when their last document reference is released.
+ * Limits come from the original document. No whitespace/comment preservation.
+ * Edits require CONFIG+CONFIG_SERIALIZE, reject unrepresentable text and
+ * scalar/section name collisions. Missing removal returns NOT_FOUND; removing
+ * the last key retains its empty section. Exclude concurrent owner mutation
+ * and same-owner editing from allocator callbacks.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_ini_create(hx_os_context *context,
+	hx_os_config_document **out, hx_os_config_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_ini_load(const char *path,
+	hx_os_config_document **out, hx_os_config_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_ini_save(
+	const hx_os_config_document *document, const char *path,
+	hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_ini_get(
+	const hx_os_config_document *document, const char *section,
+	const char *key, hx_string *out, hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_ini_set(hx_os_config_document **owner,
+	const char *section, const char *key, const char *value,
+	hx_os_config_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_ini_remove_key(
+	hx_os_config_document **owner, const char *section, const char *key,
+	hx_os_config_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_ini_remove_section(
+	hx_os_config_document **owner, const char *section,
+	hx_os_config_error *error);
+
 /* Explicitly parse a STRING/TEXT/ATTRIBUTE as another document. Never
  * automatically reinterpret strings that happen to resemble JSON or XML.
  */

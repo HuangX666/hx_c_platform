@@ -1,5 +1,43 @@
 #include "containers_private.h"
 
+hx_os_status hx_os_byte_queue_create(hx_os_context *context, size_t max_bytes,
+	hx_os_byte_queue **out, hx_os_error *error)
+{
+	(void)context;
+	(void)max_bytes;
+	if (out)
+		*out = NULL;
+
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_byte_queue_write(hx_os_byte_queue *queue, const void *data,
+	size_t bytes, hx_os_error *error)
+{
+	(void)queue;
+	(void)data;
+	(void)bytes;
+
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_byte_queue_read(
+	hx_os_byte_queue *queue, void *data, size_t bytes, hx_os_error *error)
+{
+	return hx_os_byte_queue_write(queue, data, bytes, error);
+}
+
+hx_os_status hx_os_byte_queue_peek(const hx_os_byte_queue *queue, size_t offset,
+	void *data, size_t bytes, hx_os_error *error)
+{
+	(void)queue;
+	(void)offset;
+	(void)data;
+	(void)bytes;
+
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
 hx_os_status hx_os_vector_create(hx_os_context *context,
 	const hx_os_container_options *options, hx_os_vector **out,
 	hx_os_error *error)

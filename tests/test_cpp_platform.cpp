@@ -15,6 +15,9 @@
 #include <hx/Watch.hpp>
 #include <hx/SocketOptions.hpp>
 #include <hx/Text.hpp>
+#include <hx/ByteQueue.hpp>
+#include <hx/Stream.hpp>
+#include <hx/FileWriter.hpp>
 #include <hx/Config.hpp>
 #include "cpp_check.hpp"
 #if !defined(_WIN32)
@@ -212,6 +215,20 @@ int main(int argc, char **argv)
 	CHECK(argc == 3);
 
 	const auto capabilities = hx_os_capabilities();
+	if (hx_os_file_writer_available()) {
+		hx_os_file_writer *owner = NULL;
+		auto writer =
+			Take(hx::FileWriter::open(owner, "hx-cpp-writer.txt"));
+
+		CHECK(Take(writer.write(
+			      "hello", hx_os_deadline_after_ms(3000))) == 5);
+		Take(writer.flushUntil(hx_os_deadline_after_ms(3000), true));
+		CHECK(Take(writer.pending()) == 0);
+		Take(writer.closeUntil(hx_os_deadline_after_ms(3000)));
+		CHECK(!owner && writer.write("x").status() == HX_OS_CLOSED);
+		CHECK(hx_os_file_remove("hx-cpp-writer.txt", NULL) == HX_OS_OK);
+	}
+
 	if (capabilities & HX_OS_CAP_SYSTEM_UTILS) {
 		CHECK(!Take(hx::System::arguments()).empty());
 		CHECK(!Take(hx::System::hostName()).empty());
@@ -343,6 +360,46 @@ int main(int argc, char **argv)
 		Take(loop.closeUntil(HX_OS_DEADLINE_NOW));
 	}
 
+	{
+		auto text = Take(hx::Text::fromWide(L"中文😀"));
+		CHECK(text == "中文😀");
+		CHECK(Take(hx::Text::fromWide(L"", NULL)).empty());
+		auto embedded = Take(hx::Text::fromWideUnits(L"a\0b", 3));
+		CHECK(embedded == hx::StringView("a\0b", 3));
+		auto wide = Take(hx::Text::toWide(text));
+		CHECK(!wcscmp(wide.c_str(), L"中文😀"));
+		CHECK(wide.size() == wcslen(L"中文😀"));
+		CHECK(hx::Text::toWide(hx::StringView("\xff", 1)).status() ==
+			HX_OS_INVALID_ENCODING);
+		auto ascii = Take(hx::String::copy("Ab中文Cd"));
+		CHECK(ascii.compareAsciiNoCase("ab中文cd") == 0);
+		CHECK(ascii.findAsciiNoCase("cD") == 8);
+	}
+
+	if (capabilities & HX_OS_CAP_CONTAINERS) {
+		auto queue = Take(hx::ByteQueue::create(8));
+		Take(queue.write("a\0b", 3));
+		auto data = Take(queue.read(size_t(3)));
+		CHECK(data.size() == 3);
+		CHECK(!memcmp(data.data(), "a\0b", 3));
+		CHECK(queue.size() == 0);
+		CHECK(queue.read(size_t(1)).status() == HX_OS_NEED_INPUT);
+	}
+
+	if (capabilities & HX_OS_CAP_STREAM) {
+		auto stream = Take(hx::Stream::memory(32));
+		Take(stream.write<uint32_t>(0x12345678, HX_OS_BIG_ENDIAN));
+		Take(stream.write<double>(1.5));
+		CHECK(Take(stream.view()).size == 12);
+		Take(stream.seek(0));
+		CHECK(Take(stream.read<uint32_t>(HX_OS_BIG_ENDIAN)) ==
+			0x12345678);
+		CHECK(Take(stream.read<double>()) == 1.5);
+		CHECK(stream.read<uint32_t>().status() == HX_OS_EOF);
+		Take(stream.close());
+		CHECK(stream.read<uint32_t>().status() == HX_OS_CLOSED);
+	}
+
 	if (capabilities & HX_OS_CAP_TEXT_NUMBER) {
 		CHECK(Take(hx::Text::parseDouble("1.5")) == 1.5);
 		CHECK(Equal(hx::Text::formatDouble(1.5), "1.5"));
@@ -367,6 +424,31 @@ int main(int argc, char **argv)
 
 		auto moved = std::move(restored);
 		CHECK(Equal(moved.string("/name"), "value"));
+
+		auto ini = Take(hx::ConfigDocument::emptyIni());
+		Take(ini.setIni("network", "port", "8080"));
+		auto old_ini = ini;
+		Take(ini.setIni("network", "port", "9090"));
+		CHECK(Equal(ini.ini("network", "port"), "9090"));
+		CHECK(Equal(old_ini.ini("network", "port"), "8080"));
+		Take(ini.removeIniKey("network", "port"));
+		Take(ini.removeIniSection("network"));
+
+		if (capabilities & HX_OS_CAP_FILE_UTILS) {
+			const char *path = "hx-cpp-backup.json";
+			const char *backup = "hx-cpp-backup.json.bak";
+			hx_os_file_remove(path, NULL);
+			hx_os_file_remove(backup, NULL);
+			CHECK(Take(copy.saveBackup(path)).primary.published);
+			auto newer = Take(hx::ConfigDocument::parse(
+				"{\"name\":\"new\"}"));
+			CHECK(Take(newer.saveBackup(path)).backup.published);
+			auto recovered =
+				Take(hx::ConfigDocument::restoreBackup(path));
+			CHECK(Equal(recovered.string("/name"), "value"));
+			CHECK(hx_os_file_remove(path, NULL) == HX_OS_OK);
+			CHECK(hx_os_file_remove(backup, NULL) == HX_OS_OK);
+		}
 	}
 
 	if (capabilities & HX_OS_CAP_BOM) {

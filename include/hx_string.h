@@ -91,6 +91,17 @@ HX_OS_API size_t HX_OS_CALL hx_string_find(
 HX_OS_API int HX_OS_CALL hx_string_compare(
 	const hx_string *string, hx_string_view other);
 
+/* Locale-independent ASCII case-insensitive operations, without allocation.
+ * A-Z compare as a-z; non-ASCII UTF-8 bytes remain exact (no Unicode folding).
+ * compare requires valid views and returns -1/0/1. find uses byte offsets;
+ * invalid needles/starts return NOT_FOUND, like the case-sensitive version.
+ */
+HX_OS_API int HX_OS_CALL hx_string_compare_ascii_nocase(
+	const hx_string *string, hx_string_view other);
+
+HX_OS_API size_t HX_OS_CALL hx_string_find_ascii_nocase(
+	const hx_string *string, hx_string_view needle, size_t start);
+
 /* printf formatting uses the caller's locale; resulting bytes must be UTF-8. */
 HX_OS_API hx_os_status HX_OS_CALL hx_string_vformat(hx_string *string,
 	hx_os_error *error, const char *format, va_list arguments);
@@ -105,6 +116,12 @@ HX_OS_API hx_os_status HX_OS_CALL hx_string_append_format(
 HX_OS_API hx_os_status HX_OS_CALL hx_string_assign_encoded(hx_string *string,
 	hx_os_encoding encoding, const void *input, size_t bytes,
 	hx_os_error *error);
+
+/* units counts wchar_t elements, excluding an optional trailing NUL.
+ * Strict native-wide conversion. Failure preserves the owning string.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_string_assign_wide(hx_string *string,
+	const wchar_t *input, size_t units, hx_os_error *error);
 
 /* Encoding adds no terminator; the result reports exact byte progress. */
 HX_OS_API hx_os_status HX_OS_CALL hx_string_encode(const hx_string *string,

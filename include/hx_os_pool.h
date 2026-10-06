@@ -25,6 +25,7 @@ typedef struct hx_os_thread_pool_options {
 } hx_os_thread_pool_options;
 
 enum { HX_OS_TASK_QUEUED, HX_OS_TASK_RUNNING, HX_OS_TASK_FINISHED };
+
 enum { HX_OS_POOL_DRAIN, HX_OS_POOL_CANCEL_PENDING };
 
 HX_OS_API void HX_OS_CALL hx_os_thread_pool_options_init(
@@ -88,6 +89,25 @@ HX_OS_API hx_os_context *HX_OS_CALL hx_os_thread_pool_context(
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_inside(
 	const hx_os_thread_pool *pool, int *inside);
+
+/* Wait without closing or cancelling. wait_until captures accepted work at
+ * its mutex-protected entry; later submissions do not extend that snapshot.
+ * wait_idle_until waits for no accepted work to remain, including tasks
+ * submitted during the wait. Both include delayed tasks and user cleanup.
+ * Preparation not yet accepted is excluded. Work failures are retrieved
+ * from individual tasks, not from the pool wait result.
+ *
+ * NOW polls; INFINITE is allowed. TIMEOUT preserves the pool; a new snapshot
+ * wait captures a new boundary. Both reject the pool's workers (DEADLOCK).
+ * Independent callers may wait concurrently. Success does not block future
+ * submission. Exclude final destruction and retain the pool across calls.
+ * Acceptance sequence exhaustion returns LIMIT on subsequent submissions.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_wait_until(
+	hx_os_thread_pool *pool, hx_os_deadline deadline, hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_wait_idle_until(
+	hx_os_thread_pool *pool, hx_os_deadline deadline, hx_os_error *error);
 
 HX_OS_API int HX_OS_CALL hx_os_task_cancel_requested(hx_os_task *task);
 

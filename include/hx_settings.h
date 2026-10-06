@@ -7,6 +7,7 @@ extern "C" {
 #endif
 typedef struct hx_settings hx_settings;
 typedef struct hx_settings_value hx_settings_value;
+
 /* Fixed-layout lease of immutable UTF-8 bytes. Initialize before first use;
  * no raw assignment copies. A getter replaces a previous lease on success,
  * preserving it on failure. Release/copy through these APIs. The value keeps
@@ -17,6 +18,7 @@ typedef struct hx_settings_string_ref {
 	hx_settings_value *value;
 	hx_string_view text;
 } hx_settings_string_ref;
+
 #define HX_SETTINGS_STRING_REF_INIT                                            \
 	{                                                                      \
 		NULL,                                                          \
@@ -75,6 +77,7 @@ HX_OS_API void HX_OS_CALL hx_settings_update_unset(
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_settings_update_finish(
 	const hx_settings_update *update, size_t *applied, hx_os_error *error);
+
 enum {
 	HX_SETTINGS_NULL,
 	HX_SETTINGS_BOOL,
@@ -87,6 +90,7 @@ enum {
 };
 
 enum { HX_SETTINGS_EXPLICIT, HX_SETTINGS_DEFAULTS, HX_SETTINGS_EFFECTIVE };
+
 enum { HX_SETTINGS_SET, HX_SETTINGS_UNSET, HX_SETTINGS_REPLACE };
 
 typedef struct hx_settings_pair {
@@ -198,6 +202,7 @@ typedef struct hx_settings_change {
 typedef void(HX_OS_CALL *hx_settings_change_fn)(
 	hx_settings *settings, const hx_settings_change *change, void *user);
 typedef void(HX_OS_CALL *hx_settings_cleanup_fn)(void *user);
+
 typedef struct hx_settings_options {
 	uint32_t size;
 	uint32_t version;
@@ -211,6 +216,7 @@ typedef struct hx_settings_options {
 	hx_settings_cleanup_fn cleanup;
 	void *user;
 } hx_settings_options;
+
 #define HX_SETTINGS_OPTIONS_INIT                                               \
 	{                                                                      \
 		sizeof(hx_settings_options), 1, 4096, 4 * 1024 * 1024, 32, 64, \
@@ -239,6 +245,22 @@ HX_OS_API hx_os_status HX_OS_CALL hx_settings_create_with_options(
 /* Deep copy both layers into context; observer/cleanup are not copied. */
 HX_OS_API hx_os_status HX_OS_CALL hx_settings_copy(hx_os_context *context,
 	hx_settings *source, hx_settings **out, hx_os_error *error);
+
+/* Overlay explicit top-level keys from a stable source snapshot. Unmentioned
+ * target keys and target defaults remain unchanged. Nested objects/arrays are
+ * replaced as complete values, not recursively merged. Values are deep-copied
+ * into the target context; user pointers remain borrowed. Self-apply is valid.
+ * Each key commits and notifies separately, in byte-sorted key order. Stop at
+ * the first failure and preserve prior commits; applied (optional) is always
+ * initialized and reports successful keys even on failure. Concurrent writers
+ * and reentrant observers retain the normal setter contract, not a transaction.
+ * apply_value requires an immutable object; a scalar/array is TYPE_MISMATCH.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_settings_apply(hx_settings *settings,
+	hx_settings *source, size_t *applied, hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_settings_apply_value(hx_settings *settings,
+	const hx_settings_value *object, size_t *applied, hx_os_error *error);
 
 /* Generic key-view entries also represent empty/NUL-containing JSON keys.
  * Values are copied into the settings allocator; getters return retained

@@ -10,7 +10,8 @@ include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/HxNoExceptions.cmake")
 
 enable_testing()
 
-foreach(suite IN ITEMS ipc kcp config_tree codec)
+foreach(suite IN ITEMS ipc kcp config_tree codec stream buffered_file
+	byte_queue text_interop settings_apply config_backup ini)
 	add_executable(consumer_${suite} ../test_${suite}.c)
 	target_link_libraries(consumer_${suite} PRIVATE
 		hx_c_platform::hx_c_platform)

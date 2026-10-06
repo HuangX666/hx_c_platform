@@ -186,6 +186,21 @@ hx_os_status hx_os_thread_pool_inside(
 	return HX_OS_NOT_SUPPORTED;
 }
 
+hx_os_status hx_os_thread_pool_wait_until(
+	hx_os_thread_pool *pool, hx_os_deadline deadline, hx_os_error *error)
+{
+	(void)pool;
+	(void)deadline;
+
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_thread_pool_wait_idle_until(
+	hx_os_thread_pool *pool, hx_os_deadline deadline, hx_os_error *error)
+{
+	return hx_os_thread_pool_wait_until(pool, deadline, error);
+}
+
 hx_os_status hx_os_thread_pool_submit_prepared(hx_os_thread_pool *pool,
 	hx_os_task_prepare_fn prepare, void *factory, hx_os_task_fn function,
 	hx_os_task_cleanup cleanup, hx_os_task **out, hx_os_error *error)

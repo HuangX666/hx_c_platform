@@ -160,7 +160,7 @@ void *hx_os_vector_data(hx_os_vector *vector)
 
 static hx_os_status hx_os_seq_reserve(hx_os_sequence *sequence, size_t capacity)
 {
-	size_t i, size = sequence->base.options.element_size;
+	size_t size = sequence->base.options.element_size;
 	unsigned char *memory;
 
 	if (sequence->kind == HX_OS_SEQ_LIST)
@@ -177,10 +177,17 @@ static hx_os_status hx_os_seq_reserve(hx_os_sequence *sequence, size_t capacity)
 	if (!memory)
 		return sequence->base.allocation_status;
 
-	if (sequence->kind == HX_OS_SEQ_DEQUE)
-		for (i = 0; i < sequence->count; ++i)
-			memcpy(memory + i * size, hx_os_seq_slot(sequence, i),
-				size);
+	if (sequence->kind == HX_OS_SEQ_DEQUE && sequence->count) {
+		size_t first = sequence->capacity - sequence->head;
+
+		if (first > sequence->count)
+			first = sequence->count;
+
+		memcpy(memory, sequence->data + sequence->head * size,
+			first * size);
+		memcpy(memory + first * size, sequence->data,
+			(sequence->count - first) * size);
+	}
 	else if (sequence->count)
 		memcpy(memory, sequence->data, sequence->count * size);
 
@@ -209,6 +216,150 @@ hx_os_status hx_os_sequence_reserve(
 		++sequence->base.generation;
 
 	return hx_os_i_container_leave(&sequence->base, status, error);
+}
+
+hx_os_status hx_os_byte_queue_create(hx_os_context *context, size_t max_bytes,
+	hx_os_byte_queue **out, hx_os_error *error)
+{
+	hx_os_container_options options;
+	size_t payload, overhead;
+
+	if (out)
+		*out = NULL;
+	if (!max_bytes)
+		max_bytes = 65536;
+
+	payload = hx_os_i_allocation_cost(max_bytes, 0);
+	overhead = hx_os_i_allocation_cost(sizeof(hx_os_sequence), 0);
+	if (!payload || payload > (SIZE_MAX - overhead) / 2)
+		return hx_os_i_error(error, HX_OS_RANGE, 0, 0);
+
+	hx_os_container_options_init(&options, 1);
+	options.max_items = max_bytes;
+	options.max_bytes = overhead + 2 * payload;
+
+	return hx_os_deque_create(context, &options, out, error);
+}
+
+static hx_os_status hx_os_byte_queue_check(const hx_os_byte_queue *queue)
+{
+	if (!queue)
+		return HX_OS_INVALID;
+	if (queue->base.busy)
+		return HX_OS_BUSY;
+	if (queue->kind != HX_OS_SEQ_DEQUE ||
+		queue->base.options.element_size != 1 ||
+		queue->base.options.copy || queue->base.options.drop)
+		return HX_OS_TYPE_MISMATCH;
+
+	return HX_OS_OK;
+}
+
+hx_os_status hx_os_byte_queue_write(hx_os_byte_queue *queue, const void *data,
+	size_t bytes, hx_os_error *error)
+{
+	hx_os_status status = hx_os_byte_queue_check(queue);
+	size_t needed, capacity, tail, first;
+
+	if (status != HX_OS_OK)
+		return hx_os_i_error(error, status, 0, 0);
+	if ((!data && bytes) ||
+		hx_os_i_container_overlap(
+			data, bytes, queue->data, queue->capacity))
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (bytes > queue->base.options.max_items - queue->count)
+		return hx_os_i_error(error, HX_OS_LIMIT, 0, 0);
+	if (!bytes)
+		return hx_os_i_error(error, HX_OS_OK, 0, 0);
+
+	queue->base.busy = 1;
+	needed = queue->count + bytes;
+	capacity = queue->capacity;
+	if (needed > capacity) {
+		size_t maximum = queue->base.options.max_items;
+
+		capacity = capacity > maximum / 2 ? maximum : capacity * 2;
+		if (capacity < needed)
+			capacity = needed;
+
+		status = hx_os_seq_reserve(queue, capacity);
+		if (status != HX_OS_OK)
+			return hx_os_i_container_leave(
+				&queue->base, status, error);
+	}
+
+	tail = queue->count >= queue->capacity - queue->head
+		? queue->count - (queue->capacity - queue->head)
+		: queue->head + queue->count;
+	first = queue->capacity - tail;
+	if (first > bytes)
+		first = bytes;
+
+	memcpy(queue->data + tail, data, first);
+	memcpy(queue->data, (const unsigned char *)data + first, bytes - first);
+	queue->count = needed;
+	++queue->base.generation;
+
+	return hx_os_i_container_leave(&queue->base, HX_OS_OK, error);
+}
+
+hx_os_status hx_os_byte_queue_peek(const hx_os_byte_queue *queue, size_t offset,
+	void *data, size_t bytes, hx_os_error *error)
+{
+	hx_os_status status = hx_os_byte_queue_check(queue);
+	size_t start, first;
+
+	if (status != HX_OS_OK)
+		return hx_os_i_error(error, status, 0, 0);
+	if ((!data && bytes) ||
+		hx_os_i_container_overlap(
+			data, bytes, queue->data, queue->capacity))
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (offset > queue->count || bytes > queue->count - offset)
+		return hx_os_i_error(error, HX_OS_NEED_INPUT, 0, 0);
+	if (!bytes)
+		return hx_os_i_error(error, HX_OS_OK, 0, 0);
+
+	start = offset >= queue->capacity - queue->head
+		? offset - (queue->capacity - queue->head)
+		: queue->head + offset;
+	first = queue->capacity - start;
+	if (first > bytes)
+		first = bytes;
+
+	memcpy(data, queue->data + start, first);
+	memcpy((unsigned char *)data + first, queue->data, bytes - first);
+
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+}
+
+hx_os_status hx_os_byte_queue_read(
+	hx_os_byte_queue *queue, void *data, size_t bytes, hx_os_error *error)
+{
+	hx_os_status status = hx_os_byte_queue_check(queue);
+
+	if (status != HX_OS_OK)
+		return hx_os_i_error(error, status, 0, 0);
+	if (bytes > queue->count)
+		return hx_os_i_error(error, HX_OS_NEED_INPUT, 0, 0);
+	if (!bytes)
+		return hx_os_i_error(error, HX_OS_OK, 0, 0);
+	if (data) {
+		status = hx_os_byte_queue_peek(queue, 0, data, bytes, error);
+		if (status != HX_OS_OK)
+			return status;
+	}
+
+	queue->head = bytes >= queue->capacity - queue->head
+		? bytes - (queue->capacity - queue->head)
+		: queue->head + bytes;
+	queue->count -= bytes;
+	if (!queue->count)
+		queue->head = 0;
+
+	++queue->base.generation;
+
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
 
 static void hx_os_seq_swap(hx_os_sequence *sequence, size_t a, size_t b)
@@ -1356,8 +1507,7 @@ static void hx_os_list_merge_sort(hx_os_sequence *sequence)
 							(unsigned char *)left +
 								offset,
 							(unsigned char *)right +
-								offset) <=
-							0)) {
+								offset) <= 0)) {
 					next = left;
 					left = left->next;
 					--left_count;

@@ -118,8 +118,10 @@ auto Call(F &function, A &&...arguments) noexcept(noexcept(CallImpl(
 }
 
 template <size_t... I> struct Indices {};
+
 template <size_t N, size_t... I>
 struct MakeIndices : MakeIndices<N - 1, N - 1, I...> {};
+
 template <size_t... I> struct MakeIndices<0, I...> {
 	typedef Indices<I...> type;
 };
@@ -143,6 +145,7 @@ template <typename T> Result<T> NormalizeTask(Result<T> &&value) noexcept
 }
 
 template <bool Token> struct Invoke;
+
 template <> struct Invoke<false> {
 	template <typename F, typename Tuple, size_t... I>
 	static auto call(F &function, Tuple &arguments, hx_os_task *,
@@ -605,6 +608,47 @@ public:
 					  duration.count())),
 			std::forward<F>(function),
 			std::forward<A>(arguments)...);
+	}
+
+	Result<void> waitUntil(hx_os_deadline deadline) const noexcept
+	{
+		if (!*m_owner_)
+			return Failure(HX_OS_CLOSED);
+
+		hx_os_error error = {};
+		auto status = hx_os_thread_pool_wait_until(
+			*m_owner_, deadline, &error);
+
+		return detail::Status(status, error);
+	}
+
+	Result<void> waitIdleUntil(hx_os_deadline deadline) const noexcept
+	{
+		if (!*m_owner_)
+			return Failure(HX_OS_CLOSED);
+
+		hx_os_error error = {};
+		auto status = hx_os_thread_pool_wait_idle_until(
+			*m_owner_, deadline, &error);
+
+		return detail::Status(status, error);
+	}
+
+	Result<void> waitFor(std::chrono::milliseconds duration) const noexcept
+	{
+		return waitUntil(duration.count() <= 0
+				? HX_OS_DEADLINE_NOW
+				: hx_os_deadline_after_ms(static_cast<uint64_t>(
+					  duration.count())));
+	}
+
+	Result<void> waitIdleFor(
+		std::chrono::milliseconds duration) const noexcept
+	{
+		return waitIdleUntil(duration.count() <= 0
+				? HX_OS_DEADLINE_NOW
+				: hx_os_deadline_after_ms(static_cast<uint64_t>(
+					  duration.count())));
 	}
 
 	Result<void> closeUntil(hx_os_deadline deadline,

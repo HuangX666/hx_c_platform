@@ -711,6 +711,32 @@ public:
 			context);
 	}
 
+	Result<size_t> apply(const Settings &source) noexcept
+	{
+		if (!*m_owner_ || !*source.m_owner_)
+			return Failure(HX_OS_CLOSED);
+
+		hx_os_error error = {};
+		size_t applied = 0;
+		auto status = hx_settings_apply(
+			*m_owner_, *source.m_owner_, &applied, &error);
+
+		return Result<size_t>::withValue(applied, status, error);
+	}
+
+	Result<size_t> apply(const SettingValue &object) noexcept
+	{
+		if (!*m_owner_)
+			return Failure(HX_OS_CLOSED);
+
+		hx_os_error error = {};
+		size_t applied = 0;
+		auto status = hx_settings_apply_value(
+			*m_owner_, object.native(), &applied, &error);
+
+		return Result<size_t>::withValue(applied, status, error);
+	}
+
 	Result<void> save(const char *path, int format = HX_OS_CONFIG_JSON,
 		const hx_os_config_options *options = NULL) const noexcept
 	{

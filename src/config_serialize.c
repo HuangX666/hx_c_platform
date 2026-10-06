@@ -396,6 +396,17 @@ static void hx_os_cfg_write_lines(
 	}
 }
 
+hx_os_status hx_os_cfg_ini_validate(const hx_os_config_document *document)
+{
+	hx_os_cfg_writer writer;
+
+	memset(&writer, 0, sizeof(writer));
+	writer.options = document->options;
+	hx_os_cfg_write_lines(&writer, document->root, 0);
+
+	return writer.status;
+}
+
 static void hx_os_cfg_write_indent(hx_os_cfg_writer *writer, size_t depth)
 {
 	while (depth-- && writer->status == HX_OS_OK)

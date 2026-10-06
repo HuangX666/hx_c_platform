@@ -129,6 +129,23 @@ static void *hx_os_pool_worker(void *user)
 			&task->state, HX_OS_TASK_FINISHED, HX_OS_RELEASE);
 		hx_os_event_set(task->finished);
 
+		(void)hx_os_mutex_lock(pool->mutex, NULL);
+		if (task->pending_previous)
+			task->pending_previous->pending_next =
+				task->pending_next;
+		else
+			pool->pending_first = task->pending_next;
+
+		if (task->pending_next)
+			task->pending_next->pending_previous =
+				task->pending_previous;
+		else
+			pool->pending_last = task->pending_previous;
+
+		if (pool->waiters)
+			hx_os_condition_notify_all(pool->completion);
+
+		(void)hx_os_mutex_unlock(pool->mutex, NULL);
 		hx_os_task_release(task);
 	}
 
@@ -180,6 +197,9 @@ hx_os_status hx_os_thread_pool_create(hx_os_context *context,
 	if (status == HX_OS_OK)
 		status = hx_os_condition_create(
 			context, &pool->condition, error);
+	if (status == HX_OS_OK)
+		status = hx_os_condition_create(
+			context, &pool->completion, error);
 
 	if (status == HX_OS_OK) {
 		for (i = 0; i < options.threads; ++i) {
@@ -212,6 +232,7 @@ hx_os_status hx_os_thread_pool_create(hx_os_context *context,
 			}
 		}
 
+		hx_os_condition_destroy(pool->completion);
 		hx_os_condition_destroy(pool->condition);
 		hx_os_mutex_destroy(pool->mutex);
 		hx_os_memory_free(pool->threads);
@@ -242,6 +263,8 @@ static hx_os_status hx_os_pool_submit(hx_os_thread_pool *pool,
 	if (pool->closing)
 		status = HX_OS_CLOSED;
 	else if (pool->queued + pool->submitting >= pool->capacity)
+		status = HX_OS_LIMIT;
+	else if (pool->accepted == UINT64_MAX)
 		status = HX_OS_LIMIT;
 
 	if (status != HX_OS_OK) {
@@ -288,12 +311,22 @@ static hx_os_status hx_os_pool_submit(hx_os_thread_pool *pool,
 	--pool->submitting;
 	if (status == HX_OS_OK && pool->closing)
 		status = HX_OS_CLOSED;
+	if (status == HX_OS_OK && pool->accepted == UINT64_MAX)
+		status = HX_OS_LIMIT;
 
 	if (status == HX_OS_OK) {
 		task->function = function;
 		task->cleanup = cleanup;
 		task->user = user;
 		task->pool = pool;
+		task->sequence = ++pool->accepted;
+		task->pending_previous = pool->pending_last;
+		if (pool->pending_last)
+			pool->pending_last->pending_next = task;
+		else
+			pool->pending_first = task;
+
+		pool->pending_last = task;
 		hx_os_atomic_store(&task->references, 2, HX_OS_RELAXED);
 #if HX_OS_ENABLE_DELAYED_TASKS
 		if (task->delayed) {
@@ -438,6 +471,51 @@ hx_os_status hx_os_thread_pool_inside(
 	*inside = hx_os_current_pool == pool;
 
 	return HX_OS_OK;
+}
+
+static hx_os_status hx_os_pool_wait(hx_os_thread_pool *pool,
+	hx_os_deadline deadline, int idle, hx_os_error *error)
+{
+	hx_os_status status;
+	uint64_t boundary;
+
+	if (!pool)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (hx_os_current_pool == pool)
+		return hx_os_i_error(error, HX_OS_DEADLOCK, 0, 0);
+
+	status = hx_os_mutex_lock(pool->mutex, error);
+	if (status != HX_OS_OK)
+		return status;
+
+	boundary = pool->accepted;
+	++pool->waiters;
+	while (pool->pending_first &&
+		(idle || pool->pending_first->sequence <= boundary)) {
+		status = hx_os_condition_wait_until(
+			pool->completion, pool->mutex, deadline, error);
+		if (status != HX_OS_OK)
+			break;
+	}
+
+	--pool->waiters;
+	(void)hx_os_mutex_unlock(pool->mutex, NULL);
+	if (status != HX_OS_OK)
+		return status;
+
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+}
+
+hx_os_status hx_os_thread_pool_wait_until(
+	hx_os_thread_pool *pool, hx_os_deadline deadline, hx_os_error *error)
+{
+	return hx_os_pool_wait(pool, deadline, 0, error);
+}
+
+hx_os_status hx_os_thread_pool_wait_idle_until(
+	hx_os_thread_pool *pool, hx_os_deadline deadline, hx_os_error *error)
+{
+	return hx_os_pool_wait(pool, deadline, 1, error);
 }
 
 int hx_os_task_cancel_requested(hx_os_task *task)
@@ -597,7 +675,7 @@ hx_os_status hx_os_thread_pool_destroy(
 		return hx_os_i_error(error, HX_OS_OK, 0, 0);
 
 	(void)hx_os_mutex_lock(value->mutex, NULL);
-	if (!value->joined || value->submitting ||
+	if (!value->joined || value->submitting || value->waiters ||
 		hx_os_atomic_load(&value->close_claim, HX_OS_ACQUIRE)) {
 		(void)hx_os_mutex_unlock(value->mutex, NULL);
 
@@ -609,6 +687,7 @@ hx_os_status hx_os_thread_pool_destroy(
 	for (i = 0; i < value->thread_count; ++i)
 		(void)hx_os_thread_destroy(&value->threads[i], NULL);
 
+	hx_os_condition_destroy(value->completion);
 	hx_os_condition_destroy(value->condition);
 	hx_os_mutex_destroy(value->mutex);
 	hx_os_memory_free(value->threads);

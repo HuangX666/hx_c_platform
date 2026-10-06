@@ -29,8 +29,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("packages", nargs="*", choices=tuple(PACKAGES))
     args = parser.parse_args()
-    root = Path(__file__).resolve().parents[1] / ".deps"
-    root.mkdir(exist_ok=True)
+    root = Path(__file__).resolve().parents[1] / "deps" / ".cache"
+    root.mkdir(parents=True, exist_ok=True)
     for name in args.packages or PACKAGES:
         repository, tag, directory, checksum = PACKAGES[name]
         destination = root / directory

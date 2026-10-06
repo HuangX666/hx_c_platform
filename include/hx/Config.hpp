@@ -2,6 +2,7 @@
 #define HX_C_PLATFORM_CPP_CONFIG_HPP
 
 #include <hx_config.h>
+#include <hx_config_file.h>
 #include <hx/Values.hpp>
 
 namespace hx {
@@ -179,6 +180,104 @@ public:
 			m_document_, format, path, options, &error);
 
 		return detail::Status(status, error);
+	}
+
+	Result<hx_os_config_backup_result> saveBackup(const char *path,
+		int format = HX_OS_CONFIG_JSON,
+		const hx_os_config_options *options = NULL,
+		hx_os_config_error *diagnostic = NULL) const noexcept
+	{
+		if (!m_document_)
+			return Failure(HX_OS_CLOSED);
+
+		hx_os_config_backup_result result = {};
+		hx_os_config_error error = {};
+		auto status = hx_os_config_save_backup(
+			m_document_, format, path, options, &result, &error);
+		if (diagnostic)
+			*diagnostic = error;
+
+		return Result<hx_os_config_backup_result>::withValue(
+			result, status, error.detail);
+	}
+
+	static Result<ConfigDocument> restoreBackup(const char *path,
+		int format = HX_OS_CONFIG_JSON,
+		const hx_os_config_options *options = NULL,
+		hx_os_context *context = NULL,
+		hx_os_config_error *diagnostic = NULL,
+		hx_os_file_save_result *publication = NULL) noexcept
+	{
+		ConfigDocument result;
+		hx_os_config_error error = {};
+		auto status = hx_os_config_restore_backup(context, format, path,
+			options, &result.m_document_, publication, &error);
+		if (diagnostic)
+			*diagnostic = error;
+		if (status != HX_OS_OK)
+			return Failure(status, error.detail);
+
+		return result;
+	}
+
+	static Result<ConfigDocument> emptyIni(
+		hx_os_context *context = NULL) noexcept
+	{
+		return parse("", HX_OS_CONFIG_INI, NULL, context);
+	}
+
+	Result<void> setIni(const char *section, const char *key,
+		const char *value,
+		hx_os_config_error *diagnostic = NULL) noexcept
+	{
+		if (!m_document_)
+			return Failure(HX_OS_CLOSED);
+
+		hx_os_config_error error = {};
+		auto status = hx_os_ini_set(
+			&m_document_, section, key, value, &error);
+		if (diagnostic)
+			*diagnostic = error;
+
+		return detail::Status(status, error.detail);
+	}
+
+	Result<String> ini(const char *section, const char *key,
+		hx_os_context *context = NULL) const noexcept
+	{
+		if (!m_document_)
+			return Failure(HX_OS_CLOSED);
+
+		return detail::StringQuery(
+			[=](hx_string *out, hx_os_error *error) noexcept {
+				return hx_os_ini_get(
+					m_document_, section, key, out, error);
+			},
+			context);
+	}
+
+	Result<void> removeIniKey(const char *section, const char *key) noexcept
+	{
+		if (!m_document_)
+			return Failure(HX_OS_CLOSED);
+
+		hx_os_config_error error = {};
+		auto status = hx_os_ini_remove_key(
+			&m_document_, section, key, &error);
+
+		return detail::Status(status, error.detail);
+	}
+
+	Result<void> removeIniSection(const char *section) noexcept
+	{
+		if (!m_document_)
+			return Failure(HX_OS_CLOSED);
+
+		hx_os_config_error error = {};
+		auto status =
+			hx_os_ini_remove_section(&m_document_, section, &error);
+
+		return detail::Status(status, error.detail);
 	}
 
 	Result<const hx_os_config_node *> node(

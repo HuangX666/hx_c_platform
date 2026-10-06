@@ -21,6 +21,14 @@ static void test_strings(void)
 	CHECK(!strcmp(text.data, "ab中文😀 cd"));
 	CHECK(hx_string_upper_ascii(&text, NULL) == HX_OS_OK);
 	CHECK(!strcmp(text.data, "AB中文😀 CD"));
+	CHECK(hx_string_compare_ascii_nocase(
+		      &text, hx_string_view_from_cstr("ab中文😀 cd")) == 0);
+	CHECK(hx_string_find_ascii_nocase(
+		      &text, hx_string_view_from_cstr("cd"), 0) == 13);
+	CHECK(hx_string_find_ascii_nocase(&text, hx_string_view_from_cstr(""),
+		      3) == HX_STRING_NOT_FOUND);
+	CHECK(hx_string_find_ascii_nocase(&text, invalid, 0) ==
+		HX_STRING_NOT_FOUND);
 	CHECK(hx_string_starts_with(&text, hx_string_view_from_cstr("AB中文")));
 	CHECK(hx_string_ends_with(&text, hx_string_view_from_cstr("😀 CD")));
 	CHECK(!hx_string_starts_with(&text, invalid));
@@ -73,6 +81,8 @@ static void test_strings(void)
 	views[0].data = "a\0b";
 	views[0].size = 3;
 	CHECK(hx_string_assign(&text, views[0], NULL) == HX_OS_OK);
+	CHECK(hx_string_compare_ascii_nocase(
+		      &text, (hx_string_view){"A\0B", 3}) == 0);
 
 	views[1].data = "\0";
 	views[1].size = 1;

@@ -169,6 +169,19 @@ public:
 		return hx_string_find(&m_string_, needle.native(), start);
 	}
 
+	size_t findAsciiNoCase(
+		StringView needle, size_t start = 0) const noexcept
+	{
+		return hx_string_find_ascii_nocase(
+			&m_string_, needle.native(), start);
+	}
+
+	int compareAsciiNoCase(StringView other) const noexcept
+	{
+		return hx_string_compare_ascii_nocase(
+			&m_string_, other.native());
+	}
+
 	const char *c_str() const noexcept
 	{
 		return hx_string_c_str(&m_string_);

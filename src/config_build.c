@@ -198,6 +198,12 @@ hx_os_config_node *hx_os_cfg_clone(
 {
 	return hx_os_cfg_copy_tree(parser, source, depth, NULL, NULL, 0);
 }
+
+hx_os_config_node *hx_os_cfg_build_value(
+	hx_os_cfg_parser *parser, const hx_os_config_value *value, size_t depth)
+{
+	return hx_os_cfg_build(parser, value, NULL, depth);
+}
 #endif
 
 static hx_os_status hx_os_cfg_construct(hx_os_context *context,

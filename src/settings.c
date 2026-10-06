@@ -502,6 +502,68 @@ hx_os_status hx_settings_copy(hx_os_context *context, hx_settings *source,
 	return status;
 }
 
+hx_os_status hx_settings_apply_value(hx_settings *settings,
+	const hx_settings_value *object, size_t *applied, hx_os_error *error)
+{
+	hx_settings_frame frame;
+	hx_settings_limits limits;
+	const hx_settings_entry *entries;
+	hx_os_status status;
+	size_t index;
+
+	if (applied)
+		*applied = 0;
+	if (!object)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (object->kind != HX_SETTINGS_OBJECT)
+		return hx_os_i_error(error, HX_OS_TYPE_MISMATCH, 0, 0);
+	status = hx_settings_i_begin(settings, &frame, error);
+	if (status != HX_OS_OK)
+		return status;
+
+	hx_settings_value_retain((hx_settings_value *)object);
+	limits = hx_settings_i_limits(settings);
+	entries = (const hx_settings_entry *)(object + 1);
+	for (index = 0; index < object->count; ++index) {
+		hx_settings_value *prepared = NULL;
+
+		if (index)
+			hx_settings_refresh(&frame);
+		status = hx_settings_i_clone(settings->context,
+			entries[index].value, &limits, &prepared, error);
+		if (status == HX_OS_OK)
+			status = hx_settings_store(&frame, entries[index].name,
+				prepared, HX_SETTINGS_EXPLICIT, error);
+		hx_settings_value_release(prepared);
+		if (status != HX_OS_OK)
+			break;
+		if (applied)
+			++*applied;
+	}
+	hx_settings_value_release((hx_settings_value *)object);
+	hx_settings_i_end(&frame);
+
+	return status;
+}
+
+hx_os_status hx_settings_apply(hx_settings *settings, hx_settings *source,
+	size_t *applied, hx_os_error *error)
+{
+	hx_settings_value *snapshot = NULL;
+	hx_os_status status;
+
+	if (applied)
+		*applied = 0;
+	status = hx_settings_snapshot(
+		source, HX_SETTINGS_EXPLICIT, &snapshot, error);
+	if (status == HX_OS_OK)
+		status = hx_settings_apply_value(
+			settings, snapshot, applied, error);
+	hx_settings_value_release(snapshot);
+
+	return status;
+}
+
 hx_os_status hx_settings_close_until(
 	hx_settings **owner, hx_os_deadline deadline, hx_os_error *error)
 {

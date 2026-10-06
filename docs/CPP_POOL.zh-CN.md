@@ -14,6 +14,29 @@
 
 `closeUntil()` 开始后永久拒绝新提交。DRAIN 执行已接收的排队任务；CANCEL_PENDING 跳过排队任务，不强制打断正在运行的工作。两者均等待清理与原生线程退出。工作线程关闭自己的池返回 DEADLOCK，并发关闭或仍在准备的提交可能返回 BUSY，不引入后台回收线程或强制终止。
 
+## 等任务完成，线程池继续使用
+
+`pool.waitUntil(deadline)` 等待本次调用在池互斥锁内确定边界时已经接受的任务，后来提交的任务不延长本次等待。`pool.waitIdleUntil(deadline)` 等待池中没有尚未完成的任务，等待期间继续提交可能延长等待。`waitFor(milliseconds)` 和 `waitIdleFor(milliseconds)` 接受相对时长。这两种等待都包含延迟任务和任务清理，不关闭池；到达单调截止时间返回 TIMEOUT，零时长表示立即查询。
+
+```cpp
+auto first = pool.submit([]() noexcept { return 21 * 2; });
+if (!first)
+	return hx::Failure(first.error());
+
+auto completed = pool.waitFor(std::chrono::milliseconds(2000));
+if (!completed)
+	return completed;
+
+// Waiting leaves the pool available for the next batch.
+auto second = pool.submit([]() noexcept { return 7 * 3; });
+```
+
+这段代码放在返回 `hx::Result<void>` 且持有有效 `pool` 的函数中。使用 `second` 前仍要检查提交结果，每个任务的执行结果通过 `getUntil()` 获取：池等待成功只代表任务和清理已完成，也包含执行失败或被取消的任务，不代表所有任务都执行成功。最终不再使用时仍需显式关闭池。
+
+多个外部线程可以同时等待。本池工作线程（包括清理回调）调用这两个入口返回 DEADLOCK。尚在准备、未正式接受的任务不属于等待范围。超时后重新调用快照等待，会重新确定任务边界；空闲成功只是观察到某一时刻没有未完成任务，并不禁止随后提交。最终销毁时须排除新调用。内部提交序号耗尽后，新提交返回 LIMIT，不发生回绕。
+
+C 对应入口是 `hx_os_thread_pool_wait_until()` 和 `hx_os_thread_pool_wait_idle_until()`。提交和等待不新增内存分配；每个已接受任务增加两个链表指针和一个 64 位序号，完成时额外获取一次池互斥锁以移出未完成列表。每个池增加一个完成条件变量，防止等待完成的线程占用唤醒工作线程的通知。这些是正确性措施，不作为性能提升的结论。
+
 ## 提交与结果
 
 `submit(callable, args...)` 返回 `Result<Task<T>>`，接受普通函数、成员指针、lambda、可移动捕获和参数以及 `std::ref`。存储的函数按左值调用，参数移动到调用中。函数对象的调用必须声明 `noexcept`，参数和捕获的构造、析构必须不失败。C++11 的普通函数和成员函数指针无法把该保证编码进类型，其实现仍须遵守相同契约。

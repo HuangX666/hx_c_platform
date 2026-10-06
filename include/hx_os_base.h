@@ -235,6 +235,7 @@ HX_OS_API const char *HX_OS_CALL hx_os_cpu_name(void);
 #define HX_OS_CAP_KCP (UINT64_C(1) << 58)
 #define HX_OS_CAP_CODEC (UINT64_C(1) << 59)
 #define HX_OS_CAP_IPC (UINT64_C(1) << 57)
+#define HX_OS_CAP_STREAM (UINT64_C(1) << 60)
 
 /* required includes NUL. These queries do not need initialization. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_version_string(

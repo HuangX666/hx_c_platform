@@ -527,7 +527,7 @@ int main(void)
 ```sh
 python tools/fetch_iconv.py
 cmake -S . -B build-text -DHX_OS_ENABLE_ICONV=ON \
-  -DHX_OS_ICONV_SOURCE_DIR=/absolute/path/to/.deps/libiconv-1.18
+  -DHX_OS_ICONV_SOURCE_DIR=/absolute/path/to/deps/.cache/libiconv-1.18
 cmake --build build-text --config Release --parallel 4
 ```
 
@@ -1820,15 +1820,15 @@ int main(void)
 python tools/fetch_parsers.py
 cmake -S . -B build-parsers \
   -DHX_OS_ENABLE_CJSON=ON \
-  -DHX_OS_CJSON_SOURCE_DIR=.deps/cJSON-1.7.19 \
+  -DHX_OS_CJSON_SOURCE_DIR=deps/.cache/cJSON-1.7.19 \
   -DHX_OS_ENABLE_LIBYAML=ON \
-  -DHX_OS_LIBYAML_SOURCE_DIR=.deps/libyaml-0.2.5 \
+  -DHX_OS_LIBYAML_SOURCE_DIR=deps/.cache/libyaml-0.2.5 \
   -DHX_OS_ENABLE_MINIXML=ON \
-  -DHX_OS_MINIXML_SOURCE_DIR=.deps/mxml-4.0.6 \
+  -DHX_OS_MINIXML_SOURCE_DIR=deps/.cache/mxml-4.0.6 \
   -DHX_OS_ENABLE_INIH=ON \
-  -DHX_OS_INIH_SOURCE_DIR=.deps/inih-r62 \
+  -DHX_OS_INIH_SOURCE_DIR=deps/.cache/inih-r62 \
   -DHX_OS_ENABLE_TOMLC=ON \
-  -DHX_OS_TOMLC_SOURCE_DIR=.deps/tomlc17-R260821
+  -DHX_OS_TOMLC_SOURCE_DIR=deps/.cache/tomlc17-R260821
 cmake --build build-parsers --config Release --parallel 4
 ```
 

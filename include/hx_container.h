@@ -60,6 +60,35 @@ typedef hx_os_sequence hx_os_list;
 typedef hx_os_sequence hx_os_heap;
 typedef hx_os_sequence hx_os_stack;
 typedef hx_os_sequence hx_os_queue;
+typedef hx_os_sequence hx_os_byte_queue;
+
+/* Byte FIFO backed by the existing deque. max_bytes=0 selects 64 KiB of
+ * queued payload. Storage grows on demand; growth may temporarily retain
+ * old and new buffers, bounded by twice the payload limit plus metadata.
+ * No copy/drop callbacks. External synchronization is required.
+ * write copies the entire input or leaves contents unchanged. read/peek
+ * require the entire requested range, otherwise NEED_INPUT without mutation.
+ * NULL read output discards bytes; peek output must be non-NULL for bytes>0.
+ * Input/output must not overlap queue-owned storage. Offsets are bytes.
+ * Successful nonempty writes/reads invalidate existing container iterators.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_byte_queue_create(
+	hx_os_context *context, size_t max_bytes, hx_os_byte_queue **out,
+	hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_byte_queue_write(
+	hx_os_byte_queue *queue, const void *data, size_t bytes,
+	hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_byte_queue_read(
+	hx_os_byte_queue *queue, void *data, size_t bytes, hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_byte_queue_peek(
+	const hx_os_byte_queue *queue, size_t offset, void *data, size_t bytes,
+	hx_os_error *error);
+
+#define hx_os_byte_queue_size hx_os_sequence_size
+#define hx_os_byte_queue_destroy hx_os_sequence_destroy
 
 HX_OS_API hx_os_status HX_OS_CALL hx_os_vector_create(hx_os_context *context,
 	const hx_os_container_options *options, hx_os_vector **out,
@@ -299,6 +328,7 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_sequence_fold(
 	const hx_os_sequence *source, void *accumulator,
 	hx_os_value_fold_fn fold, void *user, size_t *completed,
 	hx_os_error *error);
+
 enum {
 	HX_OS_MERGE,
 	HX_OS_SET_UNION,

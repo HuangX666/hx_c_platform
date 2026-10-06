@@ -261,6 +261,17 @@ static void TestDirectCalls()
 			CHECK(Equal(settings.stringOr("absent", "default"),
 				"default"));
 
+			hx_settings *source_owner = NULL;
+			hx::Settings source(source_owner);
+			Take(source.create(context));
+			Take(source.setInt("port", 7070));
+			CHECK(Take(settings.apply(source)) == 1);
+			auto patch =
+				Take(source.snapshot(HX_SETTINGS_EXPLICIT));
+			CHECK(Take(settings.apply(patch)) == 1);
+			CHECK(Take(settings.integer("port")) == 7070);
+			Take(source.closeUntil(HX_OS_DEADLINE_NOW));
+
 			Take(settings.closeUntil(HX_OS_DEADLINE_NOW));
 			CHECK(!std::memcmp(copy.data(), "x\0y", 3));
 			CHECK(hx_os_context_destroy(&context, NULL) ==

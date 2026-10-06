@@ -74,15 +74,15 @@ Python 3.12+ fetches pinned archives with SHA256 checks. Existing source trees a
 ~~~sh
 python tools/fetch_parsers.py cjson libyaml minixml inih tomlc
 cmake -S . -B build-parsers -DHX_OS_ENABLE_CJSON=ON \
-  -DHX_OS_CJSON_SOURCE_DIR=/absolute/project/.deps/cJSON-1.7.19 \
+  -DHX_OS_CJSON_SOURCE_DIR=/absolute/project/deps/.cache/cJSON-1.7.19 \
   -DHX_OS_ENABLE_LIBYAML=ON \
-  -DHX_OS_LIBYAML_SOURCE_DIR=/absolute/project/.deps/libyaml-0.2.5 \
+  -DHX_OS_LIBYAML_SOURCE_DIR=/absolute/project/deps/.cache/libyaml-0.2.5 \
   -DHX_OS_ENABLE_MINIXML=ON \
-  -DHX_OS_MINIXML_SOURCE_DIR=/absolute/project/.deps/mxml-4.0.6 \
+  -DHX_OS_MINIXML_SOURCE_DIR=/absolute/project/deps/.cache/mxml-4.0.6 \
   -DHX_OS_ENABLE_INIH=ON \
-  -DHX_OS_INIH_SOURCE_DIR=/absolute/project/.deps/inih-r62 \
+  -DHX_OS_INIH_SOURCE_DIR=/absolute/project/deps/.cache/inih-r62 \
   -DHX_OS_ENABLE_TOMLC=ON \
-  -DHX_OS_TOMLC_SOURCE_DIR=/absolute/project/.deps/tomlc17-R260821
+  -DHX_OS_TOMLC_SOURCE_DIR=/absolute/project/deps/.cache/tomlc17-R260821
 cmake --build build-parsers --config Debug --parallel 4
 ctest --test-dir build-parsers -C Debug --output-on-failure
 ~~~

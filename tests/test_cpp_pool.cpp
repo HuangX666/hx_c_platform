@@ -82,6 +82,7 @@ template <size_t Alignment> struct alignas(Alignment) AlignedResult {
 	}
 
 	AlignedResult(const AlignedResult &) = delete;
+
 	~AlignedResult() noexcept
 	{
 		if (m_live_)
@@ -521,6 +522,30 @@ static void TestDelayed(hx_os_context *context)
 	Take(pool.shutdownUntil(TestJoinDeadline()));
 }
 
+static void TestPoolWaits(hx_os_context *context)
+{
+	hx_os_thread_pool *owner = NULL;
+	auto pool = Take(hx::ThreadPool::withThreads(owner, 2, 16, context));
+
+	Take(pool.waitFor(std::chrono::milliseconds(0)));
+	Take(pool.waitIdleFor(std::chrono::milliseconds(0)));
+	auto task = Take(pool.submit([&pool]() noexcept {
+		CHECK(pool.waitUntil(HX_OS_DEADLINE_NOW).status() ==
+			HX_OS_DEADLOCK);
+		CHECK(pool.waitIdleUntil(HX_OS_DEADLINE_NOW).status() ==
+			HX_OS_DEADLOCK);
+		return 42;
+	}));
+
+	Take(pool.waitUntil(TestJoinDeadline()));
+	CHECK(Take(task.get()) == 42);
+	auto next = Take(pool.submit([]() noexcept { return 24; }));
+	Take(pool.waitIdleUntil(TestJoinDeadline()));
+	CHECK(Take(next.get()) == 24);
+	Take(pool.shutdownUntil(TestJoinDeadline()));
+	CHECK(pool.waitUntil(HX_OS_DEADLINE_NOW).status() == HX_OS_CLOSED);
+}
+
 int main()
 {
 	hx_os_context *context = NULL;
@@ -534,6 +559,7 @@ int main()
 		TestPreparationRace(context, false);
 		TestAllocationFailure(false);
 		TestDelayed(context);
+		TestPoolWaits(context);
 		if (hx_os_capabilities() & HX_OS_CAP_DELAYED_TASKS) {
 			TestPreparationRace(context, true);
 			TestAllocationFailure(true);
@@ -545,6 +571,10 @@ int main()
 		CHECK(hx::ThreadPool::create(owner, context).status() ==
 			HX_OS_NOT_SUPPORTED);
 		CHECK(!owner);
+		CHECK(hx_os_thread_pool_wait_until(NULL, 0, NULL) ==
+			HX_OS_NOT_SUPPORTED);
+		CHECK(hx_os_thread_pool_wait_idle_until(NULL, 0, NULL) ==
+			HX_OS_NOT_SUPPORTED);
 	}
 
 	CHECK(hx_os_context_allocations(context) == 0);

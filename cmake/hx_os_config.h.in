@@ -70,5 +70,7 @@
 #cmakedefine01 HX_OS_ENABLE_COROUTINE_IO
 #cmakedefine01 HX_OS_ENABLE_VARIANT
 #cmakedefine01 HX_OS_ENABLE_FORMAT
+#cmakedefine01 HX_OS_ENABLE_STREAM
+#cmakedefine01 HX_OS_ENABLE_BUFFERED_FILE
 
 #endif

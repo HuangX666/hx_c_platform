@@ -1,9 +1,25 @@
 #include <hx_os.h>
 #include <hx/Ipc.hpp>
+#include <hx/Stream.hpp>
+#include <hx/FileWriter.hpp>
+#include <hx/Config.hpp>
 #include <cstring>
 
 int main()
 {
+	if (hx_os_capabilities() & HX_OS_CAP_STREAM) {
+		auto stream = hx::Stream::memory(64);
+		if (!stream)
+			return 1;
+		if (!stream.value().write<uint32_t>(42, HX_OS_BIG_ENDIAN))
+			return 1;
+		if (!stream.value().seek(0))
+			return 1;
+		auto value = stream.value().read<uint32_t>(HX_OS_BIG_ENDIAN);
+		if (!value || value.value() != 42)
+			return 1;
+	}
+
 	hx_string text = HX_STRING_INIT;
 
 	if (hx_string_assign_cstr(&text, "C ABI", NULL) != HX_OS_OK)

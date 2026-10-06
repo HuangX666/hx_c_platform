@@ -14,6 +14,29 @@ The [complete example](../examples/thread_pool.cpp) checks creation, submission,
 
 `closeUntil()` permanently rejects new submissions. DRAIN runs accepted queued tasks; CANCEL_PENDING skips queued work without forcibly interrupting work already running. Both wait for cleanup and native thread exit. Closing from a worker in the same pool returns DEADLOCK. Concurrent close or in-progress preparation can return BUSY. No reaper thread or forced termination is introduced.
 
+## Wait for work without closing the pool
+
+`pool.waitUntil(deadline)` waits for tasks already accepted when this call captures its boundary under the pool mutex. Later submissions do not extend this wait. `pool.waitIdleUntil(deadline)` waits until no accepted tasks remain; continuing submissions can delay it. `waitFor(milliseconds)` and `waitIdleFor(milliseconds)` accept relative durations. Both modes include delayed tasks and task cleanup, leave the pool open, and return TIMEOUT when their monotonic deadline expires. Zero duration polls.
+
+```cpp
+auto first = pool.submit([]() noexcept { return 21 * 2; });
+if (!first)
+	return hx::Failure(first.error());
+
+auto completed = pool.waitFor(std::chrono::milliseconds(2000));
+if (!completed)
+	return completed;
+
+// Waiting leaves the pool available for the next batch.
+auto second = pool.submit([]() noexcept { return 7 * 3; });
+```
+
+The snippet runs inside a function returning `hx::Result<void>` with a live `pool`. Check `second` before using it, and use each task's `getUntil()` to inspect work results: a successful pool wait reports completion, including failed or cancelled tasks, not success of every task. Preserve explicit shutdown when the owner is no longer needed.
+
+Multiple external callers may wait concurrently. Same-pool workers, including cleanup callbacks, receive DEADLOCK. Preparation still in progress is excluded until accepted. A new snapshot wait after a timeout captures a new boundary; idle success is only an observation, not a prohibition on future submission. Exclude final destruction while starting new calls. Sequence exhaustion rejects new submissions with LIMIT instead of wrapping.
+
+The C equivalents are `hx_os_thread_pool_wait_until()` and `hx_os_thread_pool_wait_idle_until()`. No allocation is added to submission or waiting. An accepted task stores two list pointers and a 64-bit sequence; completion acquires the pool mutex once to unlink it. The pool has one extra condition variable so completion waiters cannot consume work-availability notifications. This is a correctness mechanism, not a measured performance improvement.
+
 ## Submission and results
 
 `submit(callable, args...)` returns `Result<Task<T>>`. It accepts functions, member pointers, lambdas, move-only captures/arguments and `std::ref`. Stored functions run as lvalues; stored arguments move into the invocation. Function objects must declare their invocation `noexcept`. Capture/argument construction and destruction must be non-failing. C++11 function/member pointers cannot encode that guarantee in the type, so their implementations must honor the same contract.

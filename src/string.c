@@ -273,6 +273,62 @@ int hx_string_compare(const hx_string *string, hx_string_view other)
 	return string->size < other.size ? -1 : string->size > other.size;
 }
 
+static unsigned char hx_string_fold_ascii(unsigned char byte)
+{
+	return byte >= 'A' && byte <= 'Z' ? (unsigned char)(byte + 'a' - 'A')
+					  : byte;
+}
+
+static int hx_string_compare_folded(
+	const char *left, const char *right, size_t bytes)
+{
+	size_t i;
+
+	for (i = 0; i < bytes; ++i) {
+		unsigned char a = hx_string_fold_ascii((unsigned char)left[i]);
+		unsigned char b = hx_string_fold_ascii((unsigned char)right[i]);
+
+		if (a != b)
+			return a < b ? -1 : 1;
+	}
+
+	return 0;
+}
+
+int hx_string_compare_ascii_nocase(
+	const hx_string *string, hx_string_view other)
+{
+	size_t bytes = string->size < other.size ? string->size : other.size;
+	int compared =
+		hx_string_compare_folded(string->data, other.data, bytes);
+
+	if (compared)
+		return compared;
+
+	return string->size < other.size ? -1 : string->size > other.size;
+}
+
+size_t hx_string_find_ascii_nocase(
+	const hx_string *string, hx_string_view needle, size_t start)
+{
+	size_t i, invalid;
+
+	if (!hx_string_boundary(string, start) ||
+		needle.size > string->size - start ||
+		hx_os_text_validate_utf8(needle.data, needle.size, &invalid) !=
+			HX_OS_OK)
+		return HX_STRING_NOT_FOUND;
+	if (!needle.size)
+		return start;
+
+	for (i = start; i <= string->size - needle.size; ++i)
+		if (!hx_string_compare_folded(
+			    string->data + i, needle.data, needle.size))
+			return i;
+
+	return HX_STRING_NOT_FOUND;
+}
+
 hx_os_status hx_string_vformat(hx_string *string, hx_os_error *error,
 	const char *format, va_list arguments)
 {

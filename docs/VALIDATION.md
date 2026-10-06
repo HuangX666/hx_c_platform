@@ -4,9 +4,41 @@ Entries below describe the versions tested at the time. Historical C++ exception
 
 [简体中文](VALIDATION.zh-CN.md) · [README](../README.md)
 
-This records development validation through 2026-10-05. A design, implemented adapter, successful compile and successful target run are different states. Local tests do not certify every operating-system release, filesystem, CPU, libc or network provider.
+This records development validation through 2026-10-06. A design, implemented adapter, successful compile and successful target run are different states. Local tests do not certify every operating-system release, filesystem, CPU, libc or network provider.
 
 The JSON entry below records the current examples. Earlier independent text examples, initial shared workflows, IPC/KCP implementation and other batches describe their historical versions.
+
+## 2026-10-06: OBS-style I/O, configuration conveniences and dependency layout
+
+Baseline `a2d1799`, local `dev`. Added snapshot/idle waits without closing a pool, UTF-8 stdio paths, native wide-text conversion, ASCII case-insensitive string operations, bulk bounded byte queues, binary streams/endian I/O and bounded background file writers. Configuration additions provide section/key INI editing, explicit backup save/recovery and per-key settings overlays. C++11 facades use Result and compile without exceptions. Existing public layouts and exports are retained.
+
+| Configuration | Evidence |
+| --- | --- |
+| Windows MSVC x64 Release shared | Full build and CTest 147/147 |
+| WSL Linux GCC x86_64 Release shared | Full build and CTest 146/146; Windows-only fixture accounts for the count difference |
+| Installed shared C++11 / pure C consumers | Each host: 33/33 and 23/23, including new C exports and the C++ stream facade |
+| Windows MSVC Win32 static | Related text, queue, stream, writer, pool wait and C++ tests passed; later INI, backup and settings tests passed 4/4 with cpp_platform |
+| WSL ASan + UBSan static | Related stream/writer/queue and configuration/C++ suites passed; leak detection enabled, no reported errors |
+| WSL TSan static | pool_wait and cpp_pool passed 2/2; buffered_file passed separately after stop/retry lifetime checks, with no reported races |
+| Minimal WSL build | New stream/writer/queue/configuration/settings stubs and cpp_platform passed; C99/C++11 standalone header targets built |
+| Public headers and source rules | Independent C99/C++11 header targets built on Windows/WSL; 66 changed owned source/script files passed the 80-column check with Tab width 8; UTF-8 without BOM/LF and whitespace checks passed |
+
+Tests exercise partial I/O, EOF/truncation, unchanged numeric outputs, native errors, allocation failures, ring wraparound, two producer threads, latched write/flush failures, suffix-only retry, timed-out flush/close and explicit stop/abandonment. Pool tests gate completion/cleanup deterministically, distinguish snapshot and idle waits and reject same-worker waits. INI tests preserve retained old trees, reject unsupported values/collisions and inject every construction allocation failure until success. Backup recovery validates and preserves exact bytes; ordinary load does not restore. Settings overlay preserves prior commits on failure and exercises observer reentry and a one-operation limit.
+
+Measured private object sizes/alignment with MSVC, in bytes (generated probes copy the current private definitions):
+
+| Object | x64 size / alignment | x86 size / alignment |
+| --- | --- | --- |
+| Binary stream | 64 / 8 | 36 / 4 |
+| File writer, excluding queue/worker/native objects | 216 / 8 | 176 / 8 |
+| Pool task, with delayed tasks enabled | 112 / 8 (previous 88) | 80 / 8 (previous 56) |
+| Pool object | 144 / 8 (previous 104) | 88 / 8 (previous 64) |
+
+The stream uses mutually exclusive backend storage. Snapshot pool waits require acceptance-order links/counters and a separate completion condition; completion takes an additional pool lock. The writer test observed no context allocation in write/flush after creation. These are cost/layout observations, not measured throughput or latency improvements; no new assembly was introduced.
+
+Third-party sources now reside in `deps/`. Seven relocated KCP/uthash/minicoro files were byte-compared with HEAD and are unchanged; minicoro remains unused. OpenSSL 3.5.9, libarchive 3.8.9, zlib 1.3.2, XZ 5.8.4 and zstd 1.5.7 are fixed Git submodules. Their static Release dependency builds succeeded on Windows/WSL. Windows used OpenSSL ASM=OFF. An independent linked probe round-tripped ZIP, AES-256 password ZIP, ordinary 7z, TAR, TAR.GZ, TAR.XZ and TAR.Zstd, and rejected a wrong ZIP password on both hosts. Windows static dependency detection/linking was corrected in first-party CMake, including WIN7 selection; no upstream edits. FetchContent downloaded and checked the zlib commit, using existing source overrides for the other four dependencies. The dependency builder needs CMake 3.20; the core remains 3.16.
+
+Logs: `obs-current-full-build.log`, `obs-current-full-ctest.log`, `obs-install.log` in the two shared build trees; sanitizer and target-specific logs remain in their respective ignored build directories. The installed consumers do not require the OpenSSL/archive stack yet: public crypto/TLS/archive APIs and the optional encrypted-7z backend are still pending. The other requested OBS extension modules not listed above also remain in progress. No new macOS, Windows 7/8.1, Android, ARM board or musl run is claimed.
 
 ## 2026-10-05: Error text, IPC reentry and coroutine boundaries
 

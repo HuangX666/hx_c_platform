@@ -4,6 +4,8 @@
 /dist/
 /install*/
 .deps/
+/deps/.fetchcontent/
+/deps/.cache/
 /CMakeFiles/
 /CMakeCache.txt
 /cmake_install.cmake

@@ -1,5 +1,23 @@
 #include "settings_private.h"
 
+hx_os_status hx_settings_apply_value(hx_settings *settings,
+	const hx_settings_value *object, size_t *applied, hx_os_error *error)
+{
+	(void)settings;
+	(void)object;
+	if (applied)
+		*applied = 0;
+
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_settings_apply(hx_settings *settings, hx_settings *source,
+	size_t *applied, hx_os_error *error)
+{
+	(void)source;
+	return hx_settings_apply_value(settings, NULL, applied, error);
+}
+
 void hx_settings_value_retain(hx_settings_value *value)
 {
 	(void)value;

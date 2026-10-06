@@ -2,12 +2,14 @@
 #define HX_C_PLATFORM_TEXT_H
 
 #include "hx_os_base.h"
+#include <wchar.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 typedef struct hx_os_text_converter hx_os_text_converter;
+
 typedef enum hx_os_encoding {
 	HX_OS_UTF8,
 	HX_OS_UTF16LE,
@@ -110,6 +112,22 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_text_convert(hx_os_encoding source,
 HX_OS_API hx_os_status HX_OS_CALL hx_os_text_measure(hx_os_encoding source,
 	hx_os_encoding target, const void *input, size_t bytes,
 	size_t *required, hx_os_error *error);
+
+/* Native wchar_t (UTF-16 on Windows, UTF-32 on supported POSIX targets).
+ * Strict, locale-independent, with no BOM handling. Lengths exclude the
+ * terminator; capacity/required count destination units and include NUL.
+ * NULL output with capacity=0 measures and returns OUTPUT_FULL. Embedded
+ * NUL is preserved. Failure leaves output unchanged; required is zero on
+ * invalid input. Input/output/required must not overlap. No allocation is
+ * transferred to the caller. Unsupported wchar_t widths return NOT_SUPPORTED.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_text_to_wide(const char *input,
+	size_t bytes, wchar_t *output, size_t capacity, size_t *required,
+	hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_text_from_wide(const wchar_t *input,
+	size_t units, char *output, size_t capacity, size_t *required,
+	hx_os_error *error);
 
 #ifdef __cplusplus
 }

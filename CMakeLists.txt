@@ -7,6 +7,7 @@ include(CheckSymbolExists)
 include(CheckCSourceCompiles)
 include(cmake/HxWarnings.cmake)
 include(cmake/HxFormat.cmake)
+include(cmake/HxDependencySources.cmake)
 
 option(BUILD_SHARED_LIBS "Build shared library" OFF)
 option(HX_OS_BUILD_TESTS "Build contract tests" ON)
@@ -43,6 +44,8 @@ option(HX_OS_ENABLE_SYSINFO "Build native system information" ON)
 option(HX_OS_ENABLE_LIBRARY "Build native dynamic library loading" ON)
 
 option(HX_OS_ENABLE_FILE_UTILS "Build file and path conveniences" ON)
+option(HX_OS_ENABLE_STREAM "Build binary streams and numeric I/O" ON)
+option(HX_OS_ENABLE_BUFFERED_FILE "Build bounded background file writers" ON)
 
 option(HX_OS_ENABLE_ENV "Build UTF-8 environment access" ON)
 
@@ -314,7 +317,10 @@ add_library(hx_c_platform
 	src/base.c src/atomic.c src/time.c src/unicode.c src/thread.c
 	src/convenience.c src/lexer.c src/wide.c src/wait.c src/string.c
 	src/string_utils.c src/format.c src/file.c src/text.c src/optional.c
-	src/config.c src/config_values.c
+	src/stdio.c src/text_wide.c
+	src/stream.c src/stream_number.c
+	src/buffered_file.c
+	src/config.c src/config_values.c src/config_file.c src/config_ini.c
 	src/containers.c src/variant.c src/file_search.c
 	src/sysinfo.c src/library.c src/path.c src/env.c src/paths.c
 	src/thread_extra.c src/pipe.c src/file_at.c src/net_options.c
@@ -541,9 +547,9 @@ endif()
 if(HX_OS_ENABLE_CONTAINERS)
 	target_sources(hx_c_platform PRIVATE src/sequence.c src/map.c)
 	target_include_directories(hx_c_platform SYSTEM PRIVATE
-		third_party/uthash/v2.4.0)
+		deps/uthash/v2.4.0)
 
-	install(FILES third_party/uthash/v2.4.0/LICENSE
+	install(FILES deps/uthash/v2.4.0/LICENSE
 		DESTINATION ${CMAKE_INSTALL_DATADIR}/hx_c_platform/licenses
 		RENAME uthash-LICENSE)
 else()
@@ -601,7 +607,7 @@ endif()
 
 if(HX_OS_ENABLE_KCP)
 	set(hx_kcp_revision "8004f7eba5d1bf33f0691eef5f887f2cd3140cb5")
-	set(hx_kcp_source "${PROJECT_SOURCE_DIR}/third_party/kcp")
+	set(hx_kcp_source "${PROJECT_SOURCE_DIR}/deps/kcp")
 	set(hx_kcp_source "${hx_kcp_source}/${hx_kcp_revision}")
 
 	add_library(hx_kcp_vendor OBJECT src/kcp_vendor.c)

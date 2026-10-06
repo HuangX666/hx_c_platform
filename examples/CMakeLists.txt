@@ -27,6 +27,7 @@ endfunction()
 
 foreach(example IN ITEMS hello async_timer configuration containers system_info
 	load_plugin text_file environment special_paths thread_options
+	binary_stream buffered_file config_edit
 	serialization nested_document codec_macros
 	pipe_transfer positioned_read file_info config_save periodic_timer
 	random_uuid mapped_file file_attributes watch_directory capture_process
@@ -46,10 +47,27 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 	hx_apply_warnings(hx_os_${example})
 endforeach()
 
+if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_STREAM)
+	add_test(NAME binary_stream_example COMMAND hx_os_binary_stream)
+	set_tests_properties(binary_stream_example PROPERTIES TIMEOUT 20)
+	if(HX_OS_ENABLE_BUFFERED_FILE)
+		add_test(NAME buffered_file_example
+			COMMAND hx_os_buffered_file)
+		set_tests_properties(buffered_file_example PROPERTIES
+			TIMEOUT 20)
+	endif()
+endif()
+
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_CONFIG AND HX_OS_ENABLE_CODEC
 	AND HX_OS_ENABLE_CONFIG_SERIALIZE)
 	add_test(NAME codec_macros_example COMMAND hx_os_codec_macros)
 	set_tests_properties(codec_macros_example PROPERTIES TIMEOUT 20)
+endif()
+
+if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_CONFIG AND HX_OS_ENABLE_CONFIG_SERIALIZE
+	AND HX_OS_ENABLE_FILE_UTILS)
+	add_test(NAME config_edit_example COMMAND hx_os_config_edit)
+	set_tests_properties(config_edit_example PROPERTIES TIMEOUT 20)
 endif()
 
 if(HX_OS_BUILD_TESTS AND HX_OS_HAVE_IPC AND NOT CMAKE_CROSSCOMPILING)

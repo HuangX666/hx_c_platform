@@ -41,11 +41,13 @@ add_test(NAME library COMMAND hx_os_test_library
 set_tests_properties(library PROPERTIES TIMEOUT 20)
 
 set(hx_test_suites data options lifecycle config containers sysinfo file_utils
+	text_interop byte_queue stream buffered_file
 	env paths thread_extra pipe io_options file_info
-	config_serialize config_tree codec timer
+	config_serialize config_tree config_backup ini codec timer
 	error_text util vm file_extra watch loop_fd system delayed local duplex
 	registry power obfuscate calendar text_lookup bitstream calldata signal
-	settings settings_concurrency settings_config profiler atomic
+	settings settings_concurrency settings_config settings_apply
+	profiler atomic
 	string_tools lexer wide_wait catalog_filename procedure
 	android_baseline convenience variant file_search stl
 	coroutine coroutine_io coroutine_sync format kcp ipc ipc_allocator)
@@ -59,7 +61,7 @@ if(NOT BUILD_SHARED_LIBS)
 endif()
 
 if(HX_OS_ENABLE_THREAD_POOL)
-	list(APPEND hx_test_suites pool)
+	list(APPEND hx_test_suites pool pool_wait)
 endif()
 
 if(HX_OS_ENABLE_NETWORK AND HX_OS_ENABLE_LOOP)
@@ -78,6 +80,11 @@ foreach(suite IN LISTS hx_test_suites)
 	add_test(NAME ${suite} COMMAND hx_os_test_${suite})
 	set_tests_properties(${suite} PROPERTIES TIMEOUT 20)
 endforeach()
+
+if(HX_OS_ENABLE_THREAD_POOL)
+	target_include_directories(hx_os_test_pool_wait PRIVATE
+		"${PROJECT_SOURCE_DIR}/src" "${PROJECT_BINARY_DIR}/private")
+endif()
 
 if(WIN32)
 	target_include_directories(hx_os_test_error_text_windows PRIVATE
@@ -444,6 +451,8 @@ if(CMAKE_CXX_COMPILER_LOADED)
 	set_tests_properties(cpp_pool PROPERTIES TIMEOUT 20)
 
 	add_executable(hx_os_test_cpp_platform test_cpp_platform.cpp)
+	add_dependencies(hx_os_test_cpp_platform
+		hx_os_test_library_module hx_os_process_fixture)
 	target_link_libraries(hx_os_test_cpp_platform PRIVATE
 		hx_c_platform::cpp)
 	set_target_properties(hx_os_test_cpp_platform PROPERTIES
