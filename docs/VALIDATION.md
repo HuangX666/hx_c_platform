@@ -8,6 +8,34 @@ This records development validation through 2026-10-06. A design, implemented ad
 
 The JSON entry below records the current examples. Earlier independent text examples, initial shared workflows, IPC/KCP implementation and other batches describe their historical versions.
 
+## 2026-10-06: Structured profiler snapshots and bounded percentiles
+
+Baseline `7f3ad7d`. Added immutable independently owned snapshots, exclusive min/max, last samples, Welford mean/population deviation and opt-in inclusive/exclusive histograms. Existing options/handles and TSV v1 remain compatible. Each histogram has 252 fixed counters (2,016 bytes per path/channel); default recording has no histogram and warmed paths still allocate no context memory. Captures allocate outside the lock; consistent data/bin copies happen under it, name copies and square roots afterward. Snapshot budget includes allocation overhead, and disabled builds return not supported.
+
+Windows MSVC x64 shared full CTest passed 152/152; WSL GCC shared passed 153/153. After the final equivalent copy-expression cleanup, both hosts reran the snapshot suite/example and installed consumers: C++11 35/35, pure C 25/25. Win32 static passed profiler/snapshot/C++ extensions, with the uint64 boundary fixture rerun after it was added. WSL ASan/UBSan with leak detection passed five related suites; TSan passed profiler and concurrent snapshots 2/2; PROFILER=OFF passed three related suites. C99 and C++11 standalone public-header targets passed. C++ tests require exceptions disabled. WSL also compiled the old profiler test and headers from `7f3ad7d` and ran that consumer against the new shared library.
+
+The tests independently reconstruct mean/deviation from measured last samples and check nearest-rank intervals against a sorted sample array. They cover P0–P100, rational near-one quantiles, empty/aborted scopes, nested IDs, retained names after profiler/context closure, custom allocator failure and busy contexts, allocation reentry, per-snapshot limits, unchanged legacy TSV budgets, concurrent recording/capture, optional channel combinations and zero/UINT64_MAX bucket edges. A quiescent private fixture injects otherwise impractical elapsed values for the boundary test.
+
+| Object | MSVC x64 / WSL x64 size, alignment | MSVC x86 size, alignment |
+| --- | --- | --- |
+| Public snapshot entry / array stride | 144 / 8 bytes | 136 / 8 bytes |
+| Public quantile | 24 / 8 bytes | 24 / 8 bytes |
+| Private path record, before optional name/bins | 160 / 8 bytes | 144 / 8 bytes |
+| Private profiler | 672 / 8 bytes | 344 / 4 bytes |
+
+WSL GCC Release shared builds with only the profiler optional module enabled were compared against baseline `7f3ad7d` with identical options. Nine alternating runs each timed 100,000 warmed single-thread enter/leave pairs; setup, capture and output are outside the timed loop. The machine was not CPU-pinned; figures are local microbenchmarks, not a guarantee for ARM, contention, full-feature configurations or production work.
+
+| Recording mode | Median ns/interval | Observed range ns |
+| --- | --- | --- |
+| Baseline | 125.20 | 123.43–132.72 |
+| New default statistics | 131.55 | 125.01–143.56 |
+| Inclusive histogram | 132.43 | 125.33–143.14 |
+| Both histograms | 133.27 | 128.53–147.11 |
+
+The default median increased by about 5.1%; both histograms by about 6.4% versus baseline. The new basic statistics add floating-point work and 64 bytes per private path record, without a new lock or system call in recording. Capturing a snapshot adds a clock observation and copies enabled bins, so its cost grows with recorded paths. No native Windows before/after timing or cross-platform throughput claim is made. Reproduce the current modes with `HX_OS_BUILD_BENCHMARKS=ON` and `hx_os_profiler_benchmark 0`, `1` or `3`.
+
+Logs use `profiler-*` in the shared, Win32, sanitizer and minimal build trees. The isolated baseline/current performance builds and `results.json` are ignored artifacts. No new macOS, Win7/8.1, Android, ARM board or musl run is claimed. Remaining parameter/signal, preprocessing, platform, crypto/TLS and archive work is not represented as complete by this record.
+
 ## 2026-10-06: Local calendar fields and explicit breakpoints
 
 Baseline `6d0d8a1`. Existing UTC defaults remain intact. Added local display/filename entries, per-instant UTC offset in seconds, fixed-English weekday/month names, 12-hour time, ordinal days, milliseconds and Unix-second fields. Legacy long tokens take precedence. Local conversion uses native runtime calendar fields, with documented Windows/time_t/timezone-data limits; no global TZ/locale changes. `%Z` is a numeric UTC-offset label. Fixed-width fields retain manual digit rendering instead of introducing CRT number formatting into that path.

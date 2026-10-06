@@ -43,10 +43,35 @@ int main()
 
 		auto dump = Take(profiler.dump());
 		CHECK(std::strstr(dump.c_str(), "\"cpp_child\""));
+		auto snapshot = Take(profiler.snapshot());
+		CHECK(snapshot.size() == 2 && !snapshot.features());
+		CHECK(snapshot.percentile(1, 95).status() ==
+			HX_OS_NOT_SUPPORTED);
 
 		Take(profiler.restartThread());
 		Take(profiler.closeUntil(HX_OS_DEADLINE_NOW));
 		CHECK(!owner);
+		hx::ProfileSnapshot copy(snapshot);
+		snapshot = hx::ProfileSnapshot();
+		hx::ProfileSnapshot assigned;
+		assigned = copy;
+		copy = hx::ProfileSnapshot();
+		CHECK(assigned.at(1)->parent == 1);
+		size_t count = 0;
+
+		for (const auto &entry : assigned) {
+			CHECK(entry.completed == 1 && entry.name_bytes > 0);
+			++count;
+		}
+		CHECK(count == 2 && !assigned.at(2));
+		Take(profiler.createWithFeatures(
+			HX_OS_PROFILER_HISTOGRAM_INCLUSIVE));
+		Take(profiler.startRoot("distribution"));
+		Take(profiler.leave());
+		snapshot = Take(profiler.snapshot());
+		CHECK(Take(snapshot.percentile(1, 95)).samples == 1);
+		CHECK(snapshot.timeNs() && snapshot.features());
+		Take(profiler.closeUntil(HX_OS_DEADLINE_NOW));
 	}
 
 	if (capabilities & HX_OS_CAP_SETTINGS) {

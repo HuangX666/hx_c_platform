@@ -6,6 +6,101 @@
 extern "C" {
 #endif
 typedef struct hx_os_profiler hx_os_profiler;
+typedef struct hx_os_profiler_snapshot hx_os_profiler_snapshot;
+
+/* Fixed-layout borrowed entry in an immutable snapshot. Durations are ns;
+ * averages/deviations are approximate doubles (population deviation).
+ * Aborted/open scopes do not contribute duration samples. Empty statistics
+ * are zero. Last means most recently completed, not most recently started.
+ * Names are copied NUL-terminated UTF-8; name_bytes excludes NUL. IDs identify
+ * paths in the originating profiler only; parent=0 identifies a root.
+ * Flags retain their dump meaning: 1=counter saturation, 2=clock error.
+ * Saturated/clock-error statistics should not be treated as exact measurements.
+ * Do not change fields or retain a name/entry after releasing its snapshot.
+ */
+typedef struct hx_os_profiler_entry {
+	const char *name;
+	size_t name_bytes;
+	uint64_t completed, aborted;
+	uint64_t inclusive_ns, exclusive_ns;
+	uint64_t minimum_ns, maximum_ns;
+	uint64_t minimum_exclusive_ns, maximum_exclusive_ns;
+	uint64_t last_inclusive_ns, last_exclusive_ns;
+	double mean_inclusive_ns, deviation_inclusive_ns;
+	double mean_exclusive_ns, deviation_exclusive_ns;
+	uint32_t identifier, parent, depth, flags;
+} hx_os_profiler_entry;
+
+enum {
+	HX_OS_PROFILER_HISTOGRAM_INCLUSIVE = 1u,
+	HX_OS_PROFILER_HISTOGRAM_EXCLUSIVE = 2u
+};
+
+typedef struct hx_os_profiler_quantile {
+	uint64_t lower_ns, upper_ns;
+	uint64_t samples;
+} hx_os_profiler_quantile;
+
+/* Captures all records consistently, copying names and statistics. Snapshot
+ * storage (including allocation overhead) is bounded by max_output_bytes.
+ * Allocates outside the profiler lock; growth races retry at most eight times,
+ * then BUSY. Monotonic capture time identifies the observation instant.
+ * Success owns *out; failure sets it NULL. Default uses the immutable default
+ * allocator; with_context uses the specified context (NULL has the same rule).
+ * Retained snapshots survive profiler close and are safe for concurrent reads.
+ * The snapshot's context and the loaded library outlive its last reference.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_snapshot_create(
+	hx_os_profiler *profiler, hx_os_profiler_snapshot **out,
+	hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_snapshot_create_with_context(
+	hx_os_context *context, hx_os_profiler *profiler,
+	hx_os_profiler_snapshot **out, hx_os_error *error);
+
+HX_OS_API void HX_OS_CALL hx_os_profiler_snapshot_retain(
+	hx_os_profiler_snapshot *snapshot);
+
+HX_OS_API void HX_OS_CALL hx_os_profiler_snapshot_release(
+	hx_os_profiler_snapshot *snapshot);
+
+HX_OS_API size_t HX_OS_CALL hx_os_profiler_snapshot_count(
+	const hx_os_profiler_snapshot *snapshot);
+
+HX_OS_API uint64_t HX_OS_CALL hx_os_profiler_snapshot_time_ns(
+	const hx_os_profiler_snapshot *snapshot);
+
+/* Contiguous entries in ID order; a parent precedes its children. NULL snapshot
+ * has NULL data/count zero. at returns NULL for an invalid index. Returned
+ * pointers borrow the snapshot through its last release.
+ */
+HX_OS_API const hx_os_profiler_entry *HX_OS_CALL hx_os_profiler_snapshot_data(
+	const hx_os_profiler_snapshot *snapshot);
+
+HX_OS_API const hx_os_profiler_entry *HX_OS_CALL hx_os_profiler_snapshot_at(
+	const hx_os_profiler_snapshot *snapshot, size_t index);
+
+HX_OS_API uint32_t HX_OS_CALL hx_os_profiler_snapshot_features(
+	const hx_os_profiler_snapshot *snapshot);
+
+/* Inclusive P0..P100 convenience, keyed by entry.identifier (not array index).
+ * Advanced quantile accepts exclusive=0/1 and numerator/denominator in [0,1].
+ * Requires the selected histogram, otherwise NOT_SUPPORTED; no completed
+ * samples is NOT_FOUND, saturated statistics RANGE. Failure preserves out.
+ * Uses nearest rank, returning the selected bucket's interval intersected with
+ * observed min/max. P0/P100 return the exact observed extrema. Each enabled
+ * channel has 252 fixed logarithmic bins (~2 KiB/record): 0..3 ns are exact,
+ * then four bins per power of two, including UINT64_MAX. No sample list grows.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_snapshot_percentile(
+	const hx_os_profiler_snapshot *snapshot, uint32_t record_id,
+	unsigned percent, hx_os_profiler_quantile *out, hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_snapshot_quantile(
+	const hx_os_profiler_snapshot *snapshot, uint32_t record_id,
+	int exclusive, uint32_t numerator, uint32_t denominator,
+	hx_os_profiler_quantile *out, hx_os_error *error);
+
 typedef struct hx_os_profiler_options {
 	uint32_t size;
 	uint32_t version;
@@ -16,6 +111,7 @@ typedef struct hx_os_profiler_options {
 	size_t max_output_bytes;
 	size_t max_active_operations;
 } hx_os_profiler_options;
+
 #define HX_OS_PROFILER_OPTIONS_INIT                                            \
 	{                                                                      \
 		sizeof(hx_os_profiler_options), 1, 1024, 64, 32, 127,          \
@@ -40,6 +136,15 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_create(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_create_with_options(
 	hx_os_context *context, const hx_os_profiler_options *options,
 	hx_os_profiler **out, hx_os_error *error);
+
+/* Select optional distributions at creation; immutable for this instance.
+ * Features are the OR of HISTOGRAM_* above; 0 keeps the original default.
+ * With both channels and NULL options, the default output/snapshot budget is
+ * 8 MiB; explicit options always keep their supplied budget. No worker starts.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_profiler_create_with_features(
+	hx_os_context *context, const hx_os_profiler_options *options,
+	uint32_t features, hx_os_profiler **out, hx_os_error *error);
 
 /* Thread-bound balanced scopes; names are copied strict UTF-8, nonempty.
  * start_root requires no current scope (otherwise BUSY); reach requires a

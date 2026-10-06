@@ -40,6 +40,15 @@ set_target_properties(hx_os_pool_benchmark PROPERTIES
 	C_EXTENSIONS NO)
 hx_apply_warnings(hx_os_pool_benchmark)
 
+add_executable(hx_os_profiler_benchmark profiler.c)
+target_link_libraries(hx_os_profiler_benchmark PRIVATE hx_c_platform)
+set_target_properties(hx_os_profiler_benchmark PROPERTIES
+	C_STANDARD 99
+	C_STANDARD_REQUIRED YES
+	C_EXTENSIONS NO
+	RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+hx_apply_warnings(hx_os_profiler_benchmark)
+
 add_executable(hx_os_layout_report ../tools/report_layout.c)
 target_include_directories(hx_os_layout_report PRIVATE
 	${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/src

@@ -370,7 +370,11 @@ else()
 endif()
 
 if(HX_OS_ENABLE_PROFILER)
-	target_sources(hx_c_platform PRIVATE src/profiler_dump.c)
+	target_sources(hx_c_platform PRIVATE
+		src/profiler_dump.c src/profiler_snapshot.c)
+	if(NOT WIN32)
+		target_link_libraries(hx_c_platform PRIVATE m)
+	endif()
 else()
 	target_sources(hx_c_platform PRIVATE src/profiler_disabled.c)
 endif()
@@ -864,6 +868,10 @@ endif()
 
 if(HX_OS_NEED_RT)
 	string(APPEND HX_OS_PC_LIBS_PRIVATE " -lrt")
+endif()
+
+if(HX_OS_ENABLE_PROFILER AND NOT WIN32)
+	string(APPEND HX_OS_PC_LIBS_PRIVATE " -lm")
 endif()
 
 if(HX_OS_ICONV_SYSTEM AND NOT Iconv_IS_BUILT_IN)

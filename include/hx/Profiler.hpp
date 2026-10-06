@@ -6,6 +6,105 @@
 
 namespace hx {
 
+class ProfileSnapshot {
+public:
+	/* Adopts one snapshot reference; copying retains it without allocation.
+	 */
+	explicit ProfileSnapshot(hx_os_profiler_snapshot *value = NULL) noexcept
+	    : m_value_(value)
+	{
+	}
+
+	ProfileSnapshot(const ProfileSnapshot &other) noexcept
+	    : m_value_(other.m_value_)
+	{
+		hx_os_profiler_snapshot_retain(m_value_);
+	}
+
+	ProfileSnapshot &operator=(const ProfileSnapshot &other) noexcept
+	{
+		hx_os_profiler_snapshot_retain(other.m_value_);
+		hx_os_profiler_snapshot_release(m_value_);
+		m_value_ = other.m_value_;
+
+		return *this;
+	}
+
+	ProfileSnapshot(ProfileSnapshot &&other) noexcept
+	    : m_value_(other.m_value_)
+	{
+		other.m_value_ = NULL;
+	}
+
+	ProfileSnapshot &operator=(ProfileSnapshot &&other) noexcept
+	{
+		if (this != &other) {
+			hx_os_profiler_snapshot_release(m_value_);
+			m_value_ = other.m_value_;
+			other.m_value_ = NULL;
+		}
+
+		return *this;
+	}
+
+	~ProfileSnapshot() noexcept
+	{
+		hx_os_profiler_snapshot_release(m_value_);
+	}
+
+	size_t size() const noexcept
+	{
+		return hx_os_profiler_snapshot_count(m_value_);
+	}
+
+	uint64_t timeNs() const noexcept
+	{
+		return hx_os_profiler_snapshot_time_ns(m_value_);
+	}
+
+	uint32_t features() const noexcept
+	{
+		return hx_os_profiler_snapshot_features(m_value_);
+	}
+
+	const hx_os_profiler_entry *begin() const noexcept
+	{
+		return hx_os_profiler_snapshot_data(m_value_);
+	}
+
+	const hx_os_profiler_entry *end() const noexcept
+	{
+		return m_value_ ? begin() + size() : NULL;
+	}
+
+	const hx_os_profiler_entry *at(size_t index) const noexcept
+	{
+		return hx_os_profiler_snapshot_at(m_value_, index);
+	}
+
+	Result<hx_os_profiler_quantile> percentile(uint32_t recordId,
+		unsigned percent, bool exclusive = false) const noexcept
+	{
+		hx_os_error error = {};
+		hx_os_profiler_quantile value = {};
+		auto status = hx_os_profiler_snapshot_quantile(m_value_,
+			recordId, exclusive ? 1 : 0, percent, 100, &value,
+			&error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+
+		return value;
+	}
+
+	hx_os_profiler_snapshot *native() const noexcept
+	{
+		return m_value_;
+	}
+
+private:
+	hx_os_profiler_snapshot *m_value_;
+};
+
 /* Host owns the profiler through all threads and TLS retirement. */
 class Profiler {
 public:
@@ -35,6 +134,33 @@ public:
 			hx_os_profiler_start_root(*m_owner_, name, &error);
 
 		return detail::Status(status, error);
+	}
+
+	Result<void> createWithFeatures(uint32_t features,
+		hx_os_context *context = NULL,
+		const hx_os_profiler_options *options = NULL) noexcept
+	{
+		if (*m_owner_)
+			return Failure(HX_OS_BUSY);
+
+		hx_os_error error = {};
+		auto status = hx_os_profiler_create_with_features(
+			context, options, features, m_owner_, &error);
+
+		return detail::Status(status, error);
+	}
+
+	Result<ProfileSnapshot> snapshot(
+		hx_os_context *context = NULL) const noexcept
+	{
+		hx_os_error error = {};
+		hx_os_profiler_snapshot *value = NULL;
+		auto status = hx_os_profiler_snapshot_create_with_context(
+			context, *m_owner_, &value, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+
+		return ProfileSnapshot(value);
 	}
 
 	Result<void> reach(const char *name) noexcept

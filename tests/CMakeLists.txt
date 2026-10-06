@@ -48,7 +48,7 @@ set(hx_test_suites data options lifecycle config containers sysinfo file_utils
 	registry power obfuscate calendar calendar_dst text_lookup bitstream
 	calldata signal
 	settings settings_concurrency settings_config settings_apply
-	profiler atomic
+	profiler profiler_snapshot atomic
 	string_tools lexer wide_wait catalog_filename procedure
 	android_baseline convenience variant file_search stl
 	coroutine coroutine_io coroutine_sync format kcp ipc ipc_allocator)
@@ -83,6 +83,9 @@ foreach(suite IN LISTS hx_test_suites)
 	add_test(NAME ${suite} COMMAND hx_os_test_${suite})
 	set_tests_properties(${suite} PROPERTIES TIMEOUT 20)
 endforeach()
+
+target_include_directories(hx_os_test_profiler_snapshot PRIVATE
+	"${PROJECT_BINARY_DIR}/private")
 
 if(HX_OS_ENABLE_THREAD_POOL)
 	target_include_directories(hx_os_test_pool_wait PRIVATE

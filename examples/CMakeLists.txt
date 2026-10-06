@@ -32,7 +32,8 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 	pipe_transfer positioned_read file_info config_save periodic_timer
 	random_uuid mapped_file file_attributes watch_directory capture_process
 	delayed_task duplex_message obfuscated_string localized_time
-	signal_notifications settings profile_intervals atomic_publication
+	signal_notifications settings profile_intervals profile_statistics
+	atomic_publication
 	common_tasks variant find_files coroutine ordered_map format
 	ipc_server ipc_client ipc_device_server ipc_device_client
 	tcp_order_server tcp_order_client udp_dashboard udp_sensor
@@ -330,6 +331,10 @@ endif()
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_PROFILER)
 	add_test(NAME profile_intervals_example COMMAND hx_os_profile_intervals)
 	set_tests_properties(profile_intervals_example PROPERTIES TIMEOUT 20)
+	add_test(NAME profile_statistics_example
+		COMMAND hx_os_profile_statistics)
+	set_tests_properties(profile_statistics_example PROPERTIES
+		TIMEOUT 20)
 endif()
 
 if(CMAKE_CXX_COMPILER_LOADED)

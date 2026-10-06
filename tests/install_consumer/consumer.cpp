@@ -4,10 +4,28 @@
 #include <hx/FileWriter.hpp>
 #include <hx/Config.hpp>
 #include <hx/Calendar.hpp>
+#include <hx/Profiler.hpp>
 #include <cstring>
 
 int main()
 {
+	if (hx_os_capabilities() & HX_OS_CAP_PROFILER) {
+		hx_os_profiler *owner = NULL;
+		hx::Profiler profiler(owner);
+
+		if (!profiler.createWithFeatures(
+			    HX_OS_PROFILER_HISTOGRAM_INCLUSIVE))
+			return 1;
+		if (!profiler.startRoot("installed") || !profiler.leave())
+			return 1;
+		auto snapshot = profiler.snapshot();
+		if (!profiler.closeUntil(HX_OS_DEADLINE_NOW) || !snapshot)
+			return 1;
+		auto quantile = snapshot.value().percentile(1, 95);
+		if (!quantile || quantile.value().samples != 1)
+			return 1;
+	}
+
 	if (hx_os_capabilities() & HX_OS_CAP_CALENDAR) {
 		auto text = hx::Calendar::utc(0, "%a_%L");
 		if (!text || std::strcmp(text.value().c_str(), "Thu_000"))

@@ -10,6 +10,7 @@
 			exit(1);                                               \
 		}                                                              \
 	} while (0)
+
 typedef struct metrics {
 	unsigned long long completed, aborted, inclusive, exclusive, minimum,
 		maximum;
@@ -95,12 +96,16 @@ static void allocation_reentry(allocation_state *state)
 {
 	size_t required;
 	hx_os_profiler *same = state->profiler;
+	hx_os_profiler_snapshot *snapshot = NULL;
 
 	if (!state->reenter || !same)
 		return;
 
 	CHECK(hx_os_profiler_dump(same, NULL, 0, &required, NULL) ==
 		HX_OS_DEADLOCK);
+	CHECK(hx_os_profiler_snapshot_create(same, &snapshot, NULL) ==
+			HX_OS_DEADLOCK &&
+		!snapshot);
 	CHECK(hx_os_profiler_close_until(&same, HX_OS_DEADLINE_NOW, NULL) ==
 			HX_OS_DEADLOCK &&
 		same == state->profiler);

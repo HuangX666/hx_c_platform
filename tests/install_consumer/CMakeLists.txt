@@ -33,7 +33,8 @@ file(MAKE_DIRECTORY "${hx_search_fixture}/nested")
 file(WRITE "${hx_search_fixture}/nested/😀.txt" "found\n")
 
 foreach(example IN ITEMS hello configuration containers settings
-	profile_intervals atomic_publication common_tasks variant find_files
+	profile_intervals profile_statistics atomic_publication common_tasks
+	variant find_files
 	coroutine format)
 	add_executable(consumer_${example} ../../examples/${example}.c)
 	target_link_libraries(consumer_${example} PRIVATE

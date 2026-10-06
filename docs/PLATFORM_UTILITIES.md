@@ -518,6 +518,8 @@ Settings string references (`hx_settings_get_string_ref`, `SettingValue::asStrin
 
 ## Bounded interval profiler (batch 23c)
 
+For owned structured snapshots, means, standard deviations and opt-in bounded P50/P95/P99, see the [profiler tutorial](PROFILER.md). The existing TSV format and shutdown behavior below remain compatible.
+
 `hx_os_profiler_create`, `start_root`, `reach`, `leave` and `dump_string` provide explicit interval trees without background workers or native stack capture. See `examples/profile_intervals.c`; C++11 offers `hx::Profiler` and the lexical `hx::ProfileScope` guard. Successful entries must be balanced on the same thread/fiber. Names are copied strict UTF-8. Identical paths merge across threads; inclusive/exclusive nanoseconds are monotonic wall durations, so overlapping threads can sum to more than elapsed process wall time.
 
 Defaults limit records to 1024, participating thread/fiber caches to 64, nesting to 32, names to 127 bytes, output to 4 MiB including NUL, and active API calls to 64. A warmed thread/path uses no new context allocations. Entering/leaving still uses short mutex sections, TLS access and clock reads; this is bounded instrumentation, not a claim of zero runtime overhead.

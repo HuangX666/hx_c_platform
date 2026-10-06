@@ -117,6 +117,8 @@ int main(void)
 	HX_OS_LAYOUT(hx_settings);
 
 	HX_OS_LAYOUT(hx_os_profiler_options);
+	HX_OS_LAYOUT(hx_os_profiler_entry);
+	HX_OS_LAYOUT(hx_os_profiler_quantile);
 	HX_OS_LAYOUT(hx_os_profiler);
 	HX_OS_LAYOUT(hx_os_profile_record);
 	HX_OS_LAYOUT(hx_os_profile_frame);

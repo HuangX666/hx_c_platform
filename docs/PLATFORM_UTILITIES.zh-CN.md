@@ -493,6 +493,8 @@ SETTINGS 独立于 CONFIG、CONFIG_SERIALIZE、FILE_UTILS、SIGNALS 和 CONTAINE
 
 ## 有界区间计时树（第 23c 批）
 
+独立结构化快照、均值、标准差和按需开启的有界 P50／P95／P99，见 [Profiler 教程](PROFILER.zh-CN.md)。下方既有 TSV 格式和关闭行为保持兼容。
+
 `hx_os_profiler_create/start_root/reach/leave/dump_string` 完成显式区间计时，示例见 `examples/profile_intervals.c`。不创建后台线程，不捕获原生调用栈。 C++11 提供 `hx::Profiler` 和词法作用域 `hx::ProfileScope`。成功进入后才需要配对 leave，必须在同一线程/纤程完成。名称复制为严格 UTF-8；不同线程的相同父路径和名称合并统计。单调墙钟纳秒记录包含/独占耗时，并发区间总和可能超过进程经过的墙钟时间。
 
 默认最多 1024 条记录、64 个线程/纤程缓存、32 层嵌套、127 字节名称、 4 MiB 输出（包含 NUL）和 64 个同时进入的 API 调用。路径和线程预热后不再分配 context 内存，但进入/离开仍有短互斥区、TLS 查询和时钟读取，不能称为零开销。已完成子区间从父区间独占耗时中扣除；线程退出或 restart_thread 将未完成区间记为中止并清理当前线程缓存，不伪造耗时，也不删除既有统计。

@@ -145,7 +145,15 @@ hx_os_status hx_os_profiler_create_with_options(hx_os_context *context,
 	const hx_os_profiler_options *options, hx_os_profiler **out,
 	hx_os_error *error)
 {
-	const hx_os_profiler_options defaults = HX_OS_PROFILER_OPTIONS_INIT;
+	return hx_os_profiler_create_with_features(
+		context, options, 0, out, error);
+}
+
+hx_os_status hx_os_profiler_create_with_features(hx_os_context *context,
+	const hx_os_profiler_options *options, uint32_t features,
+	hx_os_profiler **out, hx_os_error *error)
+{
+	hx_os_profiler_options defaults = HX_OS_PROFILER_OPTIONS_INIT;
 	hx_os_profiler *profiler;
 	hx_os_status status;
 
@@ -153,6 +161,14 @@ hx_os_status hx_os_profiler_create_with_options(hx_os_context *context,
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 
 	*out = NULL;
+	if (features &
+		~(uint32_t)(HX_OS_PROFILER_HISTOGRAM_INCLUSIVE |
+			HX_OS_PROFILER_HISTOGRAM_EXCLUSIVE))
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (features ==
+		(HX_OS_PROFILER_HISTOGRAM_INCLUSIVE |
+			HX_OS_PROFILER_HISTOGRAM_EXCLUSIVE))
+		defaults.max_output_bytes = 8u * 1024u * 1024u;
 	if (!options)
 		options = &defaults;
 
@@ -172,6 +188,7 @@ hx_os_status hx_os_profiler_create_with_options(hx_os_context *context,
 
 	profiler->context = context;
 	profiler->options = *options;
+	profiler->features = features;
 
 	status = hx_os_mutex_create(context, 0, &profiler->mutex, error);
 	if (status == HX_OS_OK)
@@ -326,6 +343,10 @@ static hx_os_status hx_os_profiler_record(hx_os_profiler *profiler,
 
 	hx_os_profile_record *record, *candidate;
 	hx_os_status status = HX_OS_OK;
+	size_t allocation = sizeof(*candidate) + bytes + 1;
+	unsigned histograms =
+		!!(profiler->features & HX_OS_PROFILER_HISTOGRAM_INCLUSIVE) +
+		!!(profiler->features & HX_OS_PROFILER_HISTOGRAM_EXCLUSIVE);
 
 	(void)hx_os_mutex_lock(profiler->mutex, NULL);
 	record = hx_os_profiler_find(profiler, parent, bucket, name, bytes);
@@ -348,13 +369,16 @@ static hx_os_status hx_os_profiler_record(hx_os_profiler *profiler,
 		return HX_OS_OK;
 	}
 
-	candidate =
-		hx_os_i_zero(profiler->context, sizeof(*candidate) + bytes + 1);
+	if (histograms)
+		allocation = hx_os_profile_bins_offset(bytes) +
+			histograms * HX_OS_PROFILE_BUCKETS * sizeof(uint64_t);
+	candidate = hx_os_i_zero(profiler->context, allocation);
 	if (candidate) {
 		candidate->parent = parent;
 		candidate->name_bytes = bytes;
 		candidate->depth = parent ? parent->depth + 1 : 1;
 		candidate->minimum = UINT64_MAX;
+		candidate->minimum_exclusive = UINT64_MAX;
 		memcpy(candidate + 1, name, bytes);
 	}
 
@@ -371,6 +395,7 @@ static hx_os_status hx_os_profiler_record(hx_os_profiler *profiler,
 			record = candidate;
 			candidate = NULL;
 			record->identifier = (uint32_t)++profiler->records;
+			profiler->name_bytes += bytes + 1;
 			record->bucket_next = profiler->buckets[bucket];
 			profiler->buckets[bucket] = record;
 			if (profiler->last)
@@ -397,7 +422,7 @@ static hx_os_status hx_os_profiler_enter(hx_os_profiler *profiler,
 	hx_os_profile_guard guard;
 	hx_os_profile_thread *thread = NULL;
 	hx_os_profile_frame *frames;
-	hx_os_profile_record *record;
+	hx_os_profile_record *record = NULL;
 	uint64_t now;
 	size_t bytes = 0, invalid;
 	int created = 0;
@@ -486,7 +511,7 @@ hx_os_status hx_os_profiler_leave(hx_os_profiler *profiler, hx_os_error *error)
 	hx_os_profile_thread *thread;
 	hx_os_profile_frame *frames, *frame;
 	hx_os_profile_record *record;
-	uint64_t now, elapsed;
+	uint64_t now, elapsed, exclusive;
 	int detach = 0;
 	hx_os_status status =
 		hx_os_i_profiler_begin(profiler, &guard, 1, error);
@@ -513,23 +538,63 @@ hx_os_status hx_os_profiler_leave(hx_os_profiler *profiler, hx_os_error *error)
 	if (status != HX_OS_OK)
 		record->flags |= 2u;
 	else {
+		double delta, count;
+
 		elapsed = now - frame->started;
 		if (elapsed < frame->children)
 			record->flags |= 2u;
+		exclusive = elapsed >= frame->children
+			? elapsed - frame->children
+			: 0;
 
 		record->completed =
 			hx_os_profiler_sum(record->completed, 1, record);
 		record->inclusive =
 			hx_os_profiler_sum(record->inclusive, elapsed, record);
-		record->exclusive = hx_os_profiler_sum(record->exclusive,
-			elapsed >= frame->children ? elapsed - frame->children
-						   : 0,
-			record);
+		record->exclusive = hx_os_profiler_sum(
+			record->exclusive, exclusive, record);
 		if (record->minimum > elapsed)
 			record->minimum = elapsed;
 
 		if (record->maximum < elapsed)
 			record->maximum = elapsed;
+		if (record->minimum_exclusive > exclusive)
+			record->minimum_exclusive = exclusive;
+		if (record->maximum_exclusive < exclusive)
+			record->maximum_exclusive = exclusive;
+		record->last_inclusive = elapsed;
+		record->last_exclusive = exclusive;
+
+		/* Welford updates need no retained samples or new allocations.
+		 */
+		count = (double)record->completed;
+		delta = (double)elapsed - record->mean_inclusive;
+		record->mean_inclusive += delta / count;
+		record->m2_inclusive +=
+			delta * ((double)elapsed - record->mean_inclusive);
+		delta = (double)exclusive - record->mean_exclusive;
+		record->mean_exclusive += delta / count;
+		record->m2_exclusive +=
+			delta * ((double)exclusive - record->mean_exclusive);
+		if (profiler->features) {
+			uint64_t *bins = (uint64_t *)((unsigned char *)record +
+				hx_os_profile_bins_offset(record->name_bytes));
+			unsigned index;
+
+			if (profiler->features &
+				HX_OS_PROFILER_HISTOGRAM_INCLUSIVE) {
+				index = hx_os_profile_bin(elapsed);
+				bins[index] = hx_os_profiler_sum(
+					bins[index], 1, record);
+				bins += HX_OS_PROFILE_BUCKETS;
+			}
+			if (profiler->features &
+				HX_OS_PROFILER_HISTOGRAM_EXCLUSIVE) {
+				index = hx_os_profile_bin(exclusive);
+				bins[index] = hx_os_profiler_sum(
+					bins[index], 1, record);
+			}
+		}
 
 		--thread->depth;
 		if (thread->depth) {

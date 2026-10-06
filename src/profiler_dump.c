@@ -14,7 +14,7 @@ typedef struct hx_os_profile_writer {
 	hx_os_status status;
 } hx_os_profile_writer;
 
-static hx_os_status hx_os_profiler_snapshot(hx_os_profiler *profiler,
+static hx_os_status hx_os_profiler_copy_records(hx_os_profiler *profiler,
 	hx_os_profile_copy **out, size_t *count, hx_os_error *error)
 {
 	hx_os_profile_copy *copy = NULL;
@@ -193,7 +193,7 @@ static hx_os_status hx_os_profiler_string(
 	if (!out)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 
-	status = hx_os_profiler_snapshot(profiler, &records, &count, error);
+	status = hx_os_profiler_copy_records(profiler, &records, &count, error);
 	if (status != HX_OS_OK)
 		return status;
 
@@ -237,7 +237,7 @@ hx_os_status hx_os_profiler_dump(hx_os_profiler *profiler, char *buffer,
 	if (status != HX_OS_OK)
 		return status;
 
-	status = hx_os_profiler_snapshot(profiler, &records, &count, error);
+	status = hx_os_profiler_copy_records(profiler, &records, &count, error);
 	if (status == HX_OS_OK)
 		status = hx_os_profiler_render(records, count,
 			profiler->options.max_output_bytes, NULL, &needed);
