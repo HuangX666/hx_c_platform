@@ -1,0 +1,10 @@
+#include "common.hxconf"
+{
+	"title": TITLE,
+#if PORT >= 1024
+	"port": PORT,
+#else
+	"port": 8080,
+#endif
+	"enabled": true
+}

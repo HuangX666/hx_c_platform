@@ -44,6 +44,7 @@
 #include "hx_os_wide.h"
 #include "hx_os_wait.h"
 #include "hx_os_lexer.h"
+#include "hx_os_preprocess.h"
 #include "hx_os_procedure.h"
 #include "hx_os_posix.h"
 #include "hx_string.h"

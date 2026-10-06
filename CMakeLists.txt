@@ -98,6 +98,7 @@ option(HX_OS_ENABLE_BITSTREAM "Build bounded bit stream cursors" ON)
 
 option(HX_OS_ENABLE_SIGNALS "Build synchronous signals and parameter packs" ON)
 option(HX_OS_ENABLE_PARAMETERS "Build bounded growable parameter packs" ON)
+option(HX_OS_ENABLE_PREPROCESSOR "Build bounded runtime text preprocessing" ON)
 
 option(HX_OS_ENABLE_SETTINGS
 	"Build mutable settings and immutable snapshots" ON)
@@ -316,7 +317,7 @@ configure_file(cmake/hx_os_config.h.in
 
 add_library(hx_c_platform
 	src/base.c src/atomic.c src/time.c src/unicode.c src/thread.c
-	src/convenience.c src/lexer.c src/parser.c
+	src/convenience.c src/lexer.c src/parser.c src/preprocess.c
 	src/wide.c src/wait.c src/string.c
 	src/string_utils.c src/format.c src/file.c src/text.c src/optional.c
 	src/stdio.c src/text_wide.c
@@ -369,6 +370,12 @@ if(HX_OS_ENABLE_COROUTINES)
 	endif()
 else()
 	target_sources(hx_c_platform PRIVATE src/coroutine_disabled.c)
+endif()
+
+if(HX_OS_ENABLE_PREPROCESSOR AND HX_OS_ENABLE_LEXER
+	AND HX_OS_ENABLE_PARAMETERS)
+	target_sources(hx_c_platform PRIVATE
+		src/preprocess_engine.c src/preprocess_expr.c)
 endif()
 
 if(HX_OS_ENABLE_PROFILER)

@@ -2,6 +2,8 @@
 
 [简体中文](PARSING.zh-CN.md) · [README](../README.md)
 
+For constants, conditional branches and bounded includes before parsing, see [runtime preprocessing](PREPROCESSING.md).
+
 ## 1. From tokens to a small grammar
 
 The lexer splits UTF-8 input into identifiers, numbers, quoted strings, punctuation and optional whitespace/comments. The parsing helpers check or skip those tokens so each application need not repeat the same comparisons and bracket bookkeeping. They process runtime text, such as a configuration string or file contents. They do not add language syntax to C/C++ source files or require a pre-build generator.

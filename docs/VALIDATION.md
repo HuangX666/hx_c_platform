@@ -8,6 +8,16 @@ This records development validation through 2026-10-07. A design, implemented ad
 
 The JSON entry below records the current examples. Earlier independent text examples, initial shared workflows, IPC/KCP implementation and other batches describe their historical versions.
 
+## 2026-10-07: Bounded runtime preprocessing
+
+Baseline `2b71115`. Added independent PREPROCESSOR selection, object macros, signed-integer conditions, bounded source inclusion, owned output and per-call diagnostics. Text calls have no filesystem access unless given a resolver; file calls supply a relative resolver. Limits cover source bytes, output, retained macro storage, expansion work, directives and all nesting. Stacks grow on demand. No global macro table, background worker, compiler invocation or vendor edit was introduced.
+
+Windows MSVC x64 shared full CTest passed 158/158; WSL GCC shared passed 159/159. Installed C++11/pure C consumers passed 38/38 and 28/28 on both hosts. Win32 static preprocess/C++ utilities passed 2/2. Three WSL static configurations passed 2/2 each: missing lexer/parameters, text-only without file utilities, and PREPROCESSOR disabled. ASan/UBSan with leak detection passed preprocess, C++ utilities and the executable example 3/3; TSan passed preprocess 1/1, including independent concurrent invocations. Standalone C99/C++11 headers compiled with the normal suite.
+
+Tests exercise UTF-8 and BOM handling, token-boundary preservation, signed extrema and comparison precedence, defined operands across expansion frames, macro/source cycles, inactive branches, invalid directives/operators, virtual and real relative files, byte/depth/work limits, all allocation failure points through a successful call, native resolver error retention and unchanged output on failure. Four threads use independent definitions; 125 comparison combinations are checked against C expressions. Template data files and a complete executable show ordinary calls. Built-in inclusion follows links and is explicitly not a security sandbox; callbacks and file I/O have no hard deadline.
+
+Logs use `preprocess-*` in shared, Win32, ASan, TSan and minimal build directories. MacOS, Win7/8.1, Android and embedded target runs remain pending. Signal extensions, native-platform, crypto/TLS and archive adapters remain separate work.
+
 ## 2026-10-07: Runtime parsing conveniences
 
 Baseline `2acdb22`. Added exact-token accept/expect, expected-kind checks, quoted-string extraction, bounded nested-bracket skipping and flat token seeking. Existing lexer grammar, options, ownership and public layouts remain unchanged. The C++11 facade adds Result-based operations and an explicit borrowed native handle. These helpers process runtime input and do not add custom C/C++ syntax or build steps. Runtime macro/conditional/include preprocessing is still separate pending work.

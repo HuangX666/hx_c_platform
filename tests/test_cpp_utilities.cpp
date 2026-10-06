@@ -9,6 +9,7 @@
 #include <hx/ThreadPool.hpp>
 #include <hx/Settings.hpp>
 #include <hx/Parameters.hpp>
+#include <hx/Preprocessor.hpp>
 #include "cpp_check.hpp"
 
 static void TestResults() noexcept
@@ -424,6 +425,24 @@ static void TestDirectoryCalls()
 int main()
 {
 	TestResults();
+	if (hx_os_preprocess_available()) {
+		hx::PreprocessDiagnostic diagnostic;
+		auto text = Take(hx::Preprocessor::text(
+			"#define TITLE 'Camera'\nTITLE", NULL, &diagnostic));
+		hx_os_lexer_options options = HX_OS_LEXER_OPTIONS_INIT;
+		options.flags |= HX_OS_LEXER_SKIP_NEWLINES;
+		auto lexer =
+			Take(hx::Lexer::create(text.view(), NULL, &options));
+		CHECK(Equal(lexer.readString(), "Camera"));
+		auto failed = hx::Preprocessor::text(
+			"#if (\n", NULL, &diagnostic, NULL, "example.cfg");
+		CHECK(!failed && diagnostic.line() == 1);
+		CHECK(diagnostic.source().size() == 11);
+		CHECK(diagnostic.description()[0]);
+	}
+	else
+		CHECK(hx::Preprocessor::text("x").status() ==
+			HX_OS_NOT_SUPPORTED);
 	if (hx_os_params_available()) {
 		auto parameters = Take(hx::Parameters::create());
 		const unsigned char binary[] = {0, 0xff, 0x80};
