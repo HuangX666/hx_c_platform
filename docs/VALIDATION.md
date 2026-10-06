@@ -8,6 +8,16 @@ This records development validation through 2026-10-06. A design, implemented ad
 
 The JSON entry below records the current examples. Earlier independent text examples, initial shared workflows, IPC/KCP implementation and other batches describe their historical versions.
 
+## 2026-10-06: Local calendar fields and explicit breakpoints
+
+Baseline `6d0d8a1`. Existing UTC defaults remain intact. Added local display/filename entries, per-instant UTC offset in seconds, fixed-English weekday/month names, 12-hour time, ordinal days, milliseconds and Unix-second fields. Legacy long tokens take precedence. Local conversion uses native runtime calendar fields, with documented Windows/time_t/timezone-data limits; no global TZ/locale changes. `%Z` is a numeric UTC-offset label. Fixed-width fields retain manual digit rendering instead of introducing CRT number formatting into that path.
+
+Windows MSVC x64 shared full CTest passed 150/150; WSL GCC shared passed 151/151. Both hosts' installed consumers passed C++11 34/34 and pure C 24/24. Win32 passed seven related suites; WSL minimal passed calendar, calendar_dst, debug and cpp_utilities 4/4. WSL ASan/UBSan passed ten related suites with leak detection. Added C++ filename-now wrappers were rebuilt and tested separately after the full run. Standalone public-header targets and 16 changed source/script files passed their checks; owned changes are UTF-8 without BOM and LF.
+
+Tests include UTC/east/west/quarter-hour offsets, 2024 US DST gaps/overlaps, pre-epoch flooring, retained old UTC behavior, a POSIX seconds-resolution offset and the independent 1900–2101 day progression. The POSIX breakpoint test installs/restores its own SIGTRAP handler and confirms resumption. Windows DebugBreak is compiled/linked but deliberately not executed by automated tests. No throughput benchmark or new macOS/Win7/Android/board run is claimed.
+
+Logs use `calendar-full-*`, `calendar-install.log` and target-specific `calendar-*` files in the ignored build directories. This batch does not complete the remaining signal/parameter-pack, preprocessing, profiler, native-platform, crypto/TLS or archive adapters.
+
 ## 2026-10-06: OBS-style I/O, configuration conveniences and dependency layout
 
 Baseline `a2d1799`, local `dev`. Added snapshot/idle waits without closing a pool, UTF-8 stdio paths, native wide-text conversion, ASCII case-insensitive string operations, bulk bounded byte queues, binary streams/endian I/O and bounded background file writers. Configuration additions provide section/key INI editing, explicit backup save/recovery and per-key settings overlays. C++11 facades use Result and compile without exceptions. Existing public layouts and exports are retained.

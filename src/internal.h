@@ -87,6 +87,10 @@ hx_os_status hx_os_i_utf_decode(hx_os_encoding encoding,
 hx_os_status hx_os_i_utf_encode(hx_os_encoding encoding, uint32_t point,
 	unsigned char *output, size_t capacity, size_t *used);
 
+struct tm;
+hx_os_status hx_os_i_calendar_tm_fields(
+	const struct tm *local, unsigned fields[8], hx_os_error *error);
+
 #if defined(_WIN32)
 #include <wchar.h>
 

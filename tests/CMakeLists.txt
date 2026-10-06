@@ -45,7 +45,8 @@ set(hx_test_suites data options lifecycle config containers sysinfo file_utils
 	env paths thread_extra pipe io_options file_info
 	config_serialize config_tree config_backup ini codec timer
 	error_text util vm file_extra watch loop_fd system delayed local duplex
-	registry power obfuscate calendar text_lookup bitstream calldata signal
+	registry power obfuscate calendar calendar_dst text_lookup bitstream
+	calldata signal
 	settings settings_concurrency settings_config settings_apply
 	profiler atomic
 	string_tools lexer wide_wait catalog_filename procedure
@@ -54,6 +55,8 @@ set(hx_test_suites data options lifecycle config containers sysinfo file_utils
 
 if(WIN32)
 	list(APPEND hx_test_suites error_text_windows)
+else()
+	list(APPEND hx_test_suites debug)
 endif()
 
 if(NOT BUILD_SHARED_LIBS)
@@ -133,13 +136,32 @@ endif()
 if(HX_OS_ENABLE_CALENDAR)
 	add_test(NAME calendar_offset_utc COMMAND hx_os_test_calendar 0)
 	add_test(NAME calendar_offset_east COMMAND hx_os_test_calendar 540)
+	add_test(NAME calendar_offset_west COMMAND hx_os_test_calendar -300)
+	add_test(NAME calendar_offset_quarter COMMAND hx_os_test_calendar 345)
 	set_tests_properties(calendar_offset_utc PROPERTIES
 		TIMEOUT 20 ENVIRONMENT "TZ=UTC0")
 	set_tests_properties(calendar_offset_east PROPERTIES
 		TIMEOUT 20 ENVIRONMENT "TZ=JST-9")
+	set_tests_properties(calendar_offset_west PROPERTIES
+		TIMEOUT 20 ENVIRONMENT "TZ=EST5")
+	set_tests_properties(calendar_offset_quarter PROPERTIES
+		TIMEOUT 20 ENVIRONMENT "TZ=NPT-5:45")
+	if(NOT WIN32)
+		add_test(NAME calendar_offset_seconds
+			COMMAND hx_os_test_calendar_dst seconds)
+		set_tests_properties(calendar_offset_seconds PROPERTIES
+			TIMEOUT 20 ENVIRONMENT "TZ=XXX-0:00:30")
+	endif()
 endif()
 
 set_tests_properties(local PROPERTIES SKIP_RETURN_CODE 77)
+
+if(WIN32)
+	set_tests_properties(calendar_dst PROPERTIES ENVIRONMENT "TZ=EST5EDT")
+else()
+	set_tests_properties(calendar_dst PROPERTIES
+		ENVIRONMENT "TZ=EST5EDT,M3.2.0/2,M11.1.0/2")
+endif()
 
 find_package(Python3 QUIET COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND AND HX_OS_ENABLE_FORMAT

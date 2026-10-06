@@ -3,10 +3,20 @@
 #include <hx/Stream.hpp>
 #include <hx/FileWriter.hpp>
 #include <hx/Config.hpp>
+#include <hx/Calendar.hpp>
 #include <cstring>
 
 int main()
 {
+	if (hx_os_capabilities() & HX_OS_CAP_CALENDAR) {
+		auto text = hx::Calendar::utc(0, "%a_%L");
+		if (!text || std::strcmp(text.value().c_str(), "Thu_000"))
+			return 1;
+		auto local = hx::Calendar::localOffsetAt(0);
+		if (!local)
+			return 1;
+	}
+
 	if (hx_os_capabilities() & HX_OS_CAP_STREAM) {
 		auto stream = hx::Stream::memory(64);
 		if (!stream)

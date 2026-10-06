@@ -156,7 +156,35 @@ unregister_until 先阻止新启动，再等待在途执行；超时保留 ID，
 
 ## 文件名与词法分析
 
-文件名使用 UTC，默认 %CCYY-%MM-%DD_%hh-%mm-%ss，复用已有日期标记。替换 Windows 非法字符和控制字符，修正尾部空格/点与设备保留名；保留 Unicode。扩展名为可选 ASCII 字母数字、-、_，最多 32 字节。结果不超过 240 UTF-8 字节，不创建目录、不保证唯一、不自动覆盖同名文件。
+原有文件名入口继续使用 UTC，默认格式为 `%CCYY-%MM-%DD_%hh-%mm-%ss`。`hx_os_filename_format_local_string()` / `hx::Calendar::localFilename()` 显式选择本地时间；`hx_os_filename_generate_local()` / `Calendar::localFilenameNow()` 使用当前墙上时钟；`Calendar::filenameNow()` 继续使用 UTC。Windows 非法字符、控制字符、末尾空格／点号及保留设备名会按原规则修复，Unicode 保留。扩展名可带一个前导点，最多 32 个 ASCII 字母、数字、连字符或下划线；结果最多 240 个 UTF-8 字节。不创建目录，不保证唯一，也不自动覆盖重名文件。夏令时回拨时，本地时间可能重复，生成的文件名也可能重复。
+
+展示本地时间时，使用 `hx_os_wall_time_format_local_string()` / `hx::Calendar::local()`，不执行文件名字符替换。默认结果明确带时区偏移，例如 `2024-03-10T03:00:00-04:00`。`hx_os_wall_time_local_offset_at()` / `Calendar::localOffsetAt()` 查询指定 Unix 毫秒时间点的偏移，单位为**秒**，同时返回 DST 0/1/-1；原有“当前偏移”接口继续以**分钟**为单位。库不修改全局时区或 locale。
+
+| 标记 | 含义 |
+| --- | --- |
+| `%CCYY`、`%Y`；`%YY`、`%y` | 四位年份；年份后两位 |
+| `%MM`、`%m`；`%DD`、`%d` | 月份；月内日期 |
+| `%hh`、`%H`；`%I`、`%p` | 24 小时；12 小时与 AM/PM |
+| `%mm`、`%M`；`%ss`、`%S` | 分钟；秒 |
+| `%a`、`%A`；`%b`、`%B` | 英文星期、月份的缩写／全名 |
+| `%j`；`%u`、`%w` | 年内第 001～366 天；星期一为 1／星期日为 7，或星期日为 0 |
+| `%L`；`%s` | 000～999 毫秒；向下取整的 Unix 秒，不受时区影响 |
+| `%z`、`%:z` | 有符号偏移 +HHMM 或 +HH:MM；需要时附加秒 |
+| `%Z` | 数值标签 `UTC` 或 `UTC+HH:MM[:SS]` |
+| `%%` | 百分号本身 |
+
+原有多字符标记优先于较短标记。星期、月份名称和 AM/PM 固定为英文。未知标记返回 SYNTAX，失败保留输出。`%Z` 不返回有歧义的缩写或 IANA 时区标识。UTC 时间 `ms=-1` 使用 `%s.%L` 时结果为 `-1.999`，这表示向下取整的秒与对应毫秒部分，并不是把时间当成一个实数秒值来表示。
+
+UTC 仍支持公历延伸范围 0001～9999 年。本地转换遵循宿主 C 运行库可用范围与时区规则：Windows 适配层通过 `_localtime64_s`，保守接受 1970～3000 年的 UTC 时间点；POSIX 还受 `time_t` 位宽和已安装时区数据影响。不内置独立历史／命名时区数据库，也不承诺闰秒格式化。宿主显式修改 TZ／时区时需要自行串行协调，参见 [Microsoft 本地时间契约](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/localtime-s-localtime32-s-localtime64-s)。
+
+```cpp
+// Include <hx/Calendar.hpp>; check both Result<String> values.
+auto display = hx::Calendar::local(milliseconds);
+auto name = hx::Calendar::localFilename(
+	milliseconds, "dat", "%Y-%m-%d_%H-%M-%S_%L");
+```
+
+这里的 `milliseconds` 是 Unix 墙上时钟毫秒，不是单调截止时间。C 版本直接写入已初始化的 `hx_string`。格式化和字符串构造同步执行，不创建定时器或线程。
 
 词法器复制严格 UTF-8 输入，接受开头 BOM，拒绝内嵌 NUL； token 的 C 视图存活到 lexer_destroy，C++ Token 自己持有字符串。默认返回标识符、数字、引号串、单字符标点、换行，跳过空白和注释。标识符允许非 ASCII 码点，但不声称完成 Unicode 标识符标准验证；数字包含十进制/小数/指数/十六进制整数，符号单独返回。
 
@@ -167,3 +195,9 @@ next/peek/reset 要求外部同步；EOF 返回 END token，失败保留输出�
 新增 WIDE_MATH、PRECISE_WAIT、LEXER、PROCEDURES 默认开启，可分别关闭。文件名依赖 CALENDAR；翻译文本加载依赖 TEXT_LOOKUP+LEXER，文件加载再依赖 FILE_UTILS。SIGNALS 或 PROCEDURES 任意一个开启即可使用参数包。关闭模块保留公共符号、清除相应能力位、返回 NOT_SUPPORTED。
 
 ASCII 修改和宽位运算无分配；replace/join 使用临时字符串保证失败不变； split 分配拥有副本的结果。子串搜索采用朴素匹配，不承诺最坏线性复杂度。翻译表加载可能逐项复制和插入，不面向热循环。过程调用成功注册后不再分配上下文内存，但仍扫描有界槽表、获取锁并间接调用回调；有实际成本，不把它用来替代本来就知道目标的直接函数调用。基准入口为 hx_os_portable_baseline；结果与目标、优化选项和系统负载有关。
+
+## 显式调试断点
+
+`<hx_os_util.h>` 中的 `hx_os_debug_break()` 在当前调用线程请求原生断点，Release 构建也生效。Windows 调用 `DebugBreak`，POSIX 触发 `SIGTRAP`。调试器或应用自己的处理器可以恢复执行；没有处理者时，操作系统可能终止进程。库不会安装信号处理器，也不会用这个入口报告普通调用错误。
+
+只有业务明确决定停到断点时才调用。POSIX 契约测试在它自己的测试进程中临时安装处理器，验证收到断点并恢复执行。Windows 已验证编译和链接，自动测试不实际触发 Windows 断点。

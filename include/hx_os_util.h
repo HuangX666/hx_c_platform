@@ -43,6 +43,13 @@ HX_OS_API uint32_t HX_OS_CALL hx_os_crc32(
  */
 HX_OS_API void HX_OS_CALL hx_os_secure_zero(void *buffer, size_t bytes);
 
+/* Explicit debugger breakpoint, active in Release too. Windows DebugBreak;
+ * POSIX SIGTRAP on the calling thread. Execution may resume under a debugger
+ * or application signal handler; without one the OS can terminate the process.
+ * Installs no handler and is never called automatically by the library.
+ */
+HX_OS_API void HX_OS_CALL hx_os_debug_break(void);
+
 #ifdef __cplusplus
 }
 #endif

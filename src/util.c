@@ -2,6 +2,8 @@
 #include "hx_os_util.h"
 #if defined(_WIN32)
 #include <windows.h>
+#else
+#include <signal.h>
 #endif
 
 #if HX_OS_ENABLE_RANDOM
@@ -130,5 +132,14 @@ void hx_os_secure_zero(void *buffer, size_t bytes)
 
 	while (bytes--)
 		*output++ = 0;
+#endif
+}
+
+void hx_os_debug_break(void)
+{
+#if defined(_WIN32)
+	DebugBreak();
+#else
+	(void)raise(SIGTRAP);
 #endif
 }

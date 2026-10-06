@@ -476,9 +476,17 @@ int main()
 
 	CHECK(Take(hx::Wait::repeat(1, 10,
 		      [&calls]() noexcept { return ++calls < 2; })) == 2);
-	if (caps & HX_OS_CAP_CALENDAR)
+	if (caps & HX_OS_CAP_CALENDAR) {
 		CHECK(Equal(hx::Calendar::filename(0, "txt"),
 			"1970-01-01_00-00-00.txt"));
+		CHECK(Equal(hx::Calendar::utc(0, "%a_%L"), "Thu_000"));
+		CHECK(Equal(hx::Calendar::localFilename(0, "txt", "fixed_%L"),
+			"fixed_000.txt"));
+		CHECK(!Take(hx::Calendar::local(0)).empty());
+		CHECK(!Take(hx::Calendar::filenameNow("txt")).empty());
+		CHECK(!Take(hx::Calendar::localFilenameNow("txt")).empty());
+		Take(hx::Calendar::localOffsetAt(0));
+	}
 
 	if (caps & HX_OS_CAP_PROCEDURES) {
 		hx_os_proc_handler *owner = NULL;

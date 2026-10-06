@@ -22,8 +22,8 @@ static int hx_os_filename_reserved(const char *text)
 			(!memcmp(name, "COM", 3) || !memcmp(name, "LPT", 3)));
 }
 #endif
-hx_os_status hx_os_filename_format_string(int64_t milliseconds,
-	const char *pattern, const char *extension, hx_string *out,
+static hx_os_status hx_os_filename_string(int64_t milliseconds,
+	const char *pattern, const char *extension, hx_string *out, int local,
 	hx_os_error *error)
 {
 #if HX_OS_ENABLE_CALENDAR
@@ -51,9 +51,12 @@ hx_os_status hx_os_filename_format_string(int64_t milliseconds,
 
 	hx_string_init(&result, out->context);
 
-	status = hx_os_wall_time_format_utc_string(milliseconds,
-		pattern ? pattern : "%CCYY-%MM-%DD_%hh-%mm-%ss", &result,
-		error);
+	if (!pattern)
+		pattern = "%CCYY-%MM-%DD_%hh-%mm-%ss";
+	status = local ? hx_os_wall_time_format_local_string(
+				 milliseconds, pattern, &result, error)
+		       : hx_os_wall_time_format_utc_string(
+				 milliseconds, pattern, &result, error);
 	if (status == HX_OS_OK && !result.size)
 		status = hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 
@@ -92,6 +95,7 @@ hx_os_status hx_os_filename_format_string(int64_t milliseconds,
 	return status;
 #else
 	(void)milliseconds;
+	(void)local;
 	(void)pattern;
 	(void)extension;
 	(void)out;
@@ -100,9 +104,9 @@ hx_os_status hx_os_filename_format_string(int64_t milliseconds,
 #endif
 }
 
-hx_os_status hx_os_filename_format(int64_t milliseconds, const char *pattern,
-	const char *extension, char *buffer, size_t capacity, size_t *required,
-	hx_os_error *error)
+static hx_os_status hx_os_filename_buffer(int64_t milliseconds,
+	const char *pattern, const char *extension, char *buffer,
+	size_t capacity, size_t *required, int local, hx_os_error *error)
 {
 	hx_string text = HX_STRING_INIT;
 	hx_os_status status;
@@ -110,8 +114,8 @@ hx_os_status hx_os_filename_format(int64_t milliseconds, const char *pattern,
 	if (!required || (!buffer && capacity))
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 
-	status = hx_os_filename_format_string(
-		milliseconds, pattern, extension, &text, error);
+	status = hx_os_filename_string(
+		milliseconds, pattern, extension, &text, local, error);
 	if (status == HX_OS_OK) {
 		*required = text.size + 1;
 		if (capacity < *required)
@@ -123,6 +127,45 @@ hx_os_status hx_os_filename_format(int64_t milliseconds, const char *pattern,
 	hx_string_destroy(&text);
 
 	return status;
+}
+
+hx_os_status hx_os_filename_format_string(int64_t ms, const char *pattern,
+	const char *extension, hx_string *out, hx_os_error *error)
+{
+	return hx_os_filename_string(ms, pattern, extension, out, 0, error);
+}
+
+hx_os_status hx_os_filename_format_local_string(int64_t ms, const char *pattern,
+	const char *extension, hx_string *out, hx_os_error *error)
+{
+	return hx_os_filename_string(ms, pattern, extension, out, 1, error);
+}
+
+hx_os_status hx_os_filename_format(int64_t ms, const char *pattern,
+	const char *extension, char *buffer, size_t capacity, size_t *required,
+	hx_os_error *error)
+{
+	return hx_os_filename_buffer(
+		ms, pattern, extension, buffer, capacity, required, 0, error);
+}
+
+hx_os_status hx_os_filename_format_local(int64_t ms, const char *pattern,
+	const char *extension, char *buffer, size_t capacity, size_t *required,
+	hx_os_error *error)
+{
+	return hx_os_filename_buffer(
+		ms, pattern, extension, buffer, capacity, required, 1, error);
+}
+
+hx_os_status hx_os_filename_generate_local(
+	const char *extension, hx_string *out, hx_os_error *error)
+{
+	int64_t ms;
+	hx_os_status status = hx_os_wall_time_read(&ms, error);
+
+	return status == HX_OS_OK ? hx_os_filename_format_local_string(
+					    ms, NULL, extension, out, error)
+				  : status;
 }
 
 hx_os_status hx_os_filename_generate(

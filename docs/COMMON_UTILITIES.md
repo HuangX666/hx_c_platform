@@ -154,7 +154,35 @@ unregister_until prevents subsequent starts, then waits; timeout retains the sam
 
 ## Filenames and lexing
 
-Filenames use UTC and existing calendar tokens, defaulting to %CCYY-%MM-%DD_%hh-%mm-%ss. Windows-invalid characters/controls, trailing spaces/dots and reserved device stems are repaired; Unicode is retained. Extensions allow optional leading dot plus up to 32 ASCII alphanumeric/-/_ bytes. Results are capped at 240 UTF-8 bytes. No directory creation, uniqueness or implicit collision overwrite is provided.
+Existing filename entries use UTC, defaulting to `%CCYY-%MM-%DD_%hh-%mm-%ss`. `hx_os_filename_format_local_string()` / `hx::Calendar::localFilename()` explicitly choose local time; `hx_os_filename_generate_local()` / `Calendar::localFilenameNow()` use the current wall clock; `Calendar::filenameNow()` keeps UTC. Windows-invalid characters/controls, trailing spaces/dots and reserved device stems are repaired; Unicode is retained. Extensions allow optional leading dot plus up to 32 ASCII alphanumeric/-/_ bytes. Results are capped at 240 UTF-8 bytes. No directory creation, uniqueness or implicit collision overwrite is provided. Repeated local times during a DST rollback can produce repeated filenames.
+
+Use `hx_os_wall_time_format_local_string()` / `hx::Calendar::local()` to display local time without filename repair. The default includes an explicit UTC offset, for example `2024-03-10T03:00:00-04:00`. `hx_os_wall_time_local_offset_at()` / `Calendar::localOffsetAt()` return the offset in **seconds** for the supplied Unix-millisecond instant, plus DST 0/1/-1. The existing current-offset API still returns **minutes**. No global timezone or locale is changed.
+
+| Tokens | Meaning |
+| --- | --- |
+| `%CCYY`, `%Y`; `%YY`, `%y` | Four-digit year; last two digits |
+| `%MM`, `%m`; `%DD`, `%d` | Month; day of month |
+| `%hh`, `%H`; `%I`, `%p` | 24-hour time; 12-hour time and AM/PM |
+| `%mm`, `%M`; `%ss`, `%S` | Minute; second |
+| `%a`, `%A`; `%b`, `%B` | Short/full English weekday and month names |
+| `%j`; `%u`, `%w` | Day of year 001..366; weekday Monday=1/Sunday=7 or Sunday=0 |
+| `%L`; `%s` | Milliseconds 000..999; floored Unix seconds, unchanged by timezone |
+| `%z`, `%:z` | Signed offset as +HHMM or +HH:MM; seconds are appended when needed |
+| `%Z` | Numeric label `UTC` or `UTC+HH:MM[:SS]` |
+| `%%` | Literal percent |
+
+Legacy multicharacter tokens take precedence over shorter ones. Names and AM/PM are fixed English. Unknown tokens fail with SYNTAX, and failed calls preserve outputs. `%Z` does not return an ambiguous abbreviation or an IANA zone identifier. For example, UTC `ms=-1` with `%s.%L` produces `-1.999` (the floored second and its millisecond part), not a decimal real-number representation of seconds.
+
+UTC keeps the proleptic Gregorian range 0001..9999. Local conversion follows the host C runtime's supported range and timezone rules. The Windows adapter conservatively accepts UTC instants from 1970 through 3000, using `_localtime64_s`; POSIX support additionally depends on `time_t` width and installed timezone data. No independent historical/named-zone database or leap-second formatting is promised. Host code must serialize external TZ/timezone changes. See [Microsoft's local-time contract](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/localtime-s-localtime32-s-localtime64-s).
+
+```cpp
+// Include <hx/Calendar.hpp>; these are checked like other Result<String> calls.
+auto display = hx::Calendar::local(milliseconds);
+auto name = hx::Calendar::localFilename(
+	milliseconds, "dat", "%Y-%m-%d_%H-%M-%S_%L");
+```
+
+Here `milliseconds` is a Unix wall-clock timestamp, not a monotonic deadline. The C equivalents write directly into an initialized `hx_string`. Formatting and string construction are synchronous; no timer or thread is created.
 
 Lexers own strict UTF-8 input, accept initial BOM and reject embedded NUL. C token views borrow until lexer destruction; C++ tokens own text. Default tokens: identifier, number, quoted string, single-character punctuation, newline; spaces/comments are skipped. Non-ASCII identifier codepoints are accepted without claiming Unicode identifier validation. Numbers cover decimal/fraction/exponent/hex integers; signs are separate. Quoted escapes follow JSON plus escaped apostrophes; block comments do not nest.
 
@@ -165,3 +193,9 @@ next/peek/reset require external synchronization. EOF returns END; other failure
 WIDE_MATH, PRECISE_WAIT, LEXER and PROCEDURES default ON and are independently optional. Filename formatting uses CALENDAR; catalog text loading requires TEXT_LOOKUP+LEXER, file loading additionally FILE_UTILS. Either SIGNALS or PROCEDURES enables parameter packs. Disabled modules retain exports, clear capability bits and return NOT_SUPPORTED.
 
 ASCII edits/wide arithmetic allocate nothing. Replace/join use a temporary for failure preservation; split owns a copy. Substring matching is naive, with no worst-case linear claim. Catalog loading copies/inserts bounded entries and is not a hot-loop operation. Registered procedure calls allocate no context storage, but scan bounded slots, acquire locks and invoke a callback indirectly. Use direct calls where the callee is already known. Run hx_os_portable_baseline for target-specific observations; do not interpret object size as throughput.
+
+## Explicit debugger breakpoint
+
+`hx_os_debug_break()` in `<hx_os_util.h>` requests a native breakpoint on the calling thread. It is active in Release builds as well. Windows calls `DebugBreak`; POSIX raises `SIGTRAP`. A debugger or an application handler can resume execution; without one, the OS may terminate the process. The library installs no signal handler and never invokes this entry to report an ordinary error.
+
+Use it only where your application deliberately chooses to break. The POSIX contract test installs a temporary handler in its own test process and verifies delivery and resumption. Windows compilation/linking is verified; no automatic Windows breakpoint is executed during the tests.
