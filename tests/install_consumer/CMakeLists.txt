@@ -16,7 +16,8 @@ enable_testing()
 
 foreach(suite IN ITEMS ipc kcp config_tree codec stream buffered_file
 	byte_queue text_interop settings_apply config_backup ini calendar
-	params parser preprocess windows_util native_interop power signal_all)
+	params parser preprocess windows_util native_interop power signal_all
+	dispatch_params)
 	add_executable(consumer_${suite} ../test_${suite}.c)
 	target_link_libraries(consumer_${suite} PRIVATE
 		hx_c_platform::hx_c_platform)
@@ -114,6 +115,16 @@ if(HX_CONSUMER_CPP)
 		CXX_EXTENSIONS NO)
 	hx_disable_exceptions(consumer_signal_cpp)
 	add_test(NAME installed_signal_cpp COMMAND consumer_signal_cpp)
+
+	add_executable(consumer_dispatch_cpp ../test_cpp_dispatch.cpp)
+	target_link_libraries(consumer_dispatch_cpp PRIVATE hx_c_platform::cpp)
+	set_target_properties(consumer_dispatch_cpp PROPERTIES
+		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO)
+	if(MSVC)
+		target_compile_options(consumer_dispatch_cpp PRIVATE /utf-8)
+	endif()
+	hx_disable_exceptions(consumer_dispatch_cpp)
+	add_test(NAME installed_dispatch_cpp COMMAND consumer_dispatch_cpp)
 
 	add_executable(consumer_coroutine_cpp ../../examples/coroutine.cpp)
 	add_executable(consumer_go ../../examples/go.cpp)

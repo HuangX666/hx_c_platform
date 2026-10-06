@@ -214,9 +214,9 @@ hx_os_status hx_os_i_dispatch_handler_create_with_options(
 }
 
 static hx_os_status hx_os_signal_connect_impl(hx_os_signal_handler *handler,
-	const char *signal, hx_os_signal_callback function, void *user,
-	hx_os_signal_cleanup_fn cleanup, hx_os_signal_connection *out,
-	hx_os_error *error)
+	const char *signal, hx_os_signal_callback function, uint16_t kind,
+	void *user, hx_os_signal_cleanup_fn cleanup,
+	hx_os_signal_connection *out, hx_os_error *error)
 {
 #if HX_OS_ENABLE_SIGNALS || HX_OS_ENABLE_PROCEDURES
 	size_t bytes = 0, i;
@@ -225,7 +225,9 @@ static hx_os_status hx_os_signal_connect_impl(hx_os_signal_handler *handler,
 	if (out)
 		*out = 0;
 
-	if (!handler || (signal ? !function.named : !function.all))
+	if (!handler || (kind == HX_OS_SIGNAL_FIXED && !function.named) ||
+		(kind == HX_OS_SIGNAL_VIEW && !function.all) ||
+		(kind == HX_OS_SIGNAL_MUTABLE && !function.modify))
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 	if (!signal && handler->unique_names)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
@@ -268,6 +270,7 @@ static hx_os_status hx_os_signal_connect_impl(hx_os_signal_handler *handler,
 			slot->identifier =
 				(handler->generation++ << 32) | (i + 1);
 			slot->function = function;
+			slot->kind = kind;
 			slot->cleanup = cleanup;
 			slot->user = user;
 			slot->state = HX_OS_SIGNAL_CONNECTED;
@@ -290,6 +293,7 @@ static hx_os_status hx_os_signal_connect_impl(hx_os_signal_handler *handler,
 	(void)handler;
 	(void)signal;
 	(void)function;
+	(void)kind;
 	(void)user;
 	(void)cleanup;
 	if (out)
@@ -309,7 +313,7 @@ hx_os_status hx_os_i_dispatch_connect(hx_os_signal_handler *handler,
 	callback.named = function;
 
 	return hx_os_signal_connect_impl(handler, signal ? signal : "",
-		callback, user, cleanup, out, error);
+		callback, HX_OS_SIGNAL_FIXED, user, cleanup, out, error);
 }
 
 hx_os_status hx_os_i_dispatch_connect_all(hx_os_signal_handler *handler,
@@ -317,17 +321,89 @@ hx_os_status hx_os_i_dispatch_connect_all(hx_os_signal_handler *handler,
 	hx_os_signal_cleanup_fn cleanup, hx_os_signal_connection *out,
 	hx_os_error *error)
 {
+	return hx_os_i_dispatch_connect_view(
+		handler, NULL, function, user, cleanup, out, error);
+}
+
+hx_os_status hx_os_i_dispatch_connect_view(hx_os_signal_handler *handler,
+	const char *signal, hx_os_signal_all_fn function, void *user,
+	hx_os_signal_cleanup_fn cleanup, hx_os_signal_connection *out,
+	hx_os_error *error)
+{
 	hx_os_signal_callback callback;
 
 	callback.all = function;
 
-	return hx_os_signal_connect_impl(
-		handler, NULL, callback, user, cleanup, out, error);
+	return hx_os_signal_connect_impl(handler, signal, callback,
+		HX_OS_SIGNAL_VIEW, user, cleanup, out, error);
 }
 
-hx_os_status hx_os_i_dispatch_emit(hx_os_signal_handler *handler,
-	const char *signal, const hx_os_calldata *data, size_t *called,
+hx_os_status hx_os_i_dispatch_connect_mutable(hx_os_signal_handler *handler,
+	const char *signal, hx_os_signal_mutable_fn function, void *user,
+	hx_os_signal_cleanup_fn cleanup, hx_os_signal_connection *out,
 	hx_os_error *error)
+{
+	hx_os_signal_callback callback;
+
+	callback.modify = function;
+
+	return hx_os_signal_connect_impl(handler, signal, callback,
+		HX_OS_SIGNAL_MUTABLE, user, cleanup, out, error);
+}
+
+#if HX_OS_ENABLE_SIGNALS || HX_OS_ENABLE_PROCEDURES
+static hx_os_status hx_os_signal_project(hx_os_signal_fn function,
+	const hx_os_params *params, void *user, int *started,
+	hx_os_error *error)
+{
+	hx_os_calldata copy = HX_OS_CALLDATA_INIT;
+	size_t i, count = hx_os_params_count(params);
+	hx_os_status status = HX_OS_OK;
+
+	for (i = 0; i < count && status == HX_OS_OK; ++i) {
+		hx_string_view name;
+		hx_os_param_value value;
+
+		status = hx_os_params_at(params, i, &name, &value, error);
+		if (status != HX_OS_OK)
+			break;
+		switch (value.kind) {
+		case HX_OS_PARAM_BOOL:
+			status = hx_os_calldata_set_bool(&copy, name.data,
+				(int)value.data.integer, error);
+			break;
+		case HX_OS_PARAM_I64:
+			status = hx_os_calldata_set_i64(
+				&copy, name.data, value.data.integer, error);
+			break;
+		case HX_OS_PARAM_DOUBLE:
+			status = hx_os_calldata_set_double(
+				&copy, name.data, value.data.real, error);
+			break;
+		case HX_OS_PARAM_STRING:
+			status = hx_os_calldata_set_string(
+				&copy, name.data, value.data.string, error);
+			break;
+		case HX_OS_PARAM_POINTER:
+			status = hx_os_calldata_set_pointer(
+				&copy, name.data, value.data.pointer, error);
+			break;
+		default:
+			status = hx_os_i_error(
+				error, HX_OS_UNREPRESENTABLE, 0, 0);
+		}
+	}
+	if (status != HX_OS_OK)
+		return status;
+	*started = 1;
+
+	return function(&copy, user, error);
+}
+#endif
+
+static hx_os_status hx_os_signal_emit_impl(hx_os_signal_handler *handler,
+	const char *signal, const hx_os_calldata *data, hx_os_params *params,
+	size_t *called, hx_os_error *error)
 {
 #if HX_OS_ENABLE_SIGNALS || HX_OS_ENABLE_PROCEDURES
 	static const hx_os_calldata empty = HX_OS_CALLDATA_INIT;
@@ -341,6 +417,7 @@ hx_os_status hx_os_i_dispatch_emit(hx_os_signal_handler *handler,
 	if (called)
 		*called = 0;
 	arguments.data = data ? data : &empty;
+	arguments.params = params;
 
 	if (!handler)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
@@ -407,7 +484,8 @@ hx_os_status hx_os_i_dispatch_emit(hx_os_signal_handler *handler,
 		size_t index = (uint32_t)snapshot[i] - 1;
 		hx_os_signal_slot *slot = &handler->slots[index];
 		hx_os_signal_callback function;
-		int all;
+		uint16_t kind;
+		int started = 1;
 		hx_os_error callback_error = {HX_OS_OK, HX_OS_ERROR_NONE, 0, 0};
 		void *user;
 
@@ -420,17 +498,31 @@ hx_os_status hx_os_i_dispatch_emit(hx_os_signal_handler *handler,
 
 		++slot->running;
 		function = slot->function;
-		all = !slot->name[0];
+		kind = slot->kind;
 		user = slot->user;
 		(void)hx_os_mutex_unlock(handler->mutex, NULL);
 		frame.connection = snapshot[i];
 
-		status = all
-			? function.all(
-				  signal, &arguments, user, &callback_error)
-			: function.named(arguments.data, user, &callback_error);
+		if (kind == HX_OS_SIGNAL_VIEW)
+			status = function.all(
+				signal, &arguments, user, &callback_error);
+		else if (kind == HX_OS_SIGNAL_MUTABLE) {
+			started = params != NULL;
+			status = params ? function.modify(signal, params, user,
+						  &callback_error)
+					: hx_os_i_error(&callback_error,
+						  HX_OS_TYPE_MISMATCH, 0, 0);
+		}
+		else if (params) {
+			started = 0;
+			status = hx_os_signal_project(function.named, params,
+				user, &started, &callback_error);
+		}
+		else
+			status = function.named(
+				arguments.data, user, &callback_error);
 		frame.connection = 0;
-		++calls;
+		calls += (size_t)started;
 		if (first == HX_OS_OK && status != HX_OS_OK) {
 			first = status;
 			if (callback_error.status != status)
@@ -467,11 +559,45 @@ finish:
 	(void)handler;
 	(void)signal;
 	(void)data;
+	(void)params;
 	if (called)
 		*called = 0;
 
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 #endif
+}
+
+hx_os_status hx_os_i_dispatch_emit(hx_os_signal_handler *handler,
+	const char *signal, const hx_os_calldata *data, size_t *called,
+	hx_os_error *error)
+{
+	return hx_os_signal_emit_impl(
+		handler, signal, data, NULL, called, error);
+}
+
+hx_os_status hx_os_i_dispatch_emit_params(hx_os_signal_handler *handler,
+	const char *signal, hx_os_params *params, size_t *called,
+	hx_os_error *error)
+{
+	char name[128];
+	size_t bytes;
+	hx_os_status status;
+
+	if (called)
+		*called = 0;
+	status = hx_os_i_parameter_name(signal, &bytes, error);
+	if (status != HX_OS_OK)
+		return status;
+	memcpy(name, signal, bytes + 1);
+	status = hx_os_i_params_hold(params, error);
+	if (status != HX_OS_OK)
+		return status;
+
+	status = hx_os_signal_emit_impl(
+		handler, name, NULL, params, called, error);
+	hx_os_i_params_release(params);
+
+	return status;
 }
 
 hx_os_status hx_os_i_dispatch_disconnect(hx_os_signal_handler *handler,

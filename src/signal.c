@@ -78,6 +78,61 @@ hx_os_status hx_os_signal_connect_all(hx_os_signal_handler *handler,
 #endif
 }
 
+hx_os_status hx_os_signal_connect_observer(hx_os_signal_handler *handler,
+	const char *signal, hx_os_signal_all_fn function, void *user,
+	hx_os_signal_cleanup_fn cleanup, hx_os_signal_connection *out,
+	hx_os_error *error)
+{
+	if (out)
+		*out = 0;
+	if (!HX_OS_ENABLE_SIGNALS)
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+
+	return hx_os_i_dispatch_connect_view(handler, signal ? signal : "",
+		function, user, cleanup, out, error);
+}
+
+hx_os_status hx_os_signal_connect_mutable(hx_os_signal_handler *handler,
+	const char *signal, hx_os_signal_mutable_fn function, void *user,
+	hx_os_signal_cleanup_fn cleanup, hx_os_signal_connection *out,
+	hx_os_error *error)
+{
+	if (out)
+		*out = 0;
+	if (!HX_OS_ENABLE_SIGNALS || !HX_OS_ENABLE_PARAMETERS)
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+
+	return hx_os_i_dispatch_connect_mutable(handler, signal ? signal : "",
+		function, user, cleanup, out, error);
+}
+
+hx_os_status hx_os_signal_connect_all_mutable(hx_os_signal_handler *handler,
+	hx_os_signal_mutable_fn function, void *user,
+	hx_os_signal_cleanup_fn cleanup, hx_os_signal_connection *out,
+	hx_os_error *error)
+{
+	if (out)
+		*out = 0;
+	if (!HX_OS_ENABLE_SIGNALS || !HX_OS_ENABLE_PARAMETERS)
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+
+	return hx_os_i_dispatch_connect_mutable(
+		handler, NULL, function, user, cleanup, out, error);
+}
+
+hx_os_status hx_os_signal_emit_params(hx_os_signal_handler *handler,
+	const char *signal, hx_os_params *parameters, size_t *called,
+	hx_os_error *error)
+{
+	if (called)
+		*called = 0;
+	if (!HX_OS_ENABLE_SIGNALS || !HX_OS_ENABLE_PARAMETERS)
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+
+	return hx_os_i_dispatch_emit_params(
+		handler, signal, parameters, called, error);
+}
+
 hx_os_status hx_os_signal_emit(hx_os_signal_handler *handler,
 	const char *signal, const hx_os_calldata *data, size_t *called,
 	hx_os_error *error)

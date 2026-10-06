@@ -369,6 +369,7 @@ public:
 
 private:
 	friend class SignalArguments;
+	friend class ProcedureHandler;
 };
 } // namespace hx
 #endif

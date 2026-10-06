@@ -6,13 +6,17 @@
 
 void *hx_os_i_signal_exchange_execution(void *value);
 
+enum { HX_OS_SIGNAL_FIXED, HX_OS_SIGNAL_VIEW, HX_OS_SIGNAL_MUTABLE };
+
 typedef union hx_os_signal_callback {
 	hx_os_signal_fn named;
 	hx_os_signal_all_fn all;
+	hx_os_signal_mutable_fn modify;
 } hx_os_signal_callback;
 
 struct hx_os_signal_arguments {
 	const hx_os_calldata *data;
+	const hx_os_params *params;
 };
 
 typedef struct hx_os_signal_slot {
@@ -21,7 +25,7 @@ typedef struct hx_os_signal_slot {
 	void *user;
 	uint64_t identifier;
 	uint32_t running;
-	uint32_t state;
+	uint16_t state, kind;
 	char name[128];
 } hx_os_signal_slot;
 
@@ -58,6 +62,20 @@ hx_os_status hx_os_i_dispatch_connect(hx_os_signal_handler *handler,
 hx_os_status hx_os_i_dispatch_connect_all(hx_os_signal_handler *handler,
 	hx_os_signal_all_fn function, void *user,
 	hx_os_signal_cleanup_fn cleanup, hx_os_signal_connection *out,
+	hx_os_error *error);
+
+hx_os_status hx_os_i_dispatch_connect_view(hx_os_signal_handler *handler,
+	const char *signal, hx_os_signal_all_fn function, void *user,
+	hx_os_signal_cleanup_fn cleanup, hx_os_signal_connection *out,
+	hx_os_error *error);
+
+hx_os_status hx_os_i_dispatch_connect_mutable(hx_os_signal_handler *handler,
+	const char *signal, hx_os_signal_mutable_fn function, void *user,
+	hx_os_signal_cleanup_fn cleanup, hx_os_signal_connection *out,
+	hx_os_error *error);
+
+hx_os_status hx_os_i_dispatch_emit_params(hx_os_signal_handler *handler,
+	const char *signal, hx_os_params *params, size_t *called,
 	hx_os_error *error);
 
 hx_os_status hx_os_i_dispatch_emit(hx_os_signal_handler *handler,

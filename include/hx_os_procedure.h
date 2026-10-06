@@ -11,7 +11,11 @@ typedef uint64_t hx_os_proc_registration;
 typedef hx_os_status(HX_OS_CALL *hx_os_proc_fn)(
 	hx_os_calldata *parameters, void *user, hx_os_error *error);
 
+typedef hx_os_status(HX_OS_CALL *hx_os_proc_params_fn)(
+	hx_os_params *parameters, void *user, hx_os_error *error);
+
 typedef void(HX_OS_CALL *hx_os_proc_cleanup_fn)(void *user);
+
 typedef struct hx_os_proc_options {
 	uint32_t size;
 	uint32_t version;
@@ -19,6 +23,7 @@ typedef struct hx_os_proc_options {
 	size_t max_parallel_calls;
 	size_t max_depth;
 } hx_os_proc_options;
+
 #define HX_OS_PROC_OPTIONS_INIT                                                \
 	{                                                                      \
 		sizeof(hx_os_proc_options), 1, 256, 64, 16                     \
@@ -56,6 +61,27 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_proc_add(hx_os_proc_handler *handler,
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_proc_call(hx_os_proc_handler *handler,
 	const char *name, hx_os_calldata *parameters, hx_os_error *error);
+
+/* Growable counterpart, requires PROCEDURES and PARAMETERS. Names are unique
+ * across both callback types. Cross-type calls return TYPE_MISMATCH, with no
+ * user callback. Lifetime/retirement matches add. Callback borrows its mutable
+ * private pack; destruction during the invocation returns BUSY.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_proc_add_params(
+	hx_os_proc_handler *handler, const char *name,
+	hx_os_proc_params_fn function, void *user,
+	hx_os_proc_cleanup_fn cleanup, hx_os_proc_registration *out,
+	hx_os_error *error);
+
+/* Copies input and its limits using the handler context; NULL is empty with
+ * default limits. Publishes a new owned result only on success (*out=NULL on
+ * failure). Input stays alive and unchanged through the call. Own result with
+ * params_destroy. Callback side effects through borrowed pointers/OS objects
+ * cannot be rolled back. No implicit conversion to/from fixed calldata.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_proc_call_params(
+	hx_os_proc_handler *handler, const char *name,
+	const hx_os_params *input, hx_os_params **out, hx_os_error *error);
 
 /* Immediately prevent later starts, then wait for active calls and cleanup.
  * Timeout retains the ID/handler; retry with the SAME ID. Self/ancestor wait

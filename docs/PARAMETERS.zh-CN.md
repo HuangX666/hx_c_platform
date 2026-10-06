@@ -103,3 +103,7 @@ std::puts(name.value().c_str());
 修改、移动、销毁必须与其它访问互斥。clone 为防止分配器重入，也需要独占访问源参数包。只有 owner 和字节数据保持稳定时，才允许并发只读查询。分配器不得重入正在操作的参数包；检测到时返回 `HX_OS_DEADLOCK`，不会打断外层操作。owner／context 必须覆盖分配器调用生命周期。参数包仍持有分配时，销毁 context 会返回 busy。
 
 `HX_OS_ENABLE_PARAMETERS` 默认开启，可独立关闭，也可以在 signals／procedures 都关闭时单独启用。运行时使用 `hx_os_params_available()` 查询。关闭功能后，操作明确返回 `HX_OS_NOT_SUPPORTED`；销毁空 owner 仍然安全。不需要第三方库。
+
+## 6. 信号与命名过程
+
+参数 owner 可直接用于可写信号，也可作为可增长命名过程的输入／结果。同步回调只借用参数包，借用期间 `params_destroy` 返回 BUSY；不要在回调里移动或销毁 C++ owner。两种接口的失败和结果交付规则不同，见[信号／过程说明](SIGNALS.zh-CN.md#6-在通知过程中修改参数)。

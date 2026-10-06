@@ -31,12 +31,24 @@ public:
 	}
 
 	Result<bool> boolean(const char *name) const noexcept
+
 	{
 		auto value = read<int>(name, hx_os_signal_arguments_get_bool);
 		if (!value)
 			return Failure(value.error());
 
 		return value.value() != 0;
+	}
+
+	Result<uint64_t> unsignedInteger(const char *name) const noexcept
+	{
+		return read<uint64_t>(name, hx_os_signal_arguments_get_u64);
+	}
+
+	Result<hx_os_bytes_view> bytesView(const char *name) const noexcept
+	{
+		return read<hx_os_bytes_view>(
+			name, hx_os_signal_arguments_get_bytes);
 	}
 
 	Result<double> real(const char *name) const noexcept

@@ -1653,6 +1653,8 @@ int main(void)
 
 订阅一个处理器的全部信号，使用 `hx_os_signal_connect_all` 或 C++ `connectAll`；C++ `notify` 也可用于定义了 `emit` 宏的 Qt 工程。回调接收信号名称和借用的只读参数视图。见[顺序、所有权和可运行示例](SIGNALS.zh-CN.md)。
 
+可写信号使用 `connect_mutable`／`connect_all_mutable` 配合 `emit_params`：即使回调随后失败，已经成功的修改仍保留，后续有效回调继续执行。通用观察者可读取全部可增长类型，旧固定参数回调仅在整个包都能表示时启动。命名过程通过 `hx_os_proc_add_params`／`hx_os_proc_call_params` 在成功时交付独立结果。见[可写派发与兼容说明](SIGNALS.zh-CN.md#6-在通知过程中修改参数)。
+
 ### 25.2 区间计时树
 
 ```c

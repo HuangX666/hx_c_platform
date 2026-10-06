@@ -1653,6 +1653,8 @@ For multiple parameter assignments, use `hx_os_calldata_edit_begin`, its typed s
 
 All-signal observation uses `hx_os_signal_connect_all` or C++ `connectAll`; C++ `notify` also works when Qt defines `emit`. The callback receives the signal name and a borrowed read-only argument view. See [ordering, ownership and the runnable example](SIGNALS.md).
 
+Mutable signals use `connect_mutable` / `connect_all_mutable` with `emit_params`: successful modifications remain even if a later callback fails, and later eligible callbacks continue. General observers can read all growable types; legacy fixed callbacks are invoked only when the entire pack is representable. Named procedures use `hx_os_proc_add_params` / `hx_os_proc_call_params` to return an independent result only on success. See [mutable dispatch and compatibility](SIGNALS.md#6-change-parameters-during-a-notification).
+
 ### 25.2 Profile an interval tree
 
 ```c

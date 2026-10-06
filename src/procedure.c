@@ -5,6 +5,12 @@ struct hx_os_proc_handler {
 	hx_os_context *context;
 	hx_os_signal_handler *dispatch;
 };
+
+typedef union hx_os_proc_callback {
+	hx_os_proc_fn fixed;
+	hx_os_proc_params_fn growable;
+} hx_os_proc_callback;
+
 #if HX_OS_ENABLE_PROCEDURES
 typedef struct hx_os_proc_guard {
 	struct hx_os_proc_guard *previous;
@@ -27,23 +33,48 @@ static int hx_os_proc_guarded(hx_os_proc_handler *handler)
 }
 
 typedef struct hx_os_proc_binding {
-	hx_os_proc_fn function;
+	hx_os_proc_callback function;
 	hx_os_proc_cleanup_fn cleanup;
 	void *user;
 } hx_os_proc_binding;
 
-static hx_os_status HX_OS_CALL hx_os_proc_invoke(
-	const hx_os_calldata *data, void *user, hx_os_error *error)
+typedef struct hx_os_proc_invocation {
+	void *parameters;
+	int growable;
+} hx_os_proc_invocation;
+
+static hx_os_status hx_os_proc_invoke(const hx_os_calldata *data, void *user,
+	int growable, hx_os_error *error)
 {
 	hx_os_proc_binding *binding = user;
 	void *parameters = NULL;
+	hx_os_proc_invocation *call;
 
 	hx_os_status status = hx_os_calldata_get_pointer(
 		data, "invocation", &parameters, error);
 	if (status != HX_OS_OK)
 		return status;
 
-	return binding->function(parameters, binding->user, error);
+	call = parameters;
+	if (call->growable != growable)
+		return hx_os_i_error(error, HX_OS_TYPE_MISMATCH, 0, 0);
+
+	return call->growable ? binding->function.growable(
+					call->parameters, binding->user, error)
+			      : binding->function.fixed(
+					call->parameters, binding->user, error);
+}
+
+static hx_os_status HX_OS_CALL hx_os_proc_invoke_fixed(
+	const hx_os_calldata *data, void *user, hx_os_error *error)
+{
+	return hx_os_proc_invoke(data, user, 0, error);
+}
+
+static hx_os_status HX_OS_CALL hx_os_proc_invoke_params(
+	const hx_os_calldata *data, void *user, hx_os_error *error)
+{
+	return hx_os_proc_invoke(data, user, 1, error);
 }
 
 static void HX_OS_CALL hx_os_proc_retire(void *user)
@@ -54,6 +85,24 @@ static void HX_OS_CALL hx_os_proc_retire(void *user)
 		binding->cleanup(binding->user);
 
 	hx_os_memory_free(binding);
+}
+
+static hx_os_status hx_os_proc_dispatch(hx_os_proc_handler *handler,
+	const char *name, void *parameters, int growable, hx_os_error *error)
+{
+	hx_os_proc_invocation call = {parameters, growable};
+	hx_os_calldata invocation = HX_OS_CALLDATA_INIT;
+	size_t called = 0;
+	hx_os_status status = hx_os_calldata_set_pointer(
+		&invocation, "invocation", &call, error);
+
+	if (status == HX_OS_OK)
+		status = hx_os_i_dispatch_emit(
+			handler->dispatch, name, &invocation, &called, error);
+	if (status == HX_OS_OK && !called)
+		status = hx_os_i_error(error, HX_OS_NOT_FOUND, 0, 0);
+
+	return status;
 }
 #endif
 hx_os_status hx_os_proc_options_init(
@@ -135,9 +184,10 @@ hx_os_status hx_os_proc_register(hx_os_proc_handler *handler, const char *name,
 	return hx_os_proc_add(handler, name, function, user, NULL, NULL, error);
 }
 
-hx_os_status hx_os_proc_add(hx_os_proc_handler *handler, const char *name,
-	hx_os_proc_fn function, void *user, hx_os_proc_cleanup_fn cleanup,
-	hx_os_proc_registration *out, hx_os_error *error)
+static hx_os_status hx_os_proc_add_impl(hx_os_proc_handler *handler,
+	const char *name, hx_os_proc_callback function, int growable,
+	void *user, hx_os_proc_cleanup_fn cleanup, hx_os_proc_registration *out,
+	hx_os_error *error)
 {
 #if HX_OS_ENABLE_PROCEDURES
 	hx_os_proc_binding *binding;
@@ -147,7 +197,7 @@ hx_os_status hx_os_proc_add(hx_os_proc_handler *handler, const char *name,
 	if (out)
 		*out = 0;
 
-	if (!handler || !function)
+	if (!handler || (growable ? !function.growable : !function.fixed))
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 
 	if (hx_os_proc_guarded(handler))
@@ -168,7 +218,8 @@ hx_os_status hx_os_proc_add(hx_os_proc_handler *handler, const char *name,
 	binding->user = user;
 
 	status = hx_os_i_dispatch_connect(handler->dispatch, name,
-		hx_os_proc_invoke, binding, hx_os_proc_retire, out, error);
+		growable ? hx_os_proc_invoke_params : hx_os_proc_invoke_fixed,
+		binding, hx_os_proc_retire, out, error);
 	if (status != HX_OS_OK)
 		hx_os_memory_free(binding);
 
@@ -179,6 +230,7 @@ hx_os_status hx_os_proc_add(hx_os_proc_handler *handler, const char *name,
 	(void)handler;
 	(void)name;
 	(void)function;
+	(void)growable;
 	(void)user;
 	(void)cleanup;
 	if (out)
@@ -188,13 +240,40 @@ hx_os_status hx_os_proc_add(hx_os_proc_handler *handler, const char *name,
 #endif
 }
 
+hx_os_status hx_os_proc_add(hx_os_proc_handler *handler, const char *name,
+	hx_os_proc_fn function, void *user, hx_os_proc_cleanup_fn cleanup,
+	hx_os_proc_registration *out, hx_os_error *error)
+{
+	hx_os_proc_callback callback;
+
+	callback.fixed = function;
+
+	return hx_os_proc_add_impl(
+		handler, name, callback, 0, user, cleanup, out, error);
+}
+
+hx_os_status hx_os_proc_add_params(hx_os_proc_handler *handler,
+	const char *name, hx_os_proc_params_fn function, void *user,
+	hx_os_proc_cleanup_fn cleanup, hx_os_proc_registration *out,
+	hx_os_error *error)
+{
+	hx_os_proc_callback callback;
+
+	if (out)
+		*out = 0;
+	if (!HX_OS_ENABLE_PROCEDURES || !HX_OS_ENABLE_PARAMETERS)
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+	callback.growable = function;
+
+	return hx_os_proc_add_impl(
+		handler, name, callback, 1, user, cleanup, out, error);
+}
+
 hx_os_status hx_os_proc_call(hx_os_proc_handler *handler, const char *name,
 	hx_os_calldata *parameters, hx_os_error *error)
 {
 #if HX_OS_ENABLE_PROCEDURES
 	hx_os_calldata copy = HX_OS_CALLDATA_INIT;
-	hx_os_calldata invocation = HX_OS_CALLDATA_INIT;
-	size_t called = 0;
 	hx_os_status status;
 
 	if (!handler)
@@ -206,14 +285,7 @@ hx_os_status hx_os_proc_call(hx_os_proc_handler *handler, const char *name,
 	if (parameters)
 		copy = *parameters;
 
-	status = hx_os_calldata_set_pointer(
-		&invocation, "invocation", &copy, error);
-	if (status == HX_OS_OK)
-		status = hx_os_i_dispatch_emit(
-			handler->dispatch, name, &invocation, &called, error);
-
-	if (status == HX_OS_OK && !called)
-		return hx_os_i_error(error, HX_OS_NOT_FOUND, 0, 0);
+	status = hx_os_proc_dispatch(handler, name, &copy, 0, error);
 
 	if (status == HX_OS_OK && parameters)
 		*parameters = copy;
@@ -223,6 +295,58 @@ hx_os_status hx_os_proc_call(hx_os_proc_handler *handler, const char *name,
 	(void)handler;
 	(void)name;
 	(void)parameters;
+
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
+}
+
+hx_os_status hx_os_proc_call_params(hx_os_proc_handler *handler,
+	const char *name, const hx_os_params *input, hx_os_params **out,
+	hx_os_error *error)
+{
+#if HX_OS_ENABLE_PROCEDURES && HX_OS_ENABLE_PARAMETERS
+	hx_os_params *copy = NULL;
+	hx_os_proc_guard guard;
+	hx_os_status status;
+
+	if (!out)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	*out = NULL;
+	if (!handler)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (hx_os_proc_guarded(handler))
+		return hx_os_i_error(error, HX_OS_DEADLOCK, 0, 0);
+
+	guard.handler = handler;
+	guard.previous = hx_os_proc_current;
+	hx_os_proc_current = &guard;
+	status = input
+		? hx_os_params_clone(input, handler->context, &copy, error)
+		: hx_os_params_create(handler->context, &copy, error);
+	hx_os_proc_current = guard.previous;
+	if (status != HX_OS_OK)
+		return status;
+
+	status = hx_os_i_params_hold(copy, error);
+	if (status == HX_OS_OK) {
+		status = hx_os_proc_dispatch(handler, name, copy, 1, error);
+		hx_os_i_params_release(copy);
+	}
+	if (status == HX_OS_OK)
+		*out = copy;
+	else {
+		hx_os_proc_current = &guard;
+		(void)hx_os_params_destroy(&copy, NULL);
+		hx_os_proc_current = guard.previous;
+	}
+
+	return status;
+#else
+	(void)handler;
+	(void)name;
+	(void)input;
+	if (out)
+		*out = NULL;
 
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 #endif

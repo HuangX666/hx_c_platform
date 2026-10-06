@@ -103,3 +103,7 @@ Lookups use a sorted array and binary search; inserting/removing a name may move
 Serialize mutation, moving and destruction against all access. Cloning also requires exclusive access to its source because it guards against allocator reentry. Concurrent read-only lookups are permitted only while the owner and bytes remain stable. An allocator must not reenter the active pack; detected reentry reports `HX_OS_DEADLOCK` and leaves the in-progress operation intact. The active owner/context must outlive allocator calls. Context destruction reports busy while the pack owns allocations.
 
 `HX_OS_ENABLE_PARAMETERS` defaults to ON and can be disabled independently, including with signals/procedures disabled. Query `hx_os_params_available()` at runtime. Disabled operations explicitly report `HX_OS_NOT_SUPPORTED`; null destruction remains harmless. No third-party library is required.
+
+## 6. Signals and named procedures
+
+Use this owner directly with mutable signal dispatch and as input/result of growable named procedures. A synchronous callback borrows its pack; `params_destroy` returns BUSY during that borrow. Do not move or destroy a C++ owner from its callback. See [the signal/procedure guide](SIGNALS.md#6-change-parameters-during-a-notification) for the two distinct failure/publication contracts.

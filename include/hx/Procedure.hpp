@@ -59,6 +59,46 @@ public:
 		return id;
 	}
 
+	template <typename F>
+	Result<hx_os_proc_registration> addParams(
+		const char *name, F &&function) noexcept
+	{
+		typedef typename std::decay<F>::type Function;
+		auto callback = detail::CallbackOwner::create(
+			m_context_, std::forward<F>(function));
+		if (!callback)
+			return Failure(callback.error());
+		auto *state = callback.value().nativeLease();
+		hx_os_proc_registration id = 0;
+		hx_os_error error = {};
+
+		auto status = hx_os_proc_add_params(*m_owner_, name,
+			invoke_params<Function>, state,
+			detail::callback_cleanup, &id, &error);
+		if (status != HX_OS_OK) {
+			state->release();
+
+			return Failure(status, error);
+		}
+
+		return id;
+	}
+
+	Result<Parameters> callParams(const char *name,
+		ParametersView input = ParametersView()) noexcept
+	{
+		Parameters result;
+		hx_os_params *owner = NULL;
+		hx_os_error error = {};
+		auto status = hx_os_proc_call_params(
+			*m_owner_, name, input.native(), &owner, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		result.m_data_ = owner;
+
+		return result;
+	}
+
 	Result<CallData> call(
 		const char *name, const CallData &input = CallData()) noexcept
 	{
@@ -96,6 +136,20 @@ public:
 private:
 	hx_os_proc_handler **m_owner_;
 	hx_os_context *m_context_;
+
+	template <typename F>
+	static hx_os_status HX_OS_CALL invoke_params(hx_os_params *parameters,
+		void *user, hx_os_error *error) noexcept
+	{
+		auto *state = static_cast<detail::CallbackModel<F> *>(
+			static_cast<detail::CallbackState *>(user));
+		auto result = detail::InvokeCallback(
+			state->function(), ParametersRef(parameters));
+		if (error)
+			*error = result.error();
+
+		return result.status();
+	}
 
 	template <typename F>
 	static hx_os_status HX_OS_CALL invoke(

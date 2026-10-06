@@ -314,6 +314,61 @@ public:
 		return id;
 	}
 
+	template <typename F>
+	Result<hx_os_signal_connection> observe(
+		const char *signal, F &&function) noexcept
+	{
+		typedef typename std::decay<F>::type Function;
+		auto callback = detail::CallbackOwner::create(
+			m_context_, std::forward<F>(function));
+		if (!callback)
+			return Failure(callback.error());
+		auto *state = callback.value().nativeLease();
+		hx_os_signal_connection id = 0;
+		hx_os_error error = {};
+
+		auto status = hx_os_signal_connect_observer(*m_owner_, signal,
+			invoke_all<Function>, state, detail::callback_cleanup,
+			&id, &error);
+		if (status != HX_OS_OK) {
+			state->release();
+
+			return Failure(status, error);
+		}
+
+		return id;
+	}
+
+	template <typename F>
+	Result<hx_os_signal_connection> connectMutable(
+		const char *signal, F &&function) noexcept
+	{
+		typedef typename std::decay<F>::type Function;
+
+		return connectMutation(signal ? signal : "",
+			std::forward<F>(function), invoke_mutable<Function>);
+	}
+
+	template <typename F>
+	Result<hx_os_signal_connection> connectAllMutable(F &&function) noexcept
+	{
+		typedef typename std::decay<F>::type Function;
+
+		return connectMutation(NULL, std::forward<F>(function),
+			invoke_all_mutable<Function>);
+	}
+
+	Result<size_t> notifyMutable(
+		const char *signal, ParametersRef parameters) noexcept
+	{
+		size_t called = 0;
+		hx_os_error error = {};
+		auto status = hx_os_signal_emit_params(*m_owner_, signal,
+			parameters.native(), &called, &error);
+
+		return Result<size_t>::withValue(called, status, error);
+	}
+
 	Result<size_t> notify(
 		const char *signal, const CallData &data = CallData()) noexcept
 	{
@@ -367,6 +422,63 @@ public:
 private:
 	hx_os_signal_handler **m_owner_;
 	hx_os_context *m_context_;
+
+	template <typename F>
+	Result<hx_os_signal_connection> connectMutation(const char *signal,
+		F &&function, hx_os_signal_mutable_fn invoke) noexcept
+	{
+		auto callback = detail::CallbackOwner::create(
+			m_context_, std::forward<F>(function));
+		if (!callback)
+			return Failure(callback.error());
+		auto *state = callback.value().nativeLease();
+		hx_os_signal_connection id = 0;
+		hx_os_error error = {};
+
+		auto status = signal
+			? hx_os_signal_connect_mutable(*m_owner_, signal,
+				  invoke, state, detail::callback_cleanup, &id,
+				  &error)
+			: hx_os_signal_connect_all_mutable(*m_owner_, invoke,
+				  state, detail::callback_cleanup, &id, &error);
+		if (status != HX_OS_OK) {
+			state->release();
+
+			return Failure(status, error);
+		}
+
+		return id;
+	}
+
+	template <typename F>
+	static hx_os_status HX_OS_CALL invoke_mutable(const char *,
+		hx_os_params *parameters, void *user,
+		hx_os_error *error) noexcept
+	{
+		auto *state = static_cast<detail::CallbackModel<F> *>(
+			static_cast<detail::CallbackState *>(user));
+		auto result = detail::InvokeCallback(
+			state->function(), ParametersRef(parameters));
+		if (error)
+			*error = result.error();
+
+		return result.status();
+	}
+
+	template <typename F>
+	static hx_os_status HX_OS_CALL invoke_all_mutable(const char *name,
+		hx_os_params *parameters, void *user,
+		hx_os_error *error) noexcept
+	{
+		auto *state = static_cast<detail::CallbackModel<F> *>(
+			static_cast<detail::CallbackState *>(user));
+		auto result = detail::InvokeCallback(state->function(),
+			StringView(name), ParametersRef(parameters));
+		if (error)
+			*error = result.error();
+
+		return result.status();
+	}
 
 	template <typename F>
 	static hx_os_status HX_OS_CALL invoke_all(const char *name,

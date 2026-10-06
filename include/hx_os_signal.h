@@ -140,8 +140,8 @@ typedef hx_os_status(HX_OS_CALL *hx_os_signal_fn)(
  * only until this callback returns. Never retain/destroy/cast it to an owner.
  * Named reads are strict: missing keys are NOT_FOUND, wrong types are
  * TYPE_MISMATCH; outputs are preserved on failure. Enumeration order is not a
- * persistent key order. Reading needs no allocation and works without the
- * optional PARAMETERS owner module. Current calldata values keep their types.
+ * persistent key order. Reading needs no allocation. Fixed calldata reads
+ * work without PARAMETERS; emit_params supplies the full growable value set.
  */
 typedef struct hx_os_signal_arguments hx_os_signal_arguments;
 
@@ -164,6 +164,14 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_signal_arguments_get_i64(
 	const hx_os_signal_arguments *arguments, const char *name, int64_t *out,
 	hx_os_error *error);
 
+HX_OS_API hx_os_status HX_OS_CALL hx_os_signal_arguments_get_u64(
+	const hx_os_signal_arguments *arguments, const char *name,
+	uint64_t *out, hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_signal_arguments_get_bytes(
+	const hx_os_signal_arguments *arguments, const char *name,
+	hx_os_bytes_view *out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_signal_arguments_get_double(
 	const hx_os_signal_arguments *arguments, const char *name, double *out,
 	hx_os_error *error);
@@ -177,7 +185,8 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_signal_arguments_get_pointer(
 	hx_os_error *error);
 
 /* Explicit owned copy for use after callback return. Requires PARAMETERS,
- * uses its default bounds and the supplied context. Strings/bytes are copied;
+ * uses the supplied context. Fixed calldata uses default bounds; growable
+ * input keeps its limits. Strings/bytes are copied;
  * user pointers remain borrowed. Creation sets *out=NULL before work and
  * releases all partial state on failure. Input remains alive and unchanged
  * through copying, including allocator callbacks. Release with params_destroy.
@@ -242,6 +251,53 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_signal_connect_all(
 	hx_os_signal_handler *handler, hx_os_signal_all_fn function, void *user,
 	hx_os_signal_cleanup_fn cleanup, hx_os_signal_connection *out,
 	hx_os_error *error);
+
+/* Same read-only view as connect_all, filtered to one exact UTF-8 name. */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_signal_connect_observer(
+	hx_os_signal_handler *handler, const char *signal,
+	hx_os_signal_all_fn function, void *user,
+	hx_os_signal_cleanup_fn cleanup, hx_os_signal_connection *out,
+	hx_os_error *error);
+
+typedef hx_os_status(HX_OS_CALL *hx_os_signal_mutable_fn)(const char *signal,
+	hx_os_params *parameters, void *user, hx_os_error *error);
+
+/* Growable, mutable arguments require SIGNALS and PARAMETERS. Connections
+ * share the existing bounded slots, registration order and retirement rules.
+ * Only emit_params invokes mutable callbacks. Ordinary read-only emit reports
+ * TYPE_MISMATCH for such subscriptions without invoking them, and continues.
+ * The callback borrows the pack: use params getters/setters, never retain or
+ * destroy it. Destruction while dispatch is borrowing it returns BUSY.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_signal_connect_mutable(
+	hx_os_signal_handler *handler, const char *signal,
+	hx_os_signal_mutable_fn function, void *user,
+	hx_os_signal_cleanup_fn cleanup, hx_os_signal_connection *out,
+	hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_signal_connect_all_mutable(
+	hx_os_signal_handler *handler, hx_os_signal_mutable_fn function,
+	void *user, hx_os_signal_cleanup_fn cleanup,
+	hx_os_signal_connection *out, hx_os_error *error);
+
+/* Synchronous in-place dispatch. Each successful setter is visible to later
+ * callbacks and the caller, including when a callback subsequently fails.
+ * Continue all eligible subscriptions, return the first error; no rollback.
+ * Callbacks/read-only observers share registration order. called counts user
+ * callbacks actually started. Allocation failure before dispatch changes no
+ * values. Exclude external access to this pack through return; nested calls
+ * on the same pack are synchronous and must obey the same view lifetime.
+ *
+ * Existing fixed-calldata callbacks receive a temporary copied projection.
+ * Unrepresentable types (bytes/u64) return UNREPRESENTABLE; fixed capacity
+ * overflow returns LIMIT. That callback is skipped, the error is retained,
+ * and other subscriptions continue. Use connect_observer for lossless reads.
+ * Borrowed field views expire at the next mutation, possibly a nested emit.
+ * parameters is required and stays owned by its caller.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_signal_emit_params(
+	hx_os_signal_handler *handler, const char *signal,
+	hx_os_params *parameters, size_t *called, hx_os_error *error);
 
 /* Synchronous callbacks execute on the emitter in registration order for
  * this emission's snapshot. Later connections wait for the next emit; a

@@ -42,7 +42,11 @@ static hx_os_status hx_os_signal_argument_value(const hx_os_calldata *data,
 
 size_t hx_os_signal_arguments_count(const hx_os_signal_arguments *arguments)
 {
-	return arguments ? arguments->data->count : 0;
+	if (!arguments)
+		return 0;
+
+	return arguments->params ? hx_os_params_count(arguments->params)
+				 : arguments->data->count;
 }
 
 hx_os_status hx_os_signal_arguments_get(const hx_os_signal_arguments *arguments,
@@ -54,6 +58,8 @@ hx_os_status hx_os_signal_arguments_get(const hx_os_signal_arguments *arguments,
 
 	if (!arguments || !out)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (arguments->params)
+		return hx_os_params_get(arguments->params, name, out, error);
 	status = hx_os_i_parameter_name(name, &bytes, error);
 	if (status != HX_OS_OK)
 		return status;
@@ -89,6 +95,9 @@ hx_os_status hx_os_signal_arguments_at(const hx_os_signal_arguments *arguments,
 
 	if (!arguments || !name || !out)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (arguments->params)
+		return hx_os_params_at(
+			arguments->params, index, name, out, error);
 	if (index >= arguments->data->count)
 		return hx_os_i_error(error, HX_OS_RANGE, 0, 0);
 	entry = arguments->data->entries + index;
@@ -157,6 +166,34 @@ hx_os_status hx_os_signal_arguments_get_i64(
 	return status;
 }
 
+hx_os_status hx_os_signal_arguments_get_u64(
+	const hx_os_signal_arguments *arguments, const char *name,
+	uint64_t *out, hx_os_error *error)
+{
+	hx_os_param_value value;
+	hx_os_status status = hx_os_signal_argument_get(
+		arguments, name, HX_OS_PARAM_U64, out, &value, error);
+
+	if (status == HX_OS_OK)
+		*out = value.data.unsigned_integer;
+
+	return status;
+}
+
+hx_os_status hx_os_signal_arguments_get_bytes(
+	const hx_os_signal_arguments *arguments, const char *name,
+	hx_os_bytes_view *out, hx_os_error *error)
+{
+	hx_os_param_value value;
+	hx_os_status status = hx_os_signal_argument_get(
+		arguments, name, HX_OS_PARAM_BYTES, out, &value, error);
+
+	if (status == HX_OS_OK)
+		*out = value.data.bytes;
+
+	return status;
+}
+
 hx_os_status hx_os_signal_arguments_get_double(
 	const hx_os_signal_arguments *arguments, const char *name, double *out,
 	hx_os_error *error)
@@ -214,6 +251,9 @@ hx_os_status hx_os_signal_arguments_copy(
 		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 	if (!arguments)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (arguments->params)
+		return hx_os_params_clone(
+			arguments->params, context, out, error);
 
 	status = hx_os_params_create(context, &copy, error);
 	for (i = 0; status == HX_OS_OK &&

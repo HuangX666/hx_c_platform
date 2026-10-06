@@ -48,7 +48,7 @@ set(hx_test_suites data options lifecycle config containers sysinfo file_utils
 	registry windows_util native_interop power obfuscate
 	calendar calendar_dst
 	text_lookup bitstream
-	calldata params signal signal_all
+	calldata params signal signal_all dispatch_params
 	settings settings_concurrency settings_config settings_apply
 	profiler profiler_snapshot atomic
 	string_tools lexer parser preprocess wide_wait catalog_filename
@@ -484,6 +484,16 @@ if(CMAKE_CXX_COMPILER_LOADED)
 	hx_apply_warnings(hx_os_test_cpp_signal_macro)
 	add_test(NAME cpp_signal_macro COMMAND hx_os_test_cpp_signal_macro)
 	set_tests_properties(cpp_signal_macro PROPERTIES TIMEOUT 20)
+
+	add_executable(hx_os_test_cpp_dispatch test_cpp_dispatch.cpp)
+	target_link_libraries(hx_os_test_cpp_dispatch PRIVATE
+		hx_c_platform::cpp)
+	set_target_properties(hx_os_test_cpp_dispatch PROPERTIES
+		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+	hx_apply_warnings(hx_os_test_cpp_dispatch)
+	add_test(NAME cpp_dispatch COMMAND hx_os_test_cpp_dispatch)
+	set_tests_properties(cpp_dispatch PROPERTIES TIMEOUT 20)
 
 	file(GLOB facade_headers "${PROJECT_SOURCE_DIR}/include/hx/*.hpp")
 

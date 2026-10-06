@@ -86,6 +86,9 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_params_create_with_options(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_params_clone(const hx_os_params *source,
 	hx_os_context *context, hx_os_params **out, hx_os_error *error);
 
+/* A synchronous signal/procedure borrow keeps the owner alive. Destruction
+ * during that borrow returns BUSY; keep the owner for destruction afterward.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_params_destroy(
 	hx_os_params **params, hx_os_error *error);
 

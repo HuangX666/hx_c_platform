@@ -19,6 +19,7 @@ struct hx_os_params {
 	hx_os_param_entry *entries;
 	size_t count, capacity, bytes, max_entries, max_bytes;
 	int busy;
+	uint32_t borrows;
 };
 
 int hx_os_params_available(void)
@@ -51,6 +52,24 @@ static hx_os_status hx_os_params_ready(
 		return hx_os_i_error(error, HX_OS_DEADLOCK, 0, 0);
 
 	return HX_OS_OK;
+}
+
+hx_os_status hx_os_i_params_hold(hx_os_params *params, hx_os_error *error)
+{
+	hx_os_status status = hx_os_params_ready(params, error);
+
+	if (status != HX_OS_OK)
+		return status;
+	if (params->borrows == UINT32_MAX)
+		return hx_os_i_error(error, HX_OS_LIMIT, 0, 0);
+	++params->borrows;
+
+	return HX_OS_OK;
+}
+
+void hx_os_i_params_release(hx_os_params *params)
+{
+	--params->borrows;
 }
 
 hx_os_status hx_os_i_parameter_name(
@@ -414,6 +433,8 @@ hx_os_status hx_os_params_destroy(hx_os_params **owner, hx_os_error *error)
 	status = hx_os_params_ready(*owner, error);
 	if (status != HX_OS_OK)
 		return status;
+	if ((*owner)->borrows)
+		return hx_os_i_error(error, HX_OS_BUSY, 0, 0);
 	(*owner)->busy = 1;
 	hx_os_params_dispose(*owner);
 	hx_os_memory_free(*owner);
