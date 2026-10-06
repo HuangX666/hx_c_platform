@@ -1,30 +1,5 @@
 #include "signal_private.h"
 #if HX_OS_ENABLE_SIGNALS || HX_OS_ENABLE_PROCEDURES
-hx_os_status hx_os_i_signal_name(
-	const char *name, size_t *bytes, hx_os_error *error)
-{
-	size_t invalid, n = 0;
-	hx_os_status status;
-
-	if (!name)
-		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
-
-	while (n <= 127 && name[n])
-		++n;
-
-	if (!n)
-		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
-
-	if (n > 127)
-		return hx_os_i_error(error, HX_OS_LIMIT, 0, 0);
-
-	status = hx_os_text_validate_utf8(name, n, &invalid);
-	if (status == HX_OS_OK)
-		*bytes = n;
-
-	return hx_os_i_error(error, status, 0, 0);
-}
-
 static int hx_os_calldata_pack(hx_os_calldata *data, const char *name,
 	size_t bytes, unsigned kind, hx_os_calldata_value value,
 	hx_string_view text)
@@ -90,7 +65,7 @@ static hx_os_status hx_os_calldata_set(hx_os_calldata *data, const char *name,
 		(kind == HX_OS_CALLDATA_BOOL && value.integer != 0 &&
 			value.integer != 1))
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
-	status = hx_os_i_signal_name(name, &bytes, error);
+	status = hx_os_i_parameter_name(name, &bytes, error);
 	if (status != HX_OS_OK)
 		return status;
 
@@ -153,7 +128,7 @@ static hx_os_status hx_os_calldata_get(const hx_os_calldata *data,
 	if (!data || !out)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 
-	status = hx_os_i_signal_name(name, &bytes, error);
+	status = hx_os_i_parameter_name(name, &bytes, error);
 	if (status != HX_OS_OK)
 		return status;
 

@@ -31,9 +31,6 @@ struct hx_os_signal_handler {
 	int unique_names;
 };
 
-hx_os_status hx_os_i_signal_name(
-	const char *name, size_t *bytes, hx_os_error *error);
-
 hx_os_status hx_os_i_dispatch_options_init(
 	hx_os_signal_options *options, size_t capacity);
 

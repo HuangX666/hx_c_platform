@@ -14,6 +14,7 @@
 #include "hx_os_wide.h"
 #include "hx_os_lexer.h"
 #include "hx_os_procedure.h"
+#include "hx_os_params.h"
 #include "hx_variant.h"
 #include "signal_private.h"
 #include "settings_private.h"
@@ -106,6 +107,9 @@ int main(void)
 	HX_OS_LAYOUT(hx_os_text_lookup_options);
 
 	HX_OS_LAYOUT(hx_os_calldata);
+	HX_OS_LAYOUT(hx_os_params_options);
+	HX_OS_LAYOUT(hx_os_param_value);
+	HX_OS_LAYOUT(hx_os_params_edit);
 	HX_OS_LAYOUT(hx_os_signal_options);
 	HX_OS_LAYOUT(hx_os_signal_slot);
 	HX_OS_LAYOUT(hx_os_signal_handler);

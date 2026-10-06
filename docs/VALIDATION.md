@@ -8,6 +8,18 @@ This records development validation through 2026-10-06. A design, implemented ad
 
 The JSON entry below records the current examples. Earlier independent text examples, initial shared workflows, IPC/KCP implementation and other batches describe their historical versions.
 
+## 2026-10-06: Growable named parameter packs
+
+Baseline `8e82749`. Added the independent PARAMETERS module, bounded named scalar/string/byte values, deep clones, borrowed views and first-error edit cursors. C++11 provides move-only `Parameters` ownership and borrowed const/mutable facades, without exceptions. Existing stack calldata layout and behavior are unchanged. Name validation is shared with the existing signal/procedure path; no third-party source was changed.
+
+Windows MSVC x64 shared full CTest passed 154/154; WSL GCC shared passed 155/155. Both hosts' installed C++11 and pure C consumers passed 36/36 and 26/26. Win32 static params/C++ utility suites passed 2/2. WSL ASan/UBSan with leak detection passed params, calldata, signals, procedures, C++ utilities and the executable example 6/6. With every other optional module disabled, a static build passed params/C++ utilities 2/2; disabling PARAMETERS as well passed their unsupported-path checks 2/2. Standalone C99/C++11 public headers compiled successfully.
+
+Coverage includes 150 shuffled insertions with sorted enumeration, 64-bit unsigned extrema, copied binary bytes with invalid UTF-8, embedded NUL text, self-aliased replacement, wrong-type/missing-key output preservation, field/storage limits, retained capacity on shortening, first-error edits, deep-copy lifetime, allocation failure at payload/array/clone steps, allocator reentry and complete context reclamation. One thousand warmed scalar/string updates and reads preserved the allocator call count. There is no new internal lock, thread or variant/container dependency. Lookup is binary search; insertion/removal may move entries. No throughput comparison or concurrent mutation support is claimed.
+
+Public size/alignment measurements are: options 24/8 on MSVC/WSL x64 and 16/4 on MSVC x86; tagged value 24/8 and 16/8; edit cursor 32/8 on both widths. These are full object sizes/array strides, not a runtime speed claim. Payload capacities and geometric entry arrays have separately documented limits and bounded temporary duplication.
+
+Logs use `params-*` under the shared, Win32, ASan and dedicated minimal build trees. The minimal tree's final configuration has PARAMETERS disabled; its enabled-run record is retained separately. New macOS/Win7/Android/embedded-board runs remain pending. Dynamic signal dispatch integration and the remaining preprocessing/platform/crypto/archive work are not marked complete here.
+
 ## 2026-10-06: Structured profiler snapshots and bounded percentiles
 
 Baseline `7f3ad7d`. Added immutable independently owned snapshots, exclusive min/max, last samples, Welford mean/population deviation and opt-in inclusive/exclusive histograms. Existing options/handles and TSV v1 remain compatible. Each histogram has 252 fixed counters (2,016 bytes per path/channel); default recording has no histogram and warmed paths still allocate no context memory. Captures allocate outside the lock; consistent data/bin copies happen under it, name copies and square roots afterward. Snapshot budget includes allocation overhead, and disabled builds return not supported.

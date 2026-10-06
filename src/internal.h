@@ -46,6 +46,9 @@ void *hx_os_i_zero(hx_os_context *context, size_t bytes);
 
 size_t hx_os_i_allocation_cost(size_t bytes, size_t alignment);
 
+hx_os_status hx_os_i_parameter_name(
+	const char *name, size_t *bytes, hx_os_error *error);
+
 size_t hx_os_i_allocation_bytes(const void *memory);
 
 void hx_os_i_context_retain(hx_os_context *context);

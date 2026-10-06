@@ -46,7 +46,7 @@ set(hx_test_suites data options lifecycle config containers sysinfo file_utils
 	config_serialize config_tree config_backup ini codec timer
 	error_text util vm file_extra watch loop_fd system delayed local duplex
 	registry power obfuscate calendar calendar_dst text_lookup bitstream
-	calldata signal
+	calldata params signal
 	settings settings_concurrency settings_config settings_apply
 	profiler profiler_snapshot atomic
 	string_tools lexer wide_wait catalog_filename procedure

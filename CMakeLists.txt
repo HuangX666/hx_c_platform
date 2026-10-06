@@ -97,6 +97,7 @@ option(HX_OS_ENABLE_TEXT_LOOKUP "Build bounded translation tables" ON)
 option(HX_OS_ENABLE_BITSTREAM "Build bounded bit stream cursors" ON)
 
 option(HX_OS_ENABLE_SIGNALS "Build synchronous signals and parameter packs" ON)
+option(HX_OS_ENABLE_PARAMETERS "Build bounded growable parameter packs" ON)
 
 option(HX_OS_ENABLE_SETTINGS
 	"Build mutable settings and immutable snapshots" ON)
@@ -332,7 +333,7 @@ add_library(hx_c_platform
 	src/process.c src/process_capture.c src/local.c src/duplex_pipe.c
 	src/registry.c src/power.c src/obfuscate.c
 	src/calendar.c src/filename.c src/text_lookup.c src/bitstream.c
-	src/calldata.c src/dispatch.c src/signal.c src/procedure.c
+	src/calldata.c src/params.c src/dispatch.c src/signal.c src/procedure.c
 	src/settings.c
 	src/profiler.c
 	${hx_parser_sources} ${hx_parser_objects}

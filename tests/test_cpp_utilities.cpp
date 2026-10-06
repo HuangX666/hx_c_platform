@@ -8,6 +8,7 @@
 #include <hx/Files.hpp>
 #include <hx/ThreadPool.hpp>
 #include <hx/Settings.hpp>
+#include <hx/Parameters.hpp>
 #include "cpp_check.hpp"
 
 static void TestResults() noexcept
@@ -423,6 +424,54 @@ static void TestDirectoryCalls()
 int main()
 {
 	TestResults();
+	if (hx_os_params_available()) {
+		auto parameters = Take(hx::Parameters::create());
+		const unsigned char binary[] = {0, 0xff, 0x80};
+
+		Take(parameters.setInt("port", 8080));
+		Take(parameters.setBool("enabled", true));
+		Take(parameters.setUnsigned("sequence", UINT64_MAX));
+		Take(parameters.setDouble("ratio", 1.5));
+		Take(parameters.setString("label", "device"));
+		Take(parameters.setPointer("user", &parameters));
+		Take(parameters.setBytes("data", binary, sizeof(binary)));
+		CHECK(Take(parameters.integer("port")) == 8080);
+		CHECK(Take(parameters.boolean("enabled")));
+		CHECK(Take(parameters.unsignedInteger("sequence")) ==
+			UINT64_MAX);
+		CHECK(Take(parameters.real("ratio")) == 1.5);
+		CHECK(Take(parameters.pointer("user")) == &parameters);
+		CHECK(Take(parameters.bytesView("data")).size ==
+			sizeof(binary));
+		CHECK(Equal(parameters.string("label"), "device"));
+		CHECK(parameters.integer("label").status() ==
+			HX_OS_TYPE_MISMATCH);
+
+		auto copy = Take(parameters.clone());
+		hx::Parameters moved = std::move(copy);
+		CHECK(!copy.native() && moved.size() == 7);
+		Take(parameters.clear());
+		CHECK(parameters.size() == 0);
+		hx::ParametersView view(moved.native());
+		auto label = Take(view.stringView("label"));
+		CHECK(label.size() == 6 &&
+			!std::memcmp(label.data(), "device", 6));
+		Take(moved.remove("port"));
+		CHECK(moved.integer("port").status() == HX_OS_NOT_FOUND);
+		parameters = std::move(moved);
+		CHECK(parameters.size() == 6 && !moved.native());
+		auto batch = Take(hx::Parameters::create());
+		auto edited =
+			batch.edit()
+				.setInt("partial", 7)
+				.setString("broken", hx::StringView("\xff", 1))
+				.setInt("never", 3)
+				.finish();
+		CHECK(edited.status() == HX_OS_INVALID_ENCODING);
+		CHECK(batch.size() == 1 && Take(batch.integer("partial")) == 7);
+	}
+	else
+		CHECK(hx::Parameters::create().status() == HX_OS_NOT_SUPPORTED);
 	TestAllocationFailure();
 	TestDirectCalls();
 	TestDirectoryCalls();

@@ -228,7 +228,7 @@ hx_os_status hx_os_i_dispatch_connect(hx_os_signal_handler *handler,
 	if (!handler || !function)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 
-	status = hx_os_i_signal_name(signal, &bytes, error);
+	status = hx_os_i_parameter_name(signal, &bytes, error);
 	if (status != HX_OS_OK)
 		return status;
 
@@ -309,7 +309,7 @@ hx_os_status hx_os_i_dispatch_emit(hx_os_signal_handler *handler,
 	if (!handler)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 
-	status = hx_os_i_signal_name(signal, &bytes, error);
+	status = hx_os_i_parameter_name(signal, &bytes, error);
 	if (status != HX_OS_OK)
 		return status;
 

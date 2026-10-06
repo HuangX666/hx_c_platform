@@ -1,6 +1,6 @@
 # hx_c_platform
 
-[![CI configuration][ci-badge]](.github/workflows/build.yml) [![C99 core][c-badge]](CMakeLists.txt) [![C++11 facade][cpp-badge]](docs/CPP_POOL.md) [![Header-only C++ facade][header-badge]](docs/CPP_POOL.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![First-party license pending][license-badge]](THIRD_PARTY_NOTICES.md) [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md) [![macOS validation pending][macos-badge]](docs/VALIDATION.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.md) [![Windows 152/152 and Linux 153/153 local suites passed][tests-badge]](docs/VALIDATION.md) [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md) [![Android API 21 ARM cross-build passed][android-badge]](docs/ANDROID.md)
+[![CI configuration][ci-badge]](.github/workflows/build.yml) [![C99 core][c-badge]](CMakeLists.txt) [![C++11 facade][cpp-badge]](docs/CPP_POOL.md) [![Header-only C++ facade][header-badge]](docs/CPP_POOL.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![First-party license pending][license-badge]](THIRD_PARTY_NOTICES.md) [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md) [![macOS validation pending][macos-badge]](docs/VALIDATION.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.md) [![Windows 154/154 and Linux 155/155 local suites passed][tests-badge]](docs/VALIDATION.md) [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md) [![Android API 21 ARM cross-build passed][android-badge]](docs/ANDROID.md)
 
 [简体中文](README.zh-CN.md) · [Task tutorials](docs/USAGE.md) · [Detailed reference](docs/REFERENCE.md)
 
@@ -485,6 +485,7 @@ The meaning of `NULL` depends on its position: allocator/options parameters sele
 | Binary protocols and bounded background file output | [Streams and file writer](docs/STREAMS.md) |
 | INI editing, configuration backups and settings overlays | [Configuration editing](docs/CONFIG_EDIT.md) |
 | Interval trees, owned snapshots and bounded P50/P95/P99 | [Profiler](docs/PROFILER.md) |
+| Growable named values and binary parameter data | [Parameter packs](docs/PARAMETERS.md) |
 | Optional dependency sources and native builds | [Dependencies](docs/DEPENDENCIES.md) |
 | Network, processes, pipes, watches, mappings and system info | [Platform utilities](docs/PLATFORM_UTILITIES.md) |
 | Android and embedded builds | [Android](docs/ANDROID.md) · [Cross-compilation](docs/REFERENCE.md#section-28) |
@@ -493,7 +494,7 @@ The meaning of `NULL` depends on its position: allocator/options parameters sele
 
 ## 7. Builds, validation and licensing
 
-See the [build reference](docs/REFERENCE.md#section-27) for development builds, tests, static/shared installation and optional dependencies. Full tests on 2026-10-06 passed Windows 152/152 and WSL Linux 153/153. New I/O and configuration helpers passed related sanitizer checks; installed C++11 and pure C consumers passed 35/35 and 25/25 on each host. Earlier serialization work cross-compiled both Android API 21 ARM ABIs and passed three serialization suites on native x86_64/translated ARM64 in the API 34 emulator. The new helpers have not yet repeated those Android target checks. [Validation records](docs/VALIDATION.md) identify exact configurations and pending targets. Documentation-example checks are separate from target-platform validation.
+See the [build reference](docs/REFERENCE.md#section-27) for development builds, tests, static/shared installation and optional dependencies. Full tests on 2026-10-06 passed Windows 154/154 and WSL Linux 155/155. New I/O and configuration helpers passed related sanitizer checks; installed C++11 and pure C consumers passed 36/36 and 26/26 on each host. Earlier serialization work cross-compiled both Android API 21 ARM ABIs and passed three serialization suites on native x86_64/translated ARM64 in the API 34 emulator. The new helpers have not yet repeated those Android target checks. [Validation records](docs/VALIDATION.md) identify exact configurations and pending targets. Documentation-example checks are separate from target-platform validation.
 
 The first-party distribution license is pending; see [third-party licensing](THIRD_PARTY_NOTICES.md). The coroutine implementation is self-developed; hx_c_log integration remains future work.
 
@@ -506,6 +507,6 @@ The first-party distribution license is pending; see [third-party licensing](THI
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%20152%2F152%20Linux%20153%2F153-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%20154%2F154%20Linux%20155%2F155-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

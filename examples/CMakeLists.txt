@@ -32,7 +32,8 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 	pipe_transfer positioned_read file_info config_save periodic_timer
 	random_uuid mapped_file file_attributes watch_directory capture_process
 	delayed_task duplex_message obfuscated_string localized_time
-	signal_notifications settings profile_intervals profile_statistics
+	signal_notifications parameters settings profile_intervals
+	profile_statistics
 	atomic_publication
 	common_tasks variant find_files coroutine ordered_map format
 	ipc_server ipc_client ipc_device_server ipc_device_client
@@ -321,6 +322,11 @@ if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_SIGNALS)
 	add_test(NAME signal_notifications_example
 		COMMAND hx_os_signal_notifications)
 	set_tests_properties(signal_notifications_example PROPERTIES TIMEOUT 20)
+endif()
+
+if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_PARAMETERS)
+	add_test(NAME parameters_example COMMAND hx_os_parameters)
+	set_tests_properties(parameters_example PROPERTIES TIMEOUT 20)
 endif()
 
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_SETTINGS)
