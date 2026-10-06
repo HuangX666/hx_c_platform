@@ -64,6 +64,10 @@ The dependency-free builtin profiles need none of these components. Enabled comp
 
 The reproducible URLs and archive SHA256 values are recorded in [fetch_parsers.py](tools/fetch_parsers.py). They are integration pins, not claims of being the latest releases. tomlc17 supplies the TOMLC backend; the selected version compiles as C99 despite its name. Enabled components' unaltered license files are installed under share/hx_c_platform/licenses. Mini-XML's upstream NOTICE, including its optional license exceptions, is also installed unchanged. The parsing restrictions and backend differences are documented in [CONFIGURATION.md](docs/CONFIGURATION.md).
 
+## Optional Linux desktop system runtime
+
+The separate Linux desktop adapter may dynamically use an installed libsystemd/libelogind system runtime. These are not vendored, built or statically incorporated by this project. Their upstream licensing applies if they are redistributed; see [systemd licensing](https://github.com/systemd/systemd/blob/main/LICENSE.LGPL2.1) and [elogind](https://github.com/elogind/elogind). The adapter uses published opaque C interfaces and copies no implementation/SDK headers. Its optional runtime and unload boundaries are described in [Linux desktop](docs/LINUX_DESKTOP.md).
+
 ## Optional OpenSSL and archive dependency sources
 
 The new native dependency builder uses fixed Git submodules in `deps/` by default, with the same commits available through FetchContent. See [the build guide](docs/DEPENDENCIES.md). This prepares the dependencies for the ongoing public crypto/TLS/archive implementation; it does not silently add them to the ordinary core build.

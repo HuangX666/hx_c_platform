@@ -1,6 +1,7 @@
 #include "power_private.h"
-#if (HX_OS_ENABLE_SLEEP_INHIBIT || HX_OS_ENABLE_PERFORMANCE_REQUEST) &&        \
-	(defined(_WIN32) || defined(__APPLE__))
+#if HX_OS_I_HAVE_SLEEP_INHIBIT ||                                              \
+	(HX_OS_ENABLE_PERFORMANCE_REQUEST &&                                   \
+		(defined(_WIN32) || defined(__APPLE__)))
 static hx_os_status hx_os_power_init(hx_os_i_power *power,
 	hx_os_context *context, const char *reason, int kind,
 	hx_os_error *error)
@@ -45,7 +46,7 @@ static hx_os_status hx_os_power_clear(hx_os_i_power *power, hx_os_error *error)
 hx_os_status hx_os_sleep_inhibit_create(hx_os_context *context,
 	const char *reason, hx_os_sleep_inhibit **out, hx_os_error *error)
 {
-#if HX_OS_ENABLE_SLEEP_INHIBIT && (defined(_WIN32) || defined(__APPLE__))
+#if HX_OS_I_HAVE_SLEEP_INHIBIT
 	hx_os_sleep_inhibit *value;
 	hx_os_status status;
 
@@ -81,7 +82,7 @@ hx_os_status hx_os_sleep_inhibit_create(hx_os_context *context,
 hx_os_status hx_os_sleep_inhibit_set_active(
 	hx_os_sleep_inhibit *inhibit, int active, hx_os_error *error)
 {
-#if HX_OS_ENABLE_SLEEP_INHIBIT && (defined(_WIN32) || defined(__APPLE__))
+#if HX_OS_I_HAVE_SLEEP_INHIBIT
 	hx_os_status status;
 
 	if (!inhibit || (active != 0 && active != 1))
@@ -111,7 +112,7 @@ int hx_os_sleep_inhibit_active(const hx_os_sleep_inhibit *inhibit)
 hx_os_status hx_os_sleep_inhibit_destroy(
 	hx_os_sleep_inhibit **inhibit, hx_os_error *error)
 {
-#if HX_OS_ENABLE_SLEEP_INHIBIT && (defined(_WIN32) || defined(__APPLE__))
+#if HX_OS_I_HAVE_SLEEP_INHIBIT
 	hx_os_status status;
 
 	if (!inhibit)

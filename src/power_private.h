@@ -4,6 +4,13 @@
 #include "internal.h"
 #include "hx_os_power.h"
 
+#if HX_OS_ENABLE_SLEEP_INHIBIT &&                                              \
+	(defined(_WIN32) || defined(__APPLE__) || HX_OS_HAVE_LINUX_DESKTOP)
+#define HX_OS_I_HAVE_SLEEP_INHIBIT 1
+#else
+#define HX_OS_I_HAVE_SLEEP_INHIBIT 0
+#endif
+
 enum { HX_OS_I_SLEEP_REQUEST, HX_OS_I_PERFORMANCE_REQUEST };
 
 typedef struct hx_os_i_power {

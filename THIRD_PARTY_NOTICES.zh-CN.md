@@ -64,6 +64,10 @@ cmake/HxWarnings.cmake 复制自相邻 hx_c_log 项目，保留其版权声明�
 
 可复现的下载地址和 SHA256 记录在 [fetch_parsers.py](tools/fetch_parsers.py)；这些是集成锁定版本，不表示最新版本。 TOMLC 后端使用 tomlc17，所选版本虽名为 c17，仍按 C99 编译。启用组件的原始许可证安装到 share/hx_c_platform/licenses。 Mini-XML 的上游 NOTICE（含可选许可例外）也保持原样安装。解析范围及后端差异见 [CONFIGURATION.zh-CN.md](docs/CONFIGURATION.zh-CN.md)。
 
+## 可选 Linux 桌面系统运行库
+
+独立的 Linux 桌面适配可动态使用系统安装的 libsystemd／libelogind。项目不随附、构建或静态合入这些系统运行库；若另行分发它们，应按其上游许可证处理，见 [systemd 许可证](https://github.com/systemd/systemd/blob/main/LICENSE.LGPL2.1) 和 [elogind](https://github.com/elogind/elogind)。适配使用公开的不透明 C 接口，没有复制实现／SDK 头。可选运行时与卸载边界见 [Linux 桌面](docs/LINUX_DESKTOP.zh-CN.md)。
+
 ## 可选 OpenSSL 与归档依赖源码
 
 新增原生依赖构建器默认使用 `deps/` 下固定提交的 Git 子模块，也支持获取相同提交的 FetchContent，见[构建说明](docs/DEPENDENCIES.zh-CN.md)。这是为仍在继续实现的加密、TLS、归档接口准备依赖，不会在普通核心构建中暗中链接这些组件。

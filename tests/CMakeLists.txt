@@ -115,6 +115,43 @@ endif()
 set_tests_properties(ipc PROPERTIES TIMEOUT 60)
 set_tests_properties(ipc_allocator PROPERTIES TIMEOUT 30)
 
+if(HX_OS_HAVE_LINUX_DESKTOP AND NOT CMAKE_CROSSCOMPILING)
+	find_package(Python3 QUIET COMPONENTS Interpreter)
+	if(Python3_Interpreter_FOUND)
+		foreach(provider IN ITEMS systemd elogind)
+			add_library(hx_test_missing_${provider} MODULE
+				missing_sd_bus.c)
+			set_target_properties(hx_test_missing_${provider}
+				PROPERTIES
+				C_STANDARD 99 C_STANDARD_REQUIRED YES
+				C_EXTENSIONS NO PREFIX "" SUFFIX ""
+				OUTPUT_NAME "lib${provider}.so.0"
+				LIBRARY_OUTPUT_DIRECTORY
+				"${CMAKE_CURRENT_BINARY_DIR}/missing-sd-bus")
+			hx_apply_warnings(hx_test_missing_${provider})
+			add_dependencies(hx_os_test_power
+				hx_test_missing_${provider})
+		endforeach()
+
+		set(hx_desktop_test_arguments
+			--program $<TARGET_FILE:hx_os_test_power>
+			--missing-runtime
+			"${CMAKE_CURRENT_BINARY_DIR}/missing-sd-bus")
+		if(CMAKE_CXX_COMPILER_LOADED)
+			list(APPEND hx_desktop_test_arguments --cpp-program
+				$<TARGET_FILE:hx_os_test_cpp_extensions>)
+			add_dependencies(hx_os_test_power
+				hx_os_test_cpp_extensions)
+		endif()
+		add_test(NAME linux_desktop_power
+			COMMAND "${Python3_EXECUTABLE}"
+			"${CMAKE_CURRENT_SOURCE_DIR}/test_linux_power.py"
+			${hx_desktop_test_arguments})
+		set_tests_properties(linux_desktop_power PROPERTIES
+			TIMEOUT 90 SKIP_RETURN_CODE 77)
+	endif()
+endif()
+
 target_sources(hx_os_test_variant PRIVATE variant_fixture.c)
 
 if(HX_OS_TEST_FORMAT_SYNTAX)

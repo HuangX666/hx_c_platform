@@ -8,6 +8,7 @@
 #include <hx/Signal.hpp>
 #include <hx/Settings.hpp>
 #include <hx/Profiler.hpp>
+#include <cstdlib>
 #include "cpp_check.hpp"
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
@@ -27,6 +28,11 @@ static void hx_registry_cleanup()
 int main()
 {
 	const auto capabilities = hx_os_capabilities();
+	bool testSleep = (capabilities & HX_OS_CAP_SLEEP_INHIBIT) != 0;
+
+#if defined(__linux__) && !defined(__ANDROID__)
+	testSleep = testSleep && std::getenv("HX_OS_TEST_DESKTOP");
+#endif
 	if (capabilities & HX_OS_CAP_PROFILER) {
 		hx_os_profiler *owner = NULL;
 
@@ -208,7 +214,7 @@ int main()
 		CHECK(Take(empty.decode()).empty());
 	}
 
-	if (capabilities & HX_OS_CAP_SLEEP_INHIBIT) {
+	if (testSleep) {
 		auto first =
 			Take(hx::SleepInhibit::create("hx platform unit test"));
 

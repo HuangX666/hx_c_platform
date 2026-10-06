@@ -1791,6 +1791,7 @@ int main(void)
 | `HX_OS_ENABLE_DUPLEX_PIPE` | ON | 不依赖 NETWORK 的双向文件端点 |
 | `HX_OS_ENABLE_REGISTRY` | ON | Windows 注册表操作 |
 | `HX_OS_ENABLE_SLEEP_INHIBIT` | ON | 作用域防睡眠请求 |
+| `HX_OS_ENABLE_LINUX_DESKTOP` | ON | 可选的系统 sd-bus 桌面运行库 |
 | `HX_OS_ENABLE_PERFORMANCE_REQUEST` | ON | 原生性能活动请求 |
 | `HX_OS_ENABLE_OBFUSCATION` | ON | 可逆字符串混淆 |
 | `HX_OS_ENABLE_CALENDAR` | ON | locale 无关日期与文件名 |

@@ -1791,6 +1791,7 @@ All new native/common modules default to ON; optional third-party encoding and p
 | `HX_OS_ENABLE_DUPLEX_PIPE` | ON | Build synchronous duplex socket pairs |
 | `HX_OS_ENABLE_REGISTRY` | ON | Build Windows registry access |
 | `HX_OS_ENABLE_SLEEP_INHIBIT` | ON | Build native idle-sleep requests |
+| `HX_OS_ENABLE_LINUX_DESKTOP` | ON | Optional installed sd-bus desktop runtime |
 | `HX_OS_ENABLE_PERFORMANCE_REQUEST` | ON | Build native execution activities |
 | `HX_OS_ENABLE_OBFUSCATION` | ON | Build reversible string obfuscation |
 | `HX_OS_ENABLE_CALENDAR` | ON | Build locale-independent calendar helpers |

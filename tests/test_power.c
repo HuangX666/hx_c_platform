@@ -10,6 +10,7 @@
 			exit(1);                                               \
 		}                                                              \
 	} while (0)
+
 typedef struct power_state {
 	hx_os_sleep_inhibit *inhibit;
 	hx_os_performance_token *performance;
@@ -63,7 +64,39 @@ static void HX_OS_CALL deallocate(void *memory, void *user)
 	}
 }
 
-int main(void)
+static int desktop_failure_case(const char *mode)
+{
+	hx_os_sleep_inhibit *request = NULL;
+	hx_os_context *context = NULL;
+	hx_os_error error;
+	hx_os_status status;
+
+	CHECK(hx_os_context_create(NULL, &context, NULL) == HX_OS_OK);
+	status = hx_os_sleep_inhibit_create(
+		context, "Desktop failure check", &request, &error);
+	if (!strcmp(mode, "absent") || !strcmp(mode, "address"))
+		CHECK(status == HX_OS_NOT_SUPPORTED);
+	else if (!strcmp(mode, "denied"))
+		CHECK(status == HX_OS_ACCESS_DENIED);
+	else if (!strcmp(mode, "malformed"))
+		CHECK(status == HX_OS_IO_ERROR);
+	else if (!strcmp(mode, "timeout"))
+		CHECK(status == HX_OS_TIMEOUT);
+	else if (!strcmp(mode, "disconnect"))
+		CHECK(status == HX_OS_IO_ERROR || status == HX_OS_TIMEOUT ||
+			status == HX_OS_CLOSED);
+	else
+		CHECK(0);
+
+	CHECK(!request && error.status == status);
+	CHECK(hx_os_context_allocations(context) == 0);
+	CHECK(hx_os_context_destroy(&context, NULL) == HX_OS_OK);
+	printf("Handled desktop failure: %s\n", hx_os_status_name(status));
+
+	return 0;
+}
+
+int main(int argc, char **argv)
 {
 	hx_os_sleep_inhibit *first = NULL, *second = NULL;
 	hx_os_context *context = NULL;
@@ -73,13 +106,36 @@ int main(void)
 	allocation_state allocations = {0, 0, 0};
 	hx_os_status status;
 	size_t i;
+	int available = (hx_os_capabilities() & HX_OS_CAP_SLEEP_INHIBIT) != 0;
 
-	if (!(hx_os_capabilities() & HX_OS_CAP_SLEEP_INHIBIT)) {
+	if (argc == 2)
+		return desktop_failure_case(argv[1]);
+
+	if (!available) {
 		CHECK(hx_os_sleep_inhibit_create(NULL, "test", &first, NULL) ==
 				HX_OS_NOT_SUPPORTED &&
 			!first);
 	}
-	else {
+#if defined(__linux__) && !defined(__ANDROID__)
+	if (available && !getenv("HX_OS_TEST_DESKTOP")) {
+		available = 0;
+		puts("Desktop lease behavior is checked on the isolated test "
+		     "bus.");
+	}
+	else if (available) {
+		status = hx_os_sleep_inhibit_create(
+			NULL, "Desktop service probe", &first, NULL);
+		CHECK(status == HX_OS_OK || status == HX_OS_NOT_SUPPORTED);
+		available = status == HX_OS_OK;
+		if (available)
+			CHECK(hx_os_sleep_inhibit_destroy(&first, NULL) ==
+				HX_OS_OK);
+		else
+			puts("No supported desktop service; native lease "
+			     "checks skipped.");
+	}
+#endif
+	if (available) {
 		hx_os_context_options_init(&options);
 		options.allocator.allocate = allocate;
 		options.allocator.deallocate = deallocate;
@@ -115,6 +171,9 @@ int main(void)
 			HX_OS_OK);
 		CHECK(!hx_os_sleep_inhibit_active(first) &&
 			hx_os_sleep_inhibit_active(second));
+		CHECK(hx_os_sleep_inhibit_set_active(first, 1, NULL) ==
+			HX_OS_OK);
+		CHECK(hx_os_sleep_inhibit_active(first));
 		CHECK(hx_os_sleep_inhibit_destroy(&first, NULL) == HX_OS_OK);
 		CHECK(hx_os_context_destroy(&context, NULL) == HX_OS_BUSY);
 

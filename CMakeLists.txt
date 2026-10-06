@@ -93,7 +93,14 @@ option(HX_OS_ENABLE_WINDOWS_DESKTOP "Build Windows window and GPU helpers" ON)
 option(HX_OS_ENABLE_NATIVE_INTEROP "Build borrowed native object queries" ON)
 
 option(HX_OS_ENABLE_SLEEP_INHIBIT "Build native idle-sleep requests" ON)
+option(HX_OS_ENABLE_LINUX_DESKTOP "Build optional desktop power requests" ON)
 option(HX_OS_ENABLE_PERFORMANCE_REQUEST "Build native execution activities" ON)
+
+set(HX_OS_HAVE_LINUX_DESKTOP 0)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT ANDROID
+	AND HX_OS_ENABLE_LINUX_DESKTOP AND HX_OS_ENABLE_SLEEP_INHIBIT)
+	set(HX_OS_HAVE_LINUX_DESKTOP 1)
+endif()
 
 option(HX_OS_ENABLE_OBFUSCATION "Build reversible string obfuscation" ON)
 
@@ -466,6 +473,8 @@ if(HX_OS_ENABLE_SLEEP_INHIBIT OR HX_OS_ENABLE_PERFORMANCE_REQUEST)
 			target_link_libraries(hx_c_platform PRIVATE
 				"-framework Foundation" objc)
 		endif()
+	elseif(HX_OS_HAVE_LINUX_DESKTOP)
+		target_sources(hx_c_platform PRIVATE src/linux/power_native.c)
 	endif()
 endif()
 
@@ -546,7 +555,7 @@ if(HX_OS_ENABLE_POSITIONED_IO)
 	endif()
 endif()
 
-if(HX_OS_ENABLE_LIBRARY OR HX_OS_ENABLE_PATHS)
+if(HX_OS_ENABLE_LIBRARY OR HX_OS_ENABLE_PATHS OR HX_OS_HAVE_LINUX_DESKTOP)
 	target_link_libraries(hx_c_platform PRIVATE ${CMAKE_DL_LIBS})
 endif()
 
@@ -863,7 +872,7 @@ if(APPLE AND (HX_OS_ENABLE_SLEEP_INHIBIT OR HX_OS_ENABLE_PERFORMANCE_REQUEST))
 	endif()
 endif()
 
-if(HX_OS_ENABLE_LIBRARY OR HX_OS_ENABLE_PATHS)
+if(HX_OS_ENABLE_LIBRARY OR HX_OS_ENABLE_PATHS OR HX_OS_HAVE_LINUX_DESKTOP)
 	foreach(library IN LISTS CMAKE_DL_LIBS)
 		string(APPEND HX_OS_PC_LIBS_PRIVATE " -l${library}")
 	endforeach()

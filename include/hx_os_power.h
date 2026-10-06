@@ -13,13 +13,27 @@ typedef struct hx_os_performance_token hx_os_performance_token;
  * Caller serializes operations; transfer between threads is allowed after
  * synchronization. No hidden thread, timer, process-global configuration or
  * frequency guarantee. OS/user power policies can override these requests.
- * Linux returns NOT_SUPPORTED (no DBus dependency).
+ * Linux desktop optionally uses the installed libsystemd/libelogind sd-bus
+ * runtime and a local session bus. It tries freedesktop PowerManagement then
+ * GNOME SessionManager (suspend flag only, not idle/lock inhibition). Missing
+ * runtime/service returns NOT_SUPPORTED. Method calls share a 1 s monotonic
+ * budget; native setup has no hard deadline. Activation does not autostart a
+ * service or request interactive authorization. Each active object holds a
+ * private bus connection; deactivation/destruction closes it without waiting
+ * for a release reply. The desktop observes disconnect and releases the lease.
+ * No global system power configuration is changed. Do not mutate the process
+ * environment concurrently with creation/reactivation. Native library mapping
+ * may remain loaded to protect its internal TLS through plugin unload.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sleep_inhibit_create(
 	hx_os_context *context, const char *reason, hx_os_sleep_inhibit **out,
 	hx_os_error *error);
 
-/* Idempotent requested state; no native reference is added by repeated true. */
+/* Idempotent requested state; no native reference is added by repeated true.
+ * active() records this state, not a live desktop-service health check. A bus
+ * or desktop restart can lose a Linux lease; deactivate then activate again
+ * (or recreate) to request a new one. No hidden reconnect worker is started.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sleep_inhibit_set_active(
 	hx_os_sleep_inhibit *inhibit, int active, hx_os_error *error);
 

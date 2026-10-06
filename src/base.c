@@ -637,7 +637,8 @@ uint64_t hx_os_capabilities(void)
 #if HX_OS_ENABLE_REGISTRY && defined(_WIN32)
 	result |= HX_OS_CAP_REGISTRY;
 #endif
-#if HX_OS_ENABLE_SLEEP_INHIBIT && (defined(_WIN32) || defined(__APPLE__))
+#if HX_OS_ENABLE_SLEEP_INHIBIT &&                                              \
+	(defined(_WIN32) || defined(__APPLE__) || HX_OS_HAVE_LINUX_DESKTOP)
 	result |= HX_OS_CAP_SLEEP_INHIBIT;
 #endif
 #if HX_OS_ENABLE_PERFORMANCE_REQUEST && (defined(_WIN32) || defined(__APPLE__))
