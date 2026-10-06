@@ -35,7 +35,8 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 	signal_notifications parameters settings profile_intervals
 	profile_statistics
 	atomic_publication
-	common_tasks variant find_files coroutine ordered_map format
+	common_tasks parse_script variant find_files coroutine ordered_map
+	format
 	ipc_server ipc_client ipc_device_server ipc_device_client
 	tcp_order_server tcp_order_client udp_dashboard udp_sensor
 	kcp_transfer_server kcp_transfer_client)
@@ -327,6 +328,11 @@ endif()
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_PARAMETERS)
 	add_test(NAME parameters_example COMMAND hx_os_parameters)
 	set_tests_properties(parameters_example PROPERTIES TIMEOUT 20)
+endif()
+
+if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_LEXER)
+	add_test(NAME parse_script_example COMMAND hx_os_parse_script)
+	set_tests_properties(parse_script_example PROPERTIES TIMEOUT 20)
 endif()
 
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_SETTINGS)

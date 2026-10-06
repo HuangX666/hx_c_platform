@@ -107,6 +107,85 @@ public:
 			hx_os_lexer_reset(m_handle_);
 	}
 
+	Result<bool> accept(const char *text) noexcept
+	{
+		if (!m_handle_)
+			return Failure(HX_OS_CLOSED);
+
+		int matched = 0;
+		hx_os_error error = {};
+		auto status =
+			hx_os_lexer_accept(m_handle_, text, &matched, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+
+		return matched != 0;
+	}
+
+	Result<void> expect(const char *text) noexcept
+	{
+		if (!m_handle_)
+			return Failure(HX_OS_CLOSED);
+
+		hx_os_error error = {};
+		auto status = hx_os_lexer_expect(m_handle_, text, NULL, &error);
+
+		return detail::Status(status, error);
+	}
+
+	Result<void> expectKind(int kind) noexcept
+	{
+		if (!m_handle_)
+			return Failure(HX_OS_CLOSED);
+
+		hx_os_error error = {};
+		auto status =
+			hx_os_lexer_expect_kind(m_handle_, kind, NULL, &error);
+
+		return detail::Status(status, error);
+	}
+
+	Result<String> readString(hx_os_context *context = NULL) noexcept
+	{
+		if (!m_handle_)
+			return Failure(HX_OS_CLOSED);
+
+		return detail::StringQuery(
+			[this](hx_string *out, hx_os_error *error) noexcept {
+				return hx_os_lexer_read_string(
+					m_handle_, out, error);
+			},
+			context);
+	}
+
+	Result<void> skipGroup(size_t maxDepth = 64) noexcept
+	{
+		if (!m_handle_)
+			return Failure(HX_OS_CLOSED);
+
+		hx_os_error error = {};
+		auto status = hx_os_lexer_skip_group_with_limit(
+			m_handle_, maxDepth, &error);
+
+		return detail::Status(status, error);
+	}
+
+	Result<void> skipUntil(const char *text) noexcept
+	{
+		if (!m_handle_)
+			return Failure(HX_OS_CLOSED);
+
+		hx_os_error error = {};
+		auto status = hx_os_lexer_skip_until(m_handle_, text, &error);
+
+		return detail::Status(status, error);
+	}
+
+	hx_os_lexer *native() const noexcept
+	{
+		return m_handle_;
+	}
+
 private:
 	hx_os_lexer *m_handle_;
 	hx_os_context *m_context_;

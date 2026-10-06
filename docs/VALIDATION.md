@@ -4,9 +4,19 @@ Entries below describe the versions tested at the time. Historical C++ exception
 
 [简体中文](VALIDATION.zh-CN.md) · [README](../README.md)
 
-This records development validation through 2026-10-06. A design, implemented adapter, successful compile and successful target run are different states. Local tests do not certify every operating-system release, filesystem, CPU, libc or network provider.
+This records development validation through 2026-10-07. A design, implemented adapter, successful compile and successful target run are different states. Local tests do not certify every operating-system release, filesystem, CPU, libc or network provider.
 
 The JSON entry below records the current examples. Earlier independent text examples, initial shared workflows, IPC/KCP implementation and other batches describe their historical versions.
+
+## 2026-10-07: Runtime parsing conveniences
+
+Baseline `2acdb22`. Added exact-token accept/expect, expected-kind checks, quoted-string extraction, bounded nested-bracket skipping and flat token seeking. Existing lexer grammar, options, ownership and public layouts remain unchanged. The C++11 facade adds Result-based operations and an explicit borrowed native handle. These helpers process runtime input and do not add custom C/C++ syntax or build steps. Runtime macro/conditional/include preprocessing is still separate pending work.
+
+Windows MSVC x64 shared full CTest passed 156/156; WSL GCC shared passed 157/157. Installed C++11/pure C consumers passed 37/37 and 27/27 on both hosts. Win32 static lexer/parser/C++ utilities passed 3/3; WSL all-optional-modules-off static passed their disabled checks 3/3. ASan/UBSan with leak detection passed lexer, parser, C++ utilities and the executable script example 4/4. Standalone C99/C++11 public headers compiled, and the C++20 header syntax was checked with exceptions disabled. The final explicit-this lambda capture is equivalent to the tested capture.
+
+Tests cover non-consuming mismatches, EOF versus expected END, decoded Unicode and escapes, output/cursor preservation on allocation failure, mixed bracket types, brackets inside quoted strings/comments, default 64-level and explicit 80-level nesting, invalid depth, token-count limits, missing targets, kept whitespace/comments and inert C++ objects. Helper execution adds no allocation except owned string decoding, no lock and no OS call. Group skipping uses a fixed 256-byte stack. The target text length for flat seeking is computed once, avoiding repeated scans of a long search token. No throughput improvement or new target-board run is claimed.
+
+Logs use `parser-*` in the shared, Win32, ASan and minimal build trees. macOS, Win7/8.1, Android and embedded runtime checks for these additions remain pending. Signal extensions, preprocessing, native-platform, crypto/TLS and archive adapters are not marked complete by this entry.
 
 ## 2026-10-06: Growable named parameter packs
 

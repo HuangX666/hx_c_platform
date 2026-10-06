@@ -316,7 +316,8 @@ configure_file(cmake/hx_os_config.h.in
 
 add_library(hx_c_platform
 	src/base.c src/atomic.c src/time.c src/unicode.c src/thread.c
-	src/convenience.c src/lexer.c src/wide.c src/wait.c src/string.c
+	src/convenience.c src/lexer.c src/parser.c
+	src/wide.c src/wait.c src/string.c
 	src/string_utils.c src/format.c src/file.c src/text.c src/optional.c
 	src/stdio.c src/text_wide.c
 	src/stream.c src/stream_number.c

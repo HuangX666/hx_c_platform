@@ -42,6 +42,7 @@ typedef struct hx_os_lexer_options {
 	size_t max_tokens;
 	uint32_t flags;
 } hx_os_lexer_options;
+
 #define HX_OS_LEXER_OPTIONS_INIT                                               \
 	{                                                                      \
 		sizeof(hx_os_lexer_options), 1, 16 * 1024 * 1024, 1024 * 1024, \
@@ -91,6 +92,55 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_lexer_position(
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_token_string(
 	const hx_os_token *token, hx_string *out, hx_os_error *error);
+
+/* Runtime parsing helpers respect the lexer's whitespace/comment options.
+ * Comparisons use exact raw token bytes, including quotes on STRING.
+ * token_is allocates nothing; NULL token/text is false.
+ */
+HX_OS_API int HX_OS_CALL hx_os_token_is(
+	const hx_os_token *token, const char *text);
+
+/* Accept consumes one matching token; otherwise the cursor stays unchanged.
+ * Expected text is nonempty. EOF is successful no-match; failure preserves
+ * matched. Expect reports SYNTAX on mismatch, TRUNCATED_INPUT on EOF.
+ * Optional out borrows the lexer, unchanged on failure. expect_kind(END)
+ * succeeds at EOF, returning END without further progress.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_lexer_accept(
+	hx_os_lexer *lexer, const char *text, int *matched, hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_lexer_expect(hx_os_lexer *lexer,
+	const char *text, hx_os_token *out, hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_lexer_expect_kind(
+	hx_os_lexer *lexer, int kind, hx_os_token *out, hx_os_error *error);
+
+/* Decode and consume the next STRING token using out's context. Failure
+ * preserves output/cursor. Allocators must not reenter, mutate or destroy
+ * the participating lexer/string during this operation.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_lexer_read_string(
+	hx_os_lexer *lexer, hx_string *out, hx_os_error *error);
+
+/* Consume a complete (), [] or {} group, including its opening token. Nested
+ * types must match; brackets inside strings/comments do not count. Default
+ * depth limit 64, explicit limit 1..256. Fixed bounded stack, no allocation.
+ * Failure can consume a prefix: unmatched closing/excessive opening tokens
+ * remain next; a missing close is TRUNCATED_INPUT. Reset/recreate the lexer
+ * to restart a failed group skip from the beginning.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_lexer_skip_group(
+	hx_os_lexer *lexer, hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_lexer_skip_group_with_limit(
+	hx_os_lexer *lexer, size_t max_depth, hx_os_error *error);
+
+/* Consume through the next exact raw text, including that token. Flat token
+ * scan, not bracket-aware recovery. Missing target returns EOF; lexical/limit
+ * failures may have consumed a prefix. Empty expected text is invalid.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_lexer_skip_until(
+	hx_os_lexer *lexer, const char *text, hx_os_error *error);
 #ifdef __cplusplus
 }
 #endif

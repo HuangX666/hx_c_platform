@@ -12,7 +12,7 @@ enable_testing()
 
 foreach(suite IN ITEMS ipc kcp config_tree codec stream buffered_file
 	byte_queue text_interop settings_apply config_backup ini calendar
-	params)
+	params parser)
 	add_executable(consumer_${suite} ../test_${suite}.c)
 	target_link_libraries(consumer_${suite} PRIVATE
 		hx_c_platform::hx_c_platform)

@@ -489,6 +489,25 @@ int main()
 
 	CHECK(Equal(hx::Strings::join(views, 3, ":"), "one::two"));
 	if (caps & HX_OS_CAP_LEXER) {
+		auto parser = Take(
+			hx::Lexer::create("name = 'value' { [1, 2] }; tail"));
+		CHECK(!Take(parser.accept("different")));
+		Take(parser.expect("name"));
+		Take(parser.expect("="));
+		CHECK(Equal(parser.readString(), "value"));
+		Take(parser.skipGroup());
+		Take(parser.skipUntil("tail"));
+		Take(parser.expectKind(HX_OS_TOKEN_END));
+		CHECK(parser.readString().status() == HX_OS_TRUNCATED_INPUT);
+		hx::Lexer empty;
+		CHECK(empty.accept("x").status() == HX_OS_CLOSED);
+		CHECK(empty.expect("x").status() == HX_OS_CLOSED);
+		CHECK(empty.skipGroup().status() == HX_OS_CLOSED);
+		CHECK(empty.skipUntil("x").status() == HX_OS_CLOSED);
+		CHECK(empty.readString().status() == HX_OS_CLOSED);
+		CHECK(empty.expectKind(HX_OS_TOKEN_END).status() ==
+			HX_OS_CLOSED);
+
 		hx::Token token;
 
 		{

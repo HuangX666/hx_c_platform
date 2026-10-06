@@ -49,7 +49,7 @@ set(hx_test_suites data options lifecycle config containers sysinfo file_utils
 	calldata params signal
 	settings settings_concurrency settings_config settings_apply
 	profiler profiler_snapshot atomic
-	string_tools lexer wide_wait catalog_filename procedure
+	string_tools lexer parser wide_wait catalog_filename procedure
 	android_baseline convenience variant file_search stl
 	coroutine coroutine_io coroutine_sync format kcp ipc ipc_allocator)
 
