@@ -349,6 +349,7 @@ add_library(hx_c_platform
 	src/power.c src/obfuscate.c
 	src/calendar.c src/filename.c src/text_lookup.c src/bitstream.c
 	src/calldata.c src/params.c src/dispatch.c src/signal.c src/procedure.c
+	src/signal_arguments.c
 	src/settings.c
 	src/profiler.c
 	${hx_parser_sources} ${hx_parser_objects}

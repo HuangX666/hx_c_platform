@@ -1651,6 +1651,8 @@ int main(void)
 
 连续填写参数可使用 `hx_os_calldata_edit_begin`、类型化 setter 和 `hx_os_calldata_edit_finish`，或 C++ `data.edit().setInt(...).setString(...).finish()`。每项立即生效，首次失败保留已有成功项并跳过后续项。`CallDataView::stringView()` 直接借用参数包，无需复制，使用期间参数包必须有效且不被修改。命名过程的回调结果仍按既有契约，仅成功返回后才发布。
 
+订阅一个处理器的全部信号，使用 `hx_os_signal_connect_all` 或 C++ `connectAll`；C++ `notify` 也可用于定义了 `emit` 宏的 Qt 工程。回调接收信号名称和借用的只读参数视图。见[顺序、所有权和可运行示例](SIGNALS.zh-CN.md)。
+
 ### 25.2 区间计时树
 
 ```c

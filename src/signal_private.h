@@ -6,8 +6,17 @@
 
 void *hx_os_i_signal_exchange_execution(void *value);
 
+typedef union hx_os_signal_callback {
+	hx_os_signal_fn named;
+	hx_os_signal_all_fn all;
+} hx_os_signal_callback;
+
+struct hx_os_signal_arguments {
+	const hx_os_calldata *data;
+};
+
 typedef struct hx_os_signal_slot {
-	hx_os_signal_fn function;
+	hx_os_signal_callback function;
 	hx_os_signal_cleanup_fn cleanup;
 	void *user;
 	uint64_t identifier;
@@ -43,6 +52,11 @@ hx_os_status hx_os_i_dispatch_handler_create_with_options(
 
 hx_os_status hx_os_i_dispatch_connect(hx_os_signal_handler *handler,
 	const char *signal, hx_os_signal_fn function, void *user,
+	hx_os_signal_cleanup_fn cleanup, hx_os_signal_connection *out,
+	hx_os_error *error);
+
+hx_os_status hx_os_i_dispatch_connect_all(hx_os_signal_handler *handler,
+	hx_os_signal_all_fn function, void *user,
 	hx_os_signal_cleanup_fn cleanup, hx_os_signal_connection *out,
 	hx_os_error *error);
 

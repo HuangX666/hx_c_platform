@@ -78,7 +78,7 @@ static void hx_os_signal_retire(hx_os_signal_handler *handler, size_t index)
 	hx_os_signal_current = frame.previous;
 	(void)hx_os_mutex_lock(handler->mutex, NULL);
 	slot->state = HX_OS_SIGNAL_FREE;
-	slot->function = NULL;
+	slot->function.named = NULL;
 	slot->cleanup = NULL;
 	slot->user = NULL;
 	--handler->live_slots;
@@ -213,22 +213,25 @@ hx_os_status hx_os_i_dispatch_handler_create_with_options(
 #endif
 }
 
-hx_os_status hx_os_i_dispatch_connect(hx_os_signal_handler *handler,
-	const char *signal, hx_os_signal_fn function, void *user,
+static hx_os_status hx_os_signal_connect_impl(hx_os_signal_handler *handler,
+	const char *signal, hx_os_signal_callback function, void *user,
 	hx_os_signal_cleanup_fn cleanup, hx_os_signal_connection *out,
 	hx_os_error *error)
 {
 #if HX_OS_ENABLE_SIGNALS || HX_OS_ENABLE_PROCEDURES
-	size_t bytes, i;
-	hx_os_status status;
+	size_t bytes = 0, i;
+	hx_os_status status = HX_OS_OK;
 
 	if (out)
 		*out = 0;
 
-	if (!handler || !function)
+	if (!handler || (signal ? !function.named : !function.all))
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (!signal && handler->unique_names)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 
-	status = hx_os_i_parameter_name(signal, &bytes, error);
+	if (signal)
+		status = hx_os_i_parameter_name(signal, &bytes, error);
 	if (status != HX_OS_OK)
 		return status;
 
@@ -238,7 +241,7 @@ hx_os_status hx_os_i_dispatch_connect(hx_os_signal_handler *handler,
 	else if (handler->generation > UINT32_MAX)
 		status = HX_OS_LIMIT;
 	else {
-		if (handler->unique_names) {
+		if (handler->unique_names && signal) {
 			for (i = 0; i < handler->capacity; ++i) {
 				if (handler->slots[i].state ==
 						HX_OS_SIGNAL_CONNECTED &&
@@ -268,7 +271,12 @@ hx_os_status hx_os_i_dispatch_connect(hx_os_signal_handler *handler,
 			slot->cleanup = cleanup;
 			slot->user = user;
 			slot->state = HX_OS_SIGNAL_CONNECTED;
-			memcpy(slot->name, signal, bytes + 1);
+			/* Empty names are reserved internally for all-signal
+			 * slots. */
+			if (signal)
+				memcpy(slot->name, signal, bytes + 1);
+			else
+				slot->name[0] = 0;
 			++handler->live_slots;
 			if (out)
 				*out = slot->identifier;
@@ -291,12 +299,39 @@ hx_os_status hx_os_i_dispatch_connect(hx_os_signal_handler *handler,
 #endif
 }
 
+hx_os_status hx_os_i_dispatch_connect(hx_os_signal_handler *handler,
+	const char *signal, hx_os_signal_fn function, void *user,
+	hx_os_signal_cleanup_fn cleanup, hx_os_signal_connection *out,
+	hx_os_error *error)
+{
+	hx_os_signal_callback callback;
+
+	callback.named = function;
+
+	return hx_os_signal_connect_impl(handler, signal ? signal : "",
+		callback, user, cleanup, out, error);
+}
+
+hx_os_status hx_os_i_dispatch_connect_all(hx_os_signal_handler *handler,
+	hx_os_signal_all_fn function, void *user,
+	hx_os_signal_cleanup_fn cleanup, hx_os_signal_connection *out,
+	hx_os_error *error)
+{
+	hx_os_signal_callback callback;
+
+	callback.all = function;
+
+	return hx_os_signal_connect_impl(
+		handler, NULL, callback, user, cleanup, out, error);
+}
+
 hx_os_status hx_os_i_dispatch_emit(hx_os_signal_handler *handler,
 	const char *signal, const hx_os_calldata *data, size_t *called,
 	hx_os_error *error)
 {
 #if HX_OS_ENABLE_SIGNALS || HX_OS_ENABLE_PROCEDURES
 	static const hx_os_calldata empty = HX_OS_CALLDATA_INIT;
+	hx_os_signal_arguments arguments;
 	hx_os_signal_frame frame;
 	uint64_t *snapshot = NULL, cutoff, single;
 	size_t bytes, needed = 0, count = 0, i, calls = 0;
@@ -305,6 +340,7 @@ hx_os_status hx_os_i_dispatch_emit(hx_os_signal_handler *handler,
 
 	if (called)
 		*called = 0;
+	arguments.data = data ? data : &empty;
 
 	if (!handler)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
@@ -330,7 +366,8 @@ hx_os_status hx_os_i_dispatch_emit(hx_os_signal_handler *handler,
 
 	for (i = 0; i < handler->capacity; ++i)
 		if (handler->slots[i].state == HX_OS_SIGNAL_CONNECTED &&
-			!strcmp(handler->slots[i].name, signal))
+			(!handler->slots[i].name[0] ||
+				!strcmp(handler->slots[i].name, signal)))
 			++needed;
 
 	(void)hx_os_mutex_unlock(handler->mutex, NULL);
@@ -356,7 +393,7 @@ hx_os_status hx_os_i_dispatch_emit(hx_os_signal_handler *handler,
 
 			if (slot->state == HX_OS_SIGNAL_CONNECTED &&
 				(slot->identifier >> 32) <= cutoff &&
-				!strcmp(slot->name, signal))
+				(!slot->name[0] || !strcmp(slot->name, signal)))
 				snapshot[count++] = slot->identifier;
 		}
 
@@ -369,7 +406,8 @@ hx_os_status hx_os_i_dispatch_emit(hx_os_signal_handler *handler,
 	for (i = 0; i < count; ++i) {
 		size_t index = (uint32_t)snapshot[i] - 1;
 		hx_os_signal_slot *slot = &handler->slots[index];
-		hx_os_signal_fn function;
+		hx_os_signal_callback function;
+		int all;
 		hx_os_error callback_error = {HX_OS_OK, HX_OS_ERROR_NONE, 0, 0};
 		void *user;
 
@@ -382,11 +420,15 @@ hx_os_status hx_os_i_dispatch_emit(hx_os_signal_handler *handler,
 
 		++slot->running;
 		function = slot->function;
+		all = !slot->name[0];
 		user = slot->user;
 		(void)hx_os_mutex_unlock(handler->mutex, NULL);
 		frame.connection = snapshot[i];
 
-		status = function(data ? data : &empty, user, &callback_error);
+		status = all
+			? function.all(
+				  signal, &arguments, user, &callback_error)
+			: function.named(arguments.data, user, &callback_error);
 		frame.connection = 0;
 		++calls;
 		if (first == HX_OS_OK && status != HX_OS_OK) {

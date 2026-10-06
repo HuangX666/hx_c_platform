@@ -58,6 +58,26 @@ hx_os_status hx_os_signal_connect(hx_os_signal_handler *handler,
 #endif
 }
 
+hx_os_status hx_os_signal_connect_all(hx_os_signal_handler *handler,
+	hx_os_signal_all_fn function, void *user,
+	hx_os_signal_cleanup_fn cleanup, hx_os_signal_connection *out,
+	hx_os_error *error)
+{
+#if HX_OS_ENABLE_SIGNALS
+	return hx_os_i_dispatch_connect_all(
+		handler, function, user, cleanup, out, error);
+#else
+	(void)handler;
+	(void)function;
+	(void)user;
+	(void)cleanup;
+	if (out)
+		*out = 0;
+
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
+}
+
 hx_os_status hx_os_signal_emit(hx_os_signal_handler *handler,
 	const char *signal, const hx_os_calldata *data, size_t *called,
 	hx_os_error *error)

@@ -1651,6 +1651,8 @@ Procedure names are copied UTF-8, unique, case-sensitive and 1..127 bytes. Param
 
 For multiple parameter assignments, use `hx_os_calldata_edit_begin`, its typed setters and `hx_os_calldata_edit_finish`, or C++ `data.edit().setInt(...).setString(...).finish()`. Each assignment is immediate; first failure preserves prior assignments and skips later ones. `CallDataView::stringView()` borrows the pack without copying; the pack must remain alive and unchanged. Named-procedure callback result publication still follows the existing success-only commit contract.
 
+All-signal observation uses `hx_os_signal_connect_all` or C++ `connectAll`; C++ `notify` also works when Qt defines `emit`. The callback receives the signal name and a borrowed read-only argument view. See [ordering, ownership and the runnable example](SIGNALS.md).
+
 ### 25.2 Profile an interval tree
 
 ```c

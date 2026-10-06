@@ -156,6 +156,32 @@ int main()
 
 		CHECK(Take(signal.emit("ready", copied)) == 1 && count == 1);
 
+		int observed = 0;
+		hx::Parameters saved;
+		auto all = Take(signal.connectAll(
+			[&observed, &saved](hx::StringView name,
+				hx::SignalArguments arguments) noexcept {
+				CHECK(name.size() == 5 &&
+					!std::memcmp(name.data(), "ready", 5));
+				CHECK(arguments.size() == 2);
+				CHECK(Take(arguments.integer("number")) == 42);
+				CHECK(Equal(arguments.string("文字"), "值😀"));
+				CHECK(Take(arguments.value("number")).kind ==
+					HX_OS_PARAM_I64);
+				CHECK(!Take(arguments.at(0)).name.empty());
+				if (hx_os_params_available())
+					saved = Take(arguments.copy());
+				else
+					CHECK(arguments.copy().status() ==
+						HX_OS_NOT_SUPPORTED);
+				++observed;
+			}));
+		CHECK(Take(signal.notify("ready", copied)) == 2);
+		CHECK(observed == 1 && count == 2);
+		Take(signal.disconnectUntil(all, HX_OS_DEADLINE_NOW));
+		if (hx_os_params_available())
+			CHECK(Take(saved.integer("number")) == 42);
+
 		Take(signal.disconnectUntil(connection, HX_OS_DEADLINE_NOW));
 		CHECK(hx_os_atomic_load(&captures, HX_OS_ACQUIRE) == 0);
 		CHECK(Take(signal.emit("ready")) == 0);

@@ -4,6 +4,7 @@
 #include <hx_os_signal.h>
 #include <hx/Values.hpp>
 #include <hx/Callback.hpp>
+#include <hx/SignalArguments.hpp>
 
 namespace hx {
 class CallDataEdit {
@@ -288,7 +289,32 @@ public:
 		return id;
 	}
 
-	Result<size_t> emit(
+	template <typename F>
+	Result<hx_os_signal_connection> connectAll(F &&function) noexcept
+	{
+		typedef typename std::decay<F>::type Function;
+
+		auto callback = detail::CallbackOwner::create(
+			m_context_, std::forward<F>(function));
+		if (!callback)
+			return Failure(callback.error());
+		auto *state = callback.value().nativeLease();
+		hx_os_signal_connection id = 0;
+		hx_os_error error = {};
+
+		auto status = hx_os_signal_connect_all(*m_owner_,
+			invoke_all<Function>, state, detail::callback_cleanup,
+			&id, &error);
+		if (status != HX_OS_OK) {
+			state->release();
+
+			return Failure(status, error);
+		}
+
+		return id;
+	}
+
+	Result<size_t> notify(
 		const char *signal, const CallData &data = CallData()) noexcept
 	{
 		size_t called = 0;
@@ -299,6 +325,18 @@ public:
 
 		return Result<size_t>::withValue(called, status, error);
 	}
+
+#pragma push_macro("emit")
+#undef emit
+
+	/* Compatibility alias. notify() also works when Qt defines emit. */
+	Result<size_t> emit(
+		const char *signal, const CallData &data = CallData()) noexcept
+	{
+		return notify(signal, data);
+	}
+
+#pragma pop_macro("emit")
 
 	Result<void> disconnectUntil(
 		hx_os_signal_connection id, hx_os_deadline deadline) noexcept
@@ -329,6 +367,21 @@ public:
 private:
 	hx_os_signal_handler **m_owner_;
 	hx_os_context *m_context_;
+
+	template <typename F>
+	static hx_os_status HX_OS_CALL invoke_all(const char *name,
+		const hx_os_signal_arguments *arguments, void *user,
+		hx_os_error *error) noexcept
+	{
+		auto *state = static_cast<detail::CallbackModel<F> *>(
+			static_cast<detail::CallbackState *>(user));
+		auto result = detail::InvokeCallback(state->function(),
+			StringView(name), SignalArguments(arguments));
+		if (error)
+			*error = result.error();
+
+		return result.status();
+	}
 
 	template <typename F>
 	static hx_os_status HX_OS_CALL invoke(const hx_os_calldata *data,

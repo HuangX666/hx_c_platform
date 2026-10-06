@@ -116,6 +116,7 @@ int main(void)
 	HX_OS_LAYOUT(hx_os_param_value);
 	HX_OS_LAYOUT(hx_os_params_edit);
 	HX_OS_LAYOUT(hx_os_signal_options);
+	HX_OS_LAYOUT(hx_os_signal_arguments);
 	HX_OS_LAYOUT(hx_os_signal_slot);
 	HX_OS_LAYOUT(hx_os_signal_handler);
 

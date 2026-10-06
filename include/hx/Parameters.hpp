@@ -366,6 +366,9 @@ public:
 
 		return result;
 	}
+
+private:
+	friend class SignalArguments;
 };
 } // namespace hx
 #endif

@@ -2,6 +2,7 @@
 #define HX_C_PLATFORM_SIGNAL_H
 
 #include "hx_string.h"
+#include "hx_os_params.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -44,10 +45,12 @@ typedef struct hx_os_calldata {
 	uint32_t count;
 	uint32_t text_bytes;
 } hx_os_calldata;
+
 #define HX_OS_CALLDATA_INIT                                                    \
 	{                                                                      \
 		0                                                              \
 	}
+
 /* Immediate, allocation-free edit cursor over an initialized pack. First
  * failure stops later setters; earlier successful edits remain. The pack
  * outlives the setters. Finish copies the first error without further work.
@@ -133,7 +136,62 @@ typedef uint64_t hx_os_signal_connection;
 typedef hx_os_status(HX_OS_CALL *hx_os_signal_fn)(
 	const hx_os_calldata *data, void *user, hx_os_error *error);
 
+/* Read-only callback view. Its object, names and string/byte views are borrowed
+ * only until this callback returns. Never retain/destroy/cast it to an owner.
+ * Named reads are strict: missing keys are NOT_FOUND, wrong types are
+ * TYPE_MISMATCH; outputs are preserved on failure. Enumeration order is not a
+ * persistent key order. Reading needs no allocation and works without the
+ * optional PARAMETERS owner module. Current calldata values keep their types.
+ */
+typedef struct hx_os_signal_arguments hx_os_signal_arguments;
+
+HX_OS_API size_t HX_OS_CALL hx_os_signal_arguments_count(
+	const hx_os_signal_arguments *arguments);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_signal_arguments_get(
+	const hx_os_signal_arguments *arguments, const char *name,
+	hx_os_param_value *out, hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_signal_arguments_at(
+	const hx_os_signal_arguments *arguments, size_t index,
+	hx_string_view *name, hx_os_param_value *out, hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_signal_arguments_get_bool(
+	const hx_os_signal_arguments *arguments, const char *name, int *out,
+	hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_signal_arguments_get_i64(
+	const hx_os_signal_arguments *arguments, const char *name, int64_t *out,
+	hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_signal_arguments_get_double(
+	const hx_os_signal_arguments *arguments, const char *name, double *out,
+	hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_signal_arguments_get_string(
+	const hx_os_signal_arguments *arguments, const char *name,
+	hx_string_view *out, hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_signal_arguments_get_pointer(
+	const hx_os_signal_arguments *arguments, const char *name, void **out,
+	hx_os_error *error);
+
+/* Explicit owned copy for use after callback return. Requires PARAMETERS,
+ * uses its default bounds and the supplied context. Strings/bytes are copied;
+ * user pointers remain borrowed. Creation sets *out=NULL before work and
+ * releases all partial state on failure. Input remains alive and unchanged
+ * through copying, including allocator callbacks. Release with params_destroy.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_signal_arguments_copy(
+	const hx_os_signal_arguments *arguments, hx_os_context *context,
+	hx_os_params **out, hx_os_error *error);
+
+typedef hx_os_status(HX_OS_CALL *hx_os_signal_all_fn)(const char *signal,
+	const hx_os_signal_arguments *arguments, void *user,
+	hx_os_error *error);
+
 typedef void(HX_OS_CALL *hx_os_signal_cleanup_fn)(void *user);
+
 typedef struct hx_os_signal_options {
 	uint32_t size;
 	uint32_t version;
@@ -141,6 +199,7 @@ typedef struct hx_os_signal_options {
 	size_t max_parallel_emits;
 	size_t max_depth;
 } hx_os_signal_options;
+
 #define HX_OS_SIGNAL_OPTIONS_INIT                                              \
 	{                                                                      \
 		sizeof(hx_os_signal_options), 1, 256, 64, 16                   \
@@ -171,6 +230,18 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_signal_connect(
 	hx_os_signal_handler *handler, const char *signal,
 	hx_os_signal_fn function, void *user, hx_os_signal_cleanup_fn cleanup,
 	hx_os_signal_connection *out, hx_os_error *error);
+
+/* Observe every signal on this handler, including names first emitted later.
+ * Uses one ordinary connection slot, with the same cleanup/disconnect/wait
+ * contract. Named and all-signal callbacks share registration order and the
+ * same emission snapshot/error rules. signal is borrowed until callback
+ * return; arguments is a read-only view with optional explicit owned copying.
+ * This is not a process-global subscription or a wildcard-name convention.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_signal_connect_all(
+	hx_os_signal_handler *handler, hx_os_signal_all_fn function, void *user,
+	hx_os_signal_cleanup_fn cleanup, hx_os_signal_connection *out,
+	hx_os_error *error);
 
 /* Synchronous callbacks execute on the emitter in registration order for
  * this emission's snapshot. Later connections wait for the next emit; a
