@@ -33,7 +33,7 @@ git submodule update --init --recursive
 
 The optional dependency builder checks the exact commit of each source checkout. It fails on a missing or different revision and never silently follows a branch tip. Submodule URLs are in [.gitmodules](../.gitmodules); matching versions and revisions are in [HxDependencySources.cmake](../cmake/HxDependencySources.cmake).
 
-The library's ordinary build does not automatically build OpenSSL or the archive stack. The builder below prepares their native dependencies for the continuing crypto/TLS/archive integration. The existing dependency-free Unicode and builtin configuration parsers continue to work without this builder.
+The library's ordinary build does not automatically build OpenSSL or the archive stack. The default-enabled CRYPTO module requires the OpenSSL SDK prepared below. Set `HX_OS_ENABLE_CRYPTO=OFF` for a build without OpenSSL. TLS and archive integration continue in their respective batches. The existing dependency-free Unicode and builtin configuration parsers continue to work without this builder.
 
 ## 3. Alternative: FetchContent
 
@@ -59,9 +59,11 @@ cmake -S tools/dependencies -B build-deps -G "Visual Studio 17 2022" -A x64 -DHX
 cmake --build build-deps --config Release --parallel 2
 ```
 
-The prefix is `build-deps/prefix` unless `CMAKE_INSTALL_PREFIX` is supplied. The builder uses out-of-source Release builds and static, position-independent libraries. OpenSSL command-line test suites, legacy providers/engines, archive command-line tools and unselected compression backends are not part of this build. `HX_DEPS_JOBS` limits parallel jobs inside sub-builds; the outer `--parallel` option limits concurrently building dependencies.
+The prefix is `build-deps/prefix` unless `CMAKE_INSTALL_PREFIX` is supplied. The builder uses out-of-source Release builds: OpenSSL is shared by default, while compression libraries are static and position-independent. For static OpenSSL, use `HX_DEPS_OPENSSL_SHARED=OFF` and select `HX_OS_OPENSSL_STATIC=ON` in the main project; external threads must follow the [cleanup contract](CRYPTO.md#5-threads-memory-and-unloading). OpenSSL command-line test suites, legacy providers/engines, archive command-line tools and unselected compression backends are not part of this build. `HX_DEPS_JOBS` limits parallel jobs inside sub-builds; the outer `--parallel` option limits concurrently building dependencies.
 
-Windows libarchive configuration targets WIN7 and links the static dependencies explicitly. Actual Windows 7/8.1 execution remains unverified. The tested Windows OpenSSL configuration used ASM=OFF; its results are not evidence of assembly performance. Cross-compilation needs a suitable toolchain and explicit `HX_DEPS_OPENSSL_TARGET`; passing that option alone is not evidence that the target compiler/archiver/OpenSSL environment has been configured correctly. Android, embedded Linux and Apple dependency packages still need their own build/runtime validation.
+Windows libarchive configuration targets WIN7 and links the selected dependencies explicitly. Actual Windows 7/8.1 execution remains unverified. The tested Windows OpenSSL configuration used ASM=OFF; its results are not evidence of assembly performance. Cross-compilation needs a suitable toolchain and explicit `HX_DEPS_OPENSSL_TARGET`; passing that option alone is not evidence that the target compiler/archiver/OpenSSL environment has been configured correctly. Android, embedded Linux and Apple dependency packages still need their own build/runtime validation.
+
+The SDK retains deprecated ENGINE ABI entry points because other OpenSSL 3 consumers can reference them; dynamically loaded engine modules remain disabled. Do not mix incompatible OpenSSL builds in one process.
 
 ## 5. Check real compression and encryption support
 

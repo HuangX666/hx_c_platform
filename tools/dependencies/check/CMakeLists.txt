@@ -21,6 +21,14 @@ target_link_libraries(hx_dependency_check PRIVATE
 
 if(WIN32)
 	target_link_libraries(hx_dependency_check PRIVATE bcrypt)
+	get_target_property(hx_crypto_type OpenSSL::Crypto TYPE)
+	if(hx_crypto_type STREQUAL "SHARED_LIBRARY")
+		add_custom_command(TARGET hx_dependency_check POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+				$<TARGET_FILE:OpenSSL::Crypto>
+				$<TARGET_FILE_DIR:hx_dependency_check>
+			VERBATIM)
+	endif()
 endif()
 
 if(MSVC)

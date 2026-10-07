@@ -1,6 +1,6 @@
 # hx_c_platform
 
-[![CI 配置][ci-badge]](.github/workflows/build.yml) [![C99 核心][c-badge]](CMakeLists.txt) [![C++11 封装][cpp-badge]](docs/CPP_POOL.zh-CN.md) [![仅 C++ 封装为 header-only][header-badge]](docs/CPP_POOL.zh-CN.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![自有代码许可证待定][license-badge]](THIRD_PARTY_NOTICES.zh-CN.md) [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md) [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md) [![本地 Windows 167/167、Linux 169/169 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md) [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md) [![Android API 21 ARM 交叉编译通过][android-badge]](docs/ANDROID.zh-CN.md)
+[![CI 配置][ci-badge]](.github/workflows/build.yml) [![C99 核心][c-badge]](CMakeLists.txt) [![C++11 封装][cpp-badge]](docs/CPP_POOL.zh-CN.md) [![仅 C++ 封装为 header-only][header-badge]](docs/CPP_POOL.zh-CN.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![自有代码许可证待定][license-badge]](THIRD_PARTY_NOTICES.zh-CN.md) [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md) [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md) [![本地 Windows 171/171、Linux 173/173 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md) [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md) [![Android API 21 ARM 交叉编译通过][android-badge]](docs/ANDROID.zh-CN.md)
 
 [English](README.md) · [常用任务教程](docs/USAGE.zh-CN.md) · [详细参考](docs/REFERENCE.zh-CN.md)
 
@@ -72,7 +72,7 @@ Hello, hx_c_platform!
 {"port": 8080}
 ```
 
-`CMakeLists.txt` 使用以下内容。前两项开关关闭库自身的测试和示例，只编译你的程序需要的库。`configure_file` 把输入文件复制到运行目录，避免找不到文件。
+`CMakeLists.txt` 使用以下内容。这几项开关关闭库自身的测试、示例，以及这个入门程序用不到的加密模块。需要加密功能时，保留 `HX_OS_ENABLE_CRYPTO` 开启并先准备 [OpenSSL 依赖包](docs/CRYPTO.zh-CN.md#1-构建与发布)。`configure_file` 把输入文件复制到运行目录，避免找不到文件。
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
@@ -80,6 +80,7 @@ project(hx_demo LANGUAGES C)
 
 set(HX_OS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(HX_OS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(HX_OS_ENABLE_CRYPTO OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(external/hx_c_platform)
 
@@ -463,6 +464,8 @@ HX_CODEC_STRUCT(connection,
 
 ## 6. 更多功能到哪里找
 
+一行调用文本／文件加密、SHA-256、HMAC 和签名，见[加密教程及完整 C/C++ 示例](docs/CRYPTO.zh-CN.md)。
+
 | 想做什么 | 先看哪里 |
 | --- | --- |
 | 本地 IPC 的设备控制业务 | [IPC 独立示例](docs/IPC_BUSINESS.zh-CN.md) |
@@ -500,7 +503,7 @@ HX_CODEC_STRUCT(connection,
 
 ## 7. 构建、验证与项目许可
 
-开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。2026-10-07 的全量测试为 Windows 167/167、WSL Linux 169/169；新增便利接口通过各自相关的检查器验证，两端安装后的 C++11／纯 C 消费分别通过 41/41、31/31。此前序列化功能已完成 Android API 21 两种 ARM ABI 编译，并在 API 34 模拟器的 x86_64／ARM64 上各通过 3 项序列化测试；本批新增接口尚未重新执行这些 Android 目标检查。具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
+开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。2026-10-07 的全量测试为 Windows 171/171、WSL Linux 173/173；新增便利接口通过各自相关的检查器验证，两端安装后的 C++11／纯 C 消费分别通过 47/47、34/34。此前序列化功能已完成 Android API 21 两种 ARM ABI 编译，并在 API 34 模拟器的 x86_64／ARM64 上各通过 3 项序列化测试；本批新增接口尚未重新执行这些 Android 目标检查。具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
 
 自有代码的发布许可证尚未确定，第三方许可证见[许可说明](THIRD_PARTY_NOTICES.zh-CN.md)。协程使用自研实现；hx_c_log 接入仍属于后续工作。
 
@@ -513,6 +516,6 @@ HX_CODEC_STRUCT(connection,
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%20167%2F167%20Linux%20169%2F169-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%20171%2F171%20Linux%20173%2F173-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

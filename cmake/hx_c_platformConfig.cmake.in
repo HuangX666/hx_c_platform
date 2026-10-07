@@ -3,6 +3,15 @@ include(CMakeFindDependencyMacro)
 
 find_dependency(Threads)
 
+if(@HX_OS_ENABLE_CRYPTO@ AND NOT @BUILD_SHARED_LIBS@)
+	# Function scope keeps the consumer's preference variables intact.
+	function(hx_c_platform_find_crypto)
+		set(OPENSSL_USE_STATIC_LIBS @HX_OS_OPENSSL_STATIC@)
+		find_package(OpenSSL 3.5 CONFIG REQUIRED)
+	endfunction()
+	hx_c_platform_find_crypto()
+endif()
+
 if(@HX_OS_ICONV_SYSTEM@)
 	find_dependency(Iconv)
 endif()

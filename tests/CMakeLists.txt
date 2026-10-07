@@ -41,6 +41,7 @@ add_test(NAME library COMMAND hx_os_test_library
 set_tests_properties(library PROPERTIES TIMEOUT 20)
 
 set(hx_test_suites data options lifecycle config containers sysinfo file_utils
+	crypto
 	text_interop byte_queue stream buffered_file
 	env paths thread_extra pipe io_options file_info
 	config_serialize config_tree config_backup ini codec timer
@@ -89,6 +90,22 @@ endforeach()
 
 target_include_directories(hx_os_test_profiler_snapshot PRIVATE
 	"${PROJECT_BINARY_DIR}/private")
+
+if(HX_OS_ENABLE_CRYPTO)
+	add_executable(hx_os_test_crypto_native test_crypto_native.c)
+	target_link_libraries(hx_os_test_crypto_native PRIVATE
+		hx_c_platform OpenSSL::Crypto)
+	if(HX_OS_OPENSSL_STATIC)
+		target_compile_definitions(hx_os_test_crypto_native PRIVATE
+			HX_TEST_STATIC_OPENSSL=1)
+	endif()
+	set_target_properties(hx_os_test_crypto_native PROPERTIES
+		C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+	hx_apply_warnings(hx_os_test_crypto_native)
+	add_test(NAME crypto_native COMMAND hx_os_test_crypto_native)
+	set_tests_properties(crypto_native PROPERTIES TIMEOUT 30)
+endif()
 
 if(WIN32)
 	enable_language(RC)
@@ -494,6 +511,15 @@ if(CMAKE_CXX_COMPILER_LOADED)
 	hx_apply_warnings(hx_os_test_cpp_dispatch)
 	add_test(NAME cpp_dispatch COMMAND hx_os_test_cpp_dispatch)
 	set_tests_properties(cpp_dispatch PROPERTIES TIMEOUT 20)
+
+	add_executable(hx_os_test_cpp_crypto test_cpp_crypto.cpp)
+	target_link_libraries(hx_os_test_cpp_crypto PRIVATE hx_c_platform::cpp)
+	set_target_properties(hx_os_test_cpp_crypto PROPERTIES
+		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+	hx_apply_warnings(hx_os_test_cpp_crypto)
+	add_test(NAME cpp_crypto COMMAND hx_os_test_cpp_crypto)
+	set_tests_properties(cpp_crypto PROPERTIES TIMEOUT 30)
 
 	file(GLOB facade_headers "${PROJECT_SOURCE_DIR}/include/hx/*.hpp")
 

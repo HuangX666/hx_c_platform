@@ -8,6 +8,36 @@ This records development validation through 2026-10-07. A design, implemented ad
 
 The JSON entry below records the current examples. Earlier independent text examples, initial shared workflows, IPC/KCP implementation and other batches describe their historical versions.
 
+## 2026-10-07: OpenSSL cryptography and deployment
+
+Baseline `49b439a`. Added default-enabled CRYPTO with isolated OpenSSL contexts, SHA-256/SHA-512, HMAC and constant-time tag verification, random 32-byte keys, authenticated binary/text/file encryption, Ed25519/RSA-PSS signatures and bounded PEM key import/export. C++11 returns `Result` with exceptions disabled. All old public layouts and valid calls remain intact. OpenSSL is shared by default; static linking is explicit. Vendor source is unchanged.
+
+| Configuration | Result |
+| --- | --- |
+| Windows MSVC x64 shared, full CTest | 171/171 |
+| WSL GCC x64 shared, full CTest | 173/173 |
+| Installed x64 shared, C++11 / pure C, both hosts | 47/47 and 34/34 |
+| Windows x86 static core + shared OpenSSL, related suites | 4/4; standalone C99/C++11 headers compiled |
+| Installed x86 static core, C++11 / pure C | 46/46 and 33/33 |
+| WSL ASan/UBSan with leak detection | 5/5 affected suites, plus crypto file tests on native `/tmp` |
+| WSL TSan | Concurrent native crypto suite passed |
+| WSL shared core embedding static OpenSSL | 3/3 crypto suites |
+| Minimal shared build, CRYPTO disabled | 2/2 unsupported-entry suites; standalone headers compiled |
+| Old `49b439a` headers, new shared library | Core and file utility consumers passed 2/2 on each host |
+| Complete C/C++ documentation programs | Compiled separately and printed `Hello` on both hosts |
+
+The dynamic SDKs were built for Windows x64/x86 and WSL. ASan/TSan instrument first-party code; the prepared native OpenSSL SDK is not fully sanitizer-instrumented. Native Windows static-OpenSSL thread cleanup, macOS, Win7/8.1, Android, musl and embedded targets still need their own crypto validation. Android tooling explicitly records CRYPTO disabled when no target SDK is supplied; its earlier platform evidence is not crypto acceptance.
+
+Tests cover SHA/HMAC known answers, RFC 8032 Ed25519, native AES-GCM interoperability, empty/binary/UTF-8/NUL inputs, every envelope byte being altered, wrong keys/passwords/signatures, capacity limits, file publication, first-party allocation failure, allocator reentry and four threads sharing immutable engines/keys. Dynamic builds exercise ordinary native thread-exit cleanup; the explicit cleanup API is used for the Windows static configuration when selected. Existing OpenSSL error entries and host default properties are checked. Error marks are not promised to survive OpenSSL's public save/restore API.
+
+WSL's Windows mount rejects no-replace rename and can ignore POSIX 0600. Completed regular temporary files now have a hard-link publication fallback at the staging boundary; general file-move semantics are unchanged. Decryption checks private creation permissions and rejects incapable filesystems before writing plaintext. The mounted-filesystem test checks this refusal; separate `/tmp` runs exercise actual decryption, preserved destinations on failed authentication, and cleanup.
+
+Relocation testing found and fixed a missing versioned OpenSSL runtime: installation now follows the complete symlink chain, and `verify_install.py` checks the installed runtime against its selected SDK. Relocated Windows and Linux programs work with only the copied core/Crypto runtimes and system libraries. Linux `ldd` confirms the relocated Crypto path with `LD_LIBRARY_PATH` unset. The dependency builder retains ENGINE ABI entry points after a host libssl/CTest compatibility probe exposed their absence in a trimmed build; that probe passed after rebuilding. Optional engine modules remain disabled. CTest itself is not forced through an application-specific `LD_LIBRARY_PATH`.
+
+Measured public layout (size/alignment bytes): secret 24/8 and options 40/8 on MSVC/GCC x64; secret 12/4 and options 32/8 on MSVC x86. These are layout observations, not throughput gains. Existing non-crypto hot paths gain no locks, allocation or system calls; atomic file saving adds one internal writer callback per complete save. Crypto operations allocate native OpenSSL objects; file encryption uses 64 KiB of first-party working buffers plus metadata. Native allocations are outside the hx allocator budget. No comparative crypto throughput or hx_c_log performance result is claimed.
+
+Logs use `crypto-delivery-*`; SDK rebuild logs are `build-deps-shared-*/abi-compatible-build.log`. Old-header and documentation/relocation fixtures are under ignored `build-crypto-abi` and `build-crypto-docs`. TLS and archive delivery remain separate batches. TLS concurrency is confirmed: one connection must support receiving on one application thread while another sends.
+
 ## 2026-10-07: Mutable signals and growable procedure results
 
 Baseline `f998a6e`. Added explicit mutable subscriptions/emission using existing bounded parameter owners, general named observers, bytes/u64 views, and growable named procedures. Signals preserve successful edits and continue eligible callbacks after errors, returning the first error. Procedures publish an independent cloned result only on success. Existing signatures/layouts and unified registration order remain intact. A borrowed pack rejects destruction until dispatch returns; nested borrows unwind on failure. No vendor changes.

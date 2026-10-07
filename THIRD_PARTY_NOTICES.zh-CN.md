@@ -70,7 +70,7 @@ cmake/HxWarnings.cmake 复制自相邻 hx_c_log 项目，保留其版权声明�
 
 ## 可选 OpenSSL 与归档依赖源码
 
-新增原生依赖构建器默认使用 `deps/` 下固定提交的 Git 子模块，也支持获取相同提交的 FetchContent，见[构建说明](docs/DEPENDENCIES.zh-CN.md)。这是为仍在继续实现的加密、TLS、归档接口准备依赖，不会在普通核心构建中暗中链接这些组件。
+新增原生依赖构建器默认使用 `deps/` 下固定提交的 Git 子模块，也支持获取相同提交的 FetchContent，见[构建说明](docs/DEPENDENCIES.zh-CN.md)。默认开启的 CRYPTO 模块动态链接 OpenSSL；设置 `HX_OS_ENABLE_CRYPTO=OFF` 可移除该依赖，也可显式选择静态链接并遵守线程清理契约。TLS／归档继续分别实现，见[加密教程](docs/CRYPTO.zh-CN.md)。
 
 | 组件 | 固定版本 | 保留的许可证 | 提交号 |
 | --- | --- | --- | --- |

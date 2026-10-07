@@ -203,6 +203,8 @@ const char *hx_os_status_name(hx_os_status status)
 		return "syntax error";
 	case HX_OS_TYPE_MISMATCH:
 		return "type mismatch";
+	case HX_OS_AUTH_FAILED:
+		return "authentication failed";
 	default:
 		return "unknown status";
 	}
@@ -304,6 +306,9 @@ hx_os_status hx_os_error_message(const hx_os_error *error, char *buffer,
 	if (error->domain == HX_OS_ERROR_GAI ||
 		error->domain == HX_OS_ERROR_MACH)
 		hx_os_error_extra_text(error, native, sizeof(native));
+	if (error->domain == HX_OS_ERROR_OPENSSL && error->native_code >= 0)
+		hx_os_i_crypto_error_text(
+			(uint64_t)error->native_code, native, sizeof(native));
 	length = snprintf(buffer, capacity,
 		"%s [domain=%u code=%" PRId64 "]%s%s",
 		hx_os_status_name(error->status), error->domain,

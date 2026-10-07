@@ -70,7 +70,7 @@ The separate Linux desktop adapter may dynamically use an installed libsystemd/l
 
 ## Optional OpenSSL and archive dependency sources
 
-The new native dependency builder uses fixed Git submodules in `deps/` by default, with the same commits available through FetchContent. See [the build guide](docs/DEPENDENCIES.md). This prepares the dependencies for the ongoing public crypto/TLS/archive implementation; it does not silently add them to the ordinary core build.
+The new native dependency builder uses fixed Git submodules in `deps/` by default, with the same commits available through FetchContent. See [the build guide](docs/DEPENDENCIES.md). The default-enabled CRYPTO module links OpenSSL dynamically. Set `HX_OS_ENABLE_CRYPTO=OFF` to omit it, or explicitly select static linkage and its thread-cleanup contract. TLS/archive integration continues separately; see [the crypto guide](docs/CRYPTO.md).
 
 | Component | Pin | Retained license | Commit |
 | --- | --- | --- | --- |

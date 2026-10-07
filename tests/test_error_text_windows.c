@@ -52,9 +52,21 @@ static DWORD WINAPI test_format_message(DWORD flags, LPCVOID source, DWORD code,
 	return 0;
 }
 
+static void test_crypto_text(uint64_t code, char *out, size_t capacity)
+{
+	(void)code;
+	(void)out;
+	(void)capacity;
+	/* This fixture replaces only Windows OS messages. Crypto has its own
+	 * native-runtime test and must not be queried here. */
+	CHECK(0);
+}
+
+#define hx_os_i_crypto_error_text test_crypto_text
 #define FormatMessageW test_format_message
 #include "../src/base.c"
 #undef FormatMessageW
+#undef hx_os_i_crypto_error_text
 
 static void test_snapshot(uint32_t domain, int64_t code, int expect_text)
 {

@@ -14,6 +14,21 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          submodules: recursive
+      - name: Build native dependency SDK (POSIX)
+        if: runner.os != 'Windows'
+        run: |
+          cmake -S tools/dependencies -B build-deps
+          cmake --build build-deps --parallel 2
+      - name: Build native dependency SDK (MSVC)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          call "%ProgramFiles%\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          cmake -S tools/dependencies -B build-deps -G "Visual Studio 17 2022" -A x64 -DHX_DEPS_OPENSSL_ASM=OFF
+          if errorlevel 1 exit /b 1
+          cmake --build build-deps --config Release --parallel 2
       - run: python3 tools/fetch_iconv.py
         if: runner.os != 'Windows'
       - run: python tools/fetch_iconv.py
@@ -22,6 +37,7 @@ jobs:
         run: >-
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
           -DBUILD_SHARED_LIBS=${{ matrix.shared }}
+          -DHX_OS_DEPENDENCY_PREFIX="${{ github.workspace }}/build-deps/prefix"
           -DHX_OS_ENABLE_ICONV=ON
           -DHX_OS_ICONV_SOURCE_DIR="${{ github.workspace }}/deps/.cache/libiconv-1.18"
       - run: cmake --build build --config Release --parallel 4
@@ -47,6 +63,7 @@ jobs:
         run: >-
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
           -DBUILD_SHARED_LIBS=ON
+          -DHX_OS_ENABLE_CRYPTO=OFF
           -DHX_OS_ENABLE_CJSON=ON
           -DHX_OS_CJSON_SOURCE_DIR=deps/.cache/cJSON-1.7.19
           -DHX_OS_ENABLE_LIBYAML=ON
@@ -80,9 +97,16 @@ jobs:
         sanitizer: ["address,undefined", "thread"]
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          submodules: recursive
+      - name: Prepare OpenSSL and archive SDK
+        run: |
+          cmake -S tools/dependencies -B build-deps
+          cmake --build build-deps --parallel 2
       - run: >-
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
           -DHX_OS_SANITIZER=${{ matrix.sanitizer }}
+          -DHX_OS_DEPENDENCY_PREFIX="${{ github.workspace }}/build-deps/prefix"
       - run: cmake --build build --parallel 4
       - run: ctest --test-dir build --output-on-failure
 
@@ -94,7 +118,8 @@ jobs:
         run: |
           docker run --rm -v "$PWD:/src:ro" alpine:3.22 sh -ec '
             apk add --no-cache build-base cmake
-            cmake -S /src -B /tmp/build -DCMAKE_BUILD_TYPE=Release
+            cmake -S /src -B /tmp/build -DCMAKE_BUILD_TYPE=Release \
+              -DHX_OS_ENABLE_CRYPTO=OFF
             cmake --build /tmp/build --parallel 4
             ctest --test-dir /tmp/build --output-on-failure
           '
@@ -127,6 +152,7 @@ jobs:
           -DHX_OS_TARGET_PROCESSOR=${{ matrix.processor }}
           -DHX_OS_CROSS_PREFIX=${{ matrix.triplet }}-
           -DHX_OS_SYSROOT=/
+          -DHX_OS_ENABLE_CRYPTO=OFF
           -DCMAKE_CROSSCOMPILING_EMULATOR="${{ matrix.emulator
           }};-L;/usr/${{ matrix.triplet }}"
       - run: cmake --build build --parallel 4

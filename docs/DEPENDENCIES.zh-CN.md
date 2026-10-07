@@ -33,7 +33,7 @@ git submodule update --init --recursive
 
 依赖构建器检查每个源码目录的确切提交号。缺失或版本不同会明确报错，不会自动跟随最新分支。[.gitmodules](../.gitmodules) 记录地址，[HxDependencySources.cmake](../cmake/HxDependencySources.cmake) 记录一致的版本与提交号。
 
-普通的基础库构建不会自动构建 OpenSSL 或压缩依赖。下面的构建器为后续加密、TLS、归档通用接口准备原生依赖；现有无依赖 Unicode 功能和内置配置解析器不需要它。
+普通的基础库构建不会自动构建 OpenSSL 或压缩依赖。默认开启的 CRYPTO 模块需要下面构建器准备的 OpenSSL SDK；现有 Unicode 功能和内置配置解析器不需要它。关闭 `HX_OS_ENABLE_CRYPTO` 可继续使用不依赖 OpenSSL 的构建。TLS 和归档接口继续按扩展清单推进。
 
 ## 3. 备选使用 FetchContent
 
@@ -59,9 +59,11 @@ cmake -S tools/dependencies -B build-deps -G "Visual Studio 17 2022" -A x64 -DHX
 cmake --build build-deps --config Release --parallel 2
 ```
 
-默认安装位置为 `build-deps/prefix`，可通过 `CMAKE_INSTALL_PREFIX` 指定。构建器执行独立目录的 Release 静态构建，并启用位置无关代码。不构建 OpenSSL 测试套件、旧 provider／engine、归档命令行工具和未选择的压缩后端。`HX_DEPS_JOBS` 限制每个子构建的并行量，外层 `--parallel` 限制同时构建的依赖数量。
+默认安装位置为 `build-deps/prefix`，可通过 `CMAKE_INSTALL_PREFIX` 指定。构建器执行独立目录的 Release 构建：OpenSSL 默认动态链接，压缩依赖静态链接并启用位置无关代码。传入 `HX_DEPS_OPENSSL_SHARED=OFF` 可构建静态 OpenSSL，主库同时选择 `HX_OS_OPENSSL_STATIC=ON`；外部线程需遵守[线程清理约定](CRYPTO.zh-CN.md#5-线程内存与插件卸载)。不构建 OpenSSL 测试套件、旧 provider／engine、归档命令行工具和未选择的压缩后端。`HX_DEPS_JOBS` 限制每个子构建的并行量，外层 `--parallel` 限制同时构建的依赖数量。
 
-Windows 的 libarchive 配置选择 WIN7，并显式连接静态依赖，但 Windows 7/8.1 运行仍待验证。本轮 Windows OpenSSL 使用 ASM=OFF，不能据此声称验证了汇编性能。交叉编译需要合适的 toolchain 和显式 `HX_DEPS_OPENSSL_TARGET`；只填写这个参数并不代表目标编译器、归档器及 OpenSSL 环境已经配置正确。Android、嵌入式 Linux 和 Apple 的依赖包仍需分别验证。
+Windows 的 libarchive 配置选择 WIN7，并显式连接选定的依赖，但 Windows 7/8.1 运行仍待验证。本轮 Windows OpenSSL 使用 ASM=OFF，不能据此声称验证了汇编性能。交叉编译需要合适的 toolchain 和显式 `HX_DEPS_OPENSSL_TARGET`；只填写这个参数并不代表目标编译器、归档器及 OpenSSL 环境已经配置正确。Android、嵌入式 Linux 和 Apple 的依赖包仍需分别验证。
+
+SDK 保留已弃用的 ENGINE ABI 入口，因为其他 OpenSSL 3 消费者可能引用它们；动态加载的 engine 模块仍不构建。同一进程不要混用不兼容的 OpenSSL 构建。
 
 ## 5. 验证实际压缩和密码能力
 

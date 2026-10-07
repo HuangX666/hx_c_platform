@@ -26,6 +26,7 @@ function(hx_add_serialization_interop)
 endfunction()
 
 foreach(example IN ITEMS hello async_timer configuration containers system_info
+	encrypt_text
 	load_plugin text_file environment special_paths thread_options
 	windows_info
 	native_file
@@ -53,6 +54,11 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 	hx_apply_warnings(hx_os_${example})
 endforeach()
+
+if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_CRYPTO)
+	add_test(NAME encrypt_text_example COMMAND hx_os_encrypt_text)
+	set_tests_properties(encrypt_text_example PROPERTIES TIMEOUT 20)
+endif()
 
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_NATIVE_INTEROP
 	AND HX_OS_ENABLE_SYSTEM_UTILS)

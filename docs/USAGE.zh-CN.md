@@ -66,6 +66,7 @@ project(hx_demo LANGUAGES C)
 
 set(HX_OS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(HX_OS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(HX_OS_ENABLE_CRYPTO OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(external/hx_c_platform)
 
@@ -116,6 +117,7 @@ project(hx_demo LANGUAGES CXX)
 
 set(HX_OS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(HX_OS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(HX_OS_ENABLE_CRYPTO OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(external/hx_c_platform)
 

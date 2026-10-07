@@ -71,6 +71,7 @@ option(HX_OS_ENABLE_CODEC "Build schema-based object serialization" ON)
 option(HX_OS_ENABLE_TIMER "Build periodic loop timers" ON)
 
 option(HX_OS_ENABLE_RANDOM "Build secure system randomness and UUID v4" ON)
+option(HX_OS_ENABLE_CRYPTO "Build OpenSSL data cryptography" ON)
 
 option(HX_OS_ENABLE_VIRTUAL_MEMORY "Build pages and file mappings" ON)
 
@@ -307,6 +308,7 @@ if(NOT WIN32)
 endif()
 
 include(cmake/ConfigParsers.cmake)
+include(cmake/HxCrypto.cmake)
 
 if(NOT HX_OS_ENABLE_COROUTINES)
 	set(HX_OS_ENABLE_STACKFUL_COROUTINES OFF)
@@ -342,6 +344,9 @@ add_library(hx_c_platform
 	src/file_info.c src/bom.c src/number.c src/config_serialize.c
 	src/config_build.c src/codec.c
 	src/timer.c src/util.c src/vm.c src/file_extra.c
+	src/crypto.c src/crypto_digest.c src/crypto_cipher.c src/crypto_text.c
+	src/crypto_file.c
+	src/crypto_key.c
 	src/watch.c src/loop_fd.c
 	src/system.c src/cpu_features.c src/time_posix.c
 	src/process.c src/process_capture.c src/local.c src/duplex_pipe.c
@@ -574,10 +579,13 @@ if(HX_OS_ENABLE_FILE_UTILS)
 
 	if(WIN32)
 		target_sources(hx_c_platform PRIVATE
-			src/windows/file_utils_native.c)
+			src/windows/file_utils_native.c
+			src/windows/file_stage_native.c)
+		target_link_libraries(hx_c_platform PRIVATE advapi32)
 	else()
 		target_sources(hx_c_platform PRIVATE
-			src/posix/file_utils_native.c)
+			src/posix/file_utils_native.c
+			src/posix/file_stage_native.c)
 	endif()
 else()
 	target_sources(hx_c_platform PRIVATE src/file_utils_disabled.c)
@@ -704,6 +712,7 @@ target_compile_definitions(hx_c_platform PRIVATE
 	${hx_parser_aliases} ${hx_parser_definitions})
 target_compile_definitions(hx_c_platform PRIVATE HX_OS_BUILD)
 target_link_libraries(hx_c_platform PRIVATE Threads::Threads)
+hx_link_crypto(hx_c_platform)
 
 if(HX_OS_NEED_RT)
 	target_link_libraries(hx_c_platform PRIVATE rt)
@@ -886,7 +895,8 @@ if(WIN32)
 		string(APPEND HX_OS_PC_LIBS_PRIVATE " -lshell32 -lole32 -luuid")
 	endif()
 
-	if(HX_OS_ENABLE_RANDOM OR HX_OS_ENABLE_REGISTRY)
+	if(HX_OS_ENABLE_RANDOM OR HX_OS_ENABLE_REGISTRY
+		OR HX_OS_ENABLE_FILE_UTILS)
 		string(APPEND HX_OS_PC_LIBS_PRIVATE " -ladvapi32")
 	endif()
 

@@ -8,4 +8,5 @@ Description: Independent C99 OS primitives and UTF-8 strings
 Version: @PROJECT_VERSION@
 Libs: -L"${libdir}" -lhx_c_platform
 Libs.private: @HX_OS_PC_LIBS_PRIVATE@
+Requires.private: @HX_OS_PC_REQUIRES_PRIVATE@
 Cflags: -I"${includedir}" @HX_OS_PC_DEFINITIONS@

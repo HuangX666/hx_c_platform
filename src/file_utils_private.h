@@ -21,6 +21,20 @@ hx_os_status hx_os_i_file_replace(const char *target, const char *source,
 
 hx_os_status hx_os_i_file_sync_parent(const char *path, hx_os_error *error);
 
+typedef hx_os_status (*hx_os_i_file_writer)(
+	hx_os_file *file, void *user, hx_os_error *error);
+
+hx_os_status hx_os_i_file_save_callback(hx_os_context *context,
+	const char *path, int replace, int private_file,
+	hx_os_i_file_writer writer, void *user, hx_os_file_save_result *result,
+	hx_os_error *error);
+
+hx_os_status hx_os_i_file_create_private(hx_os_context *context,
+	const char *path, hx_os_file **out, hx_os_error *error);
+
+hx_os_status hx_os_i_file_publish(const char *temporary, const char *path,
+	int replace, hx_os_error *error);
+
 hx_os_status hx_os_i_path_current(hx_string *out, hx_os_error *error);
 
 hx_os_status hx_os_i_path_absolute(

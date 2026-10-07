@@ -12,6 +12,7 @@ endif()
 set(HX_DEPS_JOBS 4 CACHE STRING "Maximum OpenSSL build jobs")
 set(HX_DEPS_OPENSSL_TARGET "" CACHE STRING "OpenSSL Configure target")
 option(HX_DEPS_OPENSSL_ASM "Use OpenSSL assembler optimizations" ON)
+option(HX_DEPS_OPENSSL_SHARED "Build the OpenSSL shared runtime" ON)
 
 if(NOT HX_DEPS_JOBS MATCHES "^[1-9][0-9]*$")
 	message(FATAL_ERROR "HX_DEPS_JOBS must be a positive integer")
@@ -73,8 +74,22 @@ else()
 	set(hx_make_jobs "-j${HX_DEPS_JOBS}")
 endif()
 
-set(hx_openssl_options no-shared no-tests no-module no-engine no-legacy
+# Keep ENGINE ABI entry points: a host libssl can reference them even when
+# this SDK does not build dynamically loaded engine modules.
+set(hx_openssl_options no-tests no-module no-legacy
 	"--prefix=${CMAKE_INSTALL_PREFIX}" --libdir=lib)
+if(HX_DEPS_OPENSSL_SHARED)
+	list(APPEND hx_openssl_options shared)
+else()
+	list(APPEND hx_openssl_options no-shared)
+endif()
+
+if(HX_DEPS_OPENSSL_SHARED)
+	set(hx_openssl_static OFF)
+else()
+	set(hx_openssl_static ON)
+endif()
+
 if(NOT HX_DEPS_OPENSSL_ASM)
 	list(APPEND hx_openssl_options no-asm)
 endif()
@@ -152,7 +167,7 @@ ExternalProject_Add(hx_dep_build_archive
 	UPDATE_COMMAND ""
 	CMAKE_ARGS ${hx_common_args} ${hx_archive_args}
 		"-DOPENSSL_ROOT_DIR:PATH=${CMAKE_INSTALL_PREFIX}"
-		-DOPENSSL_USE_STATIC_LIBS:BOOL=ON
+		-DOPENSSL_USE_STATIC_LIBS:BOOL=${hx_openssl_static}
 		-DENABLE_OPENSSL:BOOL=ON
 		-DENABLE_CNG:BOOL=OFF
 		-DENABLE_LIBB2:BOOL=OFF

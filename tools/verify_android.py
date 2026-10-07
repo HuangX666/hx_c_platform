@@ -18,6 +18,7 @@ SUITES = (
     "cpp_coroutine", "cpp_coroutine20",
     "coroutine_sync", "cpp_go11", "cpp_go20", "format", "cpp_format",
     "kcp", "ipc", "lifecycle", "config_tree", "codec", "cpp_codec",
+    "crypto", "cpp_crypto",
 )
 
 
@@ -73,6 +74,12 @@ def device_run(args, build, abi, api, record):
     files = list(binaries)
     if not args.static:
         files.append(build / "libhx_c_platform.so")
+    if args.dependency_prefix:
+        libraries = sorted((args.dependency_prefix / "lib").glob(
+            "libcrypto.so*"))
+        if not libraries:
+            raise RuntimeError("Target SDK lacks the shared libcrypto runtime")
+        files.extend(libraries)
     for path in files:
         if not path.is_file():
             raise RuntimeError(f"Missing Android artifact: {path}")
@@ -144,10 +151,14 @@ def main():
     parser.add_argument("--adb", default="adb")
     parser.add_argument("--cmake", default="cmake")
     parser.add_argument("--ninja", type=Path)
+    parser.add_argument("--dependency-prefix", type=Path,
+                        help="OpenSSL SDK for one selected ABI/API")
     parser.add_argument("--jobs", type=int, default=4)
     args = parser.parse_args()
     apis, abis = args.api or [21, 28], args.abi or [
         "arm64-v8a", "armeabi-v7a"]
+    if args.dependency_prefix and (len(apis) != 1 or len(abis) != 1):
+        parser.error("--dependency-prefix requires one explicit ABI and API")
     if not args.ndk or min(apis) < 21 or args.jobs < 1:
         parser.error("--ndk is required; API >= 21 and jobs >= 1")
     ndk = args.ndk.resolve()
@@ -191,6 +202,16 @@ def main():
                     "-DHX_OS_BUILD_TESTS=ON", "-DHX_OS_BUILD_EXAMPLES=ON",
                     "-DHX_OS_BUILD_BENCHMARKS=ON",
                 ]
+                if args.dependency_prefix:
+                    command += [
+                        "-DHX_OS_ENABLE_CRYPTO=ON",
+                        "-DHX_OS_DEPENDENCY_PREFIX=" +
+                        str(args.dependency_prefix.resolve()),
+                    ]
+                else:
+                    command += ["-DHX_OS_ENABLE_CRYPTO=OFF"]
+                record["crypto"] = "enabled" if args.dependency_prefix else (
+                    "disabled: no target OpenSSL SDK")
                 print(f"Building {abi} API {api} {profile} {linkage}",
                       flush=True)
                 run(command, build / "configure.log")

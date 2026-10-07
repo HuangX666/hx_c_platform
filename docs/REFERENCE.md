@@ -4,6 +4,8 @@
 
 This reference covers platform differences, interface limits, resource management, build options and validation status. Start with the homepage and task tutorials when using the library for the first time, then consult this reference for an operation's boundaries. Build commands run from the library source root unless stated otherwise.
 
+The default CRYPTO module needs a prepared OpenSSL SDK. Before the nonminimal commands below, put its prefix in `CMAKE_PREFIX_PATH` or pass `HX_OS_DEPENDENCY_PREFIX`; disable `HX_OS_ENABLE_CRYPTO` explicitly when unused. See the [crypto guide](CRYPTO.md) for setup, text/file encryption, hashes and signatures.
+
 - [1. Purpose and interface boundaries](#section-1)
 - [2. Platforms, languages and verification status](#section-2)
 - [3. Architecture, directories and backend selection](#section-3)

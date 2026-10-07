@@ -54,6 +54,8 @@ hx_os_status hx_os_i_params_hold(
 	struct hx_os_params *params, hx_os_error *error);
 void hx_os_i_params_release(struct hx_os_params *params);
 
+void hx_os_i_crypto_error_text(uint64_t code, char *out, size_t capacity);
+
 size_t hx_os_i_allocation_bytes(const void *memory);
 
 void hx_os_i_context_retain(hx_os_context *context);

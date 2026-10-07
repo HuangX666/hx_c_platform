@@ -195,14 +195,16 @@ hx_os_status hx_os_file_save(const char *path, const void *data, size_t bytes,
 	return status;
 }
 
-hx_os_status hx_os_file_save_atomic_ex(const char *path, const void *data,
-	size_t bytes, hx_os_file_save_result *result, hx_os_error *error)
+hx_os_status hx_os_i_file_save_callback(hx_os_context *context,
+	const char *path, int replace, int private_file,
+	hx_os_i_file_writer writer, void *user, hx_os_file_save_result *result,
+	hx_os_error *error)
 {
 	hx_string temporary = HX_STRING_INIT;
 	hx_os_file *file = NULL;
 	hx_os_file_save_result value;
 	hx_os_status status;
-	size_t parent, completed;
+	size_t parent;
 	unsigned attempt;
 	char suffix[96];
 
@@ -211,12 +213,10 @@ hx_os_status hx_os_file_save_atomic_ex(const char *path, const void *data,
 	if (result)
 		*result = value;
 
-	if (!data && bytes)
-		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
-
 	status = hx_os_i_path_validate(path, error);
 	if (status != HX_OS_OK)
 		return status;
+	hx_string_init(&temporary, context);
 
 	parent = strlen(path);
 
@@ -244,10 +244,13 @@ hx_os_status hx_os_file_save_atomic_ex(const char *path, const void *data,
 		if (status != HX_OS_OK)
 			break;
 
-		status = hx_os_file_open(NULL, hx_string_c_str(&temporary),
-			HX_OS_FILE_WRITE | HX_OS_FILE_CREATE |
-				HX_OS_FILE_EXCLUSIVE,
-			&file, error);
+		status = private_file
+			? hx_os_i_file_create_private(context,
+				  hx_string_c_str(&temporary), &file, error)
+			: hx_os_file_open(context, hx_string_c_str(&temporary),
+				  HX_OS_FILE_WRITE | HX_OS_FILE_CREATE |
+					  HX_OS_FILE_EXCLUSIVE,
+				  &file, error);
 		if (status != HX_OS_EXISTS)
 			break;
 	}
@@ -258,7 +261,7 @@ hx_os_status hx_os_file_save_atomic_ex(const char *path, const void *data,
 		return status;
 	}
 
-	status = hx_os_file_write_all(file, data, bytes, &completed, error);
+	status = writer(file, user, error);
 	if (status == HX_OS_OK)
 		status = hx_os_file_sync(file, error);
 
@@ -268,8 +271,8 @@ hx_os_status hx_os_file_save_atomic_ex(const char *path, const void *data,
 		(void)hx_os_file_close(&file, NULL);
 
 	if (status == HX_OS_OK)
-		status = hx_os_file_move(
-			hx_string_c_str(&temporary), path, 1, error);
+		status = hx_os_i_file_publish(
+			hx_string_c_str(&temporary), path, replace, error);
 
 	if (status == HX_OS_OK) {
 		value.published = 1;
@@ -285,6 +288,37 @@ hx_os_status hx_os_file_save_atomic_ex(const char *path, const void *data,
 		*result = value;
 
 	return status;
+}
+
+typedef struct hx_os_file_atomic_data {
+	const void *data;
+	size_t bytes;
+} hx_os_file_atomic_data;
+
+static hx_os_status hx_os_file_atomic_write(
+	hx_os_file *file, void *user, hx_os_error *error)
+{
+	const hx_os_file_atomic_data *input = user;
+	size_t completed;
+
+	return hx_os_file_write_all(
+		file, input->data, input->bytes, &completed, error);
+}
+
+hx_os_status hx_os_file_save_atomic_ex(const char *path, const void *data,
+	size_t bytes, hx_os_file_save_result *result, hx_os_error *error)
+{
+	hx_os_file_atomic_data input = {data, bytes};
+
+	if (!data && bytes) {
+		if (result)
+			memset(result, 0, sizeof(*result));
+
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	}
+
+	return hx_os_i_file_save_callback(NULL, path, 1, 0,
+		hx_os_file_atomic_write, &input, result, error);
 }
 
 hx_os_status hx_os_file_save_atomic(
