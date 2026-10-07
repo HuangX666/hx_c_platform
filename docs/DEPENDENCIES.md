@@ -33,7 +33,7 @@ git submodule update --init --recursive
 
 The optional dependency builder checks the exact commit of each source checkout. It fails on a missing or different revision and never silently follows a branch tip. Submodule URLs are in [.gitmodules](../.gitmodules); matching versions and revisions are in [HxDependencySources.cmake](../cmake/HxDependencySources.cmake).
 
-The library's ordinary build does not automatically build OpenSSL or the archive stack. The default-enabled CRYPTO module requires the OpenSSL SDK prepared below. Set `HX_OS_ENABLE_CRYPTO=OFF` for a build without OpenSSL. TLS and archive integration continue in their respective batches. The existing dependency-free Unicode and builtin configuration parsers continue to work without this builder.
+The library's ordinary build does not automatically build OpenSSL or the archive stack. The default-enabled CRYPTO module requires the OpenSSL SDK prepared below. Set `HX_OS_ENABLE_CRYPTO=OFF` for a build without OpenSSL. TLS uses the same SDK; see [TLS](TLS.md). Archive integration continues in its own batch. The existing dependency-free Unicode and builtin configuration parsers continue to work without this builder.
 
 ## 3. Alternative: FetchContent
 

@@ -6,6 +6,8 @@ This reference covers platform differences, interface limits, resource managemen
 
 The default CRYPTO module needs a prepared OpenSSL SDK. Before the nonminimal commands below, put its prefix in `CMAKE_PREFIX_PATH` or pass `HX_OS_DEPENDENCY_PREFIX`; disable `HX_OS_ENABLE_CRYPTO` explicitly when unused. See the [crypto guide](CRYPTO.md) for setup, text/file encryption, hashes and signatures.
 
+
+TLS connections, bounded full-duplex queues and JSON business programs: [TLS guide](TLS.md).
 - [1. Purpose and interface boundaries](#section-1)
 - [2. Platforms, languages and verification status](#section-2)
 - [3. Architecture, directories and backend selection](#section-3)
@@ -55,7 +57,7 @@ Common calls handle their own composition: read a UTF-8 file into `hx_string`, g
 | File publication and timestamp mechanisms | Log rotation, retention, formatting and filtering |
 | Interval profiling and native system queries | Crash policy, LocalDumps setup and historical log rings |
 
-The library builds, tests, installs and runs independently of hx_c_log. It does not require Qt, C++, or the OBS runtime. OBS informs the unified API, shared implementation and build-selected adapter organization. hx_c_log integration remains future work. Self-developed stackful and stackless coroutines are described in [the coroutine guide](COROUTINES.md). Thread-local storage **TLS** does not mean network encryption TLS; no encryption protocol stack is bundled.
+The library builds, tests, installs and runs independently of hx_c_log. It does not require Qt, C++, or the OBS runtime. OBS informs the unified API, shared implementation and build-selected adapter organization. hx_c_log integration remains future work. Self-developed stackful and stackless coroutines are described in [the coroutine guide](COROUTINES.md). Thread-local storage **TLS** is separate from the optional [encrypted network TLS module](TLS.md).
 
 <a id="section-2"></a>
 
@@ -1193,7 +1195,7 @@ Loads, stores and compare-exchange have different legal memory orders. Compare-e
 
 Create a `hx_os_network` owner for native networking, then create sockets or resolve addresses. IPv4/IPv6, TCP/UDP, numeric addresses, DNS, connect/wait, short send/receive, peer queries and socket options are available in [hx_os_net.h](../include/hx_os_net.h). DNS resolution may block; asynchronous resolution uses bounded workers and cannot forcibly interrupt getaddrinfo.
 
-Sockets are nonblocking and noninheritable. Retry short I/O using completed byte counts and the same deadline. `SO_REUSEADDR` is **explicit** through `hx_os_socket_set_reuseaddr`; bind never enables it silently. TCP_NODELAY and keepalive have common wrappers; native option numbers/layouts remain native. No HTTP, TLS encryption or reconnect policy is supplied by this layer.
+Sockets are nonblocking and noninheritable. Retry short I/O using completed byte counts and the same deadline. `SO_REUSEADDR` is **explicit** through `hx_os_socket_set_reuseaddr`; bind never enables it silently. TCP_NODELAY and keepalive have common wrappers; native option numbers/layouts remain native. This socket layer provides no HTTP or reconnect policy. Verified TLS is a separate optional [module](TLS.md).
 
 ### 18.2 A local loop without networking
 

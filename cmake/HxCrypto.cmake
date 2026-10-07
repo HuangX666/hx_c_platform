@@ -30,6 +30,9 @@ endfunction()
 if(HX_OS_ENABLE_CRYPTO)
 	hx_find_openssl()
 	set(HX_OS_PC_REQUIRES_PRIVATE "libcrypto >= 3.5")
+	if(HX_OS_HAVE_TLS)
+		string(APPEND HX_OS_PC_REQUIRES_PRIVATE ", libssl >= 3.5")
+	endif()
 endif()
 
 function(hx_link_crypto target)
@@ -38,6 +41,16 @@ function(hx_link_crypto target)
 	endif()
 
 	target_link_libraries(${target} PRIVATE OpenSSL::Crypto)
+	set(hx_ssl_targets OpenSSL::Crypto)
+	if(HX_OS_HAVE_TLS)
+		target_link_libraries(${target} PRIVATE OpenSSL::SSL)
+		list(APPEND hx_ssl_targets OpenSSL::SSL)
+		if(APPLE)
+			target_link_libraries(${target} PRIVATE
+				"-framework Security"
+				"-framework CoreFoundation")
+		endif()
+	endif()
 	if(EXISTS "${HX_OS_DEPENDENCY_PREFIX}/share/hx-dependencies")
 		install(DIRECTORY
 			"${HX_OS_DEPENDENCY_PREFIX}/share/hx-dependencies"
@@ -60,39 +73,49 @@ function(hx_link_crypto target)
 		if(CMAKE_CONFIGURATION_TYPES)
 			string(APPEND runtime "/$<CONFIG>")
 		endif()
-		add_custom_command(TARGET ${target} POST_BUILD
-			COMMAND ${CMAKE_COMMAND} -E make_directory "${runtime}"
-			COMMAND ${CMAKE_COMMAND} -E copy_if_different
-				$<TARGET_FILE:OpenSSL::Crypto> "${runtime}"
-			VERBATIM)
 		set(destination "${CMAKE_INSTALL_BINDIR}")
-	elseif(APPLE)
-		set_property(TARGET ${target} APPEND PROPERTY
-			INSTALL_RPATH "@loader_path")
-		set(destination "${CMAKE_INSTALL_LIBDIR}")
 	else()
-		set_property(TARGET ${target} APPEND PROPERTY
-			INSTALL_RPATH "$ORIGIN")
 		set(destination "${CMAKE_INSTALL_LIBDIR}")
+		if(APPLE)
+			set(rpath "@loader_path")
+		else()
+			set(rpath "$ORIGIN")
+		endif()
+		set_property(TARGET ${target} APPEND PROPERTY INSTALL_RPATH
+			"${rpath}")
 	endif()
 
-	if(HX_OS_INSTALL_OPENSSL_RUNTIME)
-		set(runtime_name "hx_openssl_runtime_$<CONFIG>.txt")
-		file(GENERATE
-			OUTPUT "${PROJECT_BINARY_DIR}/${runtime_name}"
-			CONTENT "$<TARGET_FILE:OpenSSL::Crypto>\n")
+	set(hx_ssl_manifest "")
+	foreach(hx_ssl IN LISTS hx_ssl_targets)
+		set(runtime_file "$<TARGET_FILE:${hx_ssl}>")
 		if(WIN32)
-			install(FILES $<TARGET_FILE:OpenSSL::Crypto>
+			add_custom_command(TARGET ${target} POST_BUILD
+				COMMAND ${CMAKE_COMMAND} -E make_directory
+					"${runtime}"
+				COMMAND ${CMAKE_COMMAND} -E copy_if_different
+					"${runtime_file}" "${runtime}"
+				VERBATIM)
+		endif()
+		if(NOT HX_OS_INSTALL_OPENSSL_RUNTIME)
+			continue()
+		endif()
+		string(APPEND hx_ssl_manifest "${runtime_file}\n")
+		if(WIN32)
+			install(FILES "${runtime_file}"
 				DESTINATION "${destination}")
 		else()
-			# The imported path can be an unversioned symlink.
-			# Include its complete chain and the actual runtime.
+			# Include the entire symlink chain and actual runtime.
 			set(install_to
 				"\${CMAKE_INSTALL_PREFIX}/${destination}")
 			install(CODE "file(INSTALL
 				DESTINATION \"${install_to}\"
 				TYPE SHARED_LIBRARY FOLLOW_SYMLINK_CHAIN
-				FILES \"$<TARGET_FILE:OpenSSL::Crypto>\")")
+				FILES \"${runtime_file}\")")
 		endif()
+	endforeach()
+	if(HX_OS_INSTALL_OPENSSL_RUNTIME)
+		set(manifest "hx_openssl_runtime_$<CONFIG>.txt")
+		file(GENERATE OUTPUT "${PROJECT_BINARY_DIR}/${manifest}"
+			CONTENT "${hx_ssl_manifest}")
 	endif()
 endfunction()

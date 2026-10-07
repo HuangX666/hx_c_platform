@@ -72,6 +72,7 @@ option(HX_OS_ENABLE_TIMER "Build periodic loop timers" ON)
 
 option(HX_OS_ENABLE_RANDOM "Build secure system randomness and UUID v4" ON)
 option(HX_OS_ENABLE_CRYPTO "Build OpenSSL data cryptography" ON)
+option(HX_OS_ENABLE_TLS "Build full-duplex TLS endpoints" ON)
 
 option(HX_OS_ENABLE_VIRTUAL_MEMORY "Build pages and file mappings" ON)
 
@@ -308,6 +309,12 @@ if(NOT WIN32)
 endif()
 
 include(cmake/ConfigParsers.cmake)
+set(HX_OS_HAVE_TLS 0)
+if(HX_OS_ENABLE_TLS AND HX_OS_ENABLE_CRYPTO AND HX_OS_ENABLE_NETWORK
+		AND HX_OS_ENABLE_LOOP AND HX_OS_ENABLE_FILE_UTILS)
+	set(HX_OS_HAVE_TLS 1)
+endif()
+
 include(cmake/HxCrypto.cmake)
 
 if(NOT HX_OS_ENABLE_COROUTINES)
@@ -347,6 +354,8 @@ add_library(hx_c_platform
 	src/crypto.c src/crypto_digest.c src/crypto_cipher.c src/crypto_text.c
 	src/crypto_file.c
 	src/crypto_key.c
+	src/tls_common.c src/tls.c src/tls_wait.c src/tls_io.c
+	src/tls_credentials.c src/tls_roots.c src/tls_stub.c
 	src/watch.c src/loop_fd.c
 	src/system.c src/cpu_features.c src/time_posix.c
 	src/process.c src/process_capture.c src/local.c src/duplex_pipe.c
@@ -854,6 +863,11 @@ install(FILES
 	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/hx_c_platform)
 
 set(HX_OS_PC_LIBS_PRIVATE "")
+
+if(APPLE AND HX_OS_HAVE_TLS)
+	string(APPEND HX_OS_PC_LIBS_PRIVATE
+		" -framework Security -framework CoreFoundation")
+endif()
 
 if(WIN32 AND HX_OS_ENABLE_WINDOWS_VERSION)
 	string(APPEND HX_OS_PC_LIBS_PRIVATE " -lversion")

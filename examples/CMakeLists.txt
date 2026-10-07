@@ -26,7 +26,7 @@ function(hx_add_serialization_interop)
 endfunction()
 
 foreach(example IN ITEMS hello async_timer configuration containers system_info
-	encrypt_text
+	encrypt_text tls_json_client tls_json_server
 	load_plugin text_file environment special_paths thread_options
 	windows_info
 	native_file
@@ -517,5 +517,17 @@ if(CMAKE_CXX_COMPILER_LOADED)
 			COMMAND hx_os_cpp_direct_calls)
 		set_tests_properties(cpp_direct_calls_example
 			PROPERTIES TIMEOUT 20)
+	endif()
+endif()
+
+if(HX_OS_BUILD_TESTS AND HX_OS_HAVE_TLS AND HX_OS_ENABLE_CONFIG
+		AND HX_OS_ENABLE_SETTINGS AND HX_OS_ENABLE_CONFIG_SERIALIZE
+		AND NOT CMAKE_CROSSCOMPILING)
+	find_package(Python3 QUIET COMPONENTS Interpreter)
+	if(Python3_Interpreter_FOUND)
+		add_test(NAME tls_json_business COMMAND "${Python3_EXECUTABLE}"
+			"${PROJECT_SOURCE_DIR}/examples/run_tls_business.py"
+			--bin-dir $<TARGET_FILE_DIR:hx_os_tls_json_server>)
+		set_tests_properties(tls_json_business PROPERTIES TIMEOUT 60)
 	endif()
 endif()

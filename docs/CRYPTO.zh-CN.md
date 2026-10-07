@@ -16,6 +16,8 @@ ctest --test-dir build -C Release -R "crypto|encrypt_text" --output-on-failure
 
 OpenSSL 默认动态链接。Windows 构建会把选中的 Crypto DLL 复制到本库的 `bin/<config>` 目录；通过 `add_subdirectory` 接入且可执行文件在其他目录时，业务也需要把该 DLL 放到程序旁，或者把安装后的 `bin` 加入 PATH。安装默认包含选中的 Crypto 运行库；业务自己管理部署时，可通过 `HX_OS_INSTALL_OPENSSL_RUNTIME=OFF` 关闭复制。Linux 将其安装在核心共享库旁，并设置相对运行库搜索路径。即便核心使用静态库，OpenSSL 默认仍为动态链接；安装后的静态库消费者执行 `find_package(hx_c_platform CONFIG REQUIRED)` 时，需要把 SDK prefix 加入 `CMAKE_PREFIX_PATH`。
 
+启用 TLS 时，同时包含选定的 SSL 运行库，详见 [TLS 教程](TLS.zh-CN.md)。
+
 需要静态集成 OpenSSL 时，用 `HX_DEPS_OPENSSL_SHARED=OFF` 构建 SDK，并给主项目传入 `HX_OS_OPENSSL_STATIC=ON`。外部线程和插件卸载还需遵守第 5 节。分发时保留实际组件的许可证材料。Apple 动态库重定位、Win7、Android 和嵌入式 OpenSSL 包仍需分别验证，Windows 11／WSL 通过不能代替这些目标。
 
 不需要 OpenSSL 时设置 `HX_OS_ENABLE_CRYPTO=OFF`。头文件和函数仍可用，`hx_os_crypto_available()` 返回 0，加密操作返回 `HX_OS_NOT_SUPPORTED`。基础字符串、容器和文件能力不依赖 OpenSSL。

@@ -41,7 +41,7 @@ add_test(NAME library COMMAND hx_os_test_library
 set_tests_properties(library PROPERTIES TIMEOUT 20)
 
 set(hx_test_suites data options lifecycle config containers sysinfo file_utils
-	crypto
+	crypto tls
 	text_interop byte_queue stream buffered_file
 	env paths thread_extra pipe io_options file_info
 	config_serialize config_tree config_backup ini codec timer
@@ -87,6 +87,12 @@ foreach(suite IN LISTS hx_test_suites)
 	add_test(NAME ${suite} COMMAND hx_os_test_${suite})
 	set_tests_properties(${suite} PROPERTIES TIMEOUT 20)
 endforeach()
+
+if(HX_OS_HAVE_TLS)
+	target_link_libraries(hx_os_test_tls PRIVATE OpenSSL::Crypto)
+	target_compile_definitions(hx_os_test_tls PRIVATE HX_TEST_TLS_NATIVE=1)
+endif()
+set_tests_properties(tls PROPERTIES TIMEOUT 60)
 
 target_include_directories(hx_os_test_profiler_snapshot PRIVATE
 	"${PROJECT_BINARY_DIR}/private")
@@ -521,6 +527,15 @@ if(CMAKE_CXX_COMPILER_LOADED)
 	add_test(NAME cpp_crypto COMMAND hx_os_test_cpp_crypto)
 	set_tests_properties(cpp_crypto PROPERTIES TIMEOUT 30)
 
+	add_executable(hx_os_test_cpp_tls test_cpp_tls.cpp)
+	target_link_libraries(hx_os_test_cpp_tls PRIVATE hx_c_platform::cpp)
+	set_target_properties(hx_os_test_cpp_tls PROPERTIES
+		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+	hx_apply_warnings(hx_os_test_cpp_tls)
+	add_test(NAME cpp_tls COMMAND hx_os_test_cpp_tls)
+	set_tests_properties(cpp_tls PROPERTIES TIMEOUT 30)
+
 	file(GLOB facade_headers "${PROJECT_SOURCE_DIR}/include/hx/*.hpp")
 
 	foreach(header IN LISTS facade_headers)
@@ -586,4 +601,22 @@ if(CMAKE_CXX_COMPILER_LOADED)
 		$<TARGET_FILE:hx_os_test_library_module>
 		$<TARGET_FILE:hx_os_process_fixture>)
 	set_tests_properties(cpp_platform PROPERTIES TIMEOUT 20)
+endif()
+
+if(HX_OS_HAVE_TLS AND BUILD_SHARED_LIBS AND NOT HX_OS_SANITIZER
+		AND NOT CMAKE_CROSSCOMPILING)
+	find_package(Python3 QUIET COMPONENTS Interpreter)
+	if(Python3_Interpreter_FOUND)
+		set(hx_tls_interop_args
+			--library $<TARGET_FILE:hx_c_platform>
+			--fixtures $<TARGET_FILE:hx_os_test_tls>)
+		if(TARGET hx_os_test_cpp_tls)
+			list(APPEND hx_tls_interop_args
+				--cpp $<TARGET_FILE:hx_os_test_cpp_tls>)
+		endif()
+		add_test(NAME tls_interop COMMAND "${Python3_EXECUTABLE}"
+			"${PROJECT_SOURCE_DIR}/tests/test_tls_interop.py"
+			${hx_tls_interop_args})
+		set_tests_properties(tls_interop PROPERTIES TIMEOUT 60)
+	endif()
 endif()

@@ -8,6 +8,29 @@ This records development validation through 2026-10-07. A design, implemented ad
 
 The JSON entry below records the current examples. Earlier independent text examples, initial shared workflows, IPC/KCP implementation and other batches describe their historical versions.
 
+## 2026-10-07: Standard TLS and independent send/receive threads
+
+Baseline `7b43315`. Added optional C99 TLS 1.2/1.3 endpoints, a borrowed exception-free C++11 facade, bounded queues/peers, explicit application cancellation and retryable graceful/abort shutdown. Each endpoint owns one I/O thread; servers share it across peers. OpenSSL runs on that thread over bounded BIO pairs and the existing native loop. This adds no locks or dispatch to ordinary non-TLS I/O. Public legacy layouts remain unchanged, and vendor source is unchanged.
+
+| Configuration | Result |
+| --- | --- |
+| Windows MSVC x64 shared, full CTest | 175/175; final TLS/interop/C++/JSON subset 4/4 |
+| WSL GCC x64 shared, full CTest | 177/177; final subset 4/4 |
+| Windows x86 static core + shared OpenSSL | TLS/C++ 2/2; standalone C99/C++11 headers compiled |
+| Installed x64 shared, both hosts | C++11 consumer 49/49; pure-C consumer 35/35 |
+| WSL ASan/UBSan, leak detection enabled | TLS/C++/two-process JSON 3/3 |
+| WSL TSan | TLS/C++ 2/2, including concurrent allocation-failure cleanup |
+| WSL shared core embedding static OpenSSL | Native TLS/C++ 2/2 with NETWORK/LOOP enabled and THREAD_POOL disabled |
+| Minimal build without crypto/network/loop | Unsupported TLS/C++ entries 2/2; isolated headers compiled |
+
+The native C suite covers two concurrent 1 MiB directions, mutual certificates, wrong hostname, system trust rejecting the private test CA, partial data followed by abrupt EOF, cancellation and reuse, 48 allocator failure points, encrypted PEM passwords and peer-close timeout/retry without ID reuse. Independent Python clients/servers exercise TLS 1.2/1.3, three-byte fragments, multiple JSON frames, an expired certificate, DNS address fallback, backpressure/partial send counts and close retry. Python 3.14 strict verification found missing key identifiers in the original test certificate generator; the generator now adds SKI/AKI instead of weakening verification. C++ tests require exceptions disabled. Native OpenSSL is not fully sanitizer-instrumented, so these results do not certify every vendor-internal path.
+
+Both SSL and Crypto runtime chains are now installed and hash-checked by the existing install verifier. Core static/shared packaging retains the explicit OpenSSL static option. UTF-8 certificate paths are tested through an independent Python ABI caller. Library-owned TLS workers finish native thread cleanup before join; external raw-crypto consumers still follow the documented static/unload contract.
+
+Measured size/alignment bytes: TLS options 72/8 and peer-info 160/8 on MSVC/GCC x64; 44/4 and 160/8 on MSVC x86. Private endpoint/peer are 280/8 and 696/8 on x64, 192/8 and 616/8 on x86. Queues, four record buffers, BIO storage, native allocations and socket buffers are separate. The endpoint has no per-connection worker; queue copies, mutex sections and native request allocations remain real costs. No comparative throughput claim is made.
+
+Logs: `tls-full-*`, `tls-delivery-*`, `tls-install.log`, `tls-native-*` in the corresponding ignored build directories. Runtime target coverage is Windows host/WSL; macOS, Windows 7/8.1, Android API 21 and embedded ARM/musl TLS SDK integration remain pending. The archive and optional encrypted-7z APIs are the remaining dependency-backed extension work.
+
 ## 2026-10-07: OpenSSL cryptography and deployment
 
 Baseline `49b439a`. Added default-enabled CRYPTO with isolated OpenSSL contexts, SHA-256/SHA-512, HMAC and constant-time tag verification, random 32-byte keys, authenticated binary/text/file encryption, Ed25519/RSA-PSS signatures and bounded PEM key import/export. C++11 returns `Result` with exceptions disabled. All old public layouts and valid calls remain intact. OpenSSL is shared by default; static linking is explicit. Vendor source is unchanged.

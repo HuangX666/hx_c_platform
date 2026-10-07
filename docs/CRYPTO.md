@@ -16,6 +16,8 @@ ctest --test-dir build -C Release -R "crypto|encrypt_text" --output-on-failure
 
 OpenSSL is dynamically linked by default. On Windows the build copies its selected Crypto DLL into the library's `bin/<config>` directory; applications using `add_subdirectory` with another executable directory must also place that DLL beside their executable, or use the installed `bin` directory on PATH. Installation includes the selected Crypto runtime by default (`HX_OS_INSTALL_OPENSSL_RUNTIME=OFF` disables copying when your application owns deployment). Linux installs it next to the core shared library with an origin-relative runtime path. Static core consumers still link OpenSSL dynamically unless explicitly configured otherwise. They need the SDK prefix in their `CMAKE_PREFIX_PATH` when calling `find_package(hx_c_platform CONFIG REQUIRED)`.
 
+With TLS enabled, the selected SSL runtime is included alongside Crypto; see the [TLS guide](TLS.md).
+
 To embed OpenSSL statically, build its SDK with `HX_DEPS_OPENSSL_SHARED=OFF` and configure the library with `HX_OS_OPENSSL_STATIC=ON`. Read section 5 before using external threads or unloading a plugin. Keep the license materials of the actual libraries you distribute. Apple runtime relocation and Win7/Android/embedded OpenSSL packages require separate target validation; successful Windows 11/WSL tests do not certify them.
 
 Set `HX_OS_ENABLE_CRYPTO=OFF` to avoid this dependency. Headers and functions remain available; `hx_os_crypto_available()` returns 0 and crypto operations return `HX_OS_NOT_SUPPORTED`. Basic strings, containers and file I/O do not need OpenSSL.

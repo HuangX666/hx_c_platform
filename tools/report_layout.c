@@ -23,6 +23,7 @@
 #include "coroutine_private.h"
 #include "hx_format.h"
 #include "ipc_private.h"
+#include "tls_private.h"
 #include <stdio.h>
 
 #define HX_OS_LAYOUT(type)                                                     \
@@ -38,6 +39,12 @@
 int main(void)
 {
 	HX_OS_LAYOUT(hx_string);
+	HX_OS_LAYOUT(hx_os_tls_options);
+	HX_OS_LAYOUT(hx_os_tls_peer_info);
+#if HX_OS_HAVE_TLS
+	HX_OS_LAYOUT(hx_os_tls);
+	HX_OS_LAYOUT(hx_tls_peer);
+#endif
 	HX_OS_LAYOUT(hx_ipc_message);
 	HX_OS_LAYOUT(hx_ipc_options);
 	HX_OS_LAYOUT(hx_ipc_statistics);

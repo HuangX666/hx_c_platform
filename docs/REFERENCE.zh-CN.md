@@ -6,6 +6,8 @@
 
 默认开启的 CRYPTO 模块需要预先构建 OpenSSL SDK。以下非最小配置命令运行前，请把 SDK prefix 加入 `CMAKE_PREFIX_PATH`，或传入 `HX_OS_DEPENDENCY_PREFIX`；不用加密时显式关闭 `HX_OS_ENABLE_CRYPTO`。构建、文本／文件加解密、摘要和签名的完整示例见[加密教程](CRYPTO.zh-CN.md)。
 
+
+TLS 连接、有界全双工队列及 JSON 业务程序见 [TLS 教程](TLS.zh-CN.md)。
 - [1. 项目定位与接口边界](#section-1)
 - [2. 平台、语言与验证状态](#section-2)
 - [3. 分层架构、目录与后端选择](#section-3)
@@ -55,7 +57,7 @@
 | 文件发布与时间戳机制 | 日志轮转、保留数量、格式与过滤 |
 | 区间 profiler 和原生系统查询 | 崩溃策略、LocalDumps 配置、日志历史环 |
 
-基础库可以脱离 hx_c_log 独立构建、测试、安装和使用，不强制依赖 Qt、C++ 或 OBS 运行库。借鉴 OBS 的是统一接口、共用实现与构建选择平台实现的组织方式。 hx_c_log 接入仍属于后续工作；自研有栈和无栈协程见[协程教程](COROUTINES.zh-CN.md)。线程局部存储 **TLS** 与网络加密 TLS 是不同概念；本库没有内置网络加密协议栈。
+基础库可以脱离 hx_c_log 独立构建、测试、安装和使用，不强制依赖 Qt、C++ 或 OBS 运行库。借鉴 OBS 的是统一接口、共用实现与构建选择平台实现的组织方式。 hx_c_log 接入仍属于后续工作；自研有栈和无栈协程见[协程教程](COROUTINES.zh-CN.md)。线程局部存储 **TLS** 与[网络加密 TLS](TLS.zh-CN.md) 是不同概念。
 
 <a id="section-2"></a>
 
@@ -1193,7 +1195,7 @@ load、store、CAS 的合法内存序不同。CAS 失败序不能是 release/acq
 
 先创建 `hx_os_network` 所有者，再创建套接字或解析地址。 [hx_os_net.h](../include/hx_os_net.h) 提供 IPv4/IPv6、TCP/UDP、数字地址、DNS、连接/等待、短收发、对端查询和套接字选项。DNS 解析可能阻塞；异步 DNS 使用有界工作线程，但不能强制中断 getaddrinfo。
 
-套接字为非阻塞、不可继承对象，依据已完成字节数和同一 deadline 重试短 I/O。 `SO_REUSEADDR` 必须通过 `hx_os_socket_set_reuseaddr` **显式开启**，bind 不会自动设置。TCP_NODELAY、keepalive 有通用包装；原生选项编号和结构仍是平台定义。本层不提供 HTTP、加密 TLS 或业务重连策略。
+套接字为非阻塞、不可继承对象，依据已完成字节数和同一 deadline 重试短 I/O。 `SO_REUSEADDR` 必须通过 `hx_os_socket_set_reuseaddr` **显式开启**，bind 不会自动设置。TCP_NODELAY、keepalive 有通用包装；原生选项编号和结构仍是平台定义。普通套接字层不提供 HTTP 或业务重连策略，验证证书的 TLS 由独立的[可选模块](TLS.zh-CN.md)提供。
 
 ### 18.2 不依赖网络初始化的本地 loop
 

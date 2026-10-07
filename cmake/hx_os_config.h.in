@@ -20,6 +20,8 @@
 #cmakedefine01 HX_OS_ENABLE_TIMER
 #cmakedefine01 HX_OS_ENABLE_RANDOM
 #cmakedefine01 HX_OS_ENABLE_CRYPTO
+#cmakedefine01 HX_OS_ENABLE_TLS
+#cmakedefine01 HX_OS_HAVE_TLS
 #cmakedefine01 HX_OS_ENABLE_VIRTUAL_MEMORY
 #cmakedefine01 HX_OS_ENABLE_FILE_EXTRA
 #cmakedefine01 HX_OS_ENABLE_WATCH

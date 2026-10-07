@@ -33,7 +33,7 @@ git submodule update --init --recursive
 
 依赖构建器检查每个源码目录的确切提交号。缺失或版本不同会明确报错，不会自动跟随最新分支。[.gitmodules](../.gitmodules) 记录地址，[HxDependencySources.cmake](../cmake/HxDependencySources.cmake) 记录一致的版本与提交号。
 
-普通的基础库构建不会自动构建 OpenSSL 或压缩依赖。默认开启的 CRYPTO 模块需要下面构建器准备的 OpenSSL SDK；现有 Unicode 功能和内置配置解析器不需要它。关闭 `HX_OS_ENABLE_CRYPTO` 可继续使用不依赖 OpenSSL 的构建。TLS 和归档接口继续按扩展清单推进。
+普通的基础库构建不会自动构建 OpenSSL 或压缩依赖。默认开启的 CRYPTO 模块需要下面构建器准备的 OpenSSL SDK；现有 Unicode 功能和内置配置解析器不需要它。关闭 `HX_OS_ENABLE_CRYPTO` 可继续使用不依赖 OpenSSL 的构建。TLS 使用同一套 SDK，见 [TLS 教程](TLS.zh-CN.md)；归档接口继续按扩展清单推进。
 
 ## 3. 备选使用 FetchContent
 

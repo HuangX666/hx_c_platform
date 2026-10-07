@@ -64,6 +64,10 @@ target_include_directories(hx_os_layout_report PRIVATE
 	${PROJECT_SOURCE_DIR}/${hx_private_include}
 	${PROJECT_BINARY_DIR}/private)
 
+if(HX_OS_HAVE_TLS)
+	target_link_libraries(hx_os_layout_report PRIVATE OpenSSL::SSL)
+endif()
+
 if(WIN32)
 	target_compile_definitions(hx_os_layout_report PRIVATE
 		_WIN32_WINNT=0x0601 WINVER=0x0601 WIN32_LEAN_AND_MEAN)
