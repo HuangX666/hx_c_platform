@@ -13,6 +13,7 @@ deps/
   zlib/             Git 子模块
   xz/               Git 子模块
   zstd/             Git 子模块
+  7zip/             独立可选原生后端子模块
   kcp/<commit>/     原有第三方文件，内容保持原样
   uthash/v2.4.0/    原有第三方文件，内容保持原样
   minicoro/v0.1.3/  仅保留早期评估副本，不参与构建
@@ -33,7 +34,7 @@ git submodule update --init --recursive
 
 依赖构建器检查每个源码目录的确切提交号。缺失或版本不同会明确报错，不会自动跟随最新分支。[.gitmodules](../.gitmodules) 记录地址，[HxDependencySources.cmake](../cmake/HxDependencySources.cmake) 记录一致的版本与提交号。
 
-普通的基础库构建不会自动构建 OpenSSL 或压缩依赖。默认开启的 CRYPTO 模块需要下面构建器准备的 OpenSSL SDK；现有 Unicode 功能和内置配置解析器不需要它。关闭 `HX_OS_ENABLE_CRYPTO` 可继续使用不依赖 OpenSSL 的构建。TLS 使用同一套 SDK，见 [TLS 教程](TLS.zh-CN.md)；归档接口继续按扩展清单推进。
+普通构建使用已经准备好的 SDK，不会自动编译第三方库。默认开启的 CRYPTO、ARCHIVE 需要下文的 SDK，TLS 复用它。不需要这些依赖时，同时设置 `HX_OS_ENABLE_CRYPTO=OFF` 和 `HX_OS_ENABLE_ARCHIVE=OFF`；基础 Unicode 和内置配置解析仍可使用。对应入口见[加密](CRYPTO.zh-CN.md)、[TLS](TLS.zh-CN.md)和[压缩](ARCHIVE.zh-CN.md)。
 
 ## 3. 备选使用 FetchContent
 
@@ -59,7 +60,9 @@ cmake -S tools/dependencies -B build-deps -G "Visual Studio 17 2022" -A x64 -DHX
 cmake --build build-deps --config Release --parallel 2
 ```
 
-默认安装位置为 `build-deps/prefix`，可通过 `CMAKE_INSTALL_PREFIX` 指定。构建器执行独立目录的 Release 构建：OpenSSL 默认动态链接，压缩依赖静态链接并启用位置无关代码。传入 `HX_DEPS_OPENSSL_SHARED=OFF` 可构建静态 OpenSSL，主库同时选择 `HX_OS_OPENSSL_STATIC=ON`；外部线程需遵守[线程清理约定](CRYPTO.zh-CN.md#5-线程内存与插件卸载)。不构建 OpenSSL 测试套件、旧 provider／engine、归档命令行工具和未选择的压缩后端。`HX_DEPS_JOBS` 限制每个子构建的并行量，外层 `--parallel` 限制同时构建的依赖数量。
+默认安装位置为 `build-deps/prefix`，可通过 `CMAKE_INSTALL_PREFIX` 指定。构建器在独立目录编译，默认使用 Release 配置：OpenSSL 默认动态链接，压缩依赖静态链接并启用位置无关代码。传入 `HX_DEPS_OPENSSL_SHARED=OFF` 可构建静态 OpenSSL，主库同时选择 `HX_OS_OPENSSL_STATIC=ON`；外部线程需遵守[线程清理约定](CRYPTO.zh-CN.md#5-线程内存与插件卸载)。不构建 OpenSSL 测试套件、旧 provider／engine、归档命令行工具和未选择的压缩后端。`HX_DEPS_JOBS` 限制每个子构建的并行量，外层 `--parallel` 限制同时构建的依赖数量。
+
+MSVC Debug 消费者应为压缩 SDK 指定 `-DHX_DEPS_CONFIGURATION=Debug`。Debug 与 Release SDK 使用不同 prefix，避免混用 `/MDd` 与 `/MD` 静态库；OpenSSL 动态运行库保持独立构建。
 
 Windows 的 libarchive 配置选择 WIN7，并显式连接选定的依赖，但 Windows 7/8.1 运行仍待验证。本轮 Windows OpenSSL 使用 ASM=OFF，不能据此声称验证了汇编性能。交叉编译需要合适的 toolchain 和显式 `HX_DEPS_OPENSSL_TARGET`；只填写这个参数并不代表目标编译器、归档器及 OpenSSL 环境已经配置正确。Android、嵌入式 Linux 和 Apple 的依赖包仍需分别验证。
 
@@ -75,6 +78,6 @@ cmake --build build-deps-check --config Release
 ctest --test-dir build-deps-check -C Release --output-on-failure
 ```
 
-检查程序在内存中写入并读回 ZIP、AES-256 密码 ZIP、普通 7z、TAR、TAR.GZ、TAR.XZ、TAR.Zstd，核对二进制内容、加密标志，并验证 ZIP 错误密码会失败。启用过滤器必须直接成功，不能退回外部命令行工具。这是底层依赖测试，还不能代替文件系统解压安全性和公共归档接口的验证。
+检查程序在内存中写入并读回 ZIP、AES-256 密码 ZIP、普通 7z、TAR、TAR.GZ、TAR.XZ、TAR.Zstd，核对二进制内容、加密标志，并验证 ZIP 错误密码会失败。启用过滤器必须直接成功，不能退回外部命令行工具。这些依赖探针不能代替[压缩教程](ARCHIVE.zh-CN.md)中的公共 API、文件系统与失败路径测试。
 
-默认组合为 libarchive、OpenSSL、zlib、liblzma、zstd。密码及文件名加密的 7z 仍按已确认方案交给独立可选的 7-Zip 动态后端，其实现与打包另行完成；引入 libarchive 不会使它自动支持加密 7z。最终发布时需按实际包含的组件保留对应许可证材料。
+默认组合为 libarchive、OpenSSL、zlib、liblzma、zstd。独立可选的 7-Zip 动态后端提供密码和文件名加密，见[构建与部署](ARCHIVE.zh-CN.md#4-7z-的密码与文件名加密)。适配模块同样使用所选依赖来源和固定的 `deps/7zip` 头文件；原生运行库通过 `tools/sevenzip` 单独构建，不属于默认 SDK，也不会隐式复制到核心安装目录。分发时保留实际组件的完整许可证材料。

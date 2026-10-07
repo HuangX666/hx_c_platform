@@ -26,7 +26,7 @@ function(hx_add_serialization_interop)
 endfunction()
 
 foreach(example IN ITEMS hello async_timer configuration containers system_info
-	encrypt_text tls_json_client tls_json_server
+	encrypt_text archive_files tls_json_client tls_json_server
 	load_plugin text_file environment special_paths thread_options
 	windows_info
 	native_file
@@ -58,6 +58,23 @@ endforeach()
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_CRYPTO)
 	add_test(NAME encrypt_text_example COMMAND hx_os_encrypt_text)
 	set_tests_properties(encrypt_text_example PROPERTIES TIMEOUT 20)
+endif()
+
+if(HX_OS_BUILD_TESTS AND HX_OS_HAVE_ARCHIVE AND NOT CMAKE_CROSSCOMPILING)
+	find_package(Python3 QUIET COMPONENTS Interpreter)
+	if(Python3_Interpreter_FOUND)
+		set(hx_archive_test_args
+			--example $<TARGET_FILE:hx_os_archive_files>)
+		if(HX_OS_HAVE_7ZIP AND HX_OS_TEST_7ZIP_LIBRARY)
+			list(APPEND hx_archive_test_args
+				--vendor "${HX_OS_TEST_7ZIP_LIBRARY}"
+				--adapter $<TARGET_FILE:hx_archive_7zip>)
+		endif()
+		add_test(NAME archive_interop COMMAND "${Python3_EXECUTABLE}"
+			"${PROJECT_SOURCE_DIR}/tests/test_archive_interop.py"
+			${hx_archive_test_args})
+		set_tests_properties(archive_interop PROPERTIES TIMEOUT 90)
+	endif()
 endif()
 
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_NATIVE_INTEROP

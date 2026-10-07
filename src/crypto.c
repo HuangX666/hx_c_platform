@@ -1,4 +1,8 @@
 #include "crypto_private.h"
+#if HX_OS_HAVE_OPENSSL
+#include <openssl/crypto.h>
+#include <openssl/err.h>
+#endif
 
 #if HX_OS_ENABLE_CRYPTO
 #if defined(_MSC_VER)
@@ -168,7 +172,7 @@ void hx_os_crypto_release(hx_os_crypto *crypto)
 
 void hx_os_crypto_thread_cleanup(void)
 {
-#if HX_OS_ENABLE_CRYPTO
+#if HX_OS_HAVE_OPENSSL
 	OPENSSL_thread_stop();
 #endif
 }
@@ -216,7 +220,7 @@ void hx_os_crypto_bytes_destroy(hx_os_crypto_bytes **owner)
 
 void hx_os_i_crypto_error_text(uint64_t code, char *out, size_t capacity)
 {
-#if HX_OS_ENABLE_CRYPTO
+#if HX_OS_HAVE_OPENSSL
 	if (code <= ULONG_MAX)
 		ERR_error_string_n((unsigned long)code, out, capacity);
 #else

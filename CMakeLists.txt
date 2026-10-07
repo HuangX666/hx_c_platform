@@ -73,6 +73,8 @@ option(HX_OS_ENABLE_TIMER "Build periodic loop timers" ON)
 option(HX_OS_ENABLE_RANDOM "Build secure system randomness and UUID v4" ON)
 option(HX_OS_ENABLE_CRYPTO "Build OpenSSL data cryptography" ON)
 option(HX_OS_ENABLE_TLS "Build full-duplex TLS endpoints" ON)
+option(HX_OS_ENABLE_ARCHIVE "Build file and directory archives" ON)
+option(HX_OS_ENABLE_7ZIP "Build the optional 7-Zip DLL adapter" OFF)
 
 option(HX_OS_ENABLE_VIRTUAL_MEMORY "Build pages and file mappings" ON)
 
@@ -315,7 +317,23 @@ if(HX_OS_ENABLE_TLS AND HX_OS_ENABLE_CRYPTO AND HX_OS_ENABLE_NETWORK
 	set(HX_OS_HAVE_TLS 1)
 endif()
 
+set(HX_OS_HAVE_ARCHIVE 0)
+set(HX_OS_HAVE_7ZIP 0)
+if(HX_OS_ENABLE_ARCHIVE AND HX_OS_ENABLE_FILE_UTILS
+		AND HX_OS_ENABLE_CONTAINERS)
+	set(HX_OS_HAVE_ARCHIVE 1)
+endif()
+if(HX_OS_ENABLE_7ZIP AND HX_OS_HAVE_ARCHIVE AND HX_OS_ENABLE_LIBRARY
+		AND HX_OS_ENABLE_PATHS)
+	set(HX_OS_HAVE_7ZIP 1)
+endif()
+set(HX_OS_HAVE_OPENSSL 0)
+if(HX_OS_ENABLE_CRYPTO OR HX_OS_HAVE_ARCHIVE)
+	set(HX_OS_HAVE_OPENSSL 1)
+endif()
+
 include(cmake/HxCrypto.cmake)
+include(cmake/HxArchive.cmake)
 
 if(NOT HX_OS_ENABLE_COROUTINES)
 	set(HX_OS_ENABLE_STACKFUL_COROUTINES OFF)
@@ -356,6 +374,9 @@ add_library(hx_c_platform
 	src/crypto_key.c
 	src/tls_common.c src/tls.c src/tls_wait.c src/tls_io.c
 	src/tls_credentials.c src/tls_roots.c src/tls_stub.c
+	src/archive.c src/archive_path.c src/archive_io.c
+	src/archive_pack.c src/archive_read.c src/archive_decode.c
+	src/archive_7zip.c
 	src/watch.c src/loop_fd.c
 	src/system.c src/cpu_features.c src/time_posix.c
 	src/process.c src/process_capture.c src/local.c src/duplex_pipe.c
@@ -722,6 +743,7 @@ target_compile_definitions(hx_c_platform PRIVATE
 target_compile_definitions(hx_c_platform PRIVATE HX_OS_BUILD)
 target_link_libraries(hx_c_platform PRIVATE Threads::Threads)
 hx_link_crypto(hx_c_platform)
+hx_link_archive(hx_c_platform)
 
 if(HX_OS_NEED_RT)
 	target_link_libraries(hx_c_platform PRIVATE rt)
@@ -774,6 +796,7 @@ if(HX_OS_HAVE_ICONV)
 endif()
 
 hx_apply_warnings(hx_c_platform)
+include(cmake/HxSevenZip.cmake)
 
 if(HX_OS_SANITIZER AND NOT MSVC)
 	if(CMAKE_C_COMPILER_ID STREQUAL "GNU" AND

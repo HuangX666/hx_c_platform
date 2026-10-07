@@ -1,6 +1,6 @@
 # hx_c_platform
 
-[![CI 配置][ci-badge]](.github/workflows/build.yml) [![C99 核心][c-badge]](CMakeLists.txt) [![C++11 封装][cpp-badge]](docs/CPP_POOL.zh-CN.md) [![仅 C++ 封装为 header-only][header-badge]](docs/CPP_POOL.zh-CN.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![自有代码许可证待定][license-badge]](THIRD_PARTY_NOTICES.zh-CN.md) [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md) [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md) [![本地 Windows 175/175、Linux 177/177 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md) [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md) [![Android API 21 ARM 交叉编译通过][android-badge]](docs/ANDROID.zh-CN.md)
+[![CI 配置][ci-badge]](.github/workflows/build.yml) [![C99 核心][c-badge]](CMakeLists.txt) [![C++11 封装][cpp-badge]](docs/CPP_POOL.zh-CN.md) [![仅 C++ 封装为 header-only][header-badge]](docs/CPP_POOL.zh-CN.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![自有代码许可证待定][license-badge]](THIRD_PARTY_NOTICES.zh-CN.md) [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md) [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md) [![本地 Windows 179/179、Linux 181/181 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md) [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md) [![Android API 21 ARM 交叉编译通过][android-badge]](docs/ANDROID.zh-CN.md)
 
 [English](README.md) · [常用任务教程](docs/USAGE.zh-CN.md) · [详细参考](docs/REFERENCE.zh-CN.md)
 
@@ -81,6 +81,7 @@ project(hx_demo LANGUAGES C)
 set(HX_OS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(HX_OS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(HX_OS_ENABLE_CRYPTO OFF CACHE BOOL "" FORCE)
+set(HX_OS_ENABLE_ARCHIVE OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(external/hx_c_platform)
 
@@ -474,6 +475,7 @@ HX_CODEC_STRUCT(connection,
 | UDP 的采样发送与反馈 | [UDP 独立示例](docs/UDP_BUSINESS.zh-CN.md) |
 | KCP 的可靠数据块传输 | [KCP 独立示例](docs/KCP_BUSINESS.zh-CN.md) |
 | 进程通信、双向消息、多线程、其他语言对端 | [IPC 教程与协议](docs/IPC.zh-CN.md) |
+| 压缩文件／目录、密码 ZIP、可选加密 7z | [压缩教程与完整程序](docs/ARCHIVE.zh-CN.md) |
 | 花括号格式化、C 自动实参与表达式 | [格式化教程](docs/FORMAT.zh-CN.md) |
 | 文本、配置、容器和线程池的完整程序 | [常用任务教程](docs/USAGE.zh-CN.md) |
 | 在多层目录中查找文件、后台扫描 | [递归查找教程](docs/FILE_SEARCH.zh-CN.md) |
@@ -504,7 +506,7 @@ HX_CODEC_STRUCT(connection,
 
 ## 7. 构建、验证与项目许可
 
-开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。2026-10-07 的全量测试为 Windows 175/175、WSL Linux 177/177；新增便利接口通过各自相关的检查器验证，两端安装后的 C++11／纯 C 消费分别通过 49/49、35/35。此前序列化功能已完成 Android API 21 两种 ARM ABI 编译，并在 API 34 模拟器的 x86_64／ARM64 上各通过 3 项序列化测试；本批新增接口尚未重新执行这些 Android 目标检查。具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
+开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。2026-10-07 的全量测试为 Windows 179/179、WSL Linux 181/181；新增便利接口通过各自相关的检查器验证，两端安装后的 C++11／纯 C 消费分别通过 51/51、36/36。此前序列化功能已完成 Android API 21 两种 ARM ABI 编译，并在 API 34 模拟器的 x86_64／ARM64 上各通过 3 项序列化测试；本批新增接口尚未重新执行这些 Android 目标检查。具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
 
 自有代码的发布许可证尚未确定，第三方许可证见[许可说明](THIRD_PARTY_NOTICES.zh-CN.md)。协程使用自研实现；hx_c_log 接入仍属于后续工作。
 
@@ -517,6 +519,6 @@ HX_CODEC_STRUCT(connection,
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%20175%2F175%20Linux%20177%2F177-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-Win%20179%2F179%20Linux%20181%2F181-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

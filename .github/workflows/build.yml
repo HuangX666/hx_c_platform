@@ -63,7 +63,7 @@ jobs:
         run: >-
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
           -DBUILD_SHARED_LIBS=ON
-          -DHX_OS_ENABLE_CRYPTO=OFF
+          -DHX_OS_ENABLE_CRYPTO=OFF -DHX_OS_ENABLE_ARCHIVE=OFF
           -DHX_OS_ENABLE_CJSON=ON
           -DHX_OS_CJSON_SOURCE_DIR=deps/.cache/cJSON-1.7.19
           -DHX_OS_ENABLE_LIBYAML=ON
@@ -119,7 +119,7 @@ jobs:
           docker run --rm -v "$PWD:/src:ro" alpine:3.22 sh -ec '
             apk add --no-cache build-base cmake
             cmake -S /src -B /tmp/build -DCMAKE_BUILD_TYPE=Release \
-              -DHX_OS_ENABLE_CRYPTO=OFF
+              -DHX_OS_ENABLE_CRYPTO=OFF -DHX_OS_ENABLE_ARCHIVE=OFF
             cmake --build /tmp/build --parallel 4
             ctest --test-dir /tmp/build --output-on-failure
           '
@@ -152,7 +152,7 @@ jobs:
           -DHX_OS_TARGET_PROCESSOR=${{ matrix.processor }}
           -DHX_OS_CROSS_PREFIX=${{ matrix.triplet }}-
           -DHX_OS_SYSROOT=/
-          -DHX_OS_ENABLE_CRYPTO=OFF
+          -DHX_OS_ENABLE_CRYPTO=OFF -DHX_OS_ENABLE_ARCHIVE=OFF
           -DCMAKE_CROSSCOMPILING_EMULATOR="${{ matrix.emulator
           }};-L;/usr/${{ matrix.triplet }}"
       - run: cmake --build build --parallel 4

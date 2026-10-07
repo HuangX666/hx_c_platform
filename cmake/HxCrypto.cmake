@@ -12,10 +12,11 @@ function(hx_find_openssl)
 	set(OPENSSL_USE_STATIC_LIBS ${HX_OS_OPENSSL_STATIC})
 	find_package(OpenSSL 3.5 CONFIG QUIET)
 	if(NOT OpenSSL_FOUND OR NOT TARGET OpenSSL::Crypto)
-		message(FATAL_ERROR "CRYPTO requires an OpenSSL 3.5+ SDK. "
+		message(FATAL_ERROR
+			"CRYPTO/ARCHIVE requires an OpenSSL 3.5+ SDK. "
 			"Build tools/dependencies, then set "
 			"HX_OS_DEPENDENCY_PREFIX to its prefix. "
-			"Use HX_OS_ENABLE_CRYPTO=OFF to build without OpenSSL.")
+			"Disable CRYPTO and ARCHIVE to build without OpenSSL.")
 	endif()
 
 	get_target_property(kind OpenSSL::Crypto TYPE)
@@ -27,7 +28,7 @@ function(hx_find_openssl)
 	endif()
 endfunction()
 
-if(HX_OS_ENABLE_CRYPTO)
+if(HX_OS_HAVE_OPENSSL)
 	hx_find_openssl()
 	set(HX_OS_PC_REQUIRES_PRIVATE "libcrypto >= 3.5")
 	if(HX_OS_HAVE_TLS)
@@ -36,7 +37,7 @@ if(HX_OS_ENABLE_CRYPTO)
 endif()
 
 function(hx_link_crypto target)
-	if(NOT HX_OS_ENABLE_CRYPTO)
+	if(NOT HX_OS_HAVE_OPENSSL)
 		return()
 	endif()
 

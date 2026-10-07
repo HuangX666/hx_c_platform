@@ -13,3 +13,6 @@
 [submodule "zstd"]
 	path = deps/zstd
 	url = https://github.com/facebook/zstd.git
+[submodule "7zip"]
+	path = deps/7zip
+	url = https://github.com/ip7z/7zip.git

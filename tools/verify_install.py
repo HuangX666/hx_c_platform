@@ -13,7 +13,11 @@ def run(arguments, **options):
 
 def check_runtime(build, prefix, config, cache):
     enabled = lambda name: cache.get(name, "").upper() in ("1", "ON", "TRUE")
-    if not enabled("HX_OS_ENABLE_CRYPTO") or enabled("HX_OS_OPENSSL_STATIC"):
+    archive = all(enabled(name) for name in (
+        "HX_OS_ENABLE_ARCHIVE", "HX_OS_ENABLE_FILE_UTILS",
+        "HX_OS_ENABLE_CONTAINERS"))
+    if (not enabled("HX_OS_ENABLE_CRYPTO") and not archive
+            or enabled("HX_OS_OPENSSL_STATIC")):
         return
     if not enabled("HX_OS_INSTALL_OPENSSL_RUNTIME"):
         return

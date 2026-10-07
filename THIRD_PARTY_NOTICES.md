@@ -70,7 +70,7 @@ The separate Linux desktop adapter may dynamically use an installed libsystemd/l
 
 ## Optional OpenSSL and archive dependency sources
 
-The new native dependency builder uses fixed Git submodules in `deps/` by default, with the same commits available through FetchContent. See [the build guide](docs/DEPENDENCIES.md). The default-enabled CRYPTO module links OpenSSL dynamically. Set `HX_OS_ENABLE_CRYPTO=OFF` to omit it, or explicitly select static linkage and its thread-cleanup contract. TLS/archive integration continues separately; see [the crypto guide](docs/CRYPTO.md).
+Native dependencies use fixed Git submodules under `deps/`, with the same pins available through FetchContent. CRYPTO, TLS and ARCHIVE share OpenSSL, dynamically linked by default. Disable both CRYPTO and ARCHIVE to omit it entirely. See [dependency builds](docs/DEPENDENCIES.md) and [archive backend boundaries](docs/ARCHIVE.md).
 
 | Component | Pin | Retained license | Commit |
 | --- | --- | --- | --- |
@@ -79,5 +79,6 @@ The new native dependency builder uses fixed Git submodules in `deps/` by defaul
 | zlib | 1.3.2 | [Zlib](deps/zlib/LICENSE) | `da607da739fa6047df13e66a2af6b8bec7c2a498` |
 | liblzma (XZ) | 5.8.4 | [0BSD for liblzma; other upstream files have separate terms](deps/xz/COPYING) | `d3e650e63c110e830fd5391e7f8b45df0b91d3da` |
 | zstd | 1.5.7 | [BSD-3-Clause (selected license option)](deps/zstd/LICENSE) | `f8745da6ff1ad1e7bab384bd1f9d742439278e99` |
+| 7-Zip (optional) | 26.04 | [LGPL/BSD/unRAR](deps/7zip/DOC/License.txt), [LGPL text](deps/7zip/DOC/copying.txt), [unRAR terms](deps/7zip/DOC/unRarLicense.txt) | `9128b80e3a471108678e2b3ec3c985861c8d7b0f` |
 
-Only the library components selected by `tools/dependencies` are built. Upstream notices remain unchanged; distributions must include the applicable notices for their actual component set. The default build selects no LGPL/GPL compression backend. The separately planned optional 7-Zip dynamic backend has its own LGPL/BSD/unRAR conditions and is not supplied by these five submodules. Legacy optional GNU libiconv remains subject to the separate LGPL notice above. Fixed versions describe this integration, not a perpetual latest-version claim.
+Only the library components selected by `tools/dependencies` are built. Upstream notices remain unchanged; distributions must include the applicable notices for their actual component set. The default build selects no LGPL/GPL compression backend. The separate optional 7-Zip dynamic backend has its own LGPL/BSD/unRAR conditions and a sixth submodule. The default SDK does not build it. Legacy optional GNU libiconv remains subject to the separate LGPL notice above. Fixed versions describe this integration, not a perpetual latest-version claim.

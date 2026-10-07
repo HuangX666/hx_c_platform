@@ -1762,6 +1762,10 @@ All new native/common modules default to ON; optional third-party encoding and p
 | --- | --- | --- |
 | `BUILD_SHARED_LIBS` | OFF | Build shared library |
 | `HX_OS_BUILD_TESTS` | ON | Build contract tests |
+| `HX_OS_ENABLE_CRYPTO` | ON | OpenSSL data cryptography |
+| `HX_OS_ENABLE_TLS` | ON | Verified full-duplex TLS endpoints |
+| `HX_OS_ENABLE_ARCHIVE` | ON | Files/directories through the archive SDK |
+| `HX_OS_ENABLE_7ZIP` | OFF | Separate native 7-Zip dynamic adapter |
 | `HX_OS_BUILD_EXAMPLES` | ON | Build standalone C examples |
 | `HX_OS_BUILD_BENCHMARKS` | OFF | Build development microbenchmarks |
 | `HX_OS_ENABLE_NETWORK` | ON | Build native networking |
@@ -2009,3 +2013,6 @@ Future work includes native target validation and measured improvements. hx_c_lo
 [tests-badge]: https://img.shields.io/badge/tests-Win%2091%2F91%20Linux%2093%2F93-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android
+
+
+For complete calls, see [cryptography](CRYPTO.md), [TLS](TLS.md) and [archives](ARCHIVE.md). Archive options define overwrite, partial publication, path restrictions, passwords, resource bounds and native dependency deployment.

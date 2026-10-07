@@ -94,35 +94,6 @@ void hx_tls_i_dispose(hx_os_tls *tls)
 	hx_os_memory_free(tls);
 }
 
-static hx_os_status hx_tls_path(
-	const char *input, hx_string *out, hx_os_error *error)
-{
-#if defined(_WIN32)
-	wchar_t *wide = hx_os_i_windows_path(out->context, input, error);
-	hx_os_status status;
-
-	if (!wide)
-		return error->status;
-	status = hx_string_assign_encoded(
-		out, HX_OS_UTF16LE, wide, wcslen(wide) * sizeof(*wide), error);
-	hx_os_memory_free(wide);
-
-	return status;
-#else
-	hx_os_status status = hx_os_i_path_validate(input, error);
-
-	if (status == HX_OS_OK && input[0] != '/') {
-		status = hx_os_i_path_current(out, error);
-		if (status == HX_OS_OK)
-			status = hx_string_append_cstr(out, "/", error);
-	}
-	if (status == HX_OS_OK)
-		status = hx_string_append_cstr(out, input, error);
-
-	return status;
-#endif
-}
-
 static hx_os_status hx_tls_copy(hx_os_context *context, const char *input,
 	int path, const char **out, hx_os_error *error)
 {
@@ -133,7 +104,7 @@ static hx_os_status hx_tls_copy(hx_os_context *context, const char *input,
 	if (!input)
 		return HX_OS_OK;
 	hx_string_init(&text, context);
-	status = path ? hx_tls_path(input, &text, error)
+	status = path ? hx_os_i_path_full(input, &text, error)
 		      : hx_string_assign_cstr(&text, input, error);
 	if (status == HX_OS_OK) {
 		char *copy = hx_os_i_alloc(context, text.size + 1, 0);

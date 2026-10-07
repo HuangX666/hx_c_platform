@@ -25,6 +25,7 @@
 #include "hx_os_util.h"
 #include "hx_os_crypto.h"
 #include "hx_os_tls.h"
+#include "hx_os_archive.h"
 #include "hx_os_vm.h"
 #include "hx_os_file_extra.h"
 #include "hx_os_watch.h"

@@ -24,6 +24,7 @@
 #include "hx_format.h"
 #include "ipc_private.h"
 #include "tls_private.h"
+#include "archive_private.h"
 #include <stdio.h>
 
 #define HX_OS_LAYOUT(type)                                                     \
@@ -39,6 +40,10 @@
 int main(void)
 {
 	HX_OS_LAYOUT(hx_string);
+	HX_OS_LAYOUT(hx_os_archive_options);
+	HX_OS_LAYOUT(hx_os_archive_result);
+	HX_OS_LAYOUT(hx_os_archive_entry);
+	HX_OS_LAYOUT(hx_ar_job);
 	HX_OS_LAYOUT(hx_os_tls_options);
 	HX_OS_LAYOUT(hx_os_tls_peer_info);
 #if HX_OS_HAVE_TLS

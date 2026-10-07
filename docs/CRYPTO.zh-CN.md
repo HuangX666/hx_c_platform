@@ -20,7 +20,7 @@ OpenSSL 默认动态链接。Windows 构建会把选中的 Crypto DLL 复制到�
 
 需要静态集成 OpenSSL 时，用 `HX_DEPS_OPENSSL_SHARED=OFF` 构建 SDK，并给主项目传入 `HX_OS_OPENSSL_STATIC=ON`。外部线程和插件卸载还需遵守第 5 节。分发时保留实际组件的许可证材料。Apple 动态库重定位、Win7、Android 和嵌入式 OpenSSL 包仍需分别验证，Windows 11／WSL 通过不能代替这些目标。
 
-不需要 OpenSSL 时设置 `HX_OS_ENABLE_CRYPTO=OFF`。头文件和函数仍可用，`hx_os_crypto_available()` 返回 0，加密操作返回 `HX_OS_NOT_SUPPORTED`。基础字符串、容器和文件能力不依赖 OpenSSL。
+完全不需要 OpenSSL 时，同时设置 `HX_OS_ENABLE_CRYPTO=OFF` 和 `HX_OS_ENABLE_ARCHIVE=OFF`；ARCHIVE 的密码 ZIP 同样使用 OpenSSL。头文件和函数仍可用，`hx_os_crypto_available()` 返回 0，加密操作返回 `HX_OS_NOT_SUPPORTED`。基础字符串、容器和文件能力不依赖 OpenSSL。
 
 ## 2. 加密并解密 UTF-8 文本
 

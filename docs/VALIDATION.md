@@ -8,6 +8,41 @@ This records development validation through 2026-10-07. A design, implemented ad
 
 The JSON entry below records the current examples. Earlier independent text examples, initial shared workflows, IPC/KCP implementation and other batches describe their historical versions.
 
+## 2026-10-07: File/directory archives and optional encrypted 7z
+
+Baseline `c2f216c`. Added C99 pack, unpack, single-file extraction and metadata visits, bounded options/progress/cancellation, and `hx::Archive` with explicit `Result` values. Default libarchive supports ZIP/AES-256 ZIP, TAR/TAR.GZ/TAR.XZ/TAR.Zstd, ordinary 7z and single-file Gzip/XZ/Zstd. Encrypted/header-encrypted 7z uses the separately optional exception-disabled C++11 adapter and pinned native 7-Zip 26.04. The adapter checks native module version/interface before constructing COM objects; a local 25.01 DLL was rejected with NOT_SUPPORTED. No native vendor source was patched.
+
+| Configuration | Executed result |
+| --- | --- |
+| Windows MSVC x64 Debug, shared core/shared OpenSSL | Full CTest 179/179; final archive/loader subset 5/5 |
+| WSL Linux x64 Release, shared core/shared OpenSSL | Full CTest 181/181; final archive/loader subset 5/5 |
+| Installed C++11 and pure C consumers, both hosts | 51/51 and 36/36 |
+| Baseline headers with current shared library, both hosts | 10/10 each, baseline `c2f216c` |
+| WSL ASan/UBSan with leak detection | Archive + file/crypto/TLS regression 7/7; final archive/loader subset 5/5 |
+| WSL TSan | Final archive/loader subset 5/5; native-7z concurrency regression passed five consecutive runs with two in-process operations and codec parallelism 2 |
+| MSVC x86 Debug, static core/shared OpenSSL | Archive/C++/loader 3/3; installed C++11/pure C 50/50 and 35/35; all isolated C99/C++11 headers compiled |
+| WSL shared core/static OpenSSL, CRYPTO disabled | Real native archive/C++ archive 2/2; ARCHIVE independently brings its OpenSSL dependency |
+| Trimmed build, ARCHIVE and CRYPTO disabled | Unsupported archive/loader behavior 3/3; isolated C99/C++11 headers compiled |
+| Native 7-Zip 26.04 host builds | Windows/Linux upstream make and the separate `tools/sevenzip` CMake helper passed |
+| Export checks | All 1,078 declared HX functions exported on Windows/Linux |
+
+Native and independent-process tests cover nested mixed-language/emoji names, long Windows paths, empty files/directories, raw empty streams, concatenated Gzip, Python-generated ZIP/TAR/Gzip/XZ, 7z detection without an extension, wrong passwords, invalid/escaping paths, existing links, CRC/trailer corruption, no-overwrite, selected extraction, byte/depth/count limits and cancellation. Allocation injection covers 100 default-backend and 180 native-bridge packing allocation points with zero remaining parent-context allocations. Sanitizer diagnostics in expected-failure child processes are explicitly rejected rather than accepted as ordinary command failure. Vendor libraries were not all built with compiler instrumentation; the checks do not establish an absence of every native defect.
+
+Integration findings and repairs:
+
+- Windows 7z output needed the libarchive wide-name interface; POSIX libarchive needed a per-thread UTF-8 locale. Native 7-Zip's Unix COM strings store UTF-16 units in `wchar_t`, including surrogate pairs. Chinese and supplementary-plane names/passwords now round-trip.
+- The pinned libarchive Gzip reader does not validate trailer CRC/length. Our streaming zlib/liblzma/Zstd outer decoders validate completion and enforce decoded-stream limits, including after logical TAR EOF. Damaged trailers fail without publishing the current file; previously completed files remain by contract.
+- ASan found leaked compressor storage when a failed pack entered libarchive's fatal state before finalization. Writer failure now retains the original error, drains necessary native finalization through a discard sink, and blocks publication. The final count-limit case also exposed 140 bytes of 7z directory metadata retained when format close was skipped. Failed opened writers now run close after marking entry data fatal, so native ownership lists are joined without padding the unfinished entry. The failing allocation/capacity cases pass leak detection.
+- Concurrent per-call locale destruction triggered TSan reports in libc conversion-cache allocation/free. Overlapping operations now share an immutable locale with reference-counted lifetime under short native mutex sections; the final caller retires it. No codec work or callback holds that lock. The original concurrent scenario passes without suppressions.
+- TSan also reported native 7-Zip global-cache destruction without a visible ordering edge from another operation's completed worker. The optional backend now uses a private ordered unload path, establishing synchronization between this library's module-reference releases. Codec work and application callbacks remain parallel; diagnostics and injected allocators run outside that lock. The concurrency regression passed five consecutive runs without suppressions.
+- MSVC Debug compression dependencies require the matching CRT. The dependency builder now supports `HX_DEPS_CONFIGURATION=Debug`; Debug and Release SDKs use separate prefixes. One initial concurrent Windows full build had bare CL/link exit-code failures; the subsequent four-job full build succeeded without changing warning policy.
+
+The installed 7-Zip 25.01 command-line tool independently accepted the produced ASCII-password AES ZIP and Chinese/emoji-password encrypted 7z. Windows 7-Zip's ZIP password decoder uses CP_ACP, so a UTF-8 non-ASCII ZIP password does not interoperate with it on this host; the API keeps UTF-8 and the guide records this limitation. This command-line tool is used only as a foreign test peer, never as a library fallback.
+
+Measured public size/alignment (bytes): options 136/8, result 56/8, entry 48/8 on MSVC/GCC x64; 96/8, 56/8, 40/8 on MSVC x86. The private stack job is 1,056/8 on x64 and 904/8 on x86. Streaming data uses 64 KiB chunks; extraction adds a separate plaintext buffer, and outer decompression adds another output buffer. Native codec dictionaries/interface allocations and 7z temporary spools are outside the first-party memory budget. Progress accounting uses short per-job mutex sections; POSIX default-backend entry/exit adds two locale-lifetime lock sections. Optional 7-Zip adds short unload locks for its two module references; ordinary library close does not acquire that lock. Other existing hot paths gain no archive locks, allocations or dispatch. These are cost/layout observations, not a throughput improvement or hx_c_log performance result.
+
+Logs are `archive-*` under shared, Win32, sanitizer and static-SDK builds; trimming uses `build-archive-off-linux`, and native-runtime helpers use `build-sevenzip-helper-*`. Paths and publication behavior are covered on the two hosts. macOS, Windows 7/8.1, Android, ARMv7/AArch64, musl and physical boards remain pending for these native dependency modules. Shared file helpers used by TLS/crypto were regression-tested. The requested OBS extension list now has implementations and examples through crypto/TLS/archive; target-specific validation remains distinct.
+
 ## 2026-10-07: Standard TLS and independent send/receive threads
 
 Baseline `7b43315`. Added optional C99 TLS 1.2/1.3 endpoints, a borrowed exception-free C++11 facade, bounded queues/peers, explicit application cancellation and retryable graceful/abort shutdown. Each endpoint owns one I/O thread; servers share it across peers. OpenSSL runs on that thread over bounded BIO pairs and the existing native loop. This adds no locks or dispatch to ordinary non-TLS I/O. Public legacy layouts remain unchanged, and vendor source is unchanged.

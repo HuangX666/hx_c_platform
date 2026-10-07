@@ -152,7 +152,7 @@ def main():
     parser.add_argument("--cmake", default="cmake")
     parser.add_argument("--ninja", type=Path)
     parser.add_argument("--dependency-prefix", type=Path,
-                        help="OpenSSL SDK for one selected ABI/API")
+                        help="OpenSSL/archive SDK for one selected ABI/API")
     parser.add_argument("--jobs", type=int, default=4)
     args = parser.parse_args()
     apis, abis = args.api or [21, 28], args.abi or [
@@ -209,7 +209,10 @@ def main():
                         str(args.dependency_prefix.resolve()),
                     ]
                 else:
-                    command += ["-DHX_OS_ENABLE_CRYPTO=OFF"]
+                    command += ["-DHX_OS_ENABLE_CRYPTO=OFF",
+                                "-DHX_OS_ENABLE_ARCHIVE=OFF"]
+                record["archive"] = "enabled" if args.dependency_prefix else (
+                    "disabled: no target archive SDK")
                 record["crypto"] = "enabled" if args.dependency_prefix else (
                     "disabled: no target OpenSSL SDK")
                 print(f"Building {abi} API {api} {profile} {linkage}",

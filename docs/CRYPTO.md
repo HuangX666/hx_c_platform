@@ -20,7 +20,7 @@ With TLS enabled, the selected SSL runtime is included alongside Crypto; see the
 
 To embed OpenSSL statically, build its SDK with `HX_DEPS_OPENSSL_SHARED=OFF` and configure the library with `HX_OS_OPENSSL_STATIC=ON`. Read section 5 before using external threads or unloading a plugin. Keep the license materials of the actual libraries you distribute. Apple runtime relocation and Win7/Android/embedded OpenSSL packages require separate target validation; successful Windows 11/WSL tests do not certify them.
 
-Set `HX_OS_ENABLE_CRYPTO=OFF` to avoid this dependency. Headers and functions remain available; `hx_os_crypto_available()` returns 0 and crypto operations return `HX_OS_NOT_SUPPORTED`. Basic strings, containers and file I/O do not need OpenSSL.
+Set `HX_OS_ENABLE_CRYPTO=OFF` and `HX_OS_ENABLE_ARCHIVE=OFF` to avoid OpenSSL entirely. ARCHIVE also uses OpenSSL for encrypted ZIP. Headers and functions remain available; `hx_os_crypto_available()` returns 0 and crypto operations return `HX_OS_NOT_SUPPORTED`. Basic strings, containers and file I/O do not need OpenSSL.
 
 ## 2. Encrypt and decrypt UTF-8 text
 

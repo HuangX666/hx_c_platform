@@ -3,13 +3,27 @@ include(CMakeFindDependencyMacro)
 
 find_dependency(Threads)
 
-if(@HX_OS_ENABLE_CRYPTO@ AND NOT @BUILD_SHARED_LIBS@)
+if(@HX_OS_HAVE_OPENSSL@ AND NOT @BUILD_SHARED_LIBS@)
 	# Function scope keeps the consumer's preference variables intact.
 	function(hx_c_platform_find_crypto)
 		set(OPENSSL_USE_STATIC_LIBS @HX_OS_OPENSSL_STATIC@)
 		find_package(OpenSSL 3.5 CONFIG REQUIRED)
 	endfunction()
 	hx_c_platform_find_crypto()
+endif()
+
+if(@HX_OS_HAVE_ARCHIVE@ AND NOT @BUILD_SHARED_LIBS@)
+	find_dependency(LibArchive 3.8)
+	if(NOT TARGET LibArchive::LibArchive)
+		add_library(LibArchive::LibArchive UNKNOWN IMPORTED)
+		set_target_properties(LibArchive::LibArchive PROPERTIES
+			IMPORTED_LOCATION "${LibArchive_LIBRARY}"
+			INTERFACE_INCLUDE_DIRECTORIES
+				"${LibArchive_INCLUDE_DIRS}")
+	endif()
+	find_dependency(ZLIB CONFIG COMPONENTS static)
+	find_dependency(liblzma CONFIG)
+	find_dependency(zstd CONFIG)
 endif()
 
 if(@HX_OS_ICONV_SYSTEM@)

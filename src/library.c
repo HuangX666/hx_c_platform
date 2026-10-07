@@ -6,6 +6,7 @@
 #include <windows.h>
 #else
 #include <dlfcn.h>
+#include <pthread.h>
 #endif
 #endif
 
@@ -14,6 +15,12 @@ struct hx_os_library {
 };
 
 #if HX_OS_ENABLE_LIBRARY
+#if defined(_WIN32)
+static SRWLOCK hx_os_library_unload_mutex = SRWLOCK_INIT;
+#else
+static pthread_mutex_t hx_os_library_unload_mutex = PTHREAD_MUTEX_INITIALIZER;
+#endif
+
 static void hx_os_library_diagnostic(const char *message, hx_string *out)
 {
 	char snapshot[2048];
@@ -228,8 +235,8 @@ hx_os_status hx_os_library_symbol_ex(hx_os_library *library, const char *name,
 #endif
 }
 
-hx_os_status hx_os_library_close_ex(
-	hx_os_library **library, hx_string *diagnostic, hx_os_error *error)
+static hx_os_status hx_os_library_close_internal(hx_os_library **library,
+	hx_string *diagnostic, hx_os_error *error, int ordered)
 {
 	if (diagnostic)
 		hx_string_clear(diagnostic);
@@ -243,27 +250,59 @@ hx_os_status hx_os_library_close_ex(
 	{
 		hx_os_library *value = *library;
 		hx_os_status status;
+		int closed;
+#if defined(_WIN32)
+		DWORD code;
+
+		if (ordered)
+			AcquireSRWLockExclusive(&hx_os_library_unload_mutex);
+#else
+		if (ordered) {
+			int code =
+				pthread_mutex_lock(&hx_os_library_unload_mutex);
+
+			if (code)
+				return hx_os_i_errno(error, code);
+		}
+#endif
 
 		*library = NULL;
 #if defined(_WIN32)
-		status = FreeLibrary((HMODULE)value->native)
-			? HX_OS_OK
-			: hx_os_library_failure(
-				  HX_OS_IO_ERROR, diagnostic, error);
+		closed = FreeLibrary((HMODULE)value->native) != 0;
+		code = closed ? ERROR_SUCCESS : GetLastError();
+		if (ordered)
+			ReleaseSRWLockExclusive(&hx_os_library_unload_mutex);
+		if (!closed)
+			SetLastError(code);
 #else
-		status = dlclose(value->native) == 0
-			? HX_OS_OK
-			: hx_os_library_failure(
-				  HX_OS_IO_ERROR, diagnostic, error);
+		closed = dlclose(value->native) == 0;
+		if (ordered)
+			(void)pthread_mutex_unlock(&hx_os_library_unload_mutex);
 #endif
+		status = closed ? HX_OS_OK
+				: hx_os_library_failure(
+					  HX_OS_IO_ERROR, diagnostic, error);
 		hx_os_memory_free(value);
 
 		return status == HX_OS_OK ? hx_os_i_error(error, HX_OS_OK, 0, 0)
 					  : status;
 	}
 #else
+	(void)ordered;
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 #endif
+}
+
+hx_os_status hx_os_library_close_ex(
+	hx_os_library **library, hx_string *diagnostic, hx_os_error *error)
+{
+	return hx_os_library_close_internal(library, diagnostic, error, 0);
+}
+
+hx_os_status hx_os_i_library_close_ordered(
+	hx_os_library **library, hx_string *diagnostic, hx_os_error *error)
+{
+	return hx_os_library_close_internal(library, diagnostic, error, 1);
 }
 
 hx_os_status hx_os_library_open(hx_os_context *context, const char *path,

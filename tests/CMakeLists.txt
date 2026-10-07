@@ -29,6 +29,7 @@ endif()
 hx_apply_warnings(hx_os_test_library_module)
 
 add_executable(hx_os_test_library test_library.c)
+add_dependencies(hx_os_test_library hx_os_test_library_module)
 target_link_libraries(hx_os_test_library PRIVATE hx_c_platform)
 set_target_properties(hx_os_test_library PROPERTIES
 	C_STANDARD 99
@@ -41,7 +42,7 @@ add_test(NAME library COMMAND hx_os_test_library
 set_tests_properties(library PROPERTIES TIMEOUT 20)
 
 set(hx_test_suites data options lifecycle config containers sysinfo file_utils
-	crypto tls
+	crypto tls archive
 	text_interop byte_queue stream buffered_file
 	env paths thread_extra pipe io_options file_info
 	config_serialize config_tree config_backup ini codec timer
@@ -93,6 +94,15 @@ if(HX_OS_HAVE_TLS)
 	target_compile_definitions(hx_os_test_tls PRIVATE HX_TEST_TLS_NATIVE=1)
 endif()
 set_tests_properties(tls PROPERTIES TIMEOUT 60)
+
+set(HX_OS_TEST_7ZIP_LIBRARY "" CACHE FILEPATH
+	"Trusted native 7-Zip runtime for optional integration tests")
+if(HX_OS_HAVE_7ZIP AND HX_OS_TEST_7ZIP_LIBRARY)
+	add_dependencies(hx_os_test_archive hx_archive_7zip)
+	add_test(NAME archive_7zip COMMAND hx_os_test_archive
+		"${HX_OS_TEST_7ZIP_LIBRARY}" $<TARGET_FILE:hx_archive_7zip>)
+	set_tests_properties(archive_7zip PROPERTIES TIMEOUT 60)
+endif()
 
 target_include_directories(hx_os_test_profiler_snapshot PRIVATE
 	"${PROJECT_BINARY_DIR}/private")
@@ -526,6 +536,15 @@ if(CMAKE_CXX_COMPILER_LOADED)
 	hx_apply_warnings(hx_os_test_cpp_crypto)
 	add_test(NAME cpp_crypto COMMAND hx_os_test_cpp_crypto)
 	set_tests_properties(cpp_crypto PROPERTIES TIMEOUT 30)
+
+	add_executable(hx_os_test_cpp_archive test_cpp_archive.cpp)
+	target_link_libraries(hx_os_test_cpp_archive PRIVATE hx_c_platform::cpp)
+	set_target_properties(hx_os_test_cpp_archive PROPERTIES
+		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+	hx_apply_warnings(hx_os_test_cpp_archive)
+	add_test(NAME cpp_archive COMMAND hx_os_test_cpp_archive)
+	set_tests_properties(cpp_archive PROPERTIES TIMEOUT 30)
 
 	add_executable(hx_os_test_cpp_tls test_cpp_tls.cpp)
 	target_link_libraries(hx_os_test_cpp_tls PRIVATE hx_c_platform::cpp)

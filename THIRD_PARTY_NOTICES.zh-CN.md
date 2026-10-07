@@ -70,7 +70,7 @@ cmake/HxWarnings.cmake 复制自相邻 hx_c_log 项目，保留其版权声明�
 
 ## 可选 OpenSSL 与归档依赖源码
 
-新增原生依赖构建器默认使用 `deps/` 下固定提交的 Git 子模块，也支持获取相同提交的 FetchContent，见[构建说明](docs/DEPENDENCIES.zh-CN.md)。默认开启的 CRYPTO 模块动态链接 OpenSSL；设置 `HX_OS_ENABLE_CRYPTO=OFF` 可移除该依赖，也可显式选择静态链接并遵守线程清理契约。TLS／归档继续分别实现，见[加密教程](docs/CRYPTO.zh-CN.md)。
+原生依赖默认使用 `deps/` 下固定提交的 Git 子模块，也支持相同提交的 FetchContent。CRYPTO、TLS 和 ARCHIVE 复用默认动态链接的 OpenSSL；完全裁剪它需同时关闭 CRYPTO 与 ARCHIVE。见[依赖构建](docs/DEPENDENCIES.zh-CN.md)和[压缩后端边界](docs/ARCHIVE.zh-CN.md)。
 
 | 组件 | 固定版本 | 保留的许可证 | 提交号 |
 | --- | --- | --- | --- |
@@ -79,5 +79,6 @@ cmake/HxWarnings.cmake 复制自相邻 hx_c_log 项目，保留其版权声明�
 | zlib | 1.3.2 | [Zlib](deps/zlib/LICENSE) | `da607da739fa6047df13e66a2af6b8bec7c2a498` |
 | liblzma (XZ) | 5.8.4 | [0BSD for liblzma; other upstream files have separate terms](deps/xz/COPYING) | `d3e650e63c110e830fd5391e7f8b45df0b91d3da` |
 | zstd | 1.5.7 | [BSD-3-Clause (selected license option)](deps/zstd/LICENSE) | `f8745da6ff1ad1e7bab384bd1f9d742439278e99` |
+| 7-Zip (optional) | 26.04 | [LGPL/BSD/unRAR](deps/7zip/DOC/License.txt), [LGPL text](deps/7zip/DOC/copying.txt), [unRAR terms](deps/7zip/DOC/unRarLicense.txt) | `9128b80e3a471108678e2b3ec3c985861c8d7b0f` |
 
-只构建 `tools/dependencies` 明确选择的库组件。上游许可证文本保持原样，分发时按实际组件保留适用说明。默认压缩组合没有选择 LGPL/GPL 压缩后端。另行规划的可选 7-Zip 动态后端有自己的 LGPL/BSD/unRAR 条件，并不包含在这五个子模块中；原有可选 GNU libiconv 仍适用前文的 LGPL 说明。固定版本表示本次集成选择，不表示永远是上游最新版。
+只构建 `tools/dependencies` 明确选择的库组件。上游许可证文本保持原样，分发时按实际组件保留适用说明。默认压缩组合没有选择 LGPL/GPL 压缩后端。独立可选的 7-Zip 动态后端有自己的 LGPL/BSD/unRAR 条件，使用第六个子模块；默认 SDK 不构建它；原有可选 GNU libiconv 仍适用前文的 LGPL 说明。固定版本表示本次集成选择，不表示永远是上游最新版。

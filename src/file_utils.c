@@ -2,6 +2,48 @@
 
 #include <stdio.h>
 
+hx_os_status hx_os_i_path_full(
+	const char *path, hx_string *out, hx_os_error *error)
+{
+	hx_string temporary = HX_STRING_INIT;
+	hx_os_error local;
+	hx_os_status status;
+
+	if (!error)
+		error = &local;
+	if (!out)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	hx_string_init(&temporary, out->context);
+	status = hx_os_i_path_validate(path, error);
+#if defined(_WIN32)
+	if (status == HX_OS_OK) {
+		wchar_t *wide = hx_os_i_windows_path(out->context, path, error);
+
+		if (!wide)
+			status = error->status;
+		else {
+			status = hx_string_assign_encoded(&temporary,
+				HX_OS_UTF16LE, wide,
+				wcslen(wide) * sizeof(*wide), error);
+			hx_os_memory_free(wide);
+		}
+	}
+#else
+	if (status == HX_OS_OK && path[0] != '/') {
+		status = hx_os_i_path_current(&temporary, error);
+		if (status == HX_OS_OK)
+			status = hx_string_append_cstr(&temporary, "/", error);
+	}
+	if (status == HX_OS_OK)
+		status = hx_string_append_cstr(&temporary, path, error);
+#endif
+	if (status == HX_OS_OK)
+		hx_string_move(out, &temporary);
+	hx_string_destroy(&temporary);
+
+	return status;
+}
+
 static int hx_os_file_native_separator(char value)
 {
 #if defined(_WIN32)

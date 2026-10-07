@@ -11,6 +11,12 @@ endif()
 
 set(HX_DEPS_JOBS 4 CACHE STRING "Maximum OpenSSL build jobs")
 set(HX_DEPS_OPENSSL_TARGET "" CACHE STRING "OpenSSL Configure target")
+set(HX_DEPS_CONFIGURATION "Release" CACHE STRING
+	"Compression SDK configuration (match the MSVC consumer CRT)")
+set_property(CACHE HX_DEPS_CONFIGURATION PROPERTY STRINGS Release Debug)
+if(NOT HX_DEPS_CONFIGURATION MATCHES "^(Release|Debug)$")
+	message(FATAL_ERROR "HX_DEPS_CONFIGURATION must be Release or Debug")
+endif()
 option(HX_DEPS_OPENSSL_ASM "Use OpenSSL assembler optimizations" ON)
 option(HX_DEPS_OPENSSL_SHARED "Build the OpenSSL shared runtime" ON)
 
@@ -26,14 +32,14 @@ set(hx_common_args
 	"-DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_INSTALL_PREFIX}"
 	"-DCMAKE_INSTALL_LIBDIR:STRING=lib"
 	"-DCMAKE_PREFIX_PATH:PATH=${CMAKE_INSTALL_PREFIX}"
-	"-DCMAKE_BUILD_TYPE:STRING=Release"
+	"-DCMAKE_BUILD_TYPE:STRING=${HX_DEPS_CONFIGURATION}"
 	"-DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON"
 	"-DBUILD_SHARED_LIBS:BOOL=OFF"
 	"-DBUILD_TESTING:BOOL=OFF")
 set(hx_cmake_build "${CMAKE_COMMAND}" --build <BINARY_DIR>
-	--config Release --parallel "${HX_DEPS_JOBS}")
+	--config "${HX_DEPS_CONFIGURATION}" --parallel "${HX_DEPS_JOBS}")
 set(hx_cmake_install "${CMAKE_COMMAND}" --install <BINARY_DIR>
-	--config Release)
+	--config "${HX_DEPS_CONFIGURATION}")
 
 if(CMAKE_TOOLCHAIN_FILE)
 	list(APPEND hx_common_args
@@ -145,11 +151,15 @@ ExternalProject_Add(hx_dep_build_zstd
 
 set(hx_archive_args
 	-DWINDOWS_VERSION:STRING=WIN7
-	-DCMAKE_TRY_COMPILE_CONFIGURATION:STRING=Release)
+	-DCMAKE_TRY_COMPILE_CONFIGURATION:STRING=${HX_DEPS_CONFIGURATION})
 if(WIN32 AND MSVC)
 	set(hx_zlib_static "${CMAKE_INSTALL_PREFIX}/lib/zs.lib")
+	if(HX_DEPS_CONFIGURATION STREQUAL "Debug")
+		set(hx_zlib_static "${CMAKE_INSTALL_PREFIX}/lib/zsd.lib")
+	endif()
 	list(APPEND hx_archive_args
 		"-DZLIB_LIBRARY_RELEASE:FILEPATH=${hx_zlib_static}"
+		"-DZLIB_LIBRARY_DEBUG:FILEPATH=${hx_zlib_static}"
 		"-DCMAKE_C_FLAGS:STRING=/utf-8 /DLZMA_API_STATIC"
 		"-DCMAKE_EXE_LINKER_FLAGS:STRING=ws2_32.lib crypt32.lib"
 		-UARCHIVE_CRYPTO_*_OPENSSL

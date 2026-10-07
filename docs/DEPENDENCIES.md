@@ -13,6 +13,7 @@ deps/
   zlib/             Git submodule
   xz/               Git submodule
   zstd/             Git submodule
+  7zip/             Optional native backend submodule
   kcp/<commit>/     Existing unchanged vendor files
   uthash/v2.4.0/    Existing unchanged vendor files
   minicoro/v0.1.3/  Retained evaluation only; never built
@@ -33,7 +34,7 @@ git submodule update --init --recursive
 
 The optional dependency builder checks the exact commit of each source checkout. It fails on a missing or different revision and never silently follows a branch tip. Submodule URLs are in [.gitmodules](../.gitmodules); matching versions and revisions are in [HxDependencySources.cmake](../cmake/HxDependencySources.cmake).
 
-The library's ordinary build does not automatically build OpenSSL or the archive stack. The default-enabled CRYPTO module requires the OpenSSL SDK prepared below. Set `HX_OS_ENABLE_CRYPTO=OFF` for a build without OpenSSL. TLS uses the same SDK; see [TLS](TLS.md). Archive integration continues in its own batch. The existing dependency-free Unicode and builtin configuration parsers continue to work without this builder.
+The ordinary build uses a prepared SDK instead of automatically compiling third parties. Default-enabled CRYPTO and ARCHIVE need the SDK below; TLS reuses it. Set both `HX_OS_ENABLE_CRYPTO=OFF` and `HX_OS_ENABLE_ARCHIVE=OFF` for a build without OpenSSL/compression dependencies. Existing dependency-free Unicode and builtin parsers still work. See [cryptography](CRYPTO.md), [TLS](TLS.md) and [archives](ARCHIVE.md).
 
 ## 3. Alternative: FetchContent
 
@@ -59,7 +60,9 @@ cmake -S tools/dependencies -B build-deps -G "Visual Studio 17 2022" -A x64 -DHX
 cmake --build build-deps --config Release --parallel 2
 ```
 
-The prefix is `build-deps/prefix` unless `CMAKE_INSTALL_PREFIX` is supplied. The builder uses out-of-source Release builds: OpenSSL is shared by default, while compression libraries are static and position-independent. For static OpenSSL, use `HX_DEPS_OPENSSL_SHARED=OFF` and select `HX_OS_OPENSSL_STATIC=ON` in the main project; external threads must follow the [cleanup contract](CRYPTO.md#5-threads-memory-and-unloading). OpenSSL command-line test suites, legacy providers/engines, archive command-line tools and unselected compression backends are not part of this build. `HX_DEPS_JOBS` limits parallel jobs inside sub-builds; the outer `--parallel` option limits concurrently building dependencies.
+The prefix is `build-deps/prefix` unless `CMAKE_INSTALL_PREFIX` is supplied. The builder uses out-of-source builds, with Release as the default: OpenSSL is shared by default, while compression libraries are static and position-independent. For static OpenSSL, use `HX_DEPS_OPENSSL_SHARED=OFF` and select `HX_OS_OPENSSL_STATIC=ON` in the main project; external threads must follow the [cleanup contract](CRYPTO.md#5-threads-memory-and-unloading). OpenSSL command-line test suites, legacy providers/engines, archive command-line tools and unselected compression backends are not part of this build. `HX_DEPS_JOBS` limits parallel jobs inside sub-builds; the outer `--parallel` option limits concurrently building dependencies.
+
+For an MSVC Debug consumer, configure its compression SDK with `-DHX_DEPS_CONFIGURATION=Debug`. Keep Debug and Release SDKs in separate prefixes; do not mix `/MDd` and `/MD` static libraries. The OpenSSL shared runtime stays independently built.
 
 Windows libarchive configuration targets WIN7 and links the selected dependencies explicitly. Actual Windows 7/8.1 execution remains unverified. The tested Windows OpenSSL configuration used ASM=OFF; its results are not evidence of assembly performance. Cross-compilation needs a suitable toolchain and explicit `HX_DEPS_OPENSSL_TARGET`; passing that option alone is not evidence that the target compiler/archiver/OpenSSL environment has been configured correctly. Android, embedded Linux and Apple dependency packages still need their own build/runtime validation.
 
@@ -75,6 +78,6 @@ cmake --build build-deps-check --config Release
 ctest --test-dir build-deps-check -C Release --output-on-failure
 ```
 
-The check writes and reads ZIP, AES-256 password ZIP, ordinary 7z, TAR, TAR.GZ, TAR.XZ and TAR.Zstd in memory. It compares the original binary payload, checks the encrypted flag and verifies that a wrong ZIP password fails. Filter setup must succeed without an external command-line fallback. These are dependency tests; they do not yet certify filesystem extraction safety or the future public archive API.
+The check writes and reads ZIP, AES-256 password ZIP, ordinary 7z, TAR, TAR.GZ, TAR.XZ and TAR.Zstd in memory. It compares the original binary payload, checks the encrypted flag and verifies that a wrong ZIP password fails. Filter setup must succeed without an external command-line fallback. These dependency probes do not replace the public API, filesystem and failure tests described in [ARCHIVE](ARCHIVE.md).
 
-The default stack uses libarchive, OpenSSL, zlib, liblzma and zstd. Password/header-encrypted 7z remains assigned to the separately optional 7-Zip dynamic backend. Its implementation and packaging are separate work; placing libarchive here does not make it support encrypted 7z. License notices and dependencies must follow the exact components actually distributed.
+The default stack uses libarchive, OpenSSL, zlib, liblzma and zstd. The separate optional 7-Zip dynamic backend provides encrypted 7z and filename encryption; see [its build and deployment](ARCHIVE.md#4-password-and-filename-encryption-in-7z). Enabling the adapter also uses the dependency provider and pinned `deps/7zip` headers. Native 7-Zip is built separately with `tools/sevenzip`; it is not part of the default SDK or copied implicitly into the core installation. Preserve the complete notices for every distributed component.

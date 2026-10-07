@@ -1762,6 +1762,10 @@ int main(void)
 | --- | --- | --- |
 | `BUILD_SHARED_LIBS` | OFF | 共享库替代默认静态库 |
 | `HX_OS_BUILD_TESTS` | ON | 契约测试与独立公共头验证 |
+| `HX_OS_ENABLE_CRYPTO` | ON | OpenSSL 数据加密 |
+| `HX_OS_ENABLE_TLS` | ON | 校验证书的全双工 TLS |
+| `HX_OS_ENABLE_ARCHIVE` | ON | 压缩 SDK 提供文件／目录压缩 |
+| `HX_OS_ENABLE_7ZIP` | OFF | 独立原生 7-Zip 动态适配 |
 | `HX_OS_BUILD_EXAMPLES` | ON | C 示例；存在 C++ 编译器时增加 C++ 示例 |
 | `HX_OS_BUILD_BENCHMARKS` | OFF | 开发用性能基准 |
 | `HX_OS_ENABLE_NETWORK` | ON | 原生套接字与网络生命周期 |
@@ -2009,3 +2013,6 @@ TSan 在另一个目录配置 `HX_OS_SANITIZER=thread`，不与 ASan 混用。�
 [tests-badge]: https://img.shields.io/badge/tests-Win%2091%2F91%20Linux%2093%2F93-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android
+
+
+完整调用见[加密](CRYPTO.zh-CN.md)、[TLS](TLS.zh-CN.md)与[压缩](ARCHIVE.zh-CN.md)教程。压缩选项明确区分覆盖、部分发布、路径限制、密码、资源上限以及原生依赖部署。

@@ -15,7 +15,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/HxNoExceptions.cmake")
 enable_testing()
 
 foreach(suite IN ITEMS ipc kcp config_tree codec stream buffered_file
-	crypto tls
+	crypto tls archive
 	byte_queue text_interop settings_apply config_backup ini calendar
 	params parser preprocess windows_util native_interop power signal_all
 	dispatch_params)
@@ -133,6 +133,13 @@ if(HX_CONSUMER_CPP)
 		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO)
 	hx_disable_exceptions(consumer_crypto_cpp)
 	add_test(NAME installed_crypto_cpp COMMAND consumer_crypto_cpp)
+
+	add_executable(consumer_archive_cpp ../test_cpp_archive.cpp)
+	target_link_libraries(consumer_archive_cpp PRIVATE hx_c_platform::cpp)
+	set_target_properties(consumer_archive_cpp PROPERTIES
+		CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO)
+	hx_disable_exceptions(consumer_archive_cpp)
+	add_test(NAME installed_archive_cpp COMMAND consumer_archive_cpp)
 
 	add_executable(consumer_tls_cpp ../test_cpp_tls.cpp)
 	target_link_libraries(consumer_tls_cpp PRIVATE hx_c_platform::cpp)
