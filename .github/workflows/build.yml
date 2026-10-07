@@ -1,5 +1,6 @@
 name: C platform contracts
-on: [push, pull_request, workflow_dispatch]
+# Remote automation is parked; local acceptance is the current workflow.
+on: [workflow_dispatch]
 
 permissions:
   contents: read
@@ -39,7 +40,6 @@ jobs:
           -DBUILD_SHARED_LIBS=${{ matrix.shared }}
           -DHX_OS_DEPENDENCY_PREFIX="${{ github.workspace }}/build-deps/prefix"
           -DHX_OS_ENABLE_ICONV=ON
-          -DHX_OS_ICONV_SOURCE_DIR="${{ github.workspace }}/deps/.cache/libiconv-1.18"
       - run: cmake --build build --config Release --parallel 4
       - run: ctest --test-dir build -C Release --output-on-failure
       - run: python3 tools/verify_install.py build --config Release
@@ -55,6 +55,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          submodules: recursive
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12'
@@ -65,15 +67,10 @@ jobs:
           -DBUILD_SHARED_LIBS=ON
           -DHX_OS_ENABLE_CRYPTO=OFF -DHX_OS_ENABLE_ARCHIVE=OFF
           -DHX_OS_ENABLE_CJSON=ON
-          -DHX_OS_CJSON_SOURCE_DIR=deps/.cache/cJSON-1.7.19
           -DHX_OS_ENABLE_LIBYAML=ON
-          -DHX_OS_LIBYAML_SOURCE_DIR=deps/.cache/libyaml-0.2.5
           -DHX_OS_ENABLE_MINIXML=ON
-          -DHX_OS_MINIXML_SOURCE_DIR=deps/.cache/mxml-4.0.6
           -DHX_OS_ENABLE_INIH=ON
-          -DHX_OS_INIH_SOURCE_DIR=deps/.cache/inih-r62
           -DHX_OS_ENABLE_TOMLC=ON
-          -DHX_OS_TOMLC_SOURCE_DIR=deps/.cache/tomlc17-R260821
       - run: cmake --build build --config Release --parallel 4
       - run: ctest --test-dir build -C Release --output-on-failure
       - run: python tools/verify_install.py build --config Release
@@ -83,6 +80,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          submodules: recursive
       - run: >-
           cmake -C cmake/minimal.cmake -S . -B build
           -DCMAKE_BUILD_TYPE=Release -DHX_OS_BUILD_TESTS=ON
@@ -114,6 +113,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          submodules: recursive
       - name: Run native musl contracts
         run: |
           docker run --rm -v "$PWD:/src:ro" alpine:3.22 sh -ec '
@@ -140,6 +141,8 @@ jobs:
             exclude: '^process$|^sysinfo$'
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          submodules: recursive
       - name: Install cross compiler and emulator
         run: |
           sudo apt-get update
@@ -174,6 +177,8 @@ jobs:
         api: [21, 28]
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          submodules: recursive
       - name: Install pinned Android NDK
         run: sdkmanager "ndk;28.2.13676358"
       - name: Build Android C99 and C++11 contracts
@@ -199,6 +204,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          submodules: recursive
       - run: >-
           cmake -S . -B build -C cmake/minimal.cmake
           -DHX_OS_ENABLE_PROCEDURES=ON -DHX_OS_BUILD_TESTS=ON
@@ -210,6 +217,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          submodules: recursive
       - run: >-
           cmake -S . -B build -C cmake/minimal.cmake
           -DHX_OS_ENABLE_VARIANT=ON -DHX_OS_BUILD_TESTS=ON

@@ -288,7 +288,9 @@ hx_os_status hx_os_error_message(const hx_os_error *error, char *buffer,
 				  (int)error->native_code) == 0
 			? storage
 			: NULL;
-#elif defined(__GLIBC__) && defined(_GNU_SOURCE)
+#elif defined(_GNU_SOURCE) &&                                                  \
+	(defined(__GLIBC__) ||                                                 \
+		(defined(__ANDROID__) && __ANDROID_API__ >= 23))
 		message = strerror_r(
 			(int)error->native_code, storage, sizeof(storage));
 #else

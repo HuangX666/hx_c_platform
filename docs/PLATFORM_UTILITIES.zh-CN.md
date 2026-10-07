@@ -328,6 +328,8 @@ PROCESS 与 SYSTEM_UTILS 默认开启，可独立关闭。Windows 的系统工�
 
 参数和环境分别限制为 4 MiB、65536 项。Windows 转为 UTF-16，按 CRT / CommandLineToArgvW 规则转义引号和反斜杠，检查原生 32767 宽字符命令行限制，排序 Unicode 环境，显式选择可执行文件。自定义命令行解析器可能采用不同规则。标准句柄通过私有允许列表继承；缺失的 Windows 父标准流用 NUL。临时可继承副本存在期间，宿主需协调其他“不限制继承列表”的启动操作。 POSIX 使用 posix_spawn、CLOEXEC 私有副本及 dup2 动作；宿主没有设置 CLOEXEC 的描述符仍会继承，相关关闭与启动操作需宿主协调。继承的 POSIX 环境保留原始字节，公共环境枚举则在任何回调前严格验证 UTF-8。
 
+spawn 成功表示已经创建子进程，不保证业务程序已经就绪。POSIX 允许部分 exec 前失败在之后以退出码 127 报告，Android Bionic 采用这种行为。因此既要检查 spawn 状态，也要检查等待结果；仅凭 127 无法区分启动失败和程序主动返回 127。需要确认业务就绪时，应显式交换启动消息。[POSIX 规范允许这两种报告路径](https://pubs.opengroup.org/onlinepubs/9799919799/functions/posix_spawn.html)。
+
 同一进程对象的操作需要外部互斥。NOW 尝试一次；有限及无限等待沿用单调截止时间，原生完成查询之间请求最多 5 ms 睡眠，不保证硬截止时间。超时保留对象与结果，可重试；成功结果缓存，非零退出码也属于等待成功。 POSIX 信号退出单独报告，不伪造 128+signal 退出码；Windows 先判断完成再取退出码，因此真实退出码 259 不会被误判为仍运行。 destroy 在仍运行时返回 BUSY；close_until 先等待再销毁。库不强杀、不分离、不创建回收线程、不修改 SIGCHLD；宿主不能自行回收同一子进程或将 SIGCHLD 设为忽略。
 
 `hx_os_process_capture_run` 内部启动进程并通过私有 loop 同时收集 stdout / stderr，子进程 stdin 为 EOF；不启动工作线程。默认每路保留 1 MiB 原始字节。管道、loop 和首批读请求在启动前准备好；子进程一旦启动，即使返回 TIMEOUT、 LIMIT 或 I/O 错误，仍向调用者交付会话对象，可在原对象上继续等待或关闭。成功要求子进程退出且两路都达到 EOF；继承写端的后代进程可能延迟 EOF。
@@ -336,7 +338,7 @@ PROCESS 与 SYSTEM_UTILS 默认开启，可独立关闭。Windows 的系统工�
 
 会话占用两个请求槽、32 KiB 在途字节预算，保留缓冲按需几何增长；显式丢弃时每路可再分配 16 KiB 临时缓冲。上限约束保留输出，不等于整个堆内存上限：扩容峰值同时持有旧／新缓冲，还需请求对象、分配器元数据、启动快照和原生资源。每次读取复用现有请求的分配、锁、事件机制。既有文件、线程、线程池热路径没有增加锁、间接调用、分配或系统调用；同步管道创建补记实际读写方向，以便验证进程重定向权限。
 
-`hx_os_process_arguments` 返回独立持有的 UTF-8 快照，包含 argv[0]： Windows 从原生宽字符命令行读取，Linux 读取 /proc/self/cmdline，Apple 使用原生 argc/argv。Linux 缺失 procfs 时返回 NOT_SUPPORTED。C 示例共用参数适配入口；裁剪版本要求宿主提供 UTF-8 argv，不能保证 Windows 窄字符 CRT 的 Unicode 保真。主机名支持缓冲和 hx_string 输出，进程 ID 使用原生标识。环境枚举在库内环境锁下取有界快照，锁外回调允许重入和修改；外部 CRT／原生环境修改仍需宿主互斥。锁内暂存采用 CRT 分配，避免调用注入分配器回调。
+`hx_os_process_arguments` 返回独立持有的 UTF-8 快照，包含 argv[0]： Windows 从原生宽字符命令行读取，Linux 读取 /proc/self/cmdline，Apple 使用原生 argc/argv。Linux 缺失 procfs 时返回 NOT_SUPPORTED。示例共用参数入口在 Windows 使用该 API，在 POSIX 验证并使用 main 的 UTF-8 argv。转译器／解释器可能出现在 procfs 中，系统快照是操作系统观察值，不能代替 main 收到的业务参数。裁剪后的 Windows 版本不能保证窄字符 CRT 的 Unicode 保真。主机名支持缓冲和 hx_string 输出，进程 ID 使用原生标识。环境枚举在库内环境锁下取有界快照，锁外回调允许重入和修改；外部 CRT／原生环境修改仍需宿主互斥。锁内暂存采用 CRT 分配，避免调用注入分配器回调。
 
 CPU 位集覆盖能确认可用的 SSE/SSE2/SSE4.1/AVX/AVX2/NEON；AVX 同时检查 XSAVE、 OSXSAVE 与 XCR0 的 XMM/YMM 状态。ARM 使用可用的原生辅助向量／系统能力查询，未知位不声称支持。WOW64／Rosetta 是系统兼容／翻译状态，不是虚拟机探测；无法可靠确定的 Linux 仿真状态返回 NOT_SUPPORTED 并保留输出。字节序交换和 udiv64 使用可移植头内联 C；除零返回 INVALID 并保留输出。 ARM 工具链选择自身除法 ABI 辅助实现；除法基准与相同原生表达式对照，不声称采用汇编获得加速。
 

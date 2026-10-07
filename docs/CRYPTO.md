@@ -18,7 +18,9 @@ OpenSSL is dynamically linked by default. On Windows the build copies its select
 
 With TLS enabled, the selected SSL runtime is included alongside Crypto; see the [TLS guide](TLS.md).
 
-To embed OpenSSL statically, build its SDK with `HX_DEPS_OPENSSL_SHARED=OFF` and configure the library with `HX_OS_OPENSSL_STATIC=ON`. Read section 5 before using external threads or unloading a plugin. Keep the license materials of the actual libraries you distribute. Apple runtime relocation and Win7/Android/embedded OpenSSL packages require separate target validation; successful Windows 11/WSL tests do not certify them.
+To embed OpenSSL statically, build its SDK with `HX_DEPS_OPENSSL_SHARED=OFF` and configure the library with `HX_OS_OPENSSL_STATIC=ON`. Read section 5 before using external threads or unloading a plugin. Keep the license materials of the actual libraries you distribute. Android and Linux ARM SDK commands are in [cross builds](DEPENDENCIES.md#6-cross-build-linux-arm-and-android), with current emulator/QEMU results in [validation](VALIDATION.md). Physical-board results are separate; Apple and old Windows runtime checks are deferred.
+
+Android SDKs use `libcrypto-hx.so` and `libssl-hx.so` SONAMEs through a first-party OpenSSL configuration overlay, avoiding system BoringSSL names. The CMake targets and runtime manifest carry the chosen files; do not manually rename a desktop runtime or copy one ABI's library to another. See [Android deployment](ANDROID.md).
 
 Set `HX_OS_ENABLE_CRYPTO=OFF` and `HX_OS_ENABLE_ARCHIVE=OFF` to avoid OpenSSL entirely. ARCHIVE also uses OpenSSL for encrypted ZIP. Headers and functions remain available; `hx_os_crypto_available()` returns 0 and crypto operations return `HX_OS_NOT_SUPPORTED`. Basic strings, containers and file I/O do not need OpenSSL.
 

@@ -11,6 +11,7 @@
 			exit(1);                                               \
 		}                                                              \
 	} while (0)
+
 typedef struct io_result {
 	hx_os_completion value;
 	int called;
@@ -183,7 +184,7 @@ int main(void)
 	hx_os_status status;
 	char path[108], too_long[128], buffer[32];
 	size_t sent, received;
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__ANDROID__)
 	const char *prefix = "";
 #else
 	const char *prefix = "/tmp/";
@@ -222,8 +223,16 @@ int main(void)
 
 	(void)snprintf(path, sizeof(path), "%shx-local-%s-%llx.sock", prefix,
 		"中文😀", (unsigned long long)hx_os_monotonic_ns());
-	CHECK(hx_os_local_listen(network, path, 2, &listener, &error) ==
-		HX_OS_OK);
+	status = hx_os_local_listen(network, path, 2, &listener, &error);
+#if defined(__ANDROID__)
+	if (status == HX_OS_ACCESS_DENIED) {
+		CHECK(hx_os_network_destroy(&network, NULL) == HX_OS_OK);
+		puts("SKIP local: Android sandbox denied Unix socket creation");
+
+		return 77;
+	}
+#endif
+	CHECK(status == HX_OS_OK);
 	CHECK(hx_os_network_destroy(&network, NULL) == HX_OS_BUSY);
 	CHECK(hx_os_local_listen(network, path, 2, &duplicate, NULL) !=
 			HX_OS_OK &&

@@ -11,12 +11,13 @@ int main(int argc, char **argv)
 {
 	hx_os_string_list *arguments = NULL;
 	const char *const *values = (const char *const *)argv;
-	hx_os_status status;
 	int result, i;
 	size_t invalid;
 
+#if defined(_WIN32)
 	if (hx_os_capabilities() & HX_OS_CAP_SYSTEM_UTILS) {
-		status = hx_os_process_arguments(NULL, &arguments, NULL);
+		hx_os_status status =
+			hx_os_process_arguments(NULL, &arguments, NULL);
 		if (status != HX_OS_OK) {
 			fprintf(stderr, "Arguments: %s\n",
 				hx_os_status_name(status));
@@ -27,9 +28,13 @@ int main(int argc, char **argv)
 		argc = (int)hx_os_string_list_count(arguments);
 		values = hx_os_string_list_data(arguments);
 	}
-	else {
+	else
+#endif
+	{
 		/* A trimmed build requires the host to provide UTF-8 argv.
 		 * Windows narrow CRT argv cannot promise Unicode fidelity.
+		 * POSIX main receives application arguments even when procfs
+		 * describes an interpreter or native-bridge launcher.
 		 */
 		for (i = 0; i < argc; ++i)
 			if (hx_os_text_validate_utf8(argv[i], strlen(argv[i]),

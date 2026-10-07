@@ -1,6 +1,7 @@
 function(hx_find_archive)
 	if(HX_OS_DEPENDENCY_PREFIX)
 		list(PREPEND CMAKE_PREFIX_PATH "${HX_OS_DEPENDENCY_PREFIX}")
+		list(PREPEND CMAKE_FIND_ROOT_PATH "${HX_OS_DEPENDENCY_PREFIX}")
 	endif()
 
 	find_package(LibArchive 3.8 REQUIRED)

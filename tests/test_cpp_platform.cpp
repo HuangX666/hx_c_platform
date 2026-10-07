@@ -64,7 +64,7 @@ static void test_cpp_local()
 		server(server_owner);
 
 	char path[108], data[8];
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__ANDROID__)
 	const char *prefix = "";
 #else
 	const char *prefix = "/tmp/";
@@ -74,6 +74,14 @@ static void test_cpp_local()
 	CHECK(hx_os_network_create(NULL, &network, NULL) == HX_OS_OK);
 
 	auto listening = listener.listen(network, path);
+#if defined(__ANDROID__)
+	if (listening.status() == HX_OS_ACCESS_DENIED) {
+		CHECK(hx_os_network_destroy(&network, NULL) == HX_OS_OK);
+		std::puts("SKIP local: Android sandbox denied Unix sockets");
+
+		return;
+	}
+#endif
 	if (!listening) {
 		CHECK(listening.status() == HX_OS_NOT_SUPPORTED);
 		CHECK(hx_os_network_destroy(&network, NULL) == HX_OS_OK);
@@ -499,9 +507,15 @@ int main(int argc, char **argv)
 	}
 
 	if (capabilities & HX_OS_CAP_PATHS) {
+#if defined(__ANDROID__)
+		CHECK(hx::Paths::configHome().status() == HX_OS_NOT_SUPPORTED);
+		CHECK(hx::Paths::dataHome().status() == HX_OS_NOT_SUPPORTED);
+		CHECK(hx::Paths::programData().status() == HX_OS_NOT_SUPPORTED);
+#else
 		CHECK(!Take(hx::Paths::configHome()).empty());
 		CHECK(!Take(hx::Paths::dataHome()).empty());
 		CHECK(!Take(hx::Paths::programData()).empty());
+#endif
 		CHECK(!Take(hx::Paths::executable()).empty());
 	}
 
@@ -521,7 +535,7 @@ int main(int argc, char **argv)
 
 	if (capabilities & HX_OS_CAP_FILE_UTILS) {
 		char root[128], path[144];
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__ANDROID__)
 		const char *rootPattern = "hx-cpp-files-%llx";
 #else
 		const char *rootPattern = "/tmp/hx-cpp-files-%llx";

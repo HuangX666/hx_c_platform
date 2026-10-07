@@ -18,7 +18,9 @@ OpenSSL 默认动态链接。Windows 构建会把选中的 Crypto DLL 复制到�
 
 启用 TLS 时，同时包含选定的 SSL 运行库，详见 [TLS 教程](TLS.zh-CN.md)。
 
-需要静态集成 OpenSSL 时，用 `HX_DEPS_OPENSSL_SHARED=OFF` 构建 SDK，并给主项目传入 `HX_OS_OPENSSL_STATIC=ON`。外部线程和插件卸载还需遵守第 5 节。分发时保留实际组件的许可证材料。Apple 动态库重定位、Win7、Android 和嵌入式 OpenSSL 包仍需分别验证，Windows 11／WSL 通过不能代替这些目标。
+需要静态集成 OpenSSL 时，用 `HX_DEPS_OPENSSL_SHARED=OFF` 构建 SDK，并给主项目传入 `HX_OS_OPENSSL_STATIC=ON`。外部线程和插件卸载还需遵守第 5 节。分发时保留实际组件的许可证材料。Android 和 Linux ARM SDK 操作见[交叉构建](DEPENDENCIES.zh-CN.md#6-linux-arm-与-android-交叉构建)，当前模拟器／QEMU 结果见[验证记录](VALIDATION.zh-CN.md)。实体板卡结果单列，Apple 和旧版 Windows 运行验证暂缓。
+
+Android SDK 通过自有 OpenSSL 配置使用 `libcrypto-hx.so`、`libssl-hx.so` SONAME，避开系统 BoringSSL 名称。CMake 目标和运行库清单记录实际文件，不要手工改名桌面运行库，也不能混用不同 ABI 的库。详见 [Android 部署](ANDROID.zh-CN.md)。
 
 完全不需要 OpenSSL 时，同时设置 `HX_OS_ENABLE_CRYPTO=OFF` 和 `HX_OS_ENABLE_ARCHIVE=OFF`；ARCHIVE 的密码 ZIP 同样使用 OpenSSL。头文件和函数仍可用，`hx_os_crypto_available()` 返回 0，加密操作返回 `HX_OS_NOT_SUPPORTED`。基础字符串、容器和文件能力不依赖 OpenSSL。
 

@@ -2,6 +2,7 @@
 #include <hx/System.hpp>
 #include <hx/ThreadPool.hpp>
 #include <cstdio>
+#include "example_arguments.h"
 
 static void PrintFile(hx::StringView path) noexcept
 {
@@ -15,33 +16,26 @@ static hx::Result<size_t> SearchFiles(
 		root.c_str(), pattern.c_str(), PrintFile);
 }
 
-int main()
+static int hx_example_main(int argc, const char *const *argv)
 {
-	uint64_t needed = HX_OS_CAP_FILE_SEARCH | HX_OS_CAP_SYSTEM_UTILS |
-		HX_OS_CAP_THREAD_POOL;
+	uint64_t needed = HX_OS_CAP_FILE_SEARCH | HX_OS_CAP_THREAD_POOL;
 
 	if ((hx_os_capabilities() & needed) != needed) {
-		std::puts(
-			"File search, arguments or thread pools are disabled");
+		std::puts("File search or thread pools are disabled");
 
 		return 0;
 	}
 
-	auto arguments = hx::System::arguments();
-	if (!arguments)
-		return 1;
-
-	if (arguments.value().size() < 2) {
+	if (argc < 2) {
 		std::puts(
 			"Usage: hx_os_cpp_find_files ROOT [BASENAME_PATTERN]");
 
 		return 2;
 	}
 
-	auto root = hx::String::copy(arguments.value().at(1));
+	auto root = hx::String::copy(argv[1]);
 
-	auto pattern = hx::String::copy(
-		arguments.value().size() > 2 ? arguments.value().at(2) : "*");
+	auto pattern = hx::String::copy(argc > 2 ? argv[2] : "*");
 	if (!root || !pattern)
 		return 1;
 

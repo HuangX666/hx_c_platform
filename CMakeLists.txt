@@ -26,6 +26,7 @@ option(HX_OS_ENABLE_DELAYED_TASKS "Build bounded delayed pool tasks" ON)
 option(HX_OS_ENABLE_MEMORY_POOLS "Build memory pools and arena" ON)
 
 option(HX_OS_ENABLE_ICONV "Build legacy text encoding adapter" OFF)
+option(HX_OS_ICONV_USE_SYSTEM "Use the platform iconv provider" OFF)
 
 option(HX_OS_ENABLE_CONFIG "Build configuration file parsers" ON)
 
@@ -255,6 +256,10 @@ set(HX_OS_ICONV_SYSTEM 0)
 set(HX_OS_ICONV_CONST "")
 
 if(HX_OS_ENABLE_ICONV)
+	if(NOT HX_OS_ICONV_SOURCE_DIR AND NOT HX_OS_ICONV_USE_SYSTEM)
+		include(cmake/HxDependencySources.cmake)
+		hx_dependency_source(iconv HX_OS_ICONV_SOURCE_DIR)
+	endif()
 	if(HX_OS_ICONV_SOURCE_DIR)
 		include(cmake/GnuIconv.cmake)
 
@@ -622,11 +627,13 @@ else()
 endif()
 
 if(HX_OS_ENABLE_CONTAINERS)
+	include(cmake/HxDependencySources.cmake)
+	hx_dependency_source(uthash hx_uthash_source)
 	target_sources(hx_c_platform PRIVATE src/sequence.c src/map.c)
 	target_include_directories(hx_c_platform SYSTEM PRIVATE
-		deps/uthash/v2.4.0)
+		"${hx_uthash_source}/src")
 
-	install(FILES deps/uthash/v2.4.0/LICENSE
+	install(FILES "${hx_uthash_source}/LICENSE"
 		DESTINATION ${CMAKE_INSTALL_DATADIR}/hx_c_platform/licenses
 		RENAME uthash-LICENSE)
 else()
@@ -683,9 +690,8 @@ if(HX_OS_HAVE_IPC)
 endif()
 
 if(HX_OS_ENABLE_KCP)
-	set(hx_kcp_revision "8004f7eba5d1bf33f0691eef5f887f2cd3140cb5")
-	set(hx_kcp_source "${PROJECT_SOURCE_DIR}/deps/kcp")
-	set(hx_kcp_source "${hx_kcp_source}/${hx_kcp_revision}")
+	include(cmake/HxDependencySources.cmake)
+	hx_dependency_source(kcp hx_kcp_source)
 
 	add_library(hx_kcp_vendor OBJECT src/kcp_vendor.c)
 	set_target_properties(hx_kcp_vendor PROPERTIES
@@ -828,7 +834,7 @@ endif()
 
 # Keep deployed test libraries beside their executables. Android 24+ uses
 # RUNPATH; older native targets still use the runner's LD_LIBRARY_PATH.
-if(ANDROID AND BUILD_SHARED_LIBS)
+if(ANDROID AND (BUILD_SHARED_LIBS OR HX_OS_HAVE_OPENSSL))
 	set(hx_validation_dirs)
 
 	if(HX_OS_BUILD_TESTS)

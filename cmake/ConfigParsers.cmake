@@ -1,4 +1,5 @@
 # Optional parser dependencies are compiled privately from unmodified sources.
+include("${CMAKE_CURRENT_LIST_DIR}/HxDependencySources.cmake")
 set(hx_parser_sources)
 set(hx_parser_objects)
 set(hx_parser_includes)
@@ -25,10 +26,13 @@ endforeach()
 function(hx_parser_vendor name)
 	string(TOUPPER "${name}" upper)
 	set(root "${HX_OS_${upper}_SOURCE_DIR}")
+	if(NOT root)
+		hx_dependency_source("${name}" root)
+	endif()
 
 	if(NOT IS_DIRECTORY "${root}")
-		message(FATAL_ERROR "Set HX_OS_${upper}_SOURCE_DIR; "
-			"tools/fetch_parsers.py prepares pinned sources")
+		message(FATAL_ERROR
+			"Invalid HX_OS_${upper}_SOURCE_DIR: ${root}")
 	endif()
 
 	set(generated "${CMAKE_CURRENT_BINARY_DIR}/parsers/${name}")

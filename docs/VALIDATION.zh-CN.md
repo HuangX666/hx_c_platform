@@ -8,6 +8,51 @@
 
 当前业务示例见下方 JSON 记录；此前独立文本示例、初版共用示例、IPC／KCP 实现及其他各批记录对应各自当时的版本。
 
+## 2026-10-07：Windows、Linux、Android 与 ARM 验收
+
+基线 `2d03031`，本次修改完成约定的现有环境验收。范围为 Windows、WSL Linux、API 21／28 构建在 Android API 34 模拟器中的执行，以及 QEMU 中的 ARMv7／AArch64 GNU/Linux。实体设备结果单列；Apple、旧 Windows、其他 libc 和远端 CI 不在本轮范围。工作流仅保留 `workflow_dispatch`，没有启动远端运行。
+
+下表完整构建启用五种可选解析器、源码版 GNU libiconv、动态 OpenSSL、含 zlib／XZ／Zstd 的 libarchive，以及独立 7-Zip 26.04 后端，例外单独标明。公共头按 C99／C++11 独立编译，可选 C++20 测试也参与构建；自有 C++ 继续禁用异常。两种 Android ARM ABI 的最低 API 仍是 21，另以 x86_64 API 28 配置验证进程能力。
+
+| 配置 | 实际结果 |
+| --- | --- |
+| Windows MSVC x64 Debug，共享核心 | 全量 CTest 179/179 |
+| Windows MSVC Win32 Debug，静态核心；关闭 7-Zip 适配 | 全量 CTest 176/176 |
+| WSL Linux x64 Release，共享核心 | 全量 CTest 181/181 |
+| Windows／WSL 共享库安装后消费 | 两端 C++11 各 51/51，纯 C 各 36/36 |
+| Win32 静态库安装后消费 | C++11 50/50，纯 C 35/35 |
+| `7cf52fc` 旧头／测试配当前共享库 | Windows／WSL 各 10/10；1,078 个 HX 导出匹配 |
+| WSL ASan／UBSan | 依赖／流／加密／TLS／配置／压缩子集 10/10；最后的压缩、流、错误文本和进程子集 6/6 |
+| Windows FetchContent，cJSON／iconv／KCP／uthash，关闭加密／压缩 | 全量 CTest 172/172，验证缺失／错误 Git 提交会被拒绝 |
+| Android x86_64，最低 API 21，共享核心 | API 34 原生架构：159 项原生 CTest 测试／示例通过，3 项明确跳过，另通过一次可移植基准 |
+| Android arm64-v8a，最低 API 21，共享核心 | API 34 ARM 转译：同样 159 项通过、3 项跳过，另通过一次可移植基准 |
+| Android x86_64，最低 API 28，共享核心 | API 34 原生架构：160 项通过、2 项跳过，另通过一次可移植基准；包含进程契约和输出捕获 |
+| Android x86_64，最低 API 21，最小共享配置 | API 34 原生架构：108 项原生测试／示例及可移植基准通过 |
+| Android armeabi-v7a，最低 API 21，完整共享配置 | 核心、公共头、所有测试／示例程序及目标依赖编译通过；模拟器明确不支持该 ABI，不声称 Android ARMv7 运行通过 |
+| Linux AArch64，共享核心，QEMU 用户态 | 161 项通过、2 项随机数注入测试跳过；进程套件因下述空环境加载器限制单独排除 |
+| Linux ARMv7 hard-float，共享核心，QEMU 用户态 | 160 项通过、2 项随机数注入测试跳过；进程和 sysinfo 套件有独立原生探针说明后排除 |
+| Android 部署脚本回归 | 4 项宿主测试：发现原生测试、缺失程序／运行库、SDK 位于源码下的部署、独立 SONAME 和实际功能宏 |
+
+模拟器为 `Qt_Android_34`，Android 14／API 34，原生 x86_64，ARM64 使用 native bridge 转译，不支持 ARMv7 ABI。API 21 是构建下限，不等于在 Android 5.0 上运行过。没有把这些结果当作 APK 沙箱、ARM 实体板卡或硬件性能验收。可移植基准在共享宿主负载下运行，数值只作观察，不作为性能达标门槛。
+
+API 21 的三项跳过分别是：模拟器 SELinux 拒绝路径 Unix socket、没有 Android 应用上下文时无法取得应用配置目录，以及低于 API 28 的进程捕获示例。API 28 保留前两项。IPC 和 C++ 平台套件记录 Unix socket 子项跳过后继续验证其他传输／功能，没有修改安全策略。交叉配置不注册宿主 Python 互通驱动，这部分由桌面矩阵单独覆盖。
+
+通过目标运行确定并修复的问题：
+
+- Android OpenSSL 使用自有 `shlib_variant` 配置、独立 `libssl-hx.so`／`libcrypto-hx.so` SONAME、相对 RUNPATH 和实际运行库清单。部署解析链接目标，排除会覆盖 native bridge 系统 BoringSSL 的链接别名，实际验证 Crypto 与 TLS 均可加载，不再以链接成功代替部署成功。
+- 交叉依赖构建正确传递 NDK API／ABI、编译器及 sysroot。libarchive 显式使用指定目标 SDK；缺少 zlib、XZ、Zstd 或 OpenSSL 时构建失败。Android 实际运行 ZIP／密码 ZIP／7z／TAR／Gzip／XZ／Zstd 往返，以及可选原生后端的密码和文件名加密 7z。
+- C99 解析器适配为 Bionic 补充私有静态断言，不修改 TOML 第三方源码。流的尺寸检查可以在 32 位编译。Android 23+ GNU `strerror_r` 按指针返回值处理，API 21 继续走 POSIX 分支。
+- Linux／Android 压缩祖先目录检查在可用时使用仅要求搜索权限的描述符，仍保留 `O_NOFOLLOW`。新增只有执行／搜索权限的父目录回归；不再多余要求列出祖先目录。Android 测试去除写死桌面 `/tmp` 的假设。
+- POSIX 示例验证并使用 main 的 argv，避免把 procfs 中转译启动器的参数当作业务参数；系统参数快照 API 继续报告操作系统观察值。明确 spawn 成功只保证创建子进程；测试 POSIX 允许的退出码 127 启动失败路径，不伪造 errno，不把它当作业务就绪。
+- GNU/Linux 交叉构建使用 `HX_OS_SYSROOT=/` 时保留正确的绝对构建 RPATH。原生 7-Zip 支持目标工具链交叉编译；Android 线程符号取自 Bionic libc，并在该可选运行库内静态包含 C++ 运行时。
+- Windows 并行运行暴露了测试夹具重名：两个压缩后端进程可能取得相同的粗粒度时钟值。临时目录名已加入进程 ID，之后全套测试及两个压缩用例并行重复 5 轮通过，不需要改变库的同步逻辑。
+
+QEMU 限制通过完全不调用 hx_c_platform 的 `build-platform-probe/native.c` 复现：ARMv7 的 `sysinfo` 系统调用得到约 3.7 GB 总内存，但同一进程读宿主 `/proc/meminfo` 得到约 20.9 GB，本库没有换用另一指标来掩盖差异。进程测试已接受 POSIX 两种错误报告方式，但其刻意清空环境的子进程失去 `QEMU_LD_PREFIX`，无法找到目标动态加载器；带模拟器前缀的普通子进程／捕获示例通过。这些排除项不是库验收通过，仍需原生目标确认。随机数注入测试明确跳过不兼容的 LD_PRELOAD 场景，没有把宿主拦截库注入客体进程。
+
+第三方来源统一为一个入口：默认 13 个固定提交的 Git 子模块，也可选择同提交 FetchContent；GNU libiconv 官方 Git 缺少生成转换表，因此使用带 SHA256 校验的官方发布归档。原 KCP／uthash 快照和旧缓存原样保留，除非显式选择，不参与当前构建。错误提交、缺失编解码能力的负向检查按预期失败，第三方工作区保持干净。操作见[依赖说明](DEPENDENCIES.zh-CN.md)及 [Android 命令](ANDROID.zh-CN.md)。
+
+证据保留在忽略的构建目录：`build-platform-*-ctest.log`、`build-platform-*-accepted.log`、install／ABI／export 日志、`build-platform-probe/*.log`，以及 `build-platform-android-{x64,arm64,armv7,api28,minimal}/report*.json` 和逐程序 `run-*.log`。报告包含源码版本／未提交状态、NDK、构建 API／ABI、实际功能开关、设备指纹、原生／转译运行、部署的运行库及明确跳过原因。QEMU 运行 CTest 时设置 `QEMU_LD_PREFIX=/usr/<triplet>`，只采用已说明的排除项，不能整个平台一概跳过。脚本只清理已知上传文件，测试产生的剩余文件保留排查。
+
 ## 2026-10-07：文件／目录压缩与可选加密 7z
 
 基线 `c2f216c`。新增 C99 打包、解压、单文件提取和元数据遍历，提供有界选项、进度、取消及返回 `Result` 的 `hx::Archive`。默认 libarchive 后端支持 ZIP／AES-256 密码 ZIP、TAR／TAR.GZ／TAR.XZ／TAR.Zstd、普通 7z 和单文件 Gzip／XZ／Zstd；密码及文件名加密 7z 使用独立可选、禁用异常的 C++11 适配器和固定的原生 7-Zip 26.04。适配器在构造 COM 对象前检查版本与接口布局；本机 25.01 DLL 被明确拒绝为 NOT_SUPPORTED。未修改第三方源码。

@@ -231,7 +231,7 @@ int main(void)
 				!watch);
 	}
 #endif
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__ANDROID__)
 	(void)snprintf(root, sizeof(root), "hx-watch-%llx-监听",
 		(unsigned long long)hx_os_monotonic_ns());
 #else

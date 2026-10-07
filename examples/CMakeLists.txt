@@ -261,7 +261,8 @@ endif()
 
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_PATHS)
 	add_test(NAME special_paths_example COMMAND hx_os_special_paths)
-	set_tests_properties(special_paths_example PROPERTIES TIMEOUT 20)
+	set_tests_properties(special_paths_example PROPERTIES
+		TIMEOUT 20 SKIP_RETURN_CODE 77)
 endif()
 
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_THREAD_EX)
@@ -329,7 +330,8 @@ if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_PROCESS AND HX_OS_ENABLE_PIPE
 		AND HX_OS_ENABLE_LOOP)
 	add_test(NAME process_capture_example COMMAND hx_os_capture_process
 		$<TARGET_FILE:hx_os_process_fixture> empty)
-	set_tests_properties(process_capture_example PROPERTIES TIMEOUT 20)
+	set_tests_properties(process_capture_example PROPERTIES
+		TIMEOUT 20 SKIP_RETURN_CODE 77)
 endif()
 
 if(HX_OS_BUILD_TESTS AND HX_OS_ENABLE_THREAD_POOL

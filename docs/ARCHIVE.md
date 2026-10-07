@@ -110,7 +110,7 @@ cmake -S tools/sevenzip -B build-7zip
 cmake --build build-7zip --config Release
 ```
 
-Windows requires a Visual Studio developer shell. The result is `build-7zip/runtime/7z.dll` on Windows and `build-7zip/runtime/7z.so` on Linux. The helper's build path must not contain spaces because of upstream makefile rules. Cross-compiling a 7-Zip runtime requires its own target toolchain; the helper deliberately rejects cross builds. Apple build/runtime results remain pending. FetchContent uses the same pin if explicitly selected.
+Windows requires a Visual Studio developer shell. The result is `build-7zip/runtime/7z.dll` on Windows and `build-7zip/runtime/7z.so` on Linux. The helper's build path must not contain spaces because of upstream makefile rules. The helper now accepts Linux ARM and Android cross builds from a POSIX host/WSL with the target toolchain. For Android it selects the NDK target/API, keeps libc++ inside this optional runtime and uses Bionic's libc thread symbols. See [cross-build commands](DEPENDENCIES.md#6-cross-build-linux-arm-and-android). Apple build/runtime validation is deferred. FetchContent uses the same pin if explicitly selected.
 
 ```c
 hx_os_archive_options options = HX_OS_ARCHIVE_OPTIONS_INIT;

@@ -41,14 +41,22 @@ flowchart LR
 | Windows | MSVC x86/x64 已构建和运行；Win7 SP1/8.1 保留为兼容目标，旧系统待实测 |
 | Linux | 已在 WSL Linux 构建和运行 |
 | macOS | 有平台实现；Intel 10.13 / ARM64 11.0 为基线，Apple 主机待验证 |
-| Android | API 21，两种 ARM ABI 编译通过；ARM64 在 API 34 模拟器经翻译运行 |
-| 嵌入式 Linux | ARMv7/AArch64 有交叉编译记录，具体 libc 和板卡仍需验证 |
+| Android | API 21 两种 ARM ABI 编译；API 34 上完整运行 x86_64 原生与 ARM64 转译测试，包含动态 TLS 和压缩 |
+| 嵌入式 Linux | ARMv7／AArch64 glibc 交叉编译与 QEMU 运行；模拟器排除项、实体板卡结果分别记录 |
 
 <a id="section-3"></a>
 
 ## 3. 把库接入自己的项目
 
 先建立下面的目录，把本库源码放到 `external/hx_c_platform`。`main.c` 使用第 4.1 节的完整 C 程序。每个示例单独运行，程序会打印自己的结果。
+
+拉取库源码时一并初始化固定版本子模块，当前开发分支是 `dev`：
+
+```sh
+git clone --branch dev --recurse-submodules https://github.com/HuangX666/hx_c_platform.git external/hx_c_platform
+```
+
+已有工作区执行 `git submodule update --init --recursive`。[依赖说明](docs/DEPENDENCIES.zh-CN.md)还提供 FetchContent 方式和可选解析／编码后端的准备方法。
 
 ```text
 hx_demo/
@@ -506,11 +514,11 @@ HX_CODEC_STRUCT(connection,
 
 ## 7. 构建、验证与项目许可
 
-开发本库时的构建与测试命令、静态/共享库安装和可选依赖配置见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。2026-10-07 的全量测试为 Windows 179/179、WSL Linux 181/181；新增便利接口通过各自相关的检查器验证，两端安装后的 C++11／纯 C 消费分别通过 51/51、36/36。此前序列化功能已完成 Android API 21 两种 ARM ABI 编译，并在 API 34 模拟器的 x86_64／ARM64 上各通过 3 项序列化测试；本批新增接口尚未重新执行这些 Android 目标检查。具体配置与未验证目标见[验证记录](docs/VALIDATION.zh-CN.md)。文档示例的构建检查单独记录，不代替目标平台验证。
+构建、测试、静态／共享安装和可选依赖见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。本地全量 CTest 为 Windows x64 179/179、Win32 176/176、WSL Linux 181/181。Android 现已带实际动态 OpenSSL 和压缩运行库执行全部已配置原生测试／示例：API 21 的 x86_64 与 ARM64 转译各通过 159 项、明确跳过 3 项；API 28 x86_64 通过 160 项、跳过 2 项，各另完成可移植基准。ARMv7／AArch64 Linux 有独立 QEMU 记录；Android ARMv7 编译通过，但当前模拟器不能执行它。[验证记录](docs/VALIDATION.zh-CN.md)列出配置、安装／ABI 检查及具体环境限制，不把模拟运行当作板卡实测。远端 CI 仅保留手动入口，本次未启动。
 
 自有代码的发布许可证尚未确定，第三方许可证见[许可说明](THIRD_PARTY_NOTICES.zh-CN.md)。协程使用自研实现；hx_c_log 接入仍属于后续工作。
 
-[ci-badge]: https://img.shields.io/badge/CI-configured-lightgrey?logo=githubactions
+[ci-badge]: https://img.shields.io/badge/CI-manual%20only-lightgrey?logo=githubactions
 [c-badge]: https://img.shields.io/badge/C-99-blue?logo=c
 [cpp-badge]: https://img.shields.io/badge/C%2B%2B-11-blue?logo=cplusplus
 [header-badge]: https://img.shields.io/badge/header--only-C%2B%2B%20facade-yellowgreen
@@ -520,5 +528,5 @@ HX_CODEC_STRUCT(connection,
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
 [tests-badge]: https://img.shields.io/badge/tests-Win%20179%2F179%20Linux%20181%2F181-brightgreen
-[embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
+[embedded-badge]: https://img.shields.io/badge/ARM%20Linux-QEMU%20tested-blue
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

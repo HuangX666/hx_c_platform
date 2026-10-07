@@ -194,7 +194,11 @@ static void check_replace_and_binary(const char *root)
 	}
 #if !defined(_WIN32)
 	{
+#if defined(__ANDROID__)
+		char temporary[] = "hx-platform-cross-XXXXXX";
+#else
 		char temporary[] = "/tmp/hx-platform-cross-XXXXXX";
+#endif
 		struct stat first, second;
 
 		int descriptor = mkstemp(temporary);

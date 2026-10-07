@@ -7,6 +7,12 @@ int main(void)
 	hx_os_error error;
 
 	hx_os_status status = hx_os_path_config_home_string(&path, &error);
+	if (status == HX_OS_NOT_SUPPORTED) {
+		puts("SKIP config directory: supply an application-owned path");
+		hx_string_destroy(&path);
+
+		return 77;
+	}
 	if (status != HX_OS_OK) {
 		fprintf(stderr, "%s\n", hx_os_status_name(status));
 

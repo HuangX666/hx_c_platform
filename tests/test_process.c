@@ -10,6 +10,7 @@
 			exit(1);                                               \
 		}                                                              \
 	} while (0)
+
 static hx_os_deadline test_deadline(void)
 {
 	return hx_os_deadline_after_ms(5000);
@@ -149,9 +150,40 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-	CHECK(hx_os_process_spawn(NULL, "hx-process-nonexistent-fixture", NULL,
-		      NULL, NULL, &process, &error) == HX_OS_NOT_FOUND);
-	CHECK(!process && error.domain != HX_OS_ERROR_NONE);
+	{
+		hx_os_status missing = hx_os_process_spawn(NULL,
+			"hx-process-nonexistent-fixture", NULL, NULL, NULL,
+			&process, &error);
+
+#if !defined(_WIN32)
+		if (missing == HX_OS_OK) {
+			/* POSIX also permits exec failure through child exit
+			 * 127. */
+			CHECK(process);
+			CHECK(hx_os_process_wait_until(process, test_deadline(),
+				      &result, NULL) == HX_OS_OK);
+			CHECK(result.exit_code == 127 && !result.signal_number);
+			CHECK(hx_os_process_destroy(&process, NULL) ==
+				HX_OS_OK);
+			puts("POSIX startup failure reported by child exit "
+			     "127");
+		}
+		else
+#endif
+		{
+			if (missing != HX_OS_NOT_FOUND)
+				fprintf(stderr,
+					"missing spawn: status %d native "
+					"%u:%lld\n",
+					(int)missing, error.domain,
+					(long long)error.native_code);
+			CHECK(missing == HX_OS_NOT_FOUND);
+			CHECK(error.domain != HX_OS_ERROR_NONE);
+		}
+	}
+	CHECK(!process);
+	result.exit_code = 99;
+	result.signal_number = 99;
 	CHECK(hx_os_process_spawn(NULL, argv[1], NULL, duplicates, NULL,
 		      &process, NULL) == HX_OS_INVALID);
 	CHECK(hx_os_process_spawn(NULL, argv[1], delay, NULL, &options,

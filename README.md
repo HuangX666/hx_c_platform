@@ -41,14 +41,22 @@ Use CMake 3.16 or newer and a C compiler. C++ examples also need a C++11 compile
 | Windows | MSVC x86/x64 builds and runs; Win7 SP1/8.1 remain compatibility targets with old-system testing pending |
 | Linux | Built and run on WSL Linux |
 | macOS | Adapters present; Intel 10.13 / ARM64 11.0 baselines, Apple-host validation pending |
-| Android | API 21 builds for both ARM ABIs; ARM64 runs through translation on an API 34 emulator |
-| Embedded Linux | ARMv7/AArch64 cross-build records; specific libc and boards still need validation |
+| Android | Both ARM ABIs compile at API 21; full native x86_64 and translated ARM64 suites run on API 34, including dynamic TLS and compression |
+| Embedded Linux | ARMv7/AArch64 glibc builds and QEMU runs; recorded emulator exclusions and physical-board checks remain separate |
 
 <a id="section-3"></a>
 
 ## 3. Add the library to your project
 
 Create the following layout and put this library's source in `external/hx_c_platform`. Use the complete C program in section 4.1 for `main.c`. Run examples separately; each prints its own result.
+
+Initialize the library source with its pinned submodules; the current development branch is `dev`:
+
+```sh
+git clone --branch dev --recurse-submodules https://github.com/HuangX666/hx_c_platform.git external/hx_c_platform
+```
+
+For an existing checkout, run `git submodule update --init --recursive`. [Dependency instructions](docs/DEPENDENCIES.md) also describe FetchContent and optional parser/encoding backends.
 
 ```text
 hx_demo/
@@ -506,11 +514,11 @@ For one-call text/file encryption, SHA-256, HMAC and signatures, see [cryptograp
 
 ## 7. Builds, validation and licensing
 
-See the [build reference](docs/REFERENCE.md#section-27) for development builds, tests, static/shared installation and optional dependencies. Full tests on 2026-10-07 passed Windows 179/179 and WSL Linux 181/181. The new helpers passed their related sanitizer checks; installed C++11 and pure C consumers passed 51/51 and 36/36 on each host. Earlier serialization work cross-compiled both Android API 21 ARM ABIs and passed three serialization suites on native x86_64/translated ARM64 in the API 34 emulator. The new helpers have not yet repeated those Android target checks. [Validation records](docs/VALIDATION.md) identify exact configurations and pending targets. Documentation-example checks are separate from target-platform validation.
+See the [build reference](docs/REFERENCE.md#section-27) for tests, static/shared installation and optional dependencies. Local full CTest passes are Windows x64 179/179, Win32 176/176 and WSL Linux 181/181. Android now runs every configured native test/example with its actual dynamic OpenSSL and compression runtimes: API 21 x86_64 and translated ARM64 each pass 159 with 3 explicit skips; the API 28 x86_64 build passes 160 with 2 skips. Each also completes the portable benchmark. ARMv7/AArch64 Linux have separate QEMU records; Android ARMv7 compiles but this emulator cannot execute it. [Validation records](docs/VALIDATION.md) list configurations, installation/ABI checks and exact environment limits. Physical boards are not inferred from simulation. Remote CI is manual-only and was not started.
 
 The first-party distribution license is pending; see [third-party licensing](THIRD_PARTY_NOTICES.md). The coroutine implementation is self-developed; hx_c_log integration remains future work.
 
-[ci-badge]: https://img.shields.io/badge/CI-configured-lightgrey?logo=githubactions
+[ci-badge]: https://img.shields.io/badge/CI-manual%20only-lightgrey?logo=githubactions
 [c-badge]: https://img.shields.io/badge/C-99-blue?logo=c
 [cpp-badge]: https://img.shields.io/badge/C%2B%2B-11-blue?logo=cplusplus
 [header-badge]: https://img.shields.io/badge/header--only-C%2B%2B%20facade-yellowgreen
@@ -520,5 +528,5 @@ The first-party distribution license is pending; see [third-party licensing](THI
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
 [tests-badge]: https://img.shields.io/badge/tests-Win%20179%2F179%20Linux%20181%2F181-brightgreen
-[embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
+[embedded-badge]: https://img.shields.io/badge/ARM%20Linux-QEMU%20tested-blue
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

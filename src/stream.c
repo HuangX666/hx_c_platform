@@ -24,6 +24,17 @@ struct hx_os_stream {
 	int kind, busy;
 };
 
+static int hx_os_stream_size_valid(size_t bytes)
+{
+#if SIZE_MAX > INT64_MAX
+	return bytes <= INT64_MAX;
+#else
+	(void)bytes;
+
+	return 1;
+#endif
+}
+
 static hx_os_status hx_os_stream_allocate(hx_os_context *context, int kind,
 	hx_os_stream **out, hx_os_error *error)
 {
@@ -115,7 +126,7 @@ hx_os_status hx_os_stream_from_memory(hx_os_context *context, const void *data,
 {
 	hx_os_status status;
 
-	if ((!data && bytes) || bytes > INT64_MAX) {
+	if ((!data && bytes) || !hx_os_stream_size_valid(bytes)) {
 		if (out)
 			*out = NULL;
 
@@ -137,7 +148,7 @@ hx_os_status hx_os_stream_memory(hx_os_context *context, size_t max_bytes,
 {
 	hx_os_status status;
 
-	if (max_bytes > INT64_MAX) {
+	if (!hx_os_stream_size_valid(max_bytes)) {
 		if (out)
 			*out = NULL;
 

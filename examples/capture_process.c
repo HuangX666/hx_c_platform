@@ -21,7 +21,7 @@ static int hx_example_main(int argc, const char *const *argv)
 		fprintf(stderr, "Start failed: %s\n",
 			hx_os_status_name(status));
 
-		return 1;
+		return status == HX_OS_NOT_SUPPORTED ? 77 : 1;
 	}
 
 	/* This example chooses to keep waiting and explicitly discard future

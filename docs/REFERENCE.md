@@ -529,13 +529,12 @@ Public paths are UTF-8 and Windows adapters convert them to UTF-16 internally. T
 Built-in conversion covers UTF-8, UTF-16LE/BE, UTF-32LE/BE, ASCII and ISO-8859-1. Optional iconv supports additional encoding identifiers including GB2312, GBK, GB18030:2005/:2022, Big5, Shift-JIS, EUC-JP/KR and Windows 1252/932/936/949/950, subject to backend availability.
 
 ```sh
-python tools/fetch_iconv.py
 cmake -S . -B build-text -DHX_OS_ENABLE_ICONV=ON \
-  -DHX_OS_ICONV_SOURCE_DIR=/absolute/path/to/deps/.cache/libiconv-1.18
+  -DHX_OS_ENABLE_CRYPTO=OFF -DHX_OS_ENABLE_ARCHIVE=OFF
 cmake --build build-text --config Release --parallel 4
 ```
 
-The Python 3.12+ helper prepares pinned, hash-checked sources. CMake never downloads or edits third-party sources. Without a source path, enabling ICONV selects a detected system iconv. Query `hx_os_encoding_supported()` before depending on a particular encoding. Strict string decoding is transactional; streaming conversion can report a consumed/produced prefix, so inspect both status and progress. Encoded output has no implicit terminator.
+Enabling ICONV now selects the pinned GNU libiconv release through the common dependency provider, with SHA256 verification and a reusable cache. Its official Git tree lacks generated tables, so this one dependency uses the official release archive even with the SUBMODULE default. Set `HX_OS_ICONV_USE_SYSTEM=ON` to explicitly choose system iconv; an explicit `HX_OS_ICONV_SOURCE_DIR` remains supported. Upstream files are unchanged. Query `hx_os_encoding_supported()` before depending on a particular encoding. Strict string decoding is transactional; streaming conversion can report a consumed/produced prefix, so inspect both status and progress. Encoded output has no implicit terminator.
 
 <a id="section-8"></a>
 
@@ -1822,6 +1821,7 @@ All new native/common modules default to ON; optional third-party encoding and p
 | `HX_OS_ENABLE_INIH` | OFF | Optional INIH configuration adapter |
 | `HX_OS_ENABLE_TOMLC` | OFF | Optional TOMLC configuration adapter |
 | `HX_OS_SANITIZER` | empty | GCC/Clang: address,undefined or thread |
+| `HX_OS_ICONV_USE_SYSTEM` | OFF | Explicitly use system iconv instead of the pinned release |
 | `HX_OS_ICONV_SOURCE_DIR` | empty | Unmodified iconv source path |
 | `HX_OS_<PARSER>_SOURCE_DIR` | empty | Selected parser source path |
 
@@ -1830,22 +1830,16 @@ Disabled modules preserve public declarations and ABI entry points; creation or 
 ### 27.2 Optional configuration backends
 
 ```sh
-python tools/fetch_parsers.py
+git submodule update --init --recursive
 cmake -S . -B build-parsers \
-  -DHX_OS_ENABLE_CJSON=ON \
-  -DHX_OS_CJSON_SOURCE_DIR=deps/.cache/cJSON-1.7.19 \
-  -DHX_OS_ENABLE_LIBYAML=ON \
-  -DHX_OS_LIBYAML_SOURCE_DIR=deps/.cache/libyaml-0.2.5 \
-  -DHX_OS_ENABLE_MINIXML=ON \
-  -DHX_OS_MINIXML_SOURCE_DIR=deps/.cache/mxml-4.0.6 \
-  -DHX_OS_ENABLE_INIH=ON \
-  -DHX_OS_INIH_SOURCE_DIR=deps/.cache/inih-r62 \
+  -DHX_OS_ENABLE_CJSON=ON -DHX_OS_ENABLE_LIBYAML=ON \
+  -DHX_OS_ENABLE_MINIXML=ON -DHX_OS_ENABLE_INIH=ON \
   -DHX_OS_ENABLE_TOMLC=ON \
-  -DHX_OS_TOMLC_SOURCE_DIR=deps/.cache/tomlc17-R260821
+  -DHX_OS_ENABLE_CRYPTO=OFF -DHX_OS_ENABLE_ARCHIVE=OFF
 cmake --build build-parsers --config Release --parallel 4
 ```
 
-These are POSIX-shell continuations; PowerShell users can put the configure arguments on one line or use PowerShell continuation. The helper verifies pinned archives; dependencies stay private and unchanged. Enabling a backend does not select it for parsing. Core Unicode/native facilities have no mandatory third-party dependency; default-enabled containers privately use vendored uthash. Third-party terms are listed separately.
+These are POSIX-shell continuations; PowerShell users can put the configure arguments on one line or use PowerShell continuation. The common provider verifies pinned Git revisions; dependencies stay private and unchanged. Enabling a backend does not select it for parsing. Core Unicode/native facilities have no mandatory third-party dependency; default-enabled containers privately use vendored uthash. Third-party terms are listed separately.
 
 <a id="section-28"></a>
 
@@ -1866,7 +1860,7 @@ python tools/verify_android.py --ndk /absolute/path/to/ndk \
 
 Defaults cross-build both ARM ABIs for API 21/28; `--serial` explicitly selects runtime validation. `--abi x86_64` supports compatible emulators. An empty adb list can mean an installed AVD is stopped; check `emulator -list-avds` before concluding no emulator exists.
 
-The current recursive search addition compiles API 21 ARM64/ARMv7 in full and minimal shared configurations. Each ARM64 configuration passes the fourteen-suite Android subset on an Android 14/API 34 x86_64 emulator through translation; ARMv7 runtime is unavailable. Earlier API 28/static/x86_64 runs are historical records. An API 21 build is not an Android 5.0 runtime pass. Physical ARM performance, application sandboxes and old OS releases remain target-specific work. Process support below API 28 and finite native join have explicit capability limits. See [ANDROID.md](ANDROID.md).
+The runner discovers every configured native CTest test instead of maintaining a fixed subset. Pass `--dependency-prefix` for the selected ABI/API to enable crypto, dynamic TLS and compression, `--parsers --iconv` for optional text backends, and `--sevenzip-library` for the optional target 7-Zip runtime. Reports distinguish build API from runtime API, native execution from translation, and host-only tests from device tests. API 21 has finite native join with timeout/retry; process spawning requires a minimum API of 28. See [Android instructions and current evidence](ANDROID.md). Physical boards, an actual Android 5.0 system and APK sandbox acceptance remain separate.
 
 ### 28.2 A small C-only board configuration
 

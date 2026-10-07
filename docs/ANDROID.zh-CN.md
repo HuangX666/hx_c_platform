@@ -6,7 +6,7 @@
 
 ## 构建与运行
 
-使用现有 NDK，不下载或修改 SDK/第三方源码：
+使用现有 NDK，脚本不下载或修改 SDK。可选依赖准备遵循所选来源，不改写第三方源码：
 
 ~~~text
 python tools/verify_android.py --ndk /absolute/path/to/ndk/28.2.13676358
@@ -35,40 +35,56 @@ adb devices -l
 python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --serial DEVICE_SERIAL
 ~~~
 
-可用 --adb 指定 adb 绝对路径。脚本核对目标 ABI/API，在新建的 /data/local/tmp/hx_c_platform-随机值 目录上传本次构建的文件，仅为本次进程设置 LD_LIBRARY_PATH，运行以下 31 组：
+可用 `--adb` 指定 adb 绝对路径。脚本检查明确选中的 ABI/API，创建隔离的 `/data/local/tmp/hx_c_platform-随机值` 目录，并通过 `ctest --show-only=json-v1` 自动取得**全部已配置原生测试和示例**，不再手工维护套件列表。参数、测试文件、工作目录、环境变量、输出要求、跳过码和超时均来自 CTest。宿主 Python／工具命令另列为 `host_tests`，不计入设备运行。
 
-| 测试 | 重点 |
-| --- | --- |
-| android_baseline | 平台/API、UTF-8 文件与 I/O、线程/事件、TLS 析构、有限 join |
-| string_tools | Unicode、NUL、别名、失败保持、类型化容器 |
-| lexer | token 位置、代理对、错误保持、输入/数量上限 |
-| wide_wait | 独立大整数参考值、舍入、溢出、单调等待、周期回调 |
-| catalog_filename | 翻译覆盖、分配失败、BOM/编码、文件名 |
-| procedure | 在途回调、关闭重试、自等待、分配器回入、热路径无分配 |
-| atomic | 32/64 位原子、发布关系、并发增量 |
-| cpp_utilities | 关闭异常的 C++11 Result、字符串、词法、过程与分配回滚 |
-| cpp_pool | 类型化结果、取消、容量、准备/关闭竞争与清理 |
-| cpp_extensions | 设置快照、信号结果、捕获退役、位流与平台扩展 |
-| convenience | 原地字符串、并发更新期间持有设置字符串、连续设置失败、翻译借用视图和有界目录遍历 |
-| variant | 精确类型、UTF-8/NUL、自定义复制/清理、对齐、所有权/context 回收和容器失败路径 |
-| cpp_variant | 无异常 C++11 set/get/emplace/clone/visit、类型列表、只构造对象和分配失败 |
-| file_search | 递归流式/首次命中查询、Unicode、限额、链接、分配回收和模块关闭 |
-| containers / stl | 红黑树/AVL/重复键不变量、遍历、排序、筛选、splice 和集合运算 |
-| coroutine / coroutine_io | 有栈/无栈调度、浮点状态、channel/select、准备失败回滚、关闭重试、TCP/DNS/管道和取消 |
-| cpp_coroutine / cpp_coroutine20 | 无异常 C++11 go、C++20 帧/局部变量、等待和取消后的析构 |
-| coroutine_sync / cpp_go11 / cpp_go20 | 自动持有任务、错误汇总、拥有值 channel、协程锁、条件变量取消和局部值清理 |
-| format / cpp_format | UTF-8 类型化格式化、自定义值、失败时保持输出、分配释放 |
-| kcp / ipc | 丢包重传、完整消息、双向请求、多线程、重启、背压和关闭；本地路径权限拒绝明确记录 |
-| lifecycle | 分配失败、TLS 析构阻塞期间 join 超时，释放后重试成功 |
-| config_tree / codec / cpp_codec | 深层混合文档、七种格式写出、结构体映射、资源清理和无异常 C++11 |
+因此，新增加密／TLS／压缩、流和后台文件写出、字节队列、INI／备份／设置、信号／参数、解析／预处理、profiler 测试，都会与已有平台、容器、协程和序列化测试一起运行。关闭模块的配置验证明确的不支持行为。指定 7-Zip 运行库后增加 `archive_7zip`，平台专有能力的缺失单独说明。
+
+启用完整可选依赖时，先按[依赖构建](DEPENDENCIES.zh-CN.md#6-linux-arm-与-android-交叉构建)准备对应 ABI/API 的 SDK，再执行：
+
+```sh
+python tools/verify_android.py --ndk /path/to/ndk --abi arm64-v8a --api 21 \
+  --dependency-prefix /path/to/build-deps-android-arm64/prefix \
+  --parsers --iconv --sevenzip-library /path/to/target/runtime/7z.so \
+  --serial DEVICE_SERIAL --build-root build-android-full
+```
+
+不需要独立原生 7-Zip 后端时可省略 `--sevenzip-library`。省略 `--dependency-prefix` 表示明确关闭加密／压缩。一个 prefix 必须匹配显式指定的一种 ABI/API，不能套用到默认两种 ARM ABI。`--parsers` 开启五种可选解析器，`--iconv` 开启固定版本 GNU 转换器，`--provider FETCHCONTENT` 选择替代源码来源。
+
+脚本读取生成的 `hx_openssl_runtime_Release.txt`，部署实际选中的 **libssl 和 libcrypto** 及所需版本名称，与测试程序和核心库放在一起。运行库缺失时部署失败。程序和核心同时使用 `$ORIGIN` RUNPATH 及进程局部库路径，ARM 转译的间接依赖也需要显式路径。只部署独立 SONAME 的运行库，普通 `libssl.so`／`libcrypto.so` 链接别名不能覆盖 x86_64 转译启动器使用的系统 BoringSSL。部署效果需要设备运行验证，不能只以链接成功判断。
+
+准备好的 Android SDK 通过上游支持的独立配置使用 `libssl-hx.so`／`libcrypto-hx.so` SONAME，避免转译客体误绑定已经加载的同名系统 BoringSSL。上传的文件由运行库清单及其符号链接真实目标确定；与系统 BoringSSL 同名的链接别名留在 SDK 内。
 
 另运行 hx_os_portable_baseline，记录原子、ASCII、宽位換算、命名过程、精细等待观察值，没有固定时间阈值。ADB 只负责部署和控制。记录 NDK、源码版本及是否有未提交修改、ABI/API、设备型号/指纹/API、模拟器标记和每项输出。清理只移除确切上传文件，不递归删除目录；失败夹保留排查。ADB 超时可能留下目标进程，保留目录并报告，不强杀。性能采样需记录负载、温度、调频状态并重复多轮。
 
-报告区分编译最低 API、实际系统 API、原生机器架构和翻译执行，逐程序记录结果。失败不会继续写成“未运行”。验证用共享库程序带 $ORIGIN RUNPATH，支持新版 Android 从程序所在目录加载依赖；旧系统仍使用 LD_LIBRARY_PATH。这些链接选项仅作用于测试/示例/基准程序，不传给消费者或修改系统库路径。
+报告区分编译最低 API、实际系统 API、原生机器架构和翻译执行，逐程序记录结果。失败不会继续写成“未运行”。验证用共享库程序带 $ORIGIN RUNPATH，支持新版 Android 从程序所在目录加载依赖；旧系统仍使用 LD_LIBRARY_PATH。验证程序及使用动态 OpenSSL 的 Android 核心带相对构建 RUNPATH；安装后共享库保持既有相对安装 RUNPATH，不修改系统库路径。
 
-只复核通信时，可在运行命令后追加 `--suite ipc --suite kcp --suite lifecycle`。不指定 `--suite` 时运行全部 31 组；可移植基准仍会运行，报告保存本次选择的套件和明确跳过的子项。
+只复核通信时，可在运行命令后追加 `--suite ipc --suite kcp --suite lifecycle`。不指定 `--suite` 时运行全部已配置原生测试和示例。名称使用 CTest 测试名，不是可执行文件名；`--timeout-scale` 只缩放设备测试的超时上限，不改变库的截止时间。可移植基准仍会运行，报告保存本次选择的套件和明确跳过的子项。
 
 只验证序列化时，追加 `--suite config_tree --suite codec --suite cpp_codec`。用法与示例见[序列化教程](SERIALIZATION.zh-CN.md)。
+
+## 当前验收（2026-10-07）
+
+以下均在同一台 API 34 x86_64 `Qt_Android_34` 模拟器运行。完整配置开启 Crypto、TLS、Archive、可选 7-Zip、五种原生解析后端及 GNU iconv；目标 SDK 包含对应架构的 OpenSSL、zlib、XZ、Zstd。表中数量不含另外执行的可移植基准，每个已运行配置的基准均通过。
+
+| 构建配置 | 执行方式 | 原生 CTest 测试／示例 |
+| --- | --- | --- |
+| x86_64 API 21 完整共享 | 原生架构 | 159 项通过，3 项明确跳过 |
+| arm64-v8a API 21 完整共享 | native bridge 转译 | 159 项通过，3 项明确跳过 |
+| x86_64 API 28 完整共享 | 原生架构 | 160 项通过，2 项明确跳过 |
+| x86_64 API 21 最小共享 | 原生架构 | 108 项通过 |
+| armeabi-v7a API 21 完整共享 | 模拟器不支持该 ABI | 编译通过，运行明确跳过 |
+
+API 21 的跳过项是 SELinux 拒绝的路径 Unix socket、缺少应用上下文时的配置目录，以及进程捕获示例。API 28 已启用并通过进程创建／捕获，保留前两项跳过。IPC 和 C++ 平台套件单独记录 Unix socket 子项后继续验证其他功能，没有修改安全设置。报告分别记录构建下限、实际系统 API 和运行架构。
+
+报告位于 `build-platform-android-x64/report.json`、`build-platform-android-arm64/report.json`、`build-platform-android-api28/report.json`、`build-platform-android-armv7/report.json`、`build-platform-android-minimal/report-minimal.json`。各 ABI 目录保留完整 `configure.log`、`build.log`、`run-*.log` 和运行库上传日志。最终功能标志从生成配置头读取，包含 CRYPTO 与 OPENSSL 的组合条件。宿主部署回归命令为 `python -B tests/test_android_runner.py`，覆盖缺失文件、位于源码目录内的 SDK、原生测试发现和 SONAME 别名。
+
+Android 5.0 系统运行、Android ARMv7 运行、APK 沙箱及实体 ARM 硬件仍单独标记未验证。本轮按用户确认使用现有模拟器／QEMU 验收；Linux ARM QEMU 结果见[验证记录](VALIDATION.zh-CN.md)，不能当作 Android 结果。远端 CI 继续仅保留手动入口，本次未启动。
+
+## 扩大运行测试后确认的行为
+
+启用 `_GNU_SOURCE` 时，API 23+ Bionic 使用 GNU 版 `strerror_r` 返回类型，错误适配已与 API 21 分开处理。API 28 使用原生 `posix_spawn`：子进程创建后，部分 exec 前失败可能以退出码 127 报告。测试明确检查这个 POSIX 结果，不把它伪装成立即返回的原生 errno。POSIX 示例直接使用 main 的 argv，避免 procfs 中的 ARM 转译启动器参数替代业务参数。
+
+Linux／Android 压缩输出目录的祖先检查改用只要求目录搜索权限的描述符，继续保留 `O_NOFOLLOW`，不再多余要求列出 `/data` 等祖先目录；包含仅有执行／搜索权限的父目录回归。测试临时文件放在脚本持有的可写目录，不写死桌面 `/tmp`。应用目录查询不可用、API 28 以下的进程限制，以及 SELinux 拒绝路径 Unix socket，均明确报告。
 
 ## 序列化补测（2026-10-04）
 

@@ -13,10 +13,9 @@ if(CMAKE_BINARY_DIR MATCHES "[ \t]")
 	message(FATAL_ERROR
 		"The upstream makefiles need a build path without spaces")
 endif()
-if(CMAKE_CROSSCOMPILING)
+if(CMAKE_CROSSCOMPILING AND CMAKE_HOST_WIN32)
 	message(FATAL_ERROR
-		"This helper builds host runtimes only. "
-		"Provide a separately cross-built target runtime.")
+		"Use a POSIX host/WSL for Linux and Android cross builds.")
 endif()
 
 set(hx_output "${CMAKE_BINARY_DIR}/runtime")
@@ -36,9 +35,24 @@ if(WIN32 AND MSVC)
 	set(hx_runtime "${hx_output}/7z.dll")
 else()
 	find_program(hx_make NAMES gmake make)
+	set(hx_cc "${CMAKE_C_COMPILER}")
+	set(hx_cxx "${CMAKE_CXX_COMPILER}")
+	if(CMAKE_C_COMPILER_TARGET)
+		string(APPEND hx_cc " --target=${CMAKE_C_COMPILER_TARGET}")
+		string(APPEND hx_cxx " --target=${CMAKE_CXX_COMPILER_TARGET}")
+	endif()
+	if(CMAKE_SYSROOT)
+		string(APPEND hx_cc " --sysroot=${CMAKE_SYSROOT}")
+		string(APPEND hx_cxx " --sysroot=${CMAKE_SYSROOT}")
+	endif()
 	set(hx_command "${hx_make}" -f makefile.gcc
 		"O=${hx_output}" "-j${HX_SEVENZIP_JOBS}"
-		"CC=${CMAKE_C_COMPILER}" "CXX=${CMAKE_CXX_COMPILER}")
+		"CC=${hx_cc}" "CXX=${hx_cxx}")
+	if(ANDROID)
+		# Bionic provides pthread symbols in libc, without libpthread.
+		list(APPEND hx_command "LDFLAGS_STATIC_3=-static-libstdc++"
+			"LIB2=-ldl")
+	endif()
 	set(hx_runtime "${hx_output}/7z.so")
 	if(APPLE)
 		list(APPEND hx_command "SHARED_EXT=.dylib"

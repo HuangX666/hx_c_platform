@@ -16,3 +16,24 @@
 [submodule "7zip"]
 	path = deps/7zip
 	url = https://github.com/ip7z/7zip.git
+[submodule "cjson"]
+	path = deps/cjson
+	url = https://github.com/DaveGamble/cJSON.git
+[submodule "libyaml"]
+	path = deps/libyaml
+	url = https://github.com/yaml/libyaml.git
+[submodule "minixml"]
+	path = deps/minixml
+	url = https://github.com/michaelrsweet/mxml.git
+[submodule "inih"]
+	path = deps/inih
+	url = https://github.com/benhoyt/inih.git
+[submodule "tomlc"]
+	path = deps/tomlc
+	url = https://github.com/cktan/tomlc17.git
+[submodule "kcp"]
+	path = deps/kcp/upstream
+	url = https://github.com/skywind3000/kcp.git
+[submodule "uthash"]
+	path = deps/uthash/upstream
+	url = https://github.com/troydhanson/uthash.git

@@ -196,9 +196,14 @@ const char *hx_ar_i_root_path(const hx_ar_root *root)
 
 hx_os_status hx_ar_i_contains(hx_ar_root *root, const char *path, int *inside)
 {
+#if defined(O_PATH)
+	/* Ancestor identity needs search permission, not directory listing. */
+	const int flags = O_PATH | O_DIRECTORY;
+#else
+	const int flags = O_RDONLY | O_DIRECTORY;
+#endif
 	struct stat target, current, parent;
-	int descriptor =
-		hx_ar_openat(AT_FDCWD, path, O_RDONLY | O_DIRECTORY, 0);
+	int descriptor = hx_ar_openat(AT_FDCWD, path, flags, 0);
 	int next, code = 0;
 	size_t depth = 0;
 
@@ -218,8 +223,7 @@ hx_os_status hx_ar_i_contains(hx_ar_root *root, const char *path, int *inside)
 			*inside = 1;
 			break;
 		}
-		next = hx_ar_openat(
-			descriptor, "..", O_RDONLY | O_DIRECTORY, 0);
+		next = hx_ar_openat(descriptor, "..", flags, 0);
 		if (next < 0) {
 			code = errno;
 			break;

@@ -2,9 +2,9 @@
 
 [简体中文](OBS_COMPLETION.zh-CN.md)
 
-The approved scope is all 24 batches, including synchronous and asynchronous pipes, direct C convenience entry points and optional C++11 wrappers. The reference source baseline is commit `7cf52fc` on `main`; development uses `codex/obs-platform-completion`. No remote publication is requested.
+This page preserves the **historical acceptance of the initial 24 batches**. The original baseline was `7cf52fc` on the former `main` branch; those branch names, test counts and export counts describe that stage. Current development is on `dev`, and the repository has since been published. See [current validation](VALIDATION.md), [Android execution](ANDROID.md) and [dependency builds](DEPENDENCIES.md) for subsequent extensions.
 
-Every completed batch requires Windows MSVC x64 and WSL Linux full CTest, relevant AddressSanitizer tests, isolated public headers, feature-off checks and bilingual contracts. macOS Intel 10.13 / ARM64 11.0, Windows 7 SP1 and embedded target runs remain separately identified target validation.
+The current acceptance scope is Windows, WSL Linux, Android and ARMv7/AArch64 with the available emulator/QEMU environments. Physical boards are recorded separately; macOS and older Windows runtime checks are deferred. Remote CI is manual-only and has not been run for this update.
 
 | Batch | Capability | State |
 | --- | --- | --- |
@@ -35,4 +35,4 @@ Every completed batch requires Windows MSVC x64 and WSL Linux full CTest, releva
 
 The baseline preserves pre-existing whitespace, including vendor licenses. Build products, dependency caches and install outputs are excluded from Git.
 
-All implementation batches are complete. Final static/shared installation, 576-symbol export checks and old-header/new-library ABI probes passed on Windows and WSL. See [the final matrix](VALIDATION.md) for the full sanitizer, Clang, x86 and CMake 3.16 results, partial QEMU runs and native target limits. This is not a claim of macOS/Win7/embedded-board acceptance or hx_c_log speedup.
+At the end of that initial stage, all 24 implementation batches were complete. Its final static/shared installation, 576-symbol export checks and old-header/new-library ABI probes passed on Windows and WSL. See [the final matrix](VALIDATION.md) for the full sanitizer, Clang, x86 and CMake 3.16 results, partial QEMU runs and native target limits. This is not a claim of macOS/Win7/embedded-board acceptance or hx_c_log speedup.

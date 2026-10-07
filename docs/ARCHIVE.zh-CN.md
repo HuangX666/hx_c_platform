@@ -110,7 +110,7 @@ cmake -S tools/sevenzip -B build-7zip
 cmake --build build-7zip --config Release
 ```
 
-Windows 需要使用 Visual Studio 开发者命令行。产物分别是 `build-7zip/runtime/7z.dll` 和 Linux 上的 `build-7zip/runtime/7z.so`。受上游 makefile 限制，此辅助构建目录不能包含空格。交叉编译需要单独配置原生 7-Zip 的目标工具链，辅助构建器会明确拒绝交叉构建；Apple 的构建与运行仍待验证。显式选择 FetchContent 时获取相同固定提交。
+Windows 需要使用 Visual Studio 开发者命令行。产物分别是 `build-7zip/runtime/7z.dll` 和 Linux 上的 `build-7zip/runtime/7z.so`。受上游 makefile 限制，此辅助构建目录不能包含空格。现已支持在 POSIX 宿主／WSL 中使用目标工具链交叉构建 Linux ARM 和 Android；Android 选择对应 NDK ABI/API，在运行库内部静态包含 C++ 运行时，线程符号来自 Bionic libc。操作见[交叉构建](DEPENDENCIES.zh-CN.md#6-linux-arm-与-android-交叉构建)。Apple 验证暂缓。显式选择 FetchContent 时获取相同固定提交。
 
 ```c
 hx_os_archive_options options = HX_OS_ARCHIVE_OPTIONS_INIT;

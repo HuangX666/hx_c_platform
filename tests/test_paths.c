@@ -78,14 +78,24 @@ int main(void)
 		return 0;
 	}
 
+#if defined(__ANDROID__)
+	CHECK(hx_os_path_home_string(&value, NULL) == HX_OS_NOT_SUPPORTED);
+	CHECK(hx_os_path_config_home_string(&value, NULL) ==
+		HX_OS_NOT_SUPPORTED);
+	CHECK(hx_os_path_data_home_string(&value, NULL) == HX_OS_NOT_SUPPORTED);
+	CHECK(hx_os_path_program_data_string(&value, NULL) ==
+		HX_OS_NOT_SUPPORTED);
+	CHECK(hx_os_path_temp_string(&value, NULL) == HX_OS_NOT_SUPPORTED);
+#else
 	check_path(hx_os_path_home, hx_os_path_home_string, 0);
 	check_path(hx_os_path_config_home, hx_os_path_config_home_string, 0);
 	check_path(hx_os_path_data_home, hx_os_path_data_home_string, 0);
 	check_path(hx_os_path_program_data, hx_os_path_program_data_string, 0);
 	check_path(hx_os_path_temp, hx_os_path_temp_string, 0);
+#endif
 	check_path(hx_os_path_executable, hx_os_path_executable_string, 0);
 	check_path(hx_os_path_module, hx_os_path_module_string, 1);
-#if !defined(_WIN32)
+#if !defined(_WIN32) && !defined(__ANDROID__)
 	/* This isolated test process has no concurrent environment users. */
 	CHECK(setenv("HOME", "/hx-path-test/中文/", 1) == 0);
 	CHECK(hx_os_path_home_string(&value, NULL) == HX_OS_OK);

@@ -26,6 +26,8 @@ HX_OS_API void HX_OS_CALL hx_os_string_list_destroy(hx_os_string_list **list);
 /*
  * Native argument snapshot, including argv[0], strict UTF-8. Windows reads
  * the Unicode command line rather than CRT narrow argv; Linux reads procfs.
+ * Under an interpreter/native bridge, procfs can describe its launcher.
+ * Prefer main's argv for the application's POSIX command-line arguments.
  * Bounds: 4 MiB source bytes and 65536 entries. No process locale changes.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_process_arguments(

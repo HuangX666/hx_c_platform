@@ -114,6 +114,7 @@ int main(int argc, char **argv)
 		hx_os_file_times times;
 		unsigned char canary[8];
 	} storage;
+
 	if (argc == 5 && !strcmp(argv[1], "probe")) {
 #if defined(_WIN32)
 		wchar_t **wide;
@@ -156,7 +157,7 @@ int main(int argc, char **argv)
 
 		return 0;
 	}
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__ANDROID__)
 	(void)snprintf(path, sizeof(path), "hx-extra-%llx-中文.bin",
 		(unsigned long long)hx_os_monotonic_ns());
 #else

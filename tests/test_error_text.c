@@ -42,6 +42,8 @@ static void check_message(hx_os_error error, int expect_text)
 		measured == required);
 	CHECK(strlen(text) + 1 == required);
 	CHECK(!strncmp(prefix, text, strlen(prefix)));
+	if (expect_text && text[strlen(prefix)] != ':')
+		fprintf(stderr, "missing native error text: %s\n", text);
 	CHECK(expect_text ? text[strlen(prefix)] == ':'
 			  : !strcmp(prefix, text));
 	CHECK(hx_os_text_validate_utf8(text, strlen(text), &invalid) ==

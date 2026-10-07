@@ -34,6 +34,41 @@ function(hx_dependency_metadata name repository revision version)
 		set(repo "https://github.com/ip7z/7zip.git")
 		set(pin "9128b80e3a471108678e2b3ec3c985861c8d7b0f")
 		set(release "26.04")
+	elseif(name STREQUAL "cjson")
+		set(repo "https://github.com/DaveGamble/cJSON.git")
+		set(pin "c859b25da02955fef659d658b8f324b5cde87be3")
+		set(release "1.7.19")
+	elseif(name STREQUAL "libyaml")
+		set(repo "https://github.com/yaml/libyaml.git")
+		set(pin "2c891fc7a770e8ba2fec34fc6b545c672beb37e6")
+		set(release "0.2.5")
+	elseif(name STREQUAL "minixml")
+		set(repo "https://github.com/michaelrsweet/mxml.git")
+		set(pin "874e249a0d3b506e883210b7ceece5316a8489d4")
+		set(release "4.0.6")
+	elseif(name STREQUAL "inih")
+		set(repo "https://github.com/benhoyt/inih.git")
+		set(pin "26254ee9de7681f8825433415443e7116ff24b98")
+		set(release "r62")
+	elseif(name STREQUAL "tomlc")
+		set(repo "https://github.com/cktan/tomlc17.git")
+		set(pin "e0e8868546b4611a86fcdb284819e60866a3480b")
+		set(release "R260821")
+	elseif(name STREQUAL "kcp")
+		set(repo "https://github.com/skywind3000/kcp.git")
+		set(pin "8004f7eba5d1bf33f0691eef5f887f2cd3140cb5")
+		set(release "v1")
+	elseif(name STREQUAL "uthash")
+		set(repo "https://github.com/troydhanson/uthash.git")
+		set(pin "a49bed0b4abb7dff16c73906dcdc8a9718d582d2")
+		set(release "2.4.0")
+	elseif(name STREQUAL "iconv")
+		string(CONCAT repo "https://ftp.gnu.org/pub/gnu/libiconv/"
+			"libiconv-1.18.tar.gz")
+		string(CONCAT pin
+			"3b08f5f4f9b4eb82f151a7040bfd6fe6c6"
+			"fb922efe4b1659c66ea933276965e8")
+		set(release "1.18")
 	else()
 		message(FATAL_ERROR "Unknown hx dependency: ${name}")
 	endif()
@@ -46,9 +81,24 @@ endfunction()
 function(hx_dependency_source name output)
 	hx_dependency_metadata("${name}" repository revision version)
 	string(TOUPPER "${HX_OS_DEPENDENCY_PROVIDER}" provider)
+	if(NOT provider MATCHES "^(SUBMODULE|FETCHCONTENT)$")
+		message(FATAL_ERROR
+			"HX_OS_DEPENDENCY_PROVIDER must be SUBMODULE "
+			"or FETCHCONTENT")
+	endif()
+
+	# GNU's Git tree omits the generated codec tables in its release.
+	# Keep the official release unchanged instead of requiring host gperf.
+	if(name STREQUAL "iconv")
+		set(provider FETCHCONTENT)
+	endif()
 
 	if(provider STREQUAL "SUBMODULE")
 		set(source "${hx_dependency_root}/deps/${name}")
+		if(name STREQUAL "kcp" OR name STREQUAL "uthash")
+			# Existing source snapshots remain unchanged.
+			string(APPEND source "/upstream")
+		endif()
 		if(NOT EXISTS "${source}/.git")
 			message(FATAL_ERROR "Initialize dependency submodules: "
 				"git submodule update --init --recursive. "
@@ -57,14 +107,47 @@ function(hx_dependency_source name output)
 		endif()
 	elseif(provider STREQUAL "FETCHCONTENT")
 		include(FetchContent)
+		if(POLICY CMP0135)
+			cmake_policy(SET CMP0135 NEW)
+		endif()
 		set(cache "${HX_OS_DEPENDENCY_CACHE_DIR}/${name}/${revision}")
-		FetchContent_Declare(hx_dep_${name}
-			GIT_REPOSITORY "${repository}"
-			GIT_TAG "${revision}"
-			SOURCE_DIR "${cache}"
-			GIT_PROGRESS FALSE)
+		file(MAKE_DIRECTORY "${HX_OS_DEPENDENCY_CACHE_DIR}/${name}")
+		file(LOCK "${cache}.lock" GUARD FUNCTION TIMEOUT 180)
+		string(TOUPPER "${name}" upper)
+		set(override "${FETCHCONTENT_SOURCE_DIR_HX_DEP_${upper}}")
+		set(ready FALSE)
+		if(override)
+			set(source "${override}")
+			set(ready TRUE)
+		elseif(EXISTS "${cache}/.git")
+			set(source "${cache}")
+			set(ready TRUE)
+		elseif(EXISTS "${cache}.ready")
+			file(READ "${cache}.ready" cached_revision)
+			string(STRIP "${cached_revision}" cached_revision)
+			if(NOT cached_revision STREQUAL revision OR
+				NOT EXISTS "${cache}/lib/iconv.c")
+				message(FATAL_ERROR "Incomplete dependency cache: "
+					"${cache}. Select a fresh cache directory.")
+			endif()
+			set(source "${cache}")
+			set(ready TRUE)
+		endif()
+		if(name STREQUAL "iconv")
+			FetchContent_Declare(hx_dep_${name}
+				URL "${repository}"
+				URL_HASH "SHA256=${revision}"
+				DOWNLOAD_DIR
+					"${HX_OS_DEPENDENCY_CACHE_DIR}/${name}"
+				SOURCE_DIR "${cache}")
+		else()
+			FetchContent_Declare(hx_dep_${name}
+				GIT_REPOSITORY "${repository}"
+				GIT_TAG "${revision}"
+				SOURCE_DIR "${cache}" GIT_PROGRESS FALSE)
+		endif()
 		FetchContent_GetProperties(hx_dep_${name})
-		if(NOT hx_dep_${name}_POPULATED)
+		if(NOT ready AND NOT hx_dep_${name}_POPULATED)
 			# Populate only; upstream projects build out of source.
 			cmake_policy(PUSH)
 			if(POLICY CMP0169)
@@ -73,13 +156,18 @@ function(hx_dependency_source name output)
 			FetchContent_Populate(hx_dep_${name})
 			cmake_policy(POP)
 		endif()
-		set(source "${hx_dep_${name}_SOURCE_DIR}")
-	else()
-		message(FATAL_ERROR
-			"HX_OS_DEPENDENCY_PROVIDER must be SUBMODULE "
-			"or FETCHCONTENT")
+		if(NOT ready)
+			set(source "${hx_dep_${name}_SOURCE_DIR}")
+			if(name STREQUAL "iconv")
+				file(WRITE "${cache}.ready" "${revision}\n")
+			endif()
+		endif()
 	endif()
 
+	if(name STREQUAL "iconv")
+		set(${output} "${source}" PARENT_SCOPE)
+		return()
+	endif()
 	find_package(Git REQUIRED)
 	execute_process(COMMAND "${GIT_EXECUTABLE}" -C "${source}"
 		rev-parse HEAD

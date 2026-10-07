@@ -12,6 +12,11 @@ set(CMAKE_SYSTEM_PROCESSOR "${HX_OS_TARGET_PROCESSOR}")
 set(CMAKE_C_COMPILER "${HX_OS_CROSS_PREFIX}gcc")
 set(CMAKE_CXX_COMPILER "${HX_OS_CROSS_PREFIX}g++")
 set(CMAKE_SYSROOT "${HX_OS_SYSROOT}")
+# A root of / means the compiler's installed target tree. CMake otherwise
+# strips the leading slash from every build RPATH as a sysroot prefix.
+if(CMAKE_SYSROOT STREQUAL "/")
+	set(CMAKE_SYSROOT "")
+endif()
 set(CMAKE_FIND_ROOT_PATH "${HX_OS_SYSROOT}")
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)

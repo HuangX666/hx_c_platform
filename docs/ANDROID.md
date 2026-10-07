@@ -6,7 +6,7 @@ The agreed baseline is **Android 5.0 / API 21**, **arm64-v8a and armeabi-v7a**. 
 
 ## Build and run
 
-Use an existing NDK; the script does not download or modify SDK/vendor files:
+Use an existing NDK; the script does not download or modify the SDK. Optional dependency acquisition follows the selected provider:
 
 ~~~text
 python tools/verify_android.py --ndk /absolute/path/to/ndk/28.2.13676358
@@ -35,40 +35,56 @@ adb devices -l
 python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --serial DEVICE_SERIAL
 ~~~
 
-Pass --adb for an absolute adb path. The runner checks ABI/API, uploads only its artifacts into a fresh /data/local/tmp/hx_c_platform-UUID directory, sets that process's LD_LIBRARY_PATH, and executes thirty-one suites:
+Pass `--adb` for an absolute adb path. The runner checks the explicitly selected ABI/API, creates an isolated `/data/local/tmp/hx_c_platform-UUID` directory and discovers **all configured native CTest tests and examples** using `ctest --show-only=json-v1`. There is no manually maintained suite list. Arguments, fixture files, working directories, test environment, output expectations, skip codes and timeouts come from CTest. Host Python/tool commands are listed separately in `host_tests`; they are not counted as device executions.
 
-| Suite | Coverage |
-| --- | --- |
-| android_baseline | Platform/API, Unicode files/I/O, thread/event/TLS cleanup, finite join |
-| string_tools | Unicode, NUL, aliases, failure retention, typed containers |
-| lexer | Positions, surrogate pairs, sticky errors, resource limits |
-| wide_wait | Big-integer reference values, rounding/overflow, waits/repeat |
-| catalog_filename | Overlays, allocation failure, BOM/encoding, filenames |
-| procedure | In-flight retirement, retry/self-wait, allocator reentry, allocation-free warm calls |
-| atomic | 32/64-bit atomics, publication, concurrent counters |
-| cpp_utilities | No-exception C++11 results, strings, lexing, procedures and allocation rollback |
-| cpp_pool | Typed results, cancellation, admission, preparation/close races and cleanup |
-| cpp_extensions | Settings snapshots, signal results, capture retirement, bitstreams and extensions |
-| convenience | In-place strings, retained setting strings under concurrent updates, immediate cursor failures, borrowed catalog values and bounded directory visits |
-| variant | Exact types, UTF-8/NUL, custom copy/drop, alignment, ownership/context cleanup and container failure paths |
-| cpp_variant | Exception-free C++11 set/get/emplace/clone/visit, typed alternatives, move-only objects and allocator failures |
-| file_search | Streaming/first-match recursive search, Unicode, limits, links, allocation cleanup and module-off behavior |
-| containers / stl | RB/AVL/duplicate invariants, traversal, sorting, filtering, splice and set operations |
-| coroutine / coroutine_io | Stackful/stackless scheduling, floating-point state, channel/select, prepare rollback, close retry, TCP/DNS/pipes and cancellation |
-| cpp_coroutine / cpp_coroutine20 | Exception-free C++11 go, C++20 frames/locals, waits and cancellation cleanup |
-| coroutine_sync / cpp_go11 / cpp_go20 | Runtime-owned tasks, errors, owned channel values, cooperative locks, condition cancellation and local cleanup |
-| format / cpp_format | Typed UTF-8 formatting, custom values, failed-output retention and allocator cleanup |
-| kcp / ipc | Loss/retransmission, complete messages, duplex/concurrent requests, restart, backpressure and close; explicit local-path permission skips |
-| lifecycle | Allocation failures, join timeout during blocked TLS cleanup and successful retry after release |
-| config_tree / codec / cpp_codec | Deep mixed trees, seven writers, schema mapping, ownership and no-exception C++11 |
+The list therefore includes the new crypto/TLS/archive, streams and buffered writer, queue, INI/backup/settings, signal/parameter, parser/preprocessor and profiler tests alongside the existing platform, container, coroutine and serialization suites. Module-off builds exercise their explicit unsupported behavior. A selected 7-Zip runtime adds `archive_7zip`; absent platform-only facilities remain separately identified.
+
+For the full optional dependency stack, first prepare one ABI/API SDK as described in [dependency builds](DEPENDENCIES.md#6-cross-build-linux-arm-and-android), then run:
+
+```sh
+python tools/verify_android.py --ndk /path/to/ndk --abi arm64-v8a --api 21 \
+  --dependency-prefix /path/to/build-deps-android-arm64/prefix \
+  --parsers --iconv --sevenzip-library /path/to/target/runtime/7z.so \
+  --serial DEVICE_SERIAL --build-root build-android-full
+```
+
+Omit `--sevenzip-library` if the separate optional native backend is not needed. Omit `--dependency-prefix` only for a deliberate crypto/archive-disabled build. A prefix must match one explicit ABI/API; it is never reused across both default ARM ABIs. `--parsers` enables the five optional adapters, `--iconv` enables the pinned GNU converter, and `--provider FETCHCONTENT` selects the alternative source provider.
+
+The runner reads the generated `hx_openssl_runtime_Release.txt` to deploy the exact selected **libssl and libcrypto**, including required versioned names, beside the test executables and core library. Missing runtimes fail deployment. Executables and the core use `$ORIGIN` RUNPATH plus a process-local library path. ARM translation also needs that explicit path for transitive dependencies. Only the distinct runtime SONAME files are deployed: ordinary `libssl.so` / `libcrypto.so` linker aliases must not shadow the x86_64 native bridge's system BoringSSL. This packaging behavior is covered by actual device runs, not just link success.
+
+The prepared Android SDK uses distinct `libssl-hx.so` / `libcrypto-hx.so` SONAMEs through an upstream-supported configuration overlay. This also prevents the translated guest from binding to an already loaded system BoringSSL with the ordinary `libcrypto.so` name. The manifest and its resolved symlink targets determine which files are uploaded; unversioned BoringSSL linker aliases stay in the SDK.
 
 hx_os_portable_baseline also records atomic, ASCII, wide conversion, named-call and precise-wait observations without fixed timing thresholds. Logs include NDK, source revision/dirty status, ABI/API, device model, fingerprint, runtime API, emulator marker and command output. Cleanup removes only explicitly uploaded files, never recursively deleting test directories. Failed fixtures remain. An adb timeout may leave the target process running; preserve/report its directory without killing it. Record load/temperature/ frequency conditions and collect repeated performance samples.
 
-Reports distinguish build minimum API, runtime API, native machine and translation, with a result per executable. Failures do not remain labeled as unrun. Shared validation executables have $ORIGIN RUNPATH for newer Android; older native systems still use LD_LIBRARY_PATH. Only test/example/benchmark targets receive this option; consumer and system library paths are unchanged.
+Reports distinguish build minimum API, runtime API, native machine and translation, with a result per executable. Failures do not remain labeled as unrun. Shared validation executables have $ORIGIN RUNPATH for newer Android; older native systems still use LD_LIBRARY_PATH. Validation executables and the Android core with dynamic OpenSSL use relative build RUNPATH. Installed shared libraries keep their existing relative install RUNPATH; no system library paths are changed.
 
-For a focused communication run, append `--suite ipc --suite kcp --suite lifecycle`. Without `--suite`, all thirty-one suites run. The portable benchmark still runs; the report records selected suites and explicit subcase skips.
+For a focused communication run, append `--suite ipc --suite kcp --suite lifecycle`. Without `--suite`, every configured native CTest test and example runs. Names are the actual CTest names, not binary filenames. `--timeout-scale` explicitly scales device test limits, without changing library deadlines. The portable benchmark still runs; the report records selected suites and explicit subcase skips.
 
 For serialization only, append `--suite config_tree --suite codec --suite cpp_codec`. See the [serialization tutorial](SERIALIZATION.md).
+
+## Current acceptance (2026-10-07)
+
+All executions below use the same API 34 x86_64 `Qt_Android_34` emulator. The full profile enables Crypto, TLS, Archive, optional 7-Zip, all five native parser backends and GNU iconv. Its dependency SDK includes OpenSSL, zlib, XZ and Zstd for the selected target. Counts exclude the additional portable benchmark, which passed in every executed configuration.
+
+| Build configuration | Execution | Native CTest tests/examples |
+| --- | --- | --- |
+| x86_64 API 21 full shared | Native ISA | 159 passed, 3 explicit skips |
+| arm64-v8a API 21 full shared | Native-bridge translation | 159 passed, 3 explicit skips |
+| x86_64 API 28 full shared | Native ISA | 160 passed, 2 explicit skips |
+| x86_64 API 21 minimal shared | Native ISA | 108 passed |
+| armeabi-v7a API 21 full shared | Incompatible emulator ABI | Compilation passed; runtime explicitly skipped |
+
+API 21 skips pathname Unix sockets denied by SELinux, application configuration-directory lookup without an app context, and the process-capture example. API 28 enables and passes process creation/capture; it retains the first two skips. IPC and C++ platform suites record their Unix-socket subcase separately and continue. No security setting was changed. The actual build minimum, runtime API and ISA are separate report fields.
+
+Reports are `build-platform-android-x64/report.json`, `build-platform-android-arm64/report.json`, `build-platform-android-api28/report.json`, `build-platform-android-armv7/report.json` and `build-platform-android-minimal/report-minimal.json`. Their ABI directories contain complete `configure.log`, `build.log`, `run-*.log` and runtime upload logs. Final feature flags come from the generated configuration header, including the CRYPTO + OPENSSL combination. Host deployment regressions run with `python -B tests/test_android_runner.py` and cover missing files, source-relative SDKs, native-test discovery and SONAME aliases.
+
+Android 5.0 OS execution, Android ARMv7 execution, APK sandbox behavior and physical ARM hardware remain separately unverified. The user-approved acceptance for this round uses available emulator/QEMU environments; Linux ARM QEMU results are in [validation](VALIDATION.md) and are not Android results. Remote CI remains manual-only and was not started.
+
+## Runtime details exposed by the expanded tests
+
+API 23+ Bionic uses the GNU `strerror_r` return type when `_GNU_SOURCE` is enabled; the error adapter handles this separately from API 21. API 28 process creation uses native `posix_spawn`: a created child may report pre-exec failure by exit code 127. This is tested as an explicit POSIX outcome, not relabeled as an immediate native errno. POSIX examples use main's argv, so an ARM native-bridge launcher in procfs does not replace their actual arguments.
+
+Archive output-ancestor checks use search-only directory descriptors on Linux/Android and retain `O_NOFOLLOW`. They no longer require listing permission for ancestors such as `/data`; a dedicated execute-only-parent regression is included. Test scratch paths use the runner's owned storage instead of desktop `/tmp`. Unavailable app-directory queries, process support below API 28 and SELinux-denied pathname Unix sockets are reported explicitly.
 
 ## Serialization verification (2026-10-04)
 

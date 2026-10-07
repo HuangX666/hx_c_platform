@@ -46,6 +46,15 @@ if(CMAKE_TOOLCHAIN_FILE)
 		"-DCMAKE_TOOLCHAIN_FILE:FILEPATH=${CMAKE_TOOLCHAIN_FILE}")
 endif()
 
+set(hx_forward CMAKE_SYSROOT ANDROID_ABI ANDROID_PLATFORM ANDROID_STL
+	${CMAKE_TRY_COMPILE_PLATFORM_VARIABLES})
+list(REMOVE_DUPLICATES hx_forward)
+foreach(variable IN LISTS hx_forward)
+	if(DEFINED ${variable})
+		list(APPEND hx_common_args "-D${variable}=${${variable}}")
+	endif()
+endforeach()
+
 foreach(name openssl zlib xz zstd libarchive)
 	hx_dependency_source("${name}" ${name}_source)
 endforeach()
@@ -100,15 +109,57 @@ if(NOT HX_DEPS_OPENSSL_ASM)
 	list(APPEND hx_openssl_options no-asm)
 endif()
 
+set(hx_openssl_environment)
+set(hx_openssl_target "${HX_DEPS_OPENSSL_TARGET}")
+if(ANDROID)
+	if(CMAKE_HOST_WIN32)
+		message(FATAL_ERROR
+			"Build the Android SDK in WSL/Linux with "
+			"a Linux NDK; the core library can still "
+			"be built on Windows.")
+	endif()
+	get_filename_component(hx_ndk_bin "${CMAKE_C_COMPILER}" DIRECTORY)
+	list(APPEND hx_openssl_environment
+		"ANDROID_NDK_ROOT=${CMAKE_ANDROID_NDK}"
+		"PATH=${hx_ndk_bin}:$ENV{PATH}")
+	set(hx_android_api "${CMAKE_SYSTEM_VERSION}")
+	if(DEFINED ANDROID_PLATFORM_LEVEL)
+		set(hx_android_api "${ANDROID_PLATFORM_LEVEL}")
+	elseif(DEFINED CMAKE_ANDROID_API)
+		set(hx_android_api "${CMAKE_ANDROID_API}")
+	endif()
+	if(hx_android_api LESS 21)
+		message(FATAL_ERROR
+			"The Android dependency SDK requires API 21+")
+	endif()
+	list(APPEND hx_openssl_options
+		"-D__ANDROID_API__=${hx_android_api}")
+	if(NOT hx_openssl_target MATCHES "^android-(arm|arm64|x86_64)$")
+		message(FATAL_ERROR "Unsupported Android OpenSSL target")
+	endif()
+	set(hx_openssl_target "hx-${hx_openssl_target}")
+	list(APPEND hx_openssl_options
+		"--config=${CMAKE_CURRENT_LIST_DIR}/openssl-android.conf")
+elseif(CMAKE_CROSSCOMPILING)
+	list(APPEND hx_openssl_environment "CC=${CMAKE_C_COMPILER}"
+		"AR=${CMAKE_AR}" "RANLIB=${CMAKE_RANLIB}")
+	if(CMAKE_SYSROOT)
+		list(APPEND hx_openssl_options "--sysroot=${CMAKE_SYSROOT}")
+	endif()
+endif()
+set(hx_openssl_command "${CMAKE_COMMAND}" -E env
+	${hx_openssl_environment})
+
 ExternalProject_Add(hx_dep_build_openssl
 	SOURCE_DIR "${openssl_source}"
 	BINARY_DIR "${CMAKE_BINARY_DIR}/openssl"
 	DOWNLOAD_COMMAND ""
 	UPDATE_COMMAND ""
-	CONFIGURE_COMMAND "${PERL_EXECUTABLE}" <SOURCE_DIR>/Configure
-		${HX_DEPS_OPENSSL_TARGET} ${hx_openssl_options}
-	BUILD_COMMAND "${hx_make}" ${hx_make_jobs}
-	INSTALL_COMMAND "${hx_make}" install_sw)
+	CONFIGURE_COMMAND ${hx_openssl_command}
+		"${PERL_EXECUTABLE}" <SOURCE_DIR>/Configure
+		${hx_openssl_target} ${hx_openssl_options}
+	BUILD_COMMAND ${hx_openssl_command} "${hx_make}" ${hx_make_jobs}
+	INSTALL_COMMAND ${hx_openssl_command} "${hx_make}" install_sw)
 
 ExternalProject_Add(hx_dep_build_zlib
 	SOURCE_DIR "${zlib_source}"
@@ -166,6 +217,31 @@ if(WIN32 AND MSVC)
 		-ULIBLZMA_HAS_*
 		-UHAVE_PKCS5_PBKDF2_HMAC_SHA1
 		-UHAVE_LIBCRYPTO)
+elseif(NOT WIN32)
+	set(hx_crypto_suffix so)
+	if(APPLE)
+		set(hx_crypto_suffix dylib)
+	endif()
+	if(hx_openssl_static)
+		set(hx_crypto_suffix a)
+	endif()
+	set(hx_dep_lib "${CMAKE_INSTALL_PREFIX}/lib")
+	set(hx_dep_include "${CMAKE_INSTALL_PREFIX}/include")
+	# Do not silently substitute NDK/system libraries or drop codecs.
+	list(APPEND hx_archive_args
+		"-DZLIB_INCLUDE_DIR:PATH=${hx_dep_include}"
+		"-DZLIB_LIBRARY_RELEASE:FILEPATH=${hx_dep_lib}/libz.a"
+		"-DZLIB_LIBRARY_DEBUG:FILEPATH=${hx_dep_lib}/libz.a"
+		"-DLIBLZMA_INCLUDE_DIR:PATH=${hx_dep_include}"
+		"-DLIBLZMA_LIBRARY_RELEASE:FILEPATH=${hx_dep_lib}/liblzma.a"
+		"-DLIBLZMA_LIBRARY_DEBUG:FILEPATH=${hx_dep_lib}/liblzma.a"
+		"-DZSTD_INCLUDE_DIR:PATH=${hx_dep_include}"
+		"-DZSTD_LIBRARY:FILEPATH=${hx_dep_lib}/libzstd.a"
+		"-DOPENSSL_INCLUDE_DIR:PATH=${hx_dep_include}"
+		"-DOPENSSL_CRYPTO_LIBRARY=${hx_dep_lib}/libcrypto.${hx_crypto_suffix}"
+		"-DOPENSSL_SSL_LIBRARY=${hx_dep_lib}/libssl.${hx_crypto_suffix}"
+		-UARCHIVE_CRYPTO_*_OPENSSL -ULIBLZMA_HAS_*
+		-UHAVE_PKCS5_PBKDF2_HMAC_SHA1 -UHAVE_LIBCRYPTO)
 endif()
 
 ExternalProject_Add(hx_dep_build_archive
@@ -197,3 +273,9 @@ ExternalProject_Add(hx_dep_build_archive
 		-DENABLE_UNZIP:BOOL=OFF
 	BUILD_COMMAND ${hx_cmake_build}
 	INSTALL_COMMAND ${hx_cmake_install})
+
+ExternalProject_Add_Step(hx_dep_build_archive verify_features
+	COMMAND "${CMAKE_COMMAND}"
+		"-DHX_ARCHIVE_CONFIG=<BINARY_DIR>/config.h"
+		-P "${CMAKE_CURRENT_LIST_DIR}/check_features.cmake"
+	DEPENDEES configure DEPENDERS build)

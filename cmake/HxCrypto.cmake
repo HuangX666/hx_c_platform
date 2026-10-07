@@ -7,6 +7,7 @@ option(HX_OS_INSTALL_OPENSSL_RUNTIME
 function(hx_find_openssl)
 	if(HX_OS_DEPENDENCY_PREFIX)
 		list(PREPEND CMAKE_PREFIX_PATH "${HX_OS_DEPENDENCY_PREFIX}")
+		list(PREPEND CMAKE_FIND_ROOT_PATH "${HX_OS_DEPENDENCY_PREFIX}")
 	endif()
 
 	set(OPENSSL_USE_STATIC_LIBS ${HX_OS_OPENSSL_STATIC})
@@ -84,11 +85,24 @@ function(hx_link_crypto target)
 		endif()
 		set_property(TARGET ${target} APPEND PROPERTY INSTALL_RPATH
 			"${rpath}")
+		if(ANDROID)
+			# NDK's CMake platform suppresses ordinary build RPATH flags.
+			target_link_options(${target} PRIVATE
+				"-Wl,-rpath,$ORIGIN")
+		endif()
 	endif()
 
 	set(hx_ssl_manifest "")
 	foreach(hx_ssl IN LISTS hx_ssl_targets)
 		set(runtime_file "$<TARGET_FILE:${hx_ssl}>")
+		if(ANDROID)
+			# Resolve where supported; installation also follows the chain.
+			get_target_property(hx_runtime ${hx_ssl} IMPORTED_LOCATION)
+			if(hx_runtime AND EXISTS "${hx_runtime}")
+				get_filename_component(runtime_file "${hx_runtime}"
+					REALPATH)
+			endif()
+		endif()
 		if(WIN32)
 			add_custom_command(TARGET ${target} POST_BUILD
 				COMMAND ${CMAKE_COMMAND} -E make_directory

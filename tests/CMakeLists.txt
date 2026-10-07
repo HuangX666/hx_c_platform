@@ -102,6 +102,10 @@ if(HX_OS_HAVE_7ZIP AND HX_OS_TEST_7ZIP_LIBRARY)
 	add_test(NAME archive_7zip COMMAND hx_os_test_archive
 		"${HX_OS_TEST_7ZIP_LIBRARY}" $<TARGET_FILE:hx_archive_7zip>)
 	set_tests_properties(archive_7zip PROPERTIES TIMEOUT 60)
+	if(CMAKE_CROSSCOMPILING)
+		# Password derivation runs much slower under software translation.
+		set_tests_properties(archive_7zip PROPERTIES TIMEOUT 300)
+	endif()
 endif()
 
 target_include_directories(hx_os_test_profiler_snapshot PRIVATE

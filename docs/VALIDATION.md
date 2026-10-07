@@ -8,6 +8,51 @@ This records development validation through 2026-10-07. A design, implemented ad
 
 The JSON entry below records the current examples. Earlier independent text examples, initial shared workflows, IPC/KCP implementation and other batches describe their historical versions.
 
+## 2026-10-07: Windows, Linux, Android and ARM acceptance
+
+Baseline `2d03031`; the changes in this update complete the agreed local-environment acceptance. The scope is Windows, WSL Linux, Android API 34 emulator execution with API 21/28 builds, and ARMv7/AArch64 GNU/Linux under QEMU. Physical devices are recorded separately. Apple, older Windows, other libc families and remote CI are outside this round. The workflow now has only `workflow_dispatch`; no remote run was started.
+
+Full builds below enable the five optional parsers and source-built GNU libiconv, shared OpenSSL, libarchive with zlib/XZ/Zstd, and the separate 7-Zip 26.04 backend unless noted. C99/C++11 public headers and the optional C++20 tests compile. First-party C++ remains exception-free. The Android minimum is still API 21 for both ARM ABIs; an API 28 x86_64 build separately exercises process spawning.
+
+| Configuration | Actual result |
+| --- | --- |
+| Windows MSVC x64 Debug, shared core | Full CTest 179/179 |
+| Windows MSVC Win32 Debug, static core; 7-Zip adapter off | Full CTest 176/176 |
+| WSL Linux x64 Release, shared core | Full CTest 181/181 |
+| Installed shared consumers on Windows/WSL | C++11 51/51 and pure C 36/36 on each host |
+| Installed Win32 static consumers | C++11 50/50 and pure C 35/35 |
+| Old `7cf52fc` headers/tests with current shared library | 10/10 on Windows and WSL; 1,078 exported HX functions matched |
+| WSL ASan/UBSan | Dependency/stream/crypto/TLS/config/archive subset 10/10; final archive, stream, error-text and process subset 6/6 |
+| FetchContent Windows build, cJSON/iconv/KCP/uthash, crypto/archive off | Full CTest 172/172; missing/wrong Git pin rejection checked |
+| Android x86_64, minimum API 21, shared core | API 34 native ISA: 159 native CTest tests/examples passed, 3 explicitly skipped, plus portable benchmark passed |
+| Android arm64-v8a, minimum API 21, shared core | API 34 ARM translation: same 159 passed / 3 skipped, plus portable benchmark passed |
+| Android x86_64, minimum API 28, shared core | API 34 native ISA: 160 passed / 2 skipped, plus portable benchmark passed; process contracts and capture included |
+| Android x86_64, minimum API 21, minimal shared core | API 34 native ISA: 108 native tests/examples plus portable benchmark passed |
+| Android armeabi-v7a, minimum API 21, full shared core | Core, public headers, all test/example binaries and target dependencies compiled; emulator rejects this ABI explicitly, so no Android ARMv7 run is claimed |
+| Linux AArch64, shared core, QEMU user-mode | 161 passed, 2 random-injection tests skipped; process suite separately excluded for the empty-environment loader limitation below |
+| Linux ARMv7 hard-float, shared core, QEMU user-mode | 160 passed, 2 random-injection tests skipped; process and sysinfo suites separately excluded with native probes below |
+| Android deployment script regressions | Four host tests: native-test discovery, missing binaries/runtimes, SDK-under-source deployment, distinct SONAMEs and actual feature macros |
+
+The Android emulator is `Qt_Android_34`, Android 14/API 34, native x86_64 with ARM64 native-bridge translation. It advertises no ARMv7 ABI. API 21 is a build minimum, not proof of running on Android 5.0. No APK sandbox, real ARM board or hardware-performance pass is inferred. The portable benchmark was executed under shared host load; its timings are observations, not performance acceptance thresholds.
+
+The three API 21 skips are pathname Unix sockets denied by this emulator's SELinux policy, app configuration-directory lookup without an Android application context, and the process-capture example below its API 28 minimum. API 28 keeps the first two. IPC and C++ platform suites record the Unix-socket subcase skip while continuing their other transports/features. No security policy was relaxed. Cross configurations omit host-only Python interoperability drivers; desktop runs cover those separately.
+
+Repairs established by target execution:
+
+- Android OpenSSL uses first-party `shlib_variant` configuration, distinct `libssl-hx.so` / `libcrypto-hx.so` SONAMEs, relative RUNPATH and the selected runtime manifest. Deployment resolves aliases and omits linker names that would shadow the native bridge's system BoringSSL. Both crypto and TLS are present; successful linking alone is no longer treated as deployment evidence.
+- Cross dependency builds forward the real NDK API/ABI, compiler and sysroot. libarchive uses the selected target SDK explicitly; its build fails if zlib, XZ, Zstd or OpenSSL support is absent. Actual ZIP/password ZIP/7z/TAR/Gzip/XZ/Zstd round trips run on Android, including encrypted 7z through the optional native backend.
+- C99 parser integration supplies a private static-assert fallback for Bionic without editing TOML vendor source. Stream-size checks compile correctly on 32-bit targets. Android 23+ GNU `strerror_r` uses its pointer return type; API 21 retains the POSIX branch.
+- Linux/Android archive ancestor checks use search-only directory descriptors where available, retaining `O_NOFOLLOW`. Packing beneath an execute-only ancestor now passes its regression instead of demanding directory-list permission. Desktop `/tmp` assumptions were removed from Android fixtures.
+- POSIX examples validate main's argv instead of mistaking a native-bridge launcher in procfs for application arguments. The OS argument snapshot API still reports the OS view. POSIX spawn success is documented as child creation: permitted pre-exec failure via exit 127 is tested without inventing an errno or treating it as application readiness.
+- GNU/Linux cross builds using `HX_OS_SYSROOT=/` preserve absolute build RPATH. Native 7-Zip cross builds use target compilers; Android uses Bionic's libc thread symbols and includes its C++ runtime privately.
+- A Windows parallel run exposed a test-fixture collision: two archive backend processes could receive the same coarse clock value. Scratch names now include the process ID. The full suite and five parallel repetitions of both archive tests passed afterward; no library synchronization change was needed.
+
+QEMU limits were reproduced outside hx_c_platform by `build-platform-probe/native.c`. The ARMv7 `sysinfo` syscall reports about 3.7 GB total while the same process reads about 20.9 GB from host `/proc/meminfo`; the library does not replace one metric with another to hide that mismatch. Process tests now accept both POSIX error-reporting forms, but their deliberately empty-environment child lacks `QEMU_LD_PREFIX` and cannot locate the target dynamic loader. Ordinary child/capture examples pass with that emulator prefix. These exclusions are not library passes and remain native-target checks. The random-injection LD_PRELOAD tests report their own skip rather than running a host interposer against a guest process.
+
+Source management is now one provider: 13 pinned Git submodules by default, fixed-commit FetchContent as an alternative, and the official hash-checked GNU libiconv release archive because its Git tree lacks generated conversion tables. Old KCP/uthash snapshots and old caches are unchanged and inactive unless explicitly selected. Wrong-pin and missing-codec negative checks fail as intended; vendor worktrees remain clean. See [dependency instructions](DEPENDENCIES.md) and [Android commands](ANDROID.md).
+
+Evidence stays in ignored build directories: `build-platform-*-ctest.log`, `build-platform-*-accepted.log`, install/ABI/export logs, `build-platform-probe/*.log`, and Android `build-platform-android-{x64,arm64,armv7,api28,minimal}/report*.json` with per-program `run-*.log`. Reports contain source revision/dirty state, NDK, build API/ABI, actual feature flags, device fingerprint, native/translated execution, deployed runtimes and explicit skips. For QEMU, pass `QEMU_LD_PREFIX=/usr/<triplet>` when running CTest; apply only the recorded exclusions, not a broad platform skip. Tests remove only their known uploaded files, preserving any generated fixture output for diagnosis.
+
 ## 2026-10-07: File/directory archives and optional encrypted 7z
 
 Baseline `c2f216c`. Added C99 pack, unpack, single-file extraction and metadata visits, bounded options/progress/cancellation, and `hx::Archive` with explicit `Result` values. Default libarchive supports ZIP/AES-256 ZIP, TAR/TAR.GZ/TAR.XZ/TAR.Zstd, ordinary 7z and single-file Gzip/XZ/Zstd. Encrypted/header-encrypted 7z uses the separately optional exception-disabled C++11 adapter and pinned native 7-Zip 26.04. The adapter checks native module version/interface before constructing COM objects; a local 25.01 DLL was rejected with NOT_SUPPORTED. No native vendor source was patched.

@@ -68,22 +68,17 @@ cJSON 和 Mini-XML 执行原生解析，并共用严格校验和建树，以保�
 
 ## 构建与交付
 
-Python 3.12+ 下载锁定归档并校验 SHA256。已有源码目录保留；CMake 不下载、不修改第三方源码。
+五种可选解析器统一使用固定版本的依赖入口：默认 Git submodule，也可选择 `HX_OS_DEPENDENCY_PROVIDER=FETCHCONTENT`。不再需要逐个填写源码路径，也不必运行 Python 下载器；既有集成仍可显式传入 `HX_OS_<PARSER>_SOURCE_DIR`。下面只验证解析器，关闭无关的 OpenSSL／压缩模块；需要这些模块时传入已构建的 SDK。
 
 ~~~sh
-python tools/fetch_parsers.py cjson libyaml minixml inih tomlc
-cmake -S . -B build-parsers -DHX_OS_ENABLE_CJSON=ON \
-  -DHX_OS_CJSON_SOURCE_DIR=/absolute/project/deps/.cache/cJSON-1.7.19 \
-  -DHX_OS_ENABLE_LIBYAML=ON \
-  -DHX_OS_LIBYAML_SOURCE_DIR=/absolute/project/deps/.cache/libyaml-0.2.5 \
-  -DHX_OS_ENABLE_MINIXML=ON \
-  -DHX_OS_MINIXML_SOURCE_DIR=/absolute/project/deps/.cache/mxml-4.0.6 \
-  -DHX_OS_ENABLE_INIH=ON \
-  -DHX_OS_INIH_SOURCE_DIR=/absolute/project/deps/.cache/inih-r62 \
+git submodule update --init --recursive
+cmake -S . -B build-parsers \
+  -DHX_OS_ENABLE_CJSON=ON -DHX_OS_ENABLE_LIBYAML=ON \
+  -DHX_OS_ENABLE_MINIXML=ON -DHX_OS_ENABLE_INIH=ON \
   -DHX_OS_ENABLE_TOMLC=ON \
-  -DHX_OS_TOMLC_SOURCE_DIR=/absolute/project/deps/.cache/tomlc17-R260821
-cmake --build build-parsers --config Debug --parallel 4
-ctest --test-dir build-parsers -C Debug --output-on-failure
+  -DHX_OS_ENABLE_CRYPTO=OFF -DHX_OS_ENABLE_ARCHIVE=OFF
+cmake --build build-parsers --config Release --parallel 4
+ctest --test-dir build-parsers -C Release --output-on-failure
 ~~~
 
 五个后端开关默认 OFF，HX_OS_ENABLE_CONFIG 默认 ON。 CONFIG=OFF 移除各格式实现，保留 ABI 查询/错误接口， parse/load 返回 NOT_SUPPORTED。关闭 CONFIG 时启用其后端属于配置错误。嵌入式消费者可以只选内置，也可以完全裁去配置模块。

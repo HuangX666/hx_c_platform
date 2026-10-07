@@ -6,6 +6,15 @@
 #include <string.h>
 #include <locale.h>
 #include <ctype.h>
+#include <assert.h>
+
+/* Some C99 headers, including Bionic, omit this vendor-required macro. */
+#if !defined(static_assert) && !defined(__cplusplus)
+#define HX_CFG_ASSERT_NAME_(line) hx_cfg_static_assert_##line
+#define HX_CFG_ASSERT_NAME(line) HX_CFG_ASSERT_NAME_(line)
+#define static_assert(condition, message)                                      \
+	typedef char HX_CFG_ASSERT_NAME(__LINE__)[(condition) ? 1 : -1]
+#endif
 
 void *hx_os_cfg_vendor_malloc(size_t bytes);
 

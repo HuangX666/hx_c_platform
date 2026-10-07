@@ -1,4 +1,12 @@
 #include "utility_test.h"
+#if defined(_WIN32)
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
+#if defined(__linux__)
+#include <sys/stat.h>
+#endif
 
 static const char payload[] = "{\"device\":\"传感器\",\"samples\":[1,2,3]}\n";
 static char root[1024], source[1200], archive_path[1200], destination[1200];
@@ -237,19 +245,55 @@ static void check_allocation(void)
 	}
 }
 
+static void check_search_only_ancestor(void)
+{
+#if defined(__linux__)
+	char parent[1300], directory[1350], target[1400];
+	hx_os_status status;
+
+	(void)snprintf(parent, sizeof(parent), "%s/search-only", root);
+	(void)snprintf(directory, sizeof(directory), "%s/output", parent);
+	(void)snprintf(target, sizeof(target), "%s/test.zip", directory);
+	CHECK(hx_os_directory_create(directory, 1, NULL) == HX_OS_OK);
+	CHECK(chmod(parent, S_IXUSR) == 0);
+	status = hx_os_archive_pack(source, target, NULL);
+	/* Restore access before checking, including a failed regression. */
+	CHECK(chmod(parent, S_IRWXU) == 0);
+	CHECK(status == HX_OS_OK);
+	CHECK(hx_os_directory_remove_recursive(parent, NULL) == HX_OS_OK);
+#endif
+}
+
 int main(int argc, char **argv)
 {
 	hx_string temporary = HX_STRING_INIT;
 	char path[1300];
+#if defined(_WIN32)
+	unsigned long process_id = (unsigned long)_getpid();
+#else
+	unsigned long process_id = (unsigned long)getpid();
+#endif
 
 	if (!hx_os_archive_available()) {
 		CHECK(hx_os_archive_pack("source", "out.zip", NULL) ==
 			HX_OS_NOT_SUPPORTED);
 		return 0;
 	}
+#if defined(__ANDROID__)
+	/* The Android host supplies writable app/test storage. */
+	{
+		const char *directory = getenv("HX_OS_TEST_TMPDIR");
+
+		CHECK(directory && *directory);
+		CHECK(hx_string_assign_cstr(&temporary, directory, NULL) ==
+			HX_OS_OK);
+	}
+#else
 	CHECK(hx_os_path_temp_string(&temporary, NULL) == HX_OS_OK);
-	(void)snprintf(root, sizeof(root), "%s/hx-archive-%llu",
-		hx_string_c_str(&temporary),
+#endif
+	/* Backend tests run concurrently; a coarse clock alone can collide. */
+	(void)snprintf(root, sizeof(root), "%s/hx-archive-%lu-%llu",
+		hx_string_c_str(&temporary), process_id,
 		(unsigned long long)hx_os_monotonic_ns());
 	hx_string_destroy(&temporary);
 	(void)snprintf(source, sizeof(source), "%s/source", root);
@@ -260,6 +304,7 @@ int main(int argc, char **argv)
 	(void)snprintf(path, sizeof(path), "%s/deep/中文.json", source);
 	CHECK(hx_os_file_save(path, payload, sizeof(payload) - 1, 0, NULL) ==
 		HX_OS_OK);
+	check_search_only_ancestor();
 	if (argc == 3) {
 		CHECK(hx_os_archive_7zip_available());
 		seven_library = argv[1];

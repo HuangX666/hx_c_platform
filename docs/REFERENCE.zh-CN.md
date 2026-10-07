@@ -529,13 +529,12 @@ int main(void)
 内置转换覆盖 UTF-8、UTF-16LE/BE、UTF-32LE/BE、ASCII、ISO-8859-1。可选 iconv 提供 GB2312、GBK、GB18030:2005/:2022、Big5、Shift-JIS、 EUC-JP/KR、Windows 1252/932/936/949/950 等编码标识，具体取决于后端能力。
 
 ```sh
-python tools/fetch_iconv.py
 cmake -S . -B build-text -DHX_OS_ENABLE_ICONV=ON \
-  -DHX_OS_ICONV_SOURCE_DIR=/absolute/path/to/deps/.cache/libiconv-1.18
+  -DHX_OS_ENABLE_CRYPTO=OFF -DHX_OS_ENABLE_ARCHIVE=OFF
 cmake --build build-text --config Release --parallel 4
 ```
 
-Python 3.12+ 工具准备固定版本并校验散列。CMake 不自动下载或修改第三方源码。启用 ICONV 但不提供源码路径时，选择检测到的系统 iconv。使用某种传统编码前调用 `hx_os_encoding_supported()`。严格字符串解码失败保持原值；流式转换可能已消费/产生部分数据，应同时检查状态和进度。编码输出不会自动追加结束符。
+启用 ICONV 后，统一依赖入口默认准备固定版本的 GNU libiconv 官方发布包，校验 SHA256 并复用缓存。它的官方 Git 仓库缺少生成好的转换表，因此即使选择 SUBMODULE，此组件也使用官方归档。显式设置 `HX_OS_ICONV_USE_SYSTEM=ON` 才选择系统 iconv；仍支持 `HX_OS_ICONV_SOURCE_DIR`。不修改上游源码。使用某种传统编码前调用 `hx_os_encoding_supported()`。严格字符串解码失败保持原值；流式转换可能已消费/产生部分数据，应同时检查状态和进度。编码输出不会自动追加结束符。
 
 <a id="section-8"></a>
 
@@ -1822,6 +1821,7 @@ int main(void)
 | `HX_OS_ENABLE_INIH` | OFF | 可选 INIH 配置后端 |
 | `HX_OS_ENABLE_TOMLC` | OFF | 可选 TOMLC 配置后端 |
 | `HX_OS_SANITIZER` | 空 | GCC/Clang: address,undefined 或 thread |
+| `HX_OS_ICONV_USE_SYSTEM` | OFF | 显式使用系统 iconv，替代固定发布包 |
 | `HX_OS_ICONV_SOURCE_DIR` | 空 | 未修改的 iconv 源码路径 |
 | `HX_OS_<PARSER>_SOURCE_DIR` | 空 | 所选解析器的源码路径 |
 
@@ -1830,22 +1830,16 @@ int main(void)
 ### 27.2 可选配置后端
 
 ```sh
-python tools/fetch_parsers.py
+git submodule update --init --recursive
 cmake -S . -B build-parsers \
-  -DHX_OS_ENABLE_CJSON=ON \
-  -DHX_OS_CJSON_SOURCE_DIR=deps/.cache/cJSON-1.7.19 \
-  -DHX_OS_ENABLE_LIBYAML=ON \
-  -DHX_OS_LIBYAML_SOURCE_DIR=deps/.cache/libyaml-0.2.5 \
-  -DHX_OS_ENABLE_MINIXML=ON \
-  -DHX_OS_MINIXML_SOURCE_DIR=deps/.cache/mxml-4.0.6 \
-  -DHX_OS_ENABLE_INIH=ON \
-  -DHX_OS_INIH_SOURCE_DIR=deps/.cache/inih-r62 \
+  -DHX_OS_ENABLE_CJSON=ON -DHX_OS_ENABLE_LIBYAML=ON \
+  -DHX_OS_ENABLE_MINIXML=ON -DHX_OS_ENABLE_INIH=ON \
   -DHX_OS_ENABLE_TOMLC=ON \
-  -DHX_OS_TOMLC_SOURCE_DIR=deps/.cache/tomlc17-R260821
+  -DHX_OS_ENABLE_CRYPTO=OFF -DHX_OS_ENABLE_ARCHIVE=OFF
 cmake --build build-parsers --config Release --parallel 4
 ```
 
-这些是 POSIX shell 续行；PowerShell 可以将配置参数写成一行，或使用其自身的续行规则。工具校验固定版本压缩包，依赖保持私有且不修改源码。编译某后端不会自动选择它。核心 Unicode/原生设施不强制引入第三方；默认开启的容器模块私有使用 vendored uthash，第三方许可条款单独保留。
+这些是 POSIX shell 续行；PowerShell 可以将配置参数写成一行，或使用其自身的续行规则。统一入口校验固定 Git 提交，依赖保持私有且不修改源码。编译某后端不会自动选择它。核心 Unicode/原生设施不强制引入第三方；默认开启的容器模块私有使用 vendored uthash，第三方许可条款单独保留。
 
 <a id="section-28"></a>
 
@@ -1866,7 +1860,7 @@ python tools/verify_android.py --ndk /absolute/path/to/ndk \
 
 默认交叉编译两种 ARM ABI 的 API 21/28 配置，通过 `--serial` 明确选择运行设备。 `--abi x86_64` 用于匹配的模拟器。adb 列表为空时，可能只是已有 AVD 未启动；先用 `emulator -list-avds` 检查，不能直接认定机器没有模拟器。
 
-当前递归查询扩展已编译 API 21 ARM64/ARMv7 的完整与最小共享配置。ARM64 两种配置各通过十四组 Android 测试和 portable 基准，在 Android 14/API 34 x86_64 模拟器经翻译执行；ARMv7 缺少运行环境。此前 API 28、静态库和 x86_64 执行保留为历史记录。API 21 构建不等于 Android 5.0 运行通过；ARM 真机性能、应用沙箱和旧系统仍需目标验证。API 28 以下进程能力与有限时长原生 join 有明确限制，见 [ANDROID.zh-CN.md](ANDROID.zh-CN.md)。
+脚本从 CTest 自动取得全部已配置原生测试，不再维护固定子集。使用匹配 ABI/API 的 `--dependency-prefix` 启用加密、动态 TLS 和压缩，`--parsers --iconv` 启用可选文本后端，`--sevenzip-library` 指定可选目标 7-Zip 运行库。报告分别记录构建 API、运行 API、原生执行／转译，以及宿主测试／设备测试。API 21 已支持有限原生 join 和超时重试；启动进程仍要求最低 API 28。详见 [Android 操作与当前证据](ANDROID.zh-CN.md)。实体板卡、Android 5.0 系统和 APK 沙箱验收单独记录。
 
 ### 28.2 板卡的最小纯 C 配置
 

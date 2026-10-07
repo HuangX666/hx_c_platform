@@ -8,6 +8,7 @@ extern "C" {
 #endif
 typedef struct hx_os_process hx_os_process;
 typedef struct hx_os_process_capture hx_os_process_capture;
+
 typedef struct hx_os_process_options {
 	uint32_t size;
 	uint32_t version;
@@ -15,10 +16,12 @@ typedef struct hx_os_process_options {
 	hx_os_file *standard_output;
 	hx_os_file *standard_error;
 } hx_os_process_options;
+
 #define HX_OS_PROCESS_OPTIONS_INIT                                             \
 	{                                                                      \
 		sizeof(hx_os_process_options), 1, NULL, NULL, NULL             \
 	}
+
 typedef struct hx_os_process_result {
 	uint32_t exit_code;
 	int signal_number;
@@ -41,6 +44,9 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_process_options_init(
  * operations. Windows uses a handle allowlist; external broad-inheritance
  * spawns must be excluded while private inheritable duplicates exist.
  * No background worker. All operations on one object require exclusion.
+ * Success owns a child; it does not prove application readiness. Some
+ * POSIX implementations report pre-exec failure by child exit code 127
+ * after spawn succeeds. This cannot distinguish an application's own 127.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_process_spawn(hx_os_context *context,
 	const char *path, const char *const arguments[],
@@ -76,6 +82,7 @@ typedef struct hx_os_process_capture_options {
 	size_t stdout_limit;
 	size_t stderr_limit;
 } hx_os_process_capture_options;
+
 #define HX_OS_PROCESS_CAPTURE_OPTIONS_INIT                                     \
 	{                                                                      \
 		sizeof(hx_os_process_capture_options), 1, 1024u * 1024u,       \

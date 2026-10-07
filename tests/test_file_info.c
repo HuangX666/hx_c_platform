@@ -101,7 +101,7 @@ static void test_metadata(void)
 	}
 
 	(void)snprintf(root, sizeof(root),
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__ANDROID__)
 		"hx-metadata-%llx",
 #else
 		"/tmp/hx-metadata-%llx",

@@ -28,7 +28,7 @@ static int hx_example_main(int argc, const char *const *argv)
 		return 1;
 
 	if (argc == 1) {
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__ANDROID__)
 		const char *pattern = "hx-watch-example-%llx";
 #else
 		const char *pattern = "/tmp/hx-watch-example-%llx";
