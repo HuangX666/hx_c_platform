@@ -377,13 +377,16 @@ if (!printed)
 	return 1;
 ```
 
-输出：`张三: 3.75`。`{}` 取下一个实参，`.2f` 表示保留小数点后两位。C99 在 CMake 中启用一次辅助函数后，也可以自动识别类型，直接写 C 表达式：
+输出：`张三: 3.75`。`{}` 取下一个实参，`.2f` 表示保留小数点后两位。C99 可以直接复用同一个格式化器，不需要生成步骤：
 
 ```c
-hx_os_status status = HX_FPRINTLN("{user.name}: {price * count:.2f}");
+#include <hx_print.h>
+
+hx_os_status status = HX_PRINTLN("{}: {:.2f}",
+	hx_fmt_str("张三"), hx_fmt_f64(3.75));
 ```
 
-这里的 `user`、`price`、`count` 都是当前 C 函数里的普通变量。[格式化教程](docs/FORMAT.zh-CN.md) 提供完整程序、CMake 配置、自定义结构体、编码规则，以及不使用生成步骤的 C99 写法。可选的生成步骤随正常构建自动运行，不改原始源文件。
+包含头文件并正常链接库即可。宏自动组织最多 64 个类型化参数，自定义结构体使用 `hx_fmt_custom`。[格式化教程](docs/FORMAT.zh-CN.md) 继续说明大量参数数组、容量限制，以及自动识别类型或嵌入 C 表达式的可选生成器写法。
 
 需要有序键或重复键时，[红黑树 multimap 示例](examples/ordered_map.c) 与[容器说明](docs/CONTAINERS.zh-CN.md) 包含有序遍历、排序、筛选、链表 splice 和集合运算。
 

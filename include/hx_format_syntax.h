@@ -1,6 +1,10 @@
 #ifndef HX_C_PLATFORM_FORMAT_SYNTAX_H
 #define HX_C_PLATFORM_FORMAT_SYNTAX_H
 
+#if defined(HX_C_PLATFORM_PRINT_H)
+#error "Do not include hx_print.h and hx_format_syntax.h together"
+#else
+
 #include "hx_format.h"
 
 /* Enable these source markers with hx_enable_format_syntax(target SOURCES ...).
@@ -21,4 +25,5 @@
  */
 #define HX_FORMATTER(type, function)
 #define HX_NAMED(name, value) HX_FORMAT_SYNTAX_REQUIRED
+#endif
 #endif

@@ -377,13 +377,16 @@ if (!printed)
 	return 1;
 ```
 
-Output: `张三: 3.75`. `{}` takes the next argument; `.2f` prints two digits after the decimal point. In C99, enabling one CMake helper also allows automatic types and C expressions:
+Output: `张三: 3.75`. `{}` takes the next argument; `.2f` prints two digits after the decimal point. C99 can use the same formatting engine without a generator:
 
 ```c
-hx_os_status status = HX_FPRINTLN("{user.name}: {price * count:.2f}");
+#include <hx_print.h>
+
+hx_os_status status = HX_PRINTLN("{}: {:.2f}",
+	hx_fmt_str("张三"), hx_fmt_f64(3.75));
 ```
 
-Here `user`, `price` and `count` are ordinary variables in the calling C function. The [formatting guide](docs/FORMAT.md) includes complete programs, the CMake setup, custom structures, encoding rules and a C99 path needing no generator. The optional generator runs during the normal build and leaves original sources unchanged.
+Include the header and link the library normally. The macro packs up to 64 typed arguments; custom structures use `hx_fmt_custom`. The [formatting guide](docs/FORMAT.md) covers larger arrays, limits and the optional generated syntax for automatic types or embedded C expressions.
 
 Need ordered or duplicate keys? The [red-black multimap example](examples/ordered_map.c) and [container guide](docs/CONTAINERS.md) cover ordered traversal, sorting, filtering, list splice and set operations.
 

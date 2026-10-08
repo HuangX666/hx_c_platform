@@ -1,3 +1,4 @@
+#include <hx_print.h>
 #include <hx_os.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,6 +47,51 @@ static hx_os_status test_custom(const void *object, hx_string_view spec,
 
 	return hx_format_with_options(out, hx_string_view_from_cstr("({}, {})"),
 		args, 2, &options, error);
+}
+
+static void test_convenience(void)
+{
+	hx_string text = HX_STRING_INIT;
+	int point[] = {10, 20};
+	int evaluations = 0;
+	char repeated[3 * 80 + 1];
+	size_t i;
+
+	CHECK(HX_FORMAT(&text, "literal {{}}") == HX_OS_OK);
+	CHECK(!strcmp(hx_string_c_str(&text), "literal {}"));
+	CHECK(HX_FORMAT(&text, "{0}/{0}", hx_fmt_i64(++evaluations)) ==
+		HX_OS_OK);
+	CHECK(evaluations == 1 && !strcmp(hx_string_c_str(&text), "1/1"));
+	CHECK(HX_FORMAT(&text, "{name} {value:04d}",
+		      HX_NAMED("name", hx_fmt_str("中文")),
+		      HX_NAMED("value", hx_fmt_i64(20))) == HX_OS_OK);
+	CHECK(!strcmp(hx_string_c_str(&text), "中文 0020"));
+	CHECK(HX_FORMAT(&text, "{}", hx_fmt_custom(point, test_custom)) ==
+		HX_OS_OK);
+	CHECK(!strcmp(hx_string_c_str(&text), "(10, 20)"));
+	CHECK(HX_FORMAT(&text, "{}!", hx_fmt_view(hx_string_view_of(&text))) ==
+		HX_OS_OK);
+	CHECK(!strcmp(hx_string_c_str(&text), "(10, 20)!"));
+	CHECK(HX_FORMAT(&text, "{} {}", hx_fmt_i64(1)) == HX_OS_RANGE);
+	CHECK(!strcmp(hx_string_c_str(&text), "(10, 20)!"));
+
+#define TEST_EIGHT_VALUES                                                      \
+	hx_fmt_i64(7), hx_fmt_i64(7), hx_fmt_i64(7), hx_fmt_i64(7),            \
+		hx_fmt_i64(7), hx_fmt_i64(7), hx_fmt_i64(7), hx_fmt_i64(7)
+	CHECK(HX_FORMAT(&text, "{63}", TEST_EIGHT_VALUES, TEST_EIGHT_VALUES,
+		      TEST_EIGHT_VALUES, TEST_EIGHT_VALUES, TEST_EIGHT_VALUES,
+		      TEST_EIGHT_VALUES, TEST_EIGHT_VALUES,
+		      TEST_EIGHT_VALUES) == HX_OS_OK);
+	CHECK(!strcmp(hx_string_c_str(&text), "7"));
+#undef TEST_EIGHT_VALUES
+
+	for (i = 0; i < 80; ++i)
+		memcpy(repeated + i * 3, "{0}", 3);
+	repeated[sizeof(repeated) - 1] = 0;
+	CHECK(HX_FORMAT(&text, repeated, hx_fmt_i64(7)) == HX_OS_OK);
+	CHECK(text.size == 80 && strspn(hx_string_c_str(&text), "7") == 80);
+
+	hx_string_destroy(&text);
 }
 
 typedef struct test_memory {
@@ -150,13 +196,11 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-	if (argc > 1 && !strcmp(argv[1], "--print")) {
-		hx_format_arg args[] = {hx_fmt_str("中文🙂"), hx_fmt_f64(1.25)};
+	if (argc > 1 && !strcmp(argv[1], "--print"))
+		return HX_PRINTLN("{} {:.2f}", hx_fmt_str("中文🙂"),
+			       hx_fmt_f64(1.25)) != HX_OS_OK;
 
-		return hx_print_args(HX_PRINT_STDOUT, 1,
-			       hx_string_view_from_cstr("{} {:.2f}"), args, 2,
-			       NULL) != HX_OS_OK;
-	}
+	test_convenience();
 
 	test_format("{} {} {} {:.2f} {}", values, 5,
 		"-42 18446744073709551615 中文🙂 3.14 true");

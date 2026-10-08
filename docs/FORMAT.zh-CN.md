@@ -4,10 +4,11 @@
 
 ## 1. 先选一种写法
 
-下面三种写法共用 C99 的 UTF-8 格式化实现，都不使用 C++ 异常。`HX_OS_ENABLE_FORMAT` 默认开启；关闭后，运行时接口返回 `HX_OS_NOT_SUPPORTED`，能力查询不再包含 `HX_OS_CAP_FORMAT`。
+下面几种写法共用 C99 的 UTF-8 格式化实现，都不使用 C++ 异常。`HX_OS_ENABLE_FORMAT` 默认开启；关闭后，运行时接口返回 `HX_OS_NOT_SUPPORTED`，能力查询不再包含 `HX_OS_CAP_FORMAT`。
 
 | 写法 | 示例 | 构建要求 |
 | --- | --- | --- |
+| C99，简洁的类型化调用 | 包含 `hx_print.h` 后写 `HX_PRINTLN("{}", hx_fmt_i64(count))` | 原来的 C 编译器，无生成步骤 |
 | C99，不使用生成步骤 | 把 `hx_fmt_i64(count)` 放入参数数组 | 原来的 C 编译器 |
 | C99，自动识别实参类型 | `HX_PRINTLN("{}", count)` | 在 CMake 启用一次；构建电脑安装 Python 3.10+ 和 Clang |
 | C++11 | `hx::println("{}", count)` | 原来的 C++11 编译器 |
@@ -84,6 +85,29 @@ flowchart LR
 表达式遵循调用处的 C 作用域与 C 语义。含 `:` 的三元表达式需要括号，避免与格式说明符混淆。固定字面量在生成阶段检查参数数量、基础类型和格式说明；不存在的结构体成员由 Clang 报错。实参表达式按源码顺序各求值一次，输出对象和格式字符串表达式先求值。注册的结构体值复制到本次调用的局部存储中，其中的指针成员仍然只是借用。运行时拼出来的格式字符串在运行时检查。这不等于 Python 表达式解释器、C++ 模板特化或对任意自定义格式化函数的编译期证明。
 
 ## 3. C99：不增加构建工具也能用
+
+包含 `hx_print.h` 即可使用普通 C99 调用。CMake 保留常规的 `add_executable` 和 `target_link_libraries`，不需要 `hx_enable_format_syntax`、Python 或 Clang 生成步骤。下面是完整程序，参数类型由小包装函数明确指定：
+
+```c
+#include <hx_print.h>
+
+int main(void)
+{
+	hx_os_status status = HX_PRINTLN("{}, {:04d}",
+		hx_fmt_str("HuangX"), hx_fmt_i64(2000));
+
+	return status == HX_OS_OK ? 0 : 1;
+}
+```
+
+`HX_PRINT` 不追加换行，`HX_PRINTLN` 追加 LF，`HX_EPRINTLN` 输出到 stderr，`HX_FORMAT(&text, pattern, ...)` 写入已初始化的 `hx_string`。`HX_PRINTLN("ready")` 这种没有格式化实参的调用也可以使用。所有入口返回 `hx_os_status`。实参必须是 `hx_fmt_*` 构造的 `hx_format_arg`，不会自动推断原始值的类型。命名参数写成 `HX_NAMED("name", hx_fmt_str("HuangX"))`，自定义结构体使用 `hx_fmt_custom(&object, format_callback)`。
+
+C99 便利宏一次支持 **0—64 个值参数**，格式字符串和输出对象不计入数量；超过 64 个会编译报错。这不限制占位符的重复次数：一个参数可以通过 `{0}` 引用多次，`{{` 和 `}}` 输出字面花括号，不消耗参数。每个实参表达式只求值一次，求值顺序遵循普通 C 规则，不要依赖多个副作用按从左到右执行。临时参数数组（包含一个内部哨兵）使用自动存储，不为参数打包单独申请堆内存；底层格式化器仍保留原有的分配和容量限制。
+
+同一个翻译单元只选择 `hx_print.h`（类型化 C99 调用）或 `hx_format_syntax.h`（通过生成器自动识别类型／表达式）之一。两者使用相同宏名，同时包含会明确报错。`hx_os.h` 不会隐式选择其中一种宏接口。新宏面向 C，C++11 使用下文的便利封装。没有新增导出函数或改变公共对象布局。
+
+运行时才确定的参数数组、超过 64 个的参数、自定义上限或完整错误对象，继续使用下面的现有函数。它们默认支持 **1,024 个参数**和 **16 MiB UTF-8 输出**，打印追加的 LF 也计入上限。这是运行时默认值，不是写死的 1,024 次占位符限制；`hx_format_with_options` 可以显式设置 `max_arguments` 和 `max_output_bytes`，提高上限也会增加潜在的工作量和内存需求。缺少位置参数返回 `HX_OS_RANGE`，超过所选上限返回 `HX_OS_LIMIT`；格式化失败保持输出对象不变，不静默截断。
+
 
 [format.c 完整程序](../examples/format.c) 只依赖 C 库：
 

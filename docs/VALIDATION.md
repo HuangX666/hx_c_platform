@@ -8,6 +8,14 @@ This records development validation through 2026-10-08. A design, implemented ad
 
 The JSON entry below records the current examples. Earlier independent text examples, initial shared workflows, IPC/KCP implementation and other batches describe their historical versions.
 
+## 2026-10-08: C99 printing without source generation
+
+Added the opt-in `hx_print.h` header. `HX_PRINT`, `HX_PRINTLN`, `HX_EPRINTLN`, `HX_FORMAT` and `HX_NAMED` accept existing typed `hx_format_arg` values and reuse the C99 runtime. Each convenience call accepts 0–64 values; the existing array interfaces keep their default 1,024-argument and 16 MiB output limits. Repeated field references do not consume additional arguments. No exported symbol, public object layout or runtime implementation changed. The generator header remains available separately; including both macro modes in one translation unit is an explicit error.
+
+Reused the existing Windows MSVC x64 Debug and Linux Release builds. The format suite and UTF-8 output checks passed on both hosts; Linux also exercised the existing closed-pipe output check. Added coverage within the existing suite for zero values, 64 values, 80 references to one value, once-only evaluation, named/custom values, borrowed-output aliasing and unchanged output on a missing argument. Strict GCC C99 compile probes accepted 0/64 values and rejected 65. Standalone inclusion passed C99 and C++11 checks; both conflicting-header orders were rejected. C++ callers still use their existing facade.
+
+The installed Windows example at `hx_test/test_platform_prog` now includes `hx_print.h`, uses typed values and compiles its original `main.c` with MSVC. It no longer has a format-generation target or cached Python/Clang selection. The updated headers and documentation were installed under its existing `deps/hx_c_platform`; its existing solution built and ran successfully with UTF-8 output and exit code 0. No new build configuration, test executable or full platform matrix was added.
+
 ## 2026-10-08: Simpler builds and focused checks
 
 Fresh configurations now build only the library: `HX_OS_BUILD_TESTS` and `HX_OS_BUILD_EXAMPLES` default to OFF, matching the already opt-in benchmarks. Existing CMake caches keep their choices. Tutorials and the manual-only workflow explicitly enable the targets they need; remote automation remains parked. New Android validation and source preparation use `out/android/` and `out/sources/`.

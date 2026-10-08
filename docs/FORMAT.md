@@ -4,10 +4,11 @@
 
 ## 1. Choose a calling style
 
-All three styles use the same C99 UTF-8 formatting engine. None uses C++ exceptions. `HX_OS_ENABLE_FORMAT` defaults ON; when disabled, runtime entries return `HX_OS_NOT_SUPPORTED` and `HX_OS_CAP_FORMAT` is absent.
+These styles use the same C99 UTF-8 formatting engine. None uses C++ exceptions. `HX_OS_ENABLE_FORMAT` defaults ON; when disabled, runtime entries return `HX_OS_NOT_SUPPORTED` and `HX_OS_CAP_FORMAT` is absent.
 
 | Style | Example | Build requirements |
 | --- | --- | --- |
+| C99, convenient typed calls | `HX_PRINTLN("{}", hx_fmt_i64(count))` from `hx_print.h` | The existing C compiler; no generator |
 | C99, no generator | `hx_fmt_i64(count)` inside an argument array | Your normal C compiler |
 | C99, automatic argument types | `HX_PRINTLN("{}", count)` | Optional host Python 3.10+ and Clang, enabled once in CMake |
 | C++11 | `hx::println("{}", count)` | Your normal C++11 compiler |
@@ -84,6 +85,29 @@ Use direct `.c` sources and target-level compile settings. Source-specific setti
 Expressions use C scope and C semantics. Parenthesize a ternary expression containing `:` to separate it from the format specifier. Fixed literals check field count, basic types and specs during generation. Unknown members are Clang errors. Argument expressions are evaluated once, in source order; output and pattern expressions are evaluated first. Registered structure values are copied into call-local storage, while their pointer members remain borrowed. Ordinary runtime format strings are checked at runtime. This is not Python expression evaluation, C++ template specialization, or a general compile-time proof of custom formatter behavior.
 
 ## 3. C99 without a build tool
+
+Include `hx_print.h` for ordinary C99 calls. Keep the usual `add_executable` and `target_link_libraries`; no `hx_enable_format_syntax`, Python or Clang step is needed. This complete program uses explicitly typed values:
+
+```c
+#include <hx_print.h>
+
+int main(void)
+{
+	hx_os_status status = HX_PRINTLN("{}, {:04d}",
+		hx_fmt_str("HuangX"), hx_fmt_i64(2000));
+
+	return status == HX_OS_OK ? 0 : 1;
+}
+```
+
+`HX_PRINT` omits the LF, `HX_PRINTLN` appends it, `HX_EPRINTLN` writes to stderr and `HX_FORMAT(&text, pattern, ...)` writes to an initialized `hx_string`. A plain call such as `HX_PRINTLN("ready")` also works. All return `hx_os_status`. Parameters must be `hx_format_arg` values constructed with `hx_fmt_*`; ordinary raw values are not inferred. Named values use `HX_NAMED("name", hx_fmt_str("HuangX"))`, and custom objects use `hx_fmt_custom(&object, format_callback)`.
+
+The C99 macros accept **0–64 value arguments**, excluding the format string and destination. More than 64 is a compile-time error. This is not a limit on replacement-field occurrences: `{0}` may be repeated many times using one argument; `{{` and `}}` produce literal braces and consume none. Each argument expression is evaluated once, with ordinary C evaluation-order rules; avoid depending on a left-to-right order of side effects. A temporary argument array, including an internal sentinel, uses automatic storage and does not allocate a separate heap buffer. The formatter itself retains its existing allocations and limits.
+
+Include only one of `hx_print.h` (typed C99 calls) and `hx_format_syntax.h` (generated automatic types/expressions) in a translation unit. Both use the same macro names; mixing them is rejected explicitly. `hx_os.h` does not implicitly select either macro interface. The new macros are for C; C++11 callers use the facade described below. No exported function or public object layout changes.
+
+For dynamic arrays, more than 64 values, custom limits or a full error object, use the existing functions below. Their defaults are **1,024 arguments** and **16 MiB of UTF-8 output**, including any LF added by printing. These are runtime defaults, not a hard 1,024-field ceiling: `hx_format_with_options` can explicitly set `max_arguments` and `max_output_bytes`. Raising them also increases potential work/memory. Missing positional arguments return `HX_OS_RANGE`; exceeding the selected limits returns `HX_OS_LIMIT`. Formatting failures preserve the destination and do not silently truncate.
+
 
 [format.c](../examples/format.c) is a complete program needing only the C library:
 
