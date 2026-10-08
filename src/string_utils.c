@@ -12,9 +12,6 @@ static hx_os_status hx_string_check_view(hx_string_view view)
 {
 	size_t invalid;
 
-	if (!view.data && view.size)
-		return HX_OS_INVALID;
-
 	return hx_os_text_validate_utf8(view.data, view.size, &invalid);
 }
 

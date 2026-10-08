@@ -133,8 +133,33 @@ static void hx_os_cfg_write_string(
 			hx_os_cfg_write(writer, "\\", 1);
 			hx_os_cfg_write(writer, value.data + i, 1);
 		}
-		else
-			hx_os_cfg_write(writer, value.data + i, 1);
+		else {
+			size_t start = i++;
+			size_t span = value.bytes - start;
+
+			/* Do not scan beyond the remaining work/output budgets.
+			 */
+			if (span > writer->options.max_work - writer->work)
+				span = writer->options.max_work - writer->work;
+			if (span > writer->options.max_input_bytes -
+					writer->position)
+				span = writer->options.max_input_bytes -
+					writer->position;
+			while (i - start < span) {
+				c = (unsigned char)value.data[i];
+				if (c < 0x20 || c == '\\' ||
+					(json && c == '"') ||
+					(json == 2 && c >= 0x7f) ||
+					(!json &&
+						(c == ' ' || c == '=' ||
+							c == ':' || c == '#' ||
+							c == '!' || c == 0xef)))
+					break;
+				++i;
+			}
+			hx_os_cfg_write(writer, value.data + start, i - start);
+			--i;
+		}
 	}
 
 	if (json)

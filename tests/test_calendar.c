@@ -110,8 +110,17 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-	test_more_fields();
 	test_local(argc >= 2 ? argv[1] : NULL);
+	CHECK(hx_os_wall_time_local_offset_minutes(&offset, &dst, NULL) ==
+		HX_OS_OK);
+	CHECK(offset >= -1440 && offset <= 1440 && dst >= -1 && dst <= 1);
+	if (argc >= 2)
+		CHECK(offset == atoi(argv[1]) && dst == 0);
+	/* Offset-only runs leave the exhaustive UTC walk to the main test. */
+	if (argc == 2)
+		return 0;
+
+	test_more_fields();
 
 	check_time(0, "1970-01-01T00:00:00Z");
 	check_time(-1, "1969-12-31T23:59:59Z");
@@ -142,11 +151,6 @@ int main(int argc, char **argv)
 		!strcmp(hx_string_c_str(&output), "1970/01/01"));
 
 	hx_string_destroy(&output);
-	CHECK(hx_os_wall_time_local_offset_minutes(&offset, &dst, NULL) ==
-		HX_OS_OK);
-	CHECK(offset >= -1440 && offset <= 1440 && dst >= -1 && dst <= 1);
-	if (argc >= 2)
-		CHECK(offset == atoi(argv[1]) && dst == 0);
 
 	/* Walk every civil day across two leap-year century boundaries using
 	 * an independent calendar progression, not the implementation search.

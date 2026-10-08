@@ -114,6 +114,7 @@ cmake -S tools/dependencies -B build-deps-aarch64 -G Ninja \
 cmake --build build-deps-aarch64 --parallel 2
 
 cmake -S . -B build-arm64 -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DHX_OS_BUILD_TESTS=ON \
   -DCMAKE_TOOLCHAIN_FILE="$PWD/cmake/toolchains/embedded-linux.cmake" \
   -DHX_OS_TARGET_PROCESSOR=aarch64 \
   -DHX_OS_CROSS_PREFIX=aarch64-linux-gnu- -DHX_OS_SYSROOT=/ \

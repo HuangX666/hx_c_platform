@@ -165,6 +165,15 @@ int main(int argc, char **argv)
 	test_format("{2:*^7.2s}", values, 5, "**中文***");
 	test_format("{name:>{width}} {n:#06x}", named, 3, "    张三 0x00ff");
 	test_format("{name!r}", named, 3, "\"张三\"");
+	{
+		const char raw[] = "prefix中文\0middle\"\\\x7f"
+				   "tail";
+		hx_string_view view = {raw, sizeof(raw) - 1};
+		hx_format_arg quoted = hx_fmt_view(view);
+
+		test_format("{:?}", &quoted, 1,
+			"\"prefix中文\\u0000middle\\\"\\\\\\u007ftail\"");
+	}
 	test_format("{0}", &custom, 1, "(10, 20)");
 	test_format("{4:s} {4:?}", values, 5, "true \"true\"");
 	{

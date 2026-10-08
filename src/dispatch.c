@@ -409,7 +409,7 @@ static hx_os_status hx_os_signal_emit_impl(hx_os_signal_handler *handler,
 	static const hx_os_calldata empty = HX_OS_CALLDATA_INIT;
 	hx_os_signal_arguments arguments;
 	hx_os_signal_frame frame;
-	uint64_t *snapshot = NULL, cutoff, single;
+	uint64_t *snapshot = NULL, cutoff, local[16];
 	size_t bytes, needed = 0, count = 0, i, calls = 0;
 	hx_os_status status, first = HX_OS_OK;
 	hx_os_error first_error = {HX_OS_OK, HX_OS_ERROR_NONE, 0, 0};
@@ -453,8 +453,8 @@ static hx_os_status hx_os_signal_emit_impl(hx_os_signal_handler *handler,
 	frame.connection = 0;
 	hx_os_signal_current = &frame;
 	if (needed) {
-		snapshot = handler->unique_names
-			? &single
+		snapshot = needed <= sizeof(local) / sizeof(local[0])
+			? local
 			: hx_os_i_alloc(handler->context,
 				  needed * sizeof(*snapshot), 0);
 		if (!snapshot) {
@@ -540,7 +540,7 @@ static hx_os_status hx_os_signal_emit_impl(hx_os_signal_handler *handler,
 	}
 
 finish:
-	if (snapshot != &single)
+	if (snapshot != local)
 		hx_os_memory_free(snapshot);
 
 	(void)hx_os_mutex_lock(handler->mutex, NULL);

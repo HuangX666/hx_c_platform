@@ -11,6 +11,7 @@
 			exit(1);                                               \
 		}                                                              \
 	} while (0)
+
 typedef struct signal_state {
 	hx_os_signal_handler *handler;
 	hx_os_signal_connection first, second, third;
@@ -398,6 +399,27 @@ static void allocation_test(void)
 	allocation.calls = 0;
 	allocation.fail = 1;
 	CHECK(hx_os_signal_emit(state.handler, "value", NULL, &called, NULL) ==
+			HX_OS_OK &&
+		called == 1 && allocation.calls == 0);
+	allocation.fail = 0;
+	for (i = 1; i < 16; ++i)
+		CHECK(hx_os_signal_connect(state.handler, "value", count_call,
+			      &state, NULL, NULL, NULL) == HX_OS_OK);
+
+	allocation.calls = 0;
+	allocation.fail = 1;
+	CHECK(hx_os_signal_emit(state.handler, "value", NULL, &called, NULL) ==
+			HX_OS_OK &&
+		called == 16 && allocation.calls == 0);
+	allocation.fail = 0;
+	CHECK(hx_os_signal_connect(state.handler, "value", count_call, &state,
+		      NULL, NULL, NULL) == HX_OS_OK);
+
+	/* The heap path must still reject cleanly and permit allocator reentry.
+	 */
+	allocation.calls = 0;
+	allocation.fail = 1;
+	CHECK(hx_os_signal_emit(state.handler, "value", NULL, &called, NULL) ==
 			HX_OS_NO_MEMORY &&
 		called == 0);
 
@@ -405,7 +427,7 @@ static void allocation_test(void)
 	allocation.reenter = &state;
 	CHECK(hx_os_signal_emit(state.handler, "value", NULL, &called, NULL) ==
 			HX_OS_OK &&
-		called == 0);
+		called == 16);
 	CHECK(hx_os_atomic_load(&state.cleanups, HX_OS_ACQUIRE) == 1);
 	CHECK(hx_os_context_destroy(&context, NULL) == HX_OS_BUSY);
 	CHECK(hx_os_signal_handler_destroy(&state.handler, NULL) == HX_OS_OK);

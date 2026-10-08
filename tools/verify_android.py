@@ -271,7 +271,7 @@ def main():
     parser.add_argument("--ndk", type=Path,
                         default=os.environ.get("ANDROID_NDK_ROOT"))
     parser.add_argument("--build-root", type=Path,
-                        default=ROOT / "build-android")
+                        default=ROOT / "out" / "android")
     parser.add_argument("--abi",
                         choices=("arm64-v8a", "armeabi-v7a", "x86_64"),
                         action="append",

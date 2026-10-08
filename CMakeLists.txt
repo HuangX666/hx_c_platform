@@ -10,8 +10,8 @@ include(cmake/HxFormat.cmake)
 include(cmake/HxDependencySources.cmake)
 
 option(BUILD_SHARED_LIBS "Build shared library" OFF)
-option(HX_OS_BUILD_TESTS "Build contract tests" ON)
-option(HX_OS_BUILD_EXAMPLES "Build standalone C examples" ON)
+option(HX_OS_BUILD_TESTS "Build contract tests" OFF)
+option(HX_OS_BUILD_EXAMPLES "Build standalone C examples" OFF)
 option(HX_OS_BUILD_BENCHMARKS "Build development microbenchmarks" OFF)
 option(HX_OS_TEST_FORMAT_SYNTAX "Test optional host format generator" OFF)
 

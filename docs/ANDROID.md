@@ -4,6 +4,8 @@
 
 The agreed baseline is **Android 5.0 / API 21**, **arm64-v8a and armeabi-v7a**. API 28 also covers newer native facilities. Android is an explicit target; desktop Linux, WSL and glibc/QEMU results are not Android runtime evidence.
 
+New runs reuse `out/android/`; `--build-root` can reuse an existing directory. Historical paths below identify the original runs. After local build cleanup, retained JSON reports are under `out/records/<original-build-name>/`; old binaries and logs are not retained indefinitely.
+
 ## Build and run
 
 Use an existing NDK; the script does not download or modify the SDK. Optional dependency acquisition follows the selected provider:
@@ -45,7 +47,7 @@ For the full optional dependency stack, first prepare one ABI/API SDK as describ
 python tools/verify_android.py --ndk /path/to/ndk --abi arm64-v8a --api 21 \
   --dependency-prefix /path/to/build-deps-android-arm64/prefix \
   --parsers --iconv --sevenzip-library /path/to/target/runtime/7z.so \
-  --serial DEVICE_SERIAL --build-root build-android-full
+  --serial DEVICE_SERIAL --build-root out/android
 ```
 
 Omit `--sevenzip-library` if the separate optional native backend is not needed. Omit `--dependency-prefix` only for a deliberate crypto/archive-disabled build. A prefix must match one explicit ABI/API; it is never reused across both default ARM ABIs. `--parsers` enables the five optional adapters, `--iconv` enables the pinned GNU converter, and `--provider FETCHCONTENT` selects the alternative source provider.

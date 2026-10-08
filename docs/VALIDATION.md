@@ -4,9 +4,59 @@ Entries below describe the versions tested at the time. Historical C++ exception
 
 [简体中文](VALIDATION.zh-CN.md) · [README](../README.md)
 
-This records development validation through 2026-10-07. A design, implemented adapter, successful compile and successful target run are different states. Local tests do not certify every operating-system release, filesystem, CPU, libc or network provider.
+This records development validation through 2026-10-08. A design, implemented adapter, successful compile and successful target run are different states. Local tests do not certify every operating-system release, filesystem, CPU, libc or network provider.
 
 The JSON entry below records the current examples. Earlier independent text examples, initial shared workflows, IPC/KCP implementation and other batches describe their historical versions.
+
+## 2026-10-08: Simpler builds and focused checks
+
+Fresh configurations now build only the library: `HX_OS_BUILD_TESTS` and `HX_OS_BUILD_EXAMPLES` default to OFF, matching the already opt-in benchmarks. Existing CMake caches keep their choices. Tutorials and the manual-only workflow explicitly enable the targets they need; remote automation remains parked. New Android validation and source preparation use `out/android/` and `out/sources/`.
+
+Removed four duplicate null/range checks in the string implementation; the existing UTF-8 and boundary helpers still reject invalid input. The four calendar offset runs now exercise their timezone-specific checks without repeating the 1900–2101 exhaustive UTC date walk. The main calendar run retains that walk, and explicit locale runs retain the full checks. No public interface or test suite was removed.
+
+Reused the Linux Release shared build: data, string_tools, calendar and four calendar_offset tests passed, 7/7. A reused configuration with the old test/example cache entries unset confirmed both default to OFF and neither creates build targets. No new build directory, test executable or performance benchmark was added; Windows, Android, ARM and sanitizer matrices were not rerun for this cleanup.
+
+Removed 77 obsolete top-level build directories and 84 root build logs. Active build configurations, SDKs and directories containing third-party source were retained at their existing paths. Compact measurement/acceptance JSON files (28 files) are collected under `out/records/<original-build-name>/`; 557 old ad-hoc logs were removed from retained first-party build roots as well. Historical entries below describe the original runs and paths, not a promise to retain every temporary binary or log. See [the daily build workflow](REFERENCE.md#section-4).
+
+## 2026-10-08: Text batching and small signal snapshots
+
+Baseline `42e4498`. Configuration string escaping, quoted formatting and profiler name output now write contiguous ordinary text together. Configuration work accounting still covers both sizing and writing; scanning stops at the remaining work/output budgets. UTF-8 validation skips ASCII in bounded native-word loads through `memcpy`, with a shared sequence check for validation and decoding. An initial implementation slowed predominantly Chinese input; it was revised before the final measurements below. Signal snapshots use a per-call 16-element array (128 bytes), falling back to the existing bounded allocation above 16 matches. Registration order, disconnect checks, concurrent/nested calls and heap-allocation failure behavior remain unchanged. Printing uses the same default options for formatting and its optional LF. Empty archive detail gains operation context after final error mapping; status and native codes are preserved.
+
+No public type layout or function signature changed. Changes are limited to first-party code, focused tests, one development benchmark and documentation. No third-party source, global allocator, background worker, remote CI or Git history was changed.
+
+| Configuration | Result for this change |
+| --- | --- |
+| Windows MSVC x64 Debug, shared | 11/11 related CTest cases |
+| WSL Linux x64 Release, shared | 11/11 related CTest cases |
+| WSL ASan/UBSan, leak detection enabled | 11/11 related CTest cases |
+| WSL TSan | 3/3 signal/parameter dispatch cases |
+| GNU/Linux ARMv7 and AArch64, QEMU | 5/5 related cases per architecture |
+| Minimal configuration with optional modules off | 4/4 data/format/signal/archive cases |
+| Android API 21, arm64-v8a and armeabi-v7a | Core and four related test executables compiled for each ABI; no connected adb target, so no new Android run |
+
+The selected host cases are data, text interop, format, config serialization/tree, profiler/snapshot, signal/all-signal/parameter dispatch and archive. Checks include unaligned exact-size input, incomplete/invalid UTF-8 and error offsets, embedded NUL/control characters, properties BOM escaping, YAML separators, exact two-pass work limits and unchanged output on failure. Signal allocation tests cover 1/16 subscriptions without snapshot allocation, 17 subscriptions with injected failure, allocator reentry, registration order and concurrency. A temporary comparison against the baseline shared library matched 91,653 UTF-8 validation cases and 21,008 UTF-8-to-UTF-16 conversions, including status, offsets, input/output counts and output bytes. Exported HX symbol names also match the baseline; this is not a new full installation/old-consumer acceptance run.
+
+The existing Windows dependency prefix contains Debug-CRT static compression libraries. The attempted Release link rejected that CRT mismatch; validation uses the matching Debug configuration, without suppressing the linker warning or changing third-party sources. No Windows performance claim is made.
+
+Performance uses the same benchmark executables with baseline/modified Release shared libraries, GCC 15, nine alternating process runs, pinned to WSL logical CPU 6. Other builds had finished, but host load/frequency were not controlled. Each benchmark excludes setup and a warm-up operation. JSON is one long string node with parsing outside timing; quoted formatting includes the full public call. The mixed fixture inserts two Chinese characters every 64 bytes; the predominantly Chinese fixture ends with one ASCII byte. These are local microbenchmarks, not application throughput, ARM/Android hardware performance or hx_c_log acceptance.
+
+| Case | Baseline median ns/op | Modified median ns/op |
+| --- | ---: | ---: |
+| UTF-8, 1-byte ASCII | 2.98 | 3.45 |
+| UTF-8, 32-byte ASCII | 36.71 | 3.70 |
+| UTF-8, one Chinese character | 4.54 | 4.32 |
+| UTF-8, 1 MiB ASCII | 671,576.78 | 37,113.03 |
+| UTF-8, 1 MiB mixed | 990,470.17 | 261,711.09 |
+| UTF-8, 1 MiB predominantly Chinese | 1,192,628.33 | 1,023,921.47 |
+| Quoted text, 256 KiB ASCII | 5,999,375.56 | 287,634.06 |
+| Quoted text, 256 KiB mixed | 6,026,721.94 | 522,400.75 |
+| JSON output, 256 KiB ASCII | 764,843.69 | 363,236.06 |
+| JSON output, 256 KiB mixed | 904,750.53 | 468,463.53 |
+| Signal, one callback, 200,000 notifications | 253.81 | 240.19 |
+
+One-byte ASCII was 0.47 ns slower at the median; observed ranges overlap (2.66–4.04 versus 3.18–4.81 ns). Signal ranges also overlap (237.06–265.50 versus 231.01–279.81 ns), so the 5.4% median reduction is not a stable speedup guarantee. Its deterministic improvement is removing one snapshot allocation/free for up to 16 matches, with bounded local stack storage instead. Callback/capture allocations are separate. Long text gains combine batching and UTF-8 changes; not every input is faster and the benchmark does not measure peak RSS.
+
+Reproduce the current measurements by enabling `HX_OS_BUILD_BENCHMARKS=ON` and running `hx_os_text_benchmark` and `hx_os_signal_benchmark` from the build's `bin` directory. Baseline/modified libraries, raw final samples, ranges, compiler/CPU metadata and differential results remain in ignored `build-opt-five/`; the first iteration is retained as `initial-samples.json`. Test logs use `opt-five-final-*` in the corresponding build directories; the minimal logs are under `build-opt-five/`. Source width, UTF-8/no-BOM/LF and diff whitespace checks passed. No new full-suite, physical-device, macOS, old-Windows or remote-CI result is claimed.
 
 ## 2026-10-07: Windows, Linux, Android and ARM acceptance
 

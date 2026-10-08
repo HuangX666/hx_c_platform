@@ -15,6 +15,48 @@ static uint32_t hx_os_utf_word(
 	return result;
 }
 
+static hx_os_status hx_os_utf8_length(
+	const unsigned char *input, size_t bytes, size_t *used)
+{
+	unsigned char lead;
+	size_t count, i;
+
+	if (!bytes)
+		return HX_OS_NEED_INPUT;
+	lead = input[0];
+	if (lead < 0x80) {
+		*used = 1;
+		return HX_OS_OK;
+	}
+
+	if (lead >= 0xc2 && lead <= 0xdf)
+		count = 2;
+	else if (lead >= 0xe0 && lead <= 0xef)
+		count = 3;
+	else if (lead >= 0xf0 && lead <= 0xf4)
+		count = 4;
+	else
+		return HX_OS_INVALID_ENCODING;
+
+	for (i = 1; i < count && i < bytes; ++i)
+		if ((input[i] & 0xc0) != 0x80)
+			return HX_OS_INVALID_ENCODING;
+
+	/* Lead/second-byte bounds also exclude overlongs, surrogates and
+	 * >10FFFF. */
+	if (bytes > 1 &&
+		((lead == 0xe0 && input[1] < 0xa0) ||
+			(lead == 0xed && input[1] >= 0xa0) ||
+			(lead == 0xf0 && input[1] < 0x90) ||
+			(lead == 0xf4 && input[1] >= 0x90)))
+		return HX_OS_INVALID_ENCODING;
+	if (bytes < count)
+		return HX_OS_NEED_INPUT;
+	*used = count;
+
+	return HX_OS_OK;
+}
+
 hx_os_status hx_os_i_utf_decode(hx_os_encoding encoding,
 	const unsigned char *input, size_t bytes, uint32_t *point, size_t *used)
 {
@@ -37,46 +79,21 @@ hx_os_status hx_os_i_utf_decode(hx_os_encoding encoding,
 	}
 
 	if (encoding == HX_OS_UTF8) {
-		unsigned char lead = input[0];
+		hx_os_status status;
 
-		if (lead < 0x80) {
-			*point = lead;
+		if (input[0] < 0x80) {
+			*point = input[0];
 			*used = 1;
-
 			return HX_OS_OK;
 		}
 
-		if (lead >= 0xc2 && lead <= 0xdf)
-			count = 2;
-		else if (lead >= 0xe0 && lead <= 0xef)
-			count = 3;
-		else if (lead >= 0xf0 && lead <= 0xf4)
-			count = 4;
-		else
-			return HX_OS_INVALID_ENCODING;
-
-		for (i = 1; i < count && i < bytes; ++i)
-			if ((input[i] & 0xc0) != 0x80)
-				return HX_OS_INVALID_ENCODING;
-
-		if (bytes > 1 &&
-			((lead == 0xe0 && input[1] < 0xa0) ||
-				(lead == 0xed && input[1] >= 0xa0) ||
-				(lead == 0xf0 && input[1] < 0x90) ||
-				(lead == 0xf4 && input[1] >= 0x90)))
-			return HX_OS_INVALID_ENCODING;
-		if (bytes < count)
-			return HX_OS_NEED_INPUT;
-
-		value = lead & (0x7f >> count);
+		status = hx_os_utf8_length(input, bytes, &count);
+		if (status != HX_OS_OK)
+			return status;
+		value = input[0] & (0x7f >> count);
 
 		for (i = 1; i < count; ++i)
 			value = (value << 6) | (input[i] & 0x3f);
-
-		if ((count == 2 && value < 0x80) ||
-			(count == 3 && value < 0x800) ||
-			(count == 4 && value < 0x10000))
-			return HX_OS_INVALID_ENCODING;
 	}
 	else if (encoding == HX_OS_UTF16LE || encoding == HX_OS_UTF16BE) {
 		if (bytes < 2)
@@ -212,11 +229,27 @@ hx_os_status hx_os_text_validate_utf8(
 		return HX_OS_INVALID;
 
 	while (offset < bytes) {
-		uint32_t point;
 		size_t used;
+		hx_os_status status;
 
-		hx_os_status status = hx_os_i_utf_decode(HX_OS_UTF8,
-			data + offset, bytes - offset, &point, &used);
+		if (data[offset] < 0x80) {
+			/* memcpy permits unaligned input without reading past
+			 * bytes. */
+			while (bytes - offset >= sizeof(size_t)) {
+				size_t word;
+
+				memcpy(&word, data + offset, sizeof(word));
+				if (word & (~(size_t)0 / 255 * 128))
+					break;
+				offset += sizeof(word);
+			}
+			while (offset < bytes && data[offset] < 0x80)
+				++offset;
+			continue;
+		}
+
+		status =
+			hx_os_utf8_length(data + offset, bytes - offset, &used);
 		if (status != HX_OS_OK) {
 			*error_offset = offset;
 

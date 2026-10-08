@@ -19,7 +19,7 @@ The binary stream and background writer have separate switches: `HX_OS_ENABLE_ST
 [binary_stream.c](../examples/binary_stream.c) is a complete C99 program. It puts device number 42 and temperature 23.5 in a memory stream, rewinds, then reads both values back. Build and run it from the repository root:
 
 ```sh
-cmake -S . -B build
+cmake -S . -B build -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build --config Release --target hx_os_binary_stream
 # Linux/macOS:
 ./build/bin/hx_os_binary_stream

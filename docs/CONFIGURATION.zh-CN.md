@@ -73,6 +73,7 @@ cJSON 和 Mini-XML 执行原生解析，并共用严格校验和建树，以保�
 ~~~sh
 git submodule update --init --recursive
 cmake -S . -B build-parsers \
+  -DHX_OS_BUILD_TESTS=ON -DHX_OS_BUILD_EXAMPLES=ON \
   -DHX_OS_ENABLE_CJSON=ON -DHX_OS_ENABLE_LIBYAML=ON \
   -DHX_OS_ENABLE_MINIXML=ON -DHX_OS_ENABLE_INIH=ON \
   -DHX_OS_ENABLE_TOMLC=ON \

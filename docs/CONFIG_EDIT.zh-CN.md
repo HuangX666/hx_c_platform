@@ -23,7 +23,7 @@ port=8080
 在项目根目录执行：
 
 ```sh
-cmake -S . -B build
+cmake -S . -B build -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build --config Release --target hx_os_config_edit
 # Linux/macOS：
 ./build/bin/hx_os_config_edit

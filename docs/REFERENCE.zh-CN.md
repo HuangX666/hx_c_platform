@@ -143,24 +143,33 @@ hx_c_platform/
 
 ### 4.1 桌面构建
 
-在源码根目录运行。下列命令也适用于 CMake 3.16；多配置生成器在构建和测试阶段选择 Release。
+新配置默认只构建库，测试、示例和性能测试按需开启。先按前文准备依赖 SDK，再为每种实际使用的平台／编译器／配置复用固定目录。Linux 示例：
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release --parallel 4
-cd build
-ctest -C Release --output-on-failure
-cd ..
+cmake -S . -B out/linux -DCMAKE_BUILD_TYPE=Release
+cmake --build out/linux --parallel 4
 ```
 
-Windows 使用较新 CMake 时，可以显式选择 VS2022：
+Windows 配合较新的 CMake 和 MSVC：
 
 ```powershell
-cmake -S . -B build-msvc -G "Visual Studio 17 2022" -A x64
-cmake --build build-msvc --config Release --parallel 4
+cmake -S . -B out/windows -G "Visual Studio 17 2022" -A x64
+cmake --build out/windows --config Release --parallel 4
 ```
 
-CMake 3.16 早于 VS2022 生成器；使用该版本时，可在配置好的 MSVC 开发者终端中选择 NMake。纯 C 部署关闭测试和示例后，不需要启用 C++ 编译器。
+CMake 3.16 早于 VS2022 生成器；使用该版本时，在配置好的 MSVC 开发者终端中选择 NMake。普通 C 库构建不探测 C++ 编译器。已有缓存保留原选项，若要关闭旧目录中的测试和示例，显式传入 `-DHX_OS_BUILD_TESTS=OFF -DHX_OS_BUILD_EXAMPLES=OFF`。
+
+例如修改字符串功能时，在同一个目录开启测试，只构建相关目标：
+
+```sh
+cmake -S . -B out/linux -DHX_OS_BUILD_TESTS=ON
+cmake --build out/linux --target hx_os_test_string_tools --parallel 4
+cd out/linux
+ctest -R '^string_tools$' --output-on-failure
+cd ../..
+```
+
+需要库内示例时传入 `-DHX_OS_BUILD_EXAMPLES=ON`。普通修改只验证受影响的目标和测试，纯文档修改通常不构建；涉及平台差异、内存问题、性能变化或发布验收时，再扩大验证范围。当前诊断放在对应构建目录，测量只保留必要记录，临时对照构建用完清理。不要跨平台搬用 CMake 缓存，也不要删除保留配置仍在引用的依赖 SDK。
 
 ### 4.2 使用 C 读取 UTF-8 文本
 
@@ -328,8 +337,6 @@ int main()
 cmake_minimum_required(VERSION 3.16)
 project(my_app LANGUAGES C)
 
-set(HX_OS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(HX_OS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(external/hx_c_platform)
 
@@ -1760,12 +1767,12 @@ int main(void)
 | 开关 | 默认 | 用途 |
 | --- | --- | --- |
 | `BUILD_SHARED_LIBS` | OFF | 共享库替代默认静态库 |
-| `HX_OS_BUILD_TESTS` | ON | 契约测试与独立公共头验证 |
+| `HX_OS_BUILD_TESTS` | OFF | 契约测试与独立公共头验证 |
 | `HX_OS_ENABLE_CRYPTO` | ON | OpenSSL 数据加密 |
 | `HX_OS_ENABLE_TLS` | ON | 校验证书的全双工 TLS |
 | `HX_OS_ENABLE_ARCHIVE` | ON | 压缩 SDK 提供文件／目录压缩 |
 | `HX_OS_ENABLE_7ZIP` | OFF | 独立原生 7-Zip 动态适配 |
-| `HX_OS_BUILD_EXAMPLES` | ON | C 示例；存在 C++ 编译器时增加 C++ 示例 |
+| `HX_OS_BUILD_EXAMPLES` | OFF | C 示例；存在 C++ 编译器时增加 C++ 示例 |
 | `HX_OS_BUILD_BENCHMARKS` | OFF | 开发用性能基准 |
 | `HX_OS_ENABLE_NETWORK` | ON | 原生套接字与网络生命周期 |
 | `HX_OS_ENABLE_LOOP` | ON | 有界异步请求、轮询和完成回调 |
@@ -1929,7 +1936,7 @@ GCC/Clang 内存检查使用单独构建目录：
 
 ```sh
 cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug \
-  -DHX_OS_SANITIZER=address,undefined
+  -DHX_OS_SANITIZER=address,undefined -DHX_OS_BUILD_TESTS=ON
 cmake --build build-asan --parallel 4
 cd build-asan
 ASAN_OPTIONS=detect_leaks=1 ctest --output-on-failure

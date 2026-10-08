@@ -80,14 +80,12 @@ Hello, hx_c_platform!
 {"port": 8080}
 ```
 
-`CMakeLists.txt` 使用以下内容。这几项开关关闭库自身的测试、示例，以及这个入门程序用不到的加密模块。需要加密功能时，保留 `HX_OS_ENABLE_CRYPTO` 开启并先准备 [OpenSSL 依赖包](docs/CRYPTO.zh-CN.md#1-构建与发布)。`configure_file` 把输入文件复制到运行目录，避免找不到文件。
+`CMakeLists.txt` 使用以下内容。库默认不构建自身的测试和示例。下面的开关关闭这个入门程序用不到的加密和压缩模块。需要加密功能时，保留 `HX_OS_ENABLE_CRYPTO` 开启并先准备 [OpenSSL 依赖包](docs/CRYPTO.zh-CN.md#1-构建与发布)。`configure_file` 把输入文件复制到运行目录，避免找不到文件。
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
 project(hx_demo LANGUAGES C)
 
-set(HX_OS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(HX_OS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(HX_OS_ENABLE_CRYPTO OFF CACHE BOOL "" FORCE)
 set(HX_OS_ENABLE_ARCHIVE OFF CACHE BOOL "" FORCE)
 
@@ -125,6 +123,8 @@ Linux 的 Makefile/Ninja 构建运行：
 ```
 
 结果应为 `Hello, hx_c_platform!`。输入文件按当前工作目录查找，因此这里先进入了 `build`。使用 C++ 时，把程序保存为 `main.cpp`，采用[教程中的完整 C++ CMake 配置](docs/USAGE.zh-CN.md#cpp-project)；其中也包含关闭异常的选项。
+
+维护本库时，参阅[复用构建目录与按需测试](docs/REFERENCE.zh-CN.md#section-4)。新配置默认关闭测试、示例和性能测试。
 
 <a id="section-4"></a>
 

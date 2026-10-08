@@ -233,7 +233,7 @@ File APIs are `hx_os_config_load/save` and `hx_os_codec_load/save`, with matchin
 From the project root:
 
 ```sh
-cmake -S . -B build-serialization
+cmake -S . -B build-serialization -DHX_OS_BUILD_TESTS=ON -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build-serialization --config Release --parallel 4
 ctest --test-dir build-serialization -C Release -R 'config_tree|codec|serialization|nested_document' --output-on-failure
 ```

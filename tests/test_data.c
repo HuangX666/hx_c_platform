@@ -138,6 +138,46 @@ static void test_memory(hx_os_context *context)
 	hx_os_arena_destroy(arena);
 }
 
+static void test_utf8_boundaries(void)
+{
+	static const struct {
+		const char *text;
+		size_t bytes;
+		hx_os_status status;
+	} cases[] = {{"", 0, HX_OS_OK}, {"\0ascii", 6, HX_OS_OK},
+		{"\xc2\xa2", 2, HX_OS_OK}, {"\xe4\xb8\xad", 3, HX_OS_OK},
+		{"\xf0\x9f\x99\x82!", 5, HX_OS_OK},
+		{"\x80", 1, HX_OS_INVALID_ENCODING},
+		{"\xc0\x80", 2, HX_OS_INVALID_ENCODING},
+		{"\xed\xa0\x80", 3, HX_OS_INVALID_ENCODING},
+		{"\xf4\x90\x80\x80", 4, HX_OS_INVALID_ENCODING},
+		{"\xe2\x82", 2, HX_OS_TRUNCATED_INPUT},
+		{"\xe2!", 2, HX_OS_INVALID_ENCODING}};
+
+	size_t alignment, prefix, i, offset;
+
+	for (alignment = 0; alignment < sizeof(size_t); ++alignment)
+		for (prefix = 0; prefix < 48; ++prefix)
+			for (i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+				size_t bytes = prefix + cases[i].bytes;
+				size_t total = alignment + bytes;
+				char *memory = malloc(total ? total : 1);
+				char *text;
+
+				CHECK(memory);
+				text = memory + alignment;
+				memset(text, 'a', prefix);
+				memcpy(text + prefix, cases[i].text,
+					cases[i].bytes);
+				CHECK(hx_os_text_validate_utf8(text, bytes,
+					      &offset) == cases[i].status);
+				CHECK(offset ==
+					(cases[i].status == HX_OS_OK ? bytes
+								     : prefix));
+				free(memory);
+			}
+}
+
 static void test_encoding(void)
 {
 	unsigned char output[128];
@@ -146,6 +186,7 @@ static void test_encoding(void)
 	size_t required;
 	const char utf8[] = "中文";
 
+	test_utf8_boundaries();
 	CHECK(hx_os_text_measure(HX_OS_UTF8, HX_OS_UTF16LE, utf8,
 		      sizeof(utf8) - 1, &required, NULL) == HX_OS_OK);
 	CHECK(required == 4);

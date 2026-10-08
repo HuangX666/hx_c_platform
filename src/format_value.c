@@ -69,15 +69,18 @@ static hx_os_status hx_os_format_quote(
 			++i;
 		}
 		else {
-			uint32_t point;
+			size_t start = i++;
 
-			status = hx_os_i_utf_decode(HX_OS_UTF8,
-				(const unsigned char *)piece, text.size - i,
-				&point, &bytes);
-			if (status != HX_OS_OK)
-				break;
-
-			i += bytes;
+			/* The caller validated UTF-8; ASCII escapes cannot
+			 * split it. */
+			while (i < text.size) {
+				c = (unsigned char)text.data[i];
+				if (c < 0x20 || c == 0x7f || c == '"' ||
+					c == '\\')
+					break;
+				++i;
+			}
+			bytes = i - start;
 		}
 
 		status = hx_os_i_format_append(out, piece, bytes, limit, error);

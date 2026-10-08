@@ -473,17 +473,19 @@ hx_os_status hx_format_buffer(char *buffer, size_t capacity, size_t *required,
 hx_os_status hx_print_args(int stream, int newline, hx_string_view format,
 	const hx_format_arg *arguments, size_t count, hx_os_error *error)
 {
+	const hx_format_options options = HX_FORMAT_OPTIONS_INIT;
 	hx_string text = HX_STRING_INIT;
 	hx_os_status status;
 
 	if (stream != HX_PRINT_STDOUT && stream != HX_PRINT_STDERR)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 
-	status = hx_format(&text, format, arguments, count, error);
+	status = hx_format_with_options(
+		&text, format, arguments, count, &options, error);
 #if HX_OS_ENABLE_FORMAT
 	if (status == HX_OS_OK && newline)
 		status = hx_os_i_format_append(
-			&text, "\n", 1, 16u * 1024u * 1024u, error);
+			&text, "\n", 1, options.max_output_bytes, error);
 
 	if (status == HX_OS_OK)
 		status = hx_os_i_format_print(

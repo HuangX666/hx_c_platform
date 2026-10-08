@@ -80,14 +80,12 @@ The configuration example later uses this `config.json`:
 {"port": 8080}
 ```
 
-Use this `CMakeLists.txt`. The switches disable the library's own tests, examples and unused cryptography in this first demo. To use cryptography, leave `HX_OS_ENABLE_CRYPTO` enabled and prepare the [OpenSSL SDK](docs/CRYPTO.md#1-build-and-deploy). `configure_file` copies the input files to the directory where you will run the program.
+Use this `CMakeLists.txt`. The library builds without its own tests or examples by default. The switches below disable unused cryptography and archives in this first demo. To use cryptography, leave `HX_OS_ENABLE_CRYPTO` enabled and prepare the [OpenSSL SDK](docs/CRYPTO.md#1-build-and-deploy). `configure_file` copies the input files to the directory where you will run the program.
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
 project(hx_demo LANGUAGES C)
 
-set(HX_OS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(HX_OS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(HX_OS_ENABLE_CRYPTO OFF CACHE BOOL "" FORCE)
 set(HX_OS_ENABLE_ARCHIVE OFF CACHE BOOL "" FORCE)
 
@@ -125,6 +123,8 @@ For a Makefile/Ninja build on Linux, run:
 ```
 
 The result should be `Hello, hx_c_platform!`. Input paths use the current working directory, so these commands enter `build` first. For C++, save the program as `main.cpp` and use the [complete C++ CMake setup](docs/USAGE.md#cpp-project), including its options to disable exceptions.
+
+Library developers: [reuse build directories and run selected tests](docs/REFERENCE.md#section-4). Tests, examples and benchmarks are disabled in a fresh default build.
 
 <a id="section-4"></a>
 

@@ -9,7 +9,7 @@
 先按[依赖说明](DEPENDENCIES.zh-CN.md#4-构建依赖)构建 SDK，再用绝对 prefix 路径配置本库：
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/project/build-deps/prefix
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/project/build-deps/prefix -DHX_OS_BUILD_EXAMPLES=ON -DHX_OS_BUILD_TESTS=ON
 cmake --build build --config Release --parallel 4
 ctest --test-dir build -C Release -R "crypto|encrypt_text" --output-on-failure
 ```

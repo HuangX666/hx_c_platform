@@ -19,7 +19,7 @@
 [binary_stream.c](../examples/binary_stream.c) 是完整的 C99 程序：先把设备编号 42、温度 23.5 写入内存流，再把位置移回开头，读出这两个数字。在项目根目录执行：
 
 ```sh
-cmake -S . -B build
+cmake -S . -B build -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build --config Release --target hx_os_binary_stream
 # Linux/macOS：
 ./build/bin/hx_os_binary_stream

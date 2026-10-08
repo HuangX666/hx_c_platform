@@ -168,7 +168,7 @@ static void test_order_and_bounds(void)
 	CHECK(hx_os_signal_emit(state.handler, "ready", &data, &called,
 		      &error) == HX_OS_IO_ERROR);
 	CHECK(state.trace == 123 && called == 3);
-	CHECK(memory.calls == before + 1);
+	CHECK(memory.calls == before);
 	CHECK(error.domain == HX_OS_ERROR_ERRNO && error.native_code == 5 &&
 		error.cause_code == 7);
 	CHECK(hx_os_signal_connect_all(state.handler, late, &state, cleanup,

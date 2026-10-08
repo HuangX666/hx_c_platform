@@ -109,11 +109,21 @@ static void hx_os_profiler_name(
 			text[5] = hex[c & 15];
 			hx_os_profiler_write(writer, text, sizeof(text));
 		}
-		else {
-			if (c == '\\' || c == '"')
-				hx_os_profiler_write(writer, "\\", 1);
-
+		else if (c == '\\' || c == '"') {
+			hx_os_profiler_write(writer, "\\", 1);
 			hx_os_profiler_write(writer, name + i, 1);
+		}
+		else {
+			size_t start = i++;
+
+			while (i < bytes) {
+				c = (unsigned char)name[i];
+				if (c < 0x20 || c == '\\' || c == '"')
+					break;
+				++i;
+			}
+			hx_os_profiler_write(writer, name + start, i - start);
+			--i;
 		}
 	}
 

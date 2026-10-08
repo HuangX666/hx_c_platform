@@ -74,6 +74,7 @@ The five optional parsers use the shared pinned dependency provider: Git submodu
 ~~~sh
 git submodule update --init --recursive
 cmake -S . -B build-parsers \
+  -DHX_OS_BUILD_TESTS=ON -DHX_OS_BUILD_EXAMPLES=ON \
   -DHX_OS_ENABLE_CJSON=ON -DHX_OS_ENABLE_LIBYAML=ON \
   -DHX_OS_ENABLE_MINIXML=ON -DHX_OS_ENABLE_INIH=ON \
   -DHX_OS_ENABLE_TOMLC=ON \

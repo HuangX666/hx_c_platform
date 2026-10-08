@@ -121,10 +121,9 @@ hx_os_status hx_string_replace(hx_string *string, size_t offset, size_t bytes,
 	hx_os_status status;
 	int aliases;
 
-	if (offset > string->size || bytes > string->size - offset ||
-		!hx_string_boundary(string, offset) ||
-		!hx_string_boundary(string, offset + bytes) ||
-		(!text.data && text.size))
+	if (!hx_string_boundary(string, offset) ||
+		bytes > string->size - offset ||
+		!hx_string_boundary(string, offset + bytes))
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 	aliases = text.size && string->data &&
 		(uintptr_t)text.data >= (uintptr_t)string->data &&
@@ -215,8 +214,8 @@ hx_os_status hx_string_substring(hx_string *destination,
 {
 	hx_string_view view;
 
-	if (offset > source->size || bytes > source->size - offset ||
-		!hx_string_boundary(source, offset) ||
+	if (!hx_string_boundary(source, offset) ||
+		bytes > source->size - offset ||
 		!hx_string_boundary(source, offset + bytes))
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 	view.data = hx_string_c_str(source) + offset;

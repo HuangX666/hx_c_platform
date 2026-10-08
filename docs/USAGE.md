@@ -64,8 +64,6 @@ Save the selected C program as `main.c` and use this `CMakeLists.txt`:
 cmake_minimum_required(VERSION 3.16)
 project(hx_demo LANGUAGES C)
 
-set(HX_OS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(HX_OS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(HX_OS_ENABLE_CRYPTO OFF CACHE BOOL "" FORCE)
 set(HX_OS_ENABLE_ARCHIVE OFF CACHE BOOL "" FORCE)
 
@@ -82,7 +80,7 @@ configure_file(hello.txt hello.txt COPYONLY)
 configure_file(config.json config.json COPYONLY)
 ```
 
-`add_subdirectory` builds the library; `target_link_libraries` connects it to your program. Disabling the library's own tests/examples keeps this integration build small. The default static build needs no separate DLL lookup.
+`add_subdirectory` builds the library; `target_link_libraries` connects it to your program. The library's own tests and examples are disabled by default. The default static build needs no separate DLL lookup.
 
 Run from `hx_demo`:
 
@@ -116,8 +114,6 @@ Save the selected C++ program as `main.cpp` and use this complete `CMakeLists.tx
 cmake_minimum_required(VERSION 3.16)
 project(hx_demo LANGUAGES CXX)
 
-set(HX_OS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(HX_OS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(HX_OS_ENABLE_CRYPTO OFF CACHE BOOL "" FORCE)
 set(HX_OS_ENABLE_ARCHIVE OFF CACHE BOOL "" FORCE)
 

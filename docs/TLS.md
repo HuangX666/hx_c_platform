@@ -9,7 +9,7 @@ TLS here means Transport Layer Security. Thread-local storage still uses `hx_os_
 Prepare the [dependency SDK](DEPENDENCIES.md#4-build-the-native-dependency-stack). `HX_OS_ENABLE_TLS` defaults to ON and requires CRYPTO, NETWORK, LOOP and FILE_UTILS. Disabling a prerequisite makes `hx_os_tls_available()` return 0 and the TLS operations return `HX_OS_NOT_SUPPORTED`. It does not start a thread at program load.
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/path/to/build-deps/prefix
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/path/to/build-deps/prefix -DHX_OS_BUILD_EXAMPLES=ON -DHX_OS_BUILD_TESTS=ON
 cmake --build build --config Release --parallel 4
 ctest --test-dir build -C Release -R "tls" --output-on-failure
 ```

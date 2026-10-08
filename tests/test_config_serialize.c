@@ -211,6 +211,41 @@ static void *serialize_worker(void *user)
 	return NULL;
 }
 
+static void test_escaped_runs(void)
+{
+	const char *source = "\"prefix中文\\\"middle\\\\\\u0000tail\"";
+	hx_os_config_document *document = parse(source, HX_OS_CONFIG_JSON);
+	hx_os_config_options options;
+	hx_string output = HX_STRING_INIT;
+	size_t bytes = strlen(source);
+
+	hx_os_config_options_init(&options);
+	options.max_input_bytes = bytes;
+	/* Both the sizing pass and the output pass charge node/output work. */
+	options.max_work = 2 * (bytes + 1);
+	CHECK(hx_os_config_serialize(document, HX_OS_CONFIG_JSON, &output,
+		      &options, NULL) == HX_OS_OK);
+	CHECK(output.size == bytes && !memcmp(output.data, source, bytes));
+	CHECK(hx_string_assign_cstr(&output, "kept", NULL) == HX_OS_OK);
+	--options.max_work;
+	CHECK(hx_os_config_serialize(document, HX_OS_CONFIG_JSON, &output,
+		      &options, NULL) == HX_OS_LIMIT);
+	CHECK(!strcmp(output.data, "kept"));
+	++options.max_work;
+	--options.max_input_bytes;
+	CHECK(hx_os_config_serialize(document, HX_OS_CONFIG_JSON, &output,
+		      &options, NULL) == HX_OS_LIMIT);
+	CHECK(!strcmp(output.data, "kept"));
+
+	hx_string_destroy(&output);
+	hx_os_config_release(document);
+	round_trip("{\"prefix\\ufeffkey\":\"abc #:=!\\\\\\u0000中文\"}",
+		HX_OS_CONFIG_JSON, HX_OS_CONFIG_PROPERTIES);
+	round_trip("{\"text\":\"abc\\u007f\\u0085中文\\u2028"
+		   "middle\\u2029\\ufffftail\"}",
+		HX_OS_CONFIG_JSON, HX_OS_CONFIG_YAML);
+}
+
 static void test_serialization(void)
 {
 	const char *json = "{\"n\":9007199254740993,\"real\":1.2300e+09,"
@@ -230,6 +265,7 @@ static void test_serialization(void)
 		return;
 	}
 
+	test_escaped_runs();
 	round_trip(json, HX_OS_CONFIG_JSON, HX_OS_CONFIG_JSON);
 	round_trip("global=x\n[s]\nname=中文\nempty=\n", HX_OS_CONFIG_INI,
 		HX_OS_CONFIG_INI);

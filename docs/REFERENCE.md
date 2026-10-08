@@ -143,24 +143,33 @@ hx_c_platform/
 
 ### 4.1 Desktop build
 
-Run from the source root. These commands also work with CMake 3.16; multi-config generators select Release at build/test time.
+A fresh configuration builds only the library. Tests, examples and benchmarks are opt-in. Prepare the dependency SDK described above, then reuse one build directory per platform/compiler/configuration. For Linux:
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release --parallel 4
-cd build
-ctest -C Release --output-on-failure
-cd ..
+cmake -S . -B out/linux -DCMAKE_BUILD_TYPE=Release
+cmake --build out/linux --parallel 4
 ```
 
-With a current CMake on Windows, configure explicitly if needed:
+For Windows with a current CMake and MSVC:
 
 ```powershell
-cmake -S . -B build-msvc -G "Visual Studio 17 2022" -A x64
-cmake --build build-msvc --config Release --parallel 4
+cmake -S . -B out/windows -G "Visual Studio 17 2022" -A x64
+cmake --build out/windows --config Release --parallel 4
 ```
 
-CMake 3.16 predates the VS2022 generator; use NMake in a configured MSVC developer shell for that CMake version. C-only deployment can disable tests and examples to avoid enabling a C++ compiler.
+CMake 3.16 predates the VS2022 generator; use NMake in a configured MSVC developer shell for that version. Ordinary C library builds do not probe for a C++ compiler. Existing caches retain their previous options; pass `-DHX_OS_BUILD_TESTS=OFF -DHX_OS_BUILD_EXAMPLES=OFF` to turn them off in an existing directory.
+
+When changing strings, for example, enable tests in the same directory and build only the relevant target:
+
+```sh
+cmake -S . -B out/linux -DHX_OS_BUILD_TESTS=ON
+cmake --build out/linux --target hx_os_test_string_tools --parallel 4
+cd out/linux
+ctest -R '^string_tools$' --output-on-failure
+cd ../..
+```
+
+Use `-DHX_OS_BUILD_EXAMPLES=ON` to build the bundled examples. Ordinary edits use the affected targets and tests; documentation-only edits normally need no build. Run broader platform, sanitizer or performance checks when the changed behavior or release acceptance requires them. Keep current diagnostics inside the build directory, retain only necessary measurement records, and remove finished temporary comparison builds. Do not move CMake caches between platforms or delete dependency SDKs still referenced by retained builds.
 
 ### 4.2 Read UTF-8 text from C
 
@@ -328,8 +337,6 @@ For an application with the library checkout in `external/hx_c_platform`:
 cmake_minimum_required(VERSION 3.16)
 project(my_app LANGUAGES C)
 
-set(HX_OS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(HX_OS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(external/hx_c_platform)
 
@@ -1760,12 +1767,12 @@ All new native/common modules default to ON; optional third-party encoding and p
 | Option | Default | Purpose |
 | --- | --- | --- |
 | `BUILD_SHARED_LIBS` | OFF | Build shared library |
-| `HX_OS_BUILD_TESTS` | ON | Build contract tests |
+| `HX_OS_BUILD_TESTS` | OFF | Build contract tests |
 | `HX_OS_ENABLE_CRYPTO` | ON | OpenSSL data cryptography |
 | `HX_OS_ENABLE_TLS` | ON | Verified full-duplex TLS endpoints |
 | `HX_OS_ENABLE_ARCHIVE` | ON | Files/directories through the archive SDK |
 | `HX_OS_ENABLE_7ZIP` | OFF | Separate native 7-Zip dynamic adapter |
-| `HX_OS_BUILD_EXAMPLES` | ON | Build standalone C examples |
+| `HX_OS_BUILD_EXAMPLES` | OFF | Build standalone C examples |
 | `HX_OS_BUILD_BENCHMARKS` | OFF | Build development microbenchmarks |
 | `HX_OS_ENABLE_NETWORK` | ON | Build native networking |
 | `HX_OS_ENABLE_LOOP` | ON | Build asynchronous event loop |
@@ -1929,7 +1936,7 @@ For GCC/Clang memory checking, configure a separate build:
 
 ```sh
 cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug \
-  -DHX_OS_SANITIZER=address,undefined
+  -DHX_OS_SANITIZER=address,undefined -DHX_OS_BUILD_TESTS=ON
 cmake --build build-asan --parallel 4
 cd build-asan
 ASAN_OPTIONS=detect_leaks=1 ctest --output-on-failure

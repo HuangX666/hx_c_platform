@@ -4,6 +4,8 @@
 
 确认基线为 **Android 5.0 / API 21**，覆盖 **arm64-v8a、armeabi-v7a**，补充 API 28 构建。Android 是独立目标，不能把桌面 Linux、WSL 或 glibc/QEMU 结果视为 Android 运行证据。
 
+新运行默认复用 `out/android/`，也可通过 `--build-root` 复用已有目录。下文历史路径表示当时的运行位置；本地构建清理后，保留的 JSON 报告归入 `out/records/<原构建目录名>/`，旧二进制和日志不长期保留。
+
 ## 构建与运行
 
 使用现有 NDK，脚本不下载或修改 SDK。可选依赖准备遵循所选来源，不改写第三方源码：
@@ -45,7 +47,7 @@ python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --ser
 python tools/verify_android.py --ndk /path/to/ndk --abi arm64-v8a --api 21 \
   --dependency-prefix /path/to/build-deps-android-arm64/prefix \
   --parsers --iconv --sevenzip-library /path/to/target/runtime/7z.so \
-  --serial DEVICE_SERIAL --build-root build-android-full
+  --serial DEVICE_SERIAL --build-root out/android
 ```
 
 不需要独立原生 7-Zip 后端时可省略 `--sevenzip-library`。省略 `--dependency-prefix` 表示明确关闭加密／压缩。一个 prefix 必须匹配显式指定的一种 ABI/API，不能套用到默认两种 ARM ABI。`--parsers` 开启五种可选解析器，`--iconv` 开启固定版本 GNU 转换器，`--provider FETCHCONTENT` 选择替代源码来源。

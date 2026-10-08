@@ -64,8 +64,6 @@ Hello, hx_c_platform!
 cmake_minimum_required(VERSION 3.16)
 project(hx_demo LANGUAGES C)
 
-set(HX_OS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(HX_OS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(HX_OS_ENABLE_CRYPTO OFF CACHE BOOL "" FORCE)
 set(HX_OS_ENABLE_ARCHIVE OFF CACHE BOOL "" FORCE)
 
@@ -82,7 +80,7 @@ configure_file(hello.txt hello.txt COPYONLY)
 configure_file(config.json config.json COPYONLY)
 ```
 
-`add_subdirectory` 编译本库，`target_link_libraries` 把库接入你的程序。关闭库自身的测试和示例，可避免首次接入时编译一大批无关程序。默认静态库配置不需要另外寻找 DLL。
+`add_subdirectory` 编译本库，`target_link_libraries` 把库接入你的程序。库自身的测试和示例默认关闭，首次接入只编译库。默认静态库配置不需要另外寻找 DLL。
 
 在 `hx_demo` 下执行：
 
@@ -116,8 +114,6 @@ Linux 的 Makefile/Ninja 构建运行：
 cmake_minimum_required(VERSION 3.16)
 project(hx_demo LANGUAGES CXX)
 
-set(HX_OS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(HX_OS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(HX_OS_ENABLE_CRYPTO OFF CACHE BOOL "" FORCE)
 set(HX_OS_ENABLE_ARCHIVE OFF CACHE BOOL "" FORCE)
 

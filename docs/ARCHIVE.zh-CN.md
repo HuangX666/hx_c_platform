@@ -40,7 +40,7 @@ ARCHIVE 默认开启，需要 FILE_UTILS、CONTAINERS，以及准备好的 libar
 先按[依赖构建说明](DEPENDENCIES.zh-CN.md)准备 SDK，再用它的绝对 prefix 路径配置本库：
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/project/build-deps/prefix
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/project/build-deps/prefix -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build --config Release --parallel 4
 ```
 
@@ -93,7 +93,7 @@ if (status != HX_OS_OK)
 hx_string_destroy(&diagnostic);
 ```
 
-`HX_OS_ERROR_ARCHIVE` 的 `native_code` 保留原生错误码；`cause_code` 按 `int64_t` 解读为负数时是 libarchive 返回值，此时 `native_code` 为其 errno；GZIP／XZ／ZSTD 格式常量标识外层解码器错误，零值标识原生 7-Zip 的 HRESULT／操作码。可选诊断字符串提供复制后的可读说明。
+`HX_OS_ERROR_ARCHIVE` 的 `native_code` 保留原生错误码；`cause_code` 按 `int64_t` 解读为负数时是 libarchive 返回值，此时 `native_code` 为其 errno；GZIP／XZ／ZSTD 格式常量标识外层解码器错误，零值标识原生 7-Zip 的 HRESULT／操作码。可选诊断字符串提供复制后的可读说明。原生文字只保留有效的 UTF-8 前缀；如果没有可保留的内容，使用包含最终状态的 `Archive operation failed: <status>` 兜底。如果诊断字符串自身的分配器失败，复制诊断只能尽力完成，仍以返回状态和原生错误为准。
 
 解压时把同样的选项传给 `unpack_ex` 或 `extract_file_ex`。错误密码会失败，复制后的原生诊断用于解释细节。并非所有后端的密码错误都能精确映射为 `AUTH_FAILED`；有些返回 `IO_ERROR` 并保留归档错误详情。ZIP AES 不隐藏文件名。 不同工具对 ZIP 密码字节的编码约定并不统一：本库使用 UTF-8，Windows 7-Zip 会经过 CP_ACP 转换。与该工具交换密码 ZIP 时使用 ASCII 密码；不能保证非 ASCII 密码 ZIP 在该外部程序中互通。原生 7z 的 UTF-16 密码接口不受此差异影响。CRC 用来检测损坏，不能认证发送者。加密 7z 也不等同于独立[加密模块](CRYPTO.zh-CN.md)提供的应用层认证信封契约。
 

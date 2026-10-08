@@ -233,7 +233,7 @@ C 对应调用 `hx_os_config_replace(source, target, &value, options, &out, &err
 在项目根目录运行：
 
 ```sh
-cmake -S . -B build-serialization
+cmake -S . -B build-serialization -DHX_OS_BUILD_TESTS=ON -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build-serialization --config Release --parallel 4
 ctest --test-dir build-serialization -C Release -R 'config_tree|codec|serialization|nested_document' --output-on-failure
 ```

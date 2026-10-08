@@ -9,7 +9,7 @@ Enable `HX_OS_ENABLE_CRYPTO` (default ON). This adds the pinned OpenSSL 3.5 SDK 
 First prepare the dependency SDK using [the dependency instructions](DEPENDENCIES.md#4-build-the-native-dependency-stack), then configure the library with an absolute prefix:
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/project/build-deps/prefix
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/project/build-deps/prefix -DHX_OS_BUILD_EXAMPLES=ON -DHX_OS_BUILD_TESTS=ON
 cmake --build build --config Release --parallel 4
 ctest --test-dir build -C Release -R "crypto|encrypt_text" --output-on-failure
 ```

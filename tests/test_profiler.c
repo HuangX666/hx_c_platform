@@ -316,14 +316,15 @@ int main(void)
 		profiler);
 	CHECK(hx_os_profiler_reach(profiler, "still_open", NULL) == HX_OS_OK);
 	CHECK(hx_os_profiler_restart_thread(profiler, NULL) == HX_OS_OK);
-	CHECK(hx_os_profiler_start_root(profiler, "中文😀\t\"\\", NULL) ==
-		HX_OS_OK);
+	CHECK(hx_os_profiler_start_root(
+		      profiler, "prefix中文😀\t\"\\tail", NULL) == HX_OS_OK);
 	CHECK(hx_os_profiler_leave(profiler, NULL) == HX_OS_OK);
 	CHECK(hx_os_profiler_dump(profiler, canary, sizeof(canary), &required,
 		      NULL) == HX_OS_OUTPUT_FULL &&
 		!strcmp(canary, "keep"));
 	CHECK(hx_os_profiler_dump_string(profiler, &text, NULL) == HX_OS_OK &&
-		strstr(hx_string_c_str(&text), "\\u0009\\\"\\\\"));
+		strstr(hx_string_c_str(&text),
+			"\"prefix中文😀\\u0009\\\"\\\\tail\""));
 	if (hx_os_capabilities() & HX_OS_CAP_FILE_UTILS) {
 		(void)snprintf(directory, sizeof(directory), "hx-profiler-%llx",
 			(unsigned long long)hx_os_monotonic_ns());

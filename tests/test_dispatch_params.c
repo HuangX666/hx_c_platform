@@ -127,11 +127,25 @@ static void test_signal_values(void)
 	CHECK(hx_os_signal_connect(value.signals, "volume", legacy, &value,
 		      NULL, NULL, NULL) == HX_OS_OK);
 
-	memory.fail = memory.calls + 1;
-	CHECK(hx_os_signal_emit_params(value.signals, "volume", params, &called,
-		      NULL) == HX_OS_NO_MEMORY &&
-		called == 0);
-	memory.fail = 0;
+	{
+		hx_os_signal_connection extra[12];
+		size_t i;
+
+		/* Exercise allocation failure above the small-snapshot
+		 * capacity. */
+		for (i = 0; i < sizeof(extra) / sizeof(extra[0]); ++i)
+			CHECK(hx_os_signal_connect(value.signals, "volume",
+				      legacy, &value, NULL, extra + i,
+				      NULL) == HX_OS_OK);
+		memory.fail = memory.calls + 1;
+		CHECK(hx_os_signal_emit_params(value.signals, "volume", params,
+			      &called, NULL) == HX_OS_NO_MEMORY &&
+			called == 0);
+		memory.fail = 0;
+		for (i = 0; i < sizeof(extra) / sizeof(extra[0]); ++i)
+			CHECK(hx_os_signal_disconnect(value.signals, extra[i],
+				      NULL) == HX_OS_OK);
+	}
 	CHECK(value.trace == 0);
 	CHECK(hx_os_params_get_i64(params, "volume", &volume, NULL) ==
 			HX_OS_OK &&

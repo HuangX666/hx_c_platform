@@ -9,7 +9,7 @@
 先准备[依赖 SDK](DEPENDENCIES.zh-CN.md#4-构建依赖)。`HX_OS_ENABLE_TLS` 默认开启，依赖 CRYPTO、NETWORK、LOOP 和 FILE_UTILS。关闭任何必要模块后，`hx_os_tls_available()` 返回 0，TLS 操作明确返回 `HX_OS_NOT_SUPPORTED`。仅仅启用模块不会在程序加载时启动线程。
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/path/to/build-deps/prefix
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/path/to/build-deps/prefix -DHX_OS_BUILD_EXAMPLES=ON -DHX_OS_BUILD_TESTS=ON
 cmake --build build --config Release --parallel 4
 ctest --test-dir build -C Release -R "tls" --output-on-failure
 ```

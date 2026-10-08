@@ -11,7 +11,7 @@ PARSERS = ("cjson", "libyaml", "minixml", "inih", "tomlc")
 def prepare(packages, provider, cmake):
     subprocess.run([
         cmake, "-S", str(ROOT / "tools/sources"),
-        "-B", str(ROOT / "build-dependency-sources"),
+        "-B", str(ROOT / "out" / "sources"),
         "-DHX_OS_DEPENDENCIES=" + ";".join(packages),
         "-DHX_OS_DEPENDENCY_PROVIDER=" + provider,
     ], check=True)

@@ -1,4 +1,5 @@
 #include "archive_private.h"
+#include <stdio.h>
 
 int hx_os_archive_available(void)
 {
@@ -263,11 +264,15 @@ hx_os_status hx_ar_i_end(hx_ar_job *job, hx_os_status status,
 			status = HX_OS_LIMIT;
 			job->error.status = status;
 		}
-		if (job->options.diagnostic)
-			(void)hx_string_assign_cstr(job->options.diagnostic,
-				job->diagnostic[0] ? job->diagnostic
-						   : hx_os_status_name(status),
-				NULL);
+		if (job->options.diagnostic) {
+			if (!job->diagnostic[0])
+				(void)snprintf(job->diagnostic,
+					sizeof(job->diagnostic),
+					"Archive operation failed: %s",
+					hx_os_status_name(status));
+			(void)hx_string_assign_cstr(
+				job->options.diagnostic, job->diagnostic, NULL);
+		}
 		if (error)
 			*error = job->error;
 	}

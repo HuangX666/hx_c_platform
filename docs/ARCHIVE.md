@@ -40,7 +40,7 @@ ARCHIVE is enabled by default and requires FILE_UTILS, CONTAINERS and the prepar
 Build the SDK as described in [DEPENDENCIES](DEPENDENCIES.md), then configure the library with its absolute prefix:
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/project/build-deps/prefix
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/project/build-deps/prefix -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build --config Release --parallel 4
 ```
 
@@ -93,7 +93,7 @@ if (status != HX_OS_OK)
 hx_string_destroy(&diagnostic);
 ```
 
-For `HX_OS_ERROR_ARCHIVE`, `native_code` retains the native code. A negative `cause_code` interpreted as `int64_t` is libarchive’s return value (with its errno in `native_code`); GZIP/XZ/ZSTD format constants identify outer-decoder errors; zero identifies native 7-Zip HRESULT/operation codes. The optional diagnostic provides copied readable detail.
+For `HX_OS_ERROR_ARCHIVE`, `native_code` retains the native code. A negative `cause_code` interpreted as `int64_t` is libarchive’s return value (with its errno in `native_code`); GZIP/XZ/ZSTD format constants identify outer-decoder errors; zero identifies native 7-Zip HRESULT/operation codes. The optional diagnostic provides copied readable detail. Native text is limited to a valid UTF-8 prefix; if none remains, the fallback is `Archive operation failed: <status>`, using the final status. Copying a diagnostic is best-effort if its allocator fails; the returned status and native error remain authoritative.
 
 Use the same options with `unpack_ex` or `extract_file_ex` to decrypt. Wrong passwords fail; the decoder's copied diagnostic distinguishes details when available. Do not assume every backend maps every password failure to `AUTH_FAILED`: some native failures are `IO_ERROR` with archive details. ZIP AES does not hide filenames. ZIP password bytes have incompatible conventions across tools: this API uses UTF-8, while Windows 7-Zip converts through CP_ACP. Use an ASCII password for that ZIP interoperability; a non-ASCII ZIP password is not guaranteed to work in that external program. This does not affect the native 7z UTF-16 password interface. CRCs detect corruption; they do not authenticate a sender. Encrypted 7z likewise does not supply the application-level authenticated-envelope contract of the separate [crypto module](CRYPTO.md).
 
