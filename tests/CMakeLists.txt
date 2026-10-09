@@ -1,3 +1,5 @@
+set(CMAKE_FOLDER "examples/tests")
+
 add_executable(hx_os_test_core test_core.c)
 target_link_libraries(hx_os_test_core PRIVATE hx_c_platform)
 set_target_properties(hx_os_test_core PROPERTIES
@@ -103,7 +105,7 @@ if(HX_OS_HAVE_7ZIP AND HX_OS_TEST_7ZIP_LIBRARY)
 		"${HX_OS_TEST_7ZIP_LIBRARY}" $<TARGET_FILE:hx_archive_7zip>)
 	set_tests_properties(archive_7zip PROPERTIES TIMEOUT 60)
 	if(CMAKE_CROSSCOMPILING)
-		# Password derivation runs much slower under software translation.
+		# Software translation slows down password derivation.
 		set_tests_properties(archive_7zip PROPERTIES TIMEOUT 300)
 	endif()
 endif()

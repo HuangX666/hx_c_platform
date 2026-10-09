@@ -124,7 +124,7 @@ Linux 的 Makefile/Ninja 构建运行：
 
 结果应为 `Hello, hx_c_platform!`。输入文件按当前工作目录查找，因此这里先进入了 `build`。使用 C++ 时，把程序保存为 `main.cpp`，采用[教程中的完整 C++ CMake 配置](docs/USAGE.zh-CN.md#cpp-project)；其中也包含关闭异常的选项。
 
-维护本库时，参阅[复用构建目录与按需测试](docs/REFERENCE.zh-CN.md#section-4)。新配置默认关闭测试、示例和性能测试。
+维护本库时，参阅[复用构建目录与按需测试](docs/REFERENCE.zh-CN.md#section-4)。新配置默认关闭测试、示例和性能测试。Visual Studio 解决方案将库与依赖分别分组，示例／测试／基准统一收进 `examples`，库项目内部可以浏览头文件和源文件。
 
 <a id="section-4"></a>
 

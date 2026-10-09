@@ -1,3 +1,5 @@
+set(CMAKE_FOLDER "examples/benchmarks")
+
 add_executable(hx_os_portable_baseline portable_baseline.c)
 add_executable(hx_os_coroutine_benchmark coroutine_containers.c)
 target_link_libraries(hx_os_coroutine_benchmark PRIVATE hx_c_platform)

@@ -1,3 +1,5 @@
+set(CMAKE_FOLDER "examples/demos")
+
 function(hx_add_serialization_interop)
 	if(CMAKE_CROSSCOMPILING)
 		return()

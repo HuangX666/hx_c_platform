@@ -171,6 +171,28 @@ cd ../..
 
 需要库内示例时传入 `-DHX_OS_BUILD_EXAMPLES=ON`。普通修改只验证受影响的目标和测试，纯文档修改通常不构建；涉及平台差异、内存问题、性能变化或发布验收时，再扩大验证范围。当前诊断放在对应构建目录，测量只保留必要记录，临时对照构建用完清理。不要跨平台搬用 CMake 缓存，也不要删除保留配置仍在引用的依赖 SDK。
 
+使用 Visual Studio 时，打开生成的 `hx_c_platform.sln`。解决方案按下面的方式收纳现有项目；可选项目只有开启后才显示：
+
+```text
+hx_c_platform
+├── libraries
+│   ├── hx_c_platform
+│   │   ├── Header Files
+│   │   │   ├── Public       （C 头文件与 hx/ 下的 C++ 头文件）
+│   │   │   └── Private      （内部头文件与当前平台头文件）
+│   │   ├── Source Files    （实际编译的源码，按平台保留子分组）
+│   │   └── Generated Files
+│   └── hx_archive_7zip     （可选适配库）
+├── deps                    （依赖库构建项目）
+├── examples
+│   ├── demos               （用法示例）
+│   ├── tests               （自动化测试及其辅助程序）
+│   └── benchmarks          （性能与对象布局工具）
+└── CMake                   （ALL_BUILD、INSTALL、ZERO_CHECK 等）
+```
+
+这些是 IDE 中的虚拟文件夹，源码目录、可执行程序名称和 CTest 命令保持不变。在 CMake GUI 中选择原来的源码目录和构建目录，依次点击 **Configure**、**Generate**，再让 Visual Studio 重新加载解决方案即可。不要手动修改 `.sln`、`.vcxproj` 或 `.filters` 文件。`Public` 可以浏览全部公共 C/C++ 头文件；`Source Files` 显示当前平台及功能开关实际选中的源码。通过 `add_subdirectory` 接入时，全局 `USE_FOLDERS` 开关由宿主工程决定。只链接已安装 SDK 的业务项目显示自身的项目；阅读库实现时打开库源码生成的解决方案。
+
 ### 4.2 使用 C 读取 UTF-8 文本
 
 保存为 `main.c`，在程序工作目录放一个 UTF-8 编码的 `配置.json`。这一调用会完成打开、读取、移除开头的 UTF-8 BOM、校验和关闭，默认最多读取 16 MiB。失败时，输出字符串保持原值。

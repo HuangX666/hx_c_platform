@@ -171,6 +171,28 @@ cd ../..
 
 Use `-DHX_OS_BUILD_EXAMPLES=ON` to build the bundled examples. Ordinary edits use the affected targets and tests; documentation-only edits normally need no build. Run broader platform, sanitizer or performance checks when the changed behavior or release acceptance requires them. Keep current diagnostics inside the build directory, retain only necessary measurement records, and remove finished temporary comparison builds. Do not move CMake caches between platforms or delete dependency SDKs still referenced by retained builds.
 
+For Visual Studio, open the generated `hx_c_platform.sln`. The solution groups existing targets as follows; optional targets appear only when enabled:
+
+```text
+hx_c_platform
+├── libraries
+│   ├── hx_c_platform
+│   │   ├── Header Files
+│   │   │   ├── Public       (C headers and hx/ C++ headers)
+│   │   │   └── Private      (internal and selected platform headers)
+│   │   ├── Source Files    (compiled sources, with platform subfolders)
+│   │   └── Generated Files
+│   └── hx_archive_7zip     (optional adapter)
+├── deps                    (dependency build targets)
+├── examples
+│   ├── demos               (usage examples)
+│   ├── tests               (automated tests and fixtures)
+│   └── benchmarks          (performance and layout tools)
+└── CMake                   (ALL_BUILD, INSTALL, ZERO_CHECK, etc.)
+```
+
+These are IDE folders. Source directories, executable names and CTest commands stay the same. In CMake GUI, select the existing source/build directories, then click **Configure** and **Generate**; reload the solution in Visual Studio. Do not edit `.sln`, `.vcxproj` or `.filters` files by hand. All public C/C++ headers are available under `Public`; `Source Files` shows the sources selected by the current platform and feature switches. When used via `add_subdirectory`, the enclosing project controls the global `USE_FOLDERS` setting. An installed SDK consumer shows its own targets; open the library's source solution to browse the implementation.
+
 ### 4.2 Read UTF-8 text from C
 
 Save as `main.c` and place a UTF-8 `配置.json` beside the program's working directory. The call opens the file, reads with a default 16 MiB bound, removes an initial UTF-8 BOM, validates text and closes the file. Failure leaves the output string unchanged.

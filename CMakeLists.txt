@@ -832,6 +832,8 @@ if(HX_OS_BUILD_BENCHMARKS)
 	add_subdirectory(benchmarks)
 endif()
 
+include(cmake/HxIde.cmake)
+
 # Keep deployed test libraries beside their executables. Android 24+ uses
 # RUNPATH; older native targets still use the runner's LD_LIBRARY_PATH.
 if(ANDROID AND (BUILD_SHARED_LIBS OR HX_OS_HAVE_OPENSSL))

@@ -124,7 +124,7 @@ For a Makefile/Ninja build on Linux, run:
 
 The result should be `Hello, hx_c_platform!`. Input paths use the current working directory, so these commands enter `build` first. For C++, save the program as `main.cpp` and use the [complete C++ CMake setup](docs/USAGE.md#cpp-project), including its options to disable exceptions.
 
-Library developers: [reuse build directories and run selected tests](docs/REFERENCE.md#section-4). Tests, examples and benchmarks are disabled in a fresh default build.
+Library developers: [reuse build directories and run selected tests](docs/REFERENCE.md#section-4). Tests, examples and benchmarks are disabled in a fresh default build. The Visual Studio solution groups libraries and dependencies separately, with demos/tests/benchmarks under `examples`; library headers and sources are available inside the library project.
 
 <a id="section-4"></a>
 
