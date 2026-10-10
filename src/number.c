@@ -273,7 +273,9 @@ hx_os_status hx_os_i_format_double(
 {
 #if HX_OS_HAVE_LOCAL_PRINTF &&                                                 \
 	(HX_OS_ENABLE_TEXT_NUMBER ||                                           \
-		(HX_OS_ENABLE_SETTINGS && HX_OS_ENABLE_CONFIG))
+		(HX_OS_ENABLE_SETTINGS && HX_OS_ENABLE_CONFIG) ||              \
+		(HX_OS_ENABLE_CODEC && HX_OS_ENABLE_CONFIG &&                  \
+			HX_OS_ENABLE_CONFIG_SERIALIZE))
 	char text[128];
 	int length;
 #if FLT_RADIX == 2 && DBL_MANT_DIG == 53

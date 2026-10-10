@@ -4,9 +4,22 @@ Entries below describe the versions tested at the time. Historical C++ exception
 
 [简体中文](VALIDATION.zh-CN.md) · [README](../README.md)
 
-This records development validation through 2026-10-08. A design, implemented adapter, successful compile and successful target run are different states. Local tests do not certify every operating-system release, filesystem, CPU, libc or network provider.
+This records development validation through 2026-10-10. A design, implemented adapter, successful compile and successful target run are different states. Local tests do not certify every operating-system release, filesystem, CPU, libc or network provider.
 
 The JSON entry below records the current examples. Earlier independent text examples, initial shared workflows, IPC/KCP implementation and other batches describe their historical versions.
+
+## 2026-10-10: INI controls and independent CODEC numeric formatting
+
+Fixed two defects reproduced against `97a1147`. INI serialization now rejects C0 controls other than embedded TAB in keys, values and section names, returning `HX_OS_UNREPRESENTABLE` while preserving the previous output. The existing serialization suite covers all C0 byte values in those three positions and retains the parser's existing TAB/DEL acceptance. CODEC now retains its internal floating-point formatter when CONFIG, CONFIG_SERIALIZE and CODEC are enabled, independently of TEXT_NUMBER and SETTINGS. The existing CODEC suite additionally checks precise double/float JSON round trips.
+
+| Reused configuration | Result |
+| --- | --- |
+| Windows MSVC x64 Debug, `build-shared-msvc` | config_serialize, codec, settings_config: 3/3 |
+| WSL Linux Release, `build-shared-linux`, TEXT_NUMBER and SETTINGS disabled | config_serialize and codec: 2/2; disabled public numeric interfaces still return NOT_SUPPORTED |
+| Same Linux directory, original switches restored to ON | config_serialize, codec, settings_config: 3/3 |
+| WSL ASan/UBSan, `build-sanitize-linux`, leak detection enabled | the three affected suites plus lifecycle, local, power and linux_desktop_power: 7/7 |
+
+AF_UNIX ran without an environment skip. The isolated D-Bus test passed all 13 C/C++ service and failure cases; it uses a real private bus with controlled services and does not certify a physical desktop's sleep policy. No sanitizer or leak report occurred on these paths. The preceding environment check also confirmed LeakSanitizer detects a deliberate 123-byte leak. Linux alternate numeric locales were unavailable, so that optional locale check remains pending. No new build directory or test executable was added; the Linux cache and affected binaries were restored to their original enabled-module configuration.
 
 ## 2026-10-08: C99 printing without source generation
 

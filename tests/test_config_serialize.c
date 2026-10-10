@@ -185,6 +185,32 @@ static void expect_unrepresentable(const char *source, int format)
 	hx_os_config_release(document);
 }
 
+static void test_ini_controls(void)
+{
+	static const char *const patterns[] = {"{\"key\":\"a\\u%04xb\"}",
+		"{\"a\\u%04xb\":\"value\"}",
+		"{\"a\\u%04xb\":{\"key\":\"value\"}}"};
+	char source[64];
+	unsigned int control;
+	size_t i;
+
+	for (control = 0; control < 0x20; ++control) {
+		for (i = 0; i < sizeof(patterns) / sizeof(patterns[0]); ++i) {
+			(void)snprintf(
+				source, sizeof(source), patterns[i], control);
+			if (control == '\t')
+				round_trip(source, HX_OS_CONFIG_JSON,
+					HX_OS_CONFIG_INI);
+			else
+				expect_unrepresentable(
+					source, HX_OS_CONFIG_INI);
+		}
+	}
+
+	round_trip(
+		"{\"key\":\"a\\u007fb\"}", HX_OS_CONFIG_JSON, HX_OS_CONFIG_INI);
+}
+
 static void *fail_allocate(size_t bytes, void *user)
 {
 	return *(int *)user ? NULL : malloc(bytes);
@@ -266,6 +292,7 @@ static void test_serialization(void)
 	}
 
 	test_escaped_runs();
+	test_ini_controls();
 	round_trip(json, HX_OS_CONFIG_JSON, HX_OS_CONFIG_JSON);
 	round_trip("global=x\n[s]\nname=中文\nempty=\n", HX_OS_CONFIG_INI,
 		HX_OS_CONFIG_INI);

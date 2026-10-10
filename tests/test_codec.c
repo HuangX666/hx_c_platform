@@ -405,10 +405,15 @@ static void test_arrays_attributes_and_widths(void)
 
 	hx_os_codec_release(owner);
 	owner = NULL;
+	value.precise = 1.2345678901234567;
+	value.ratio = 0.1f;
 	CHECK(hx_os_codec_encode(&schema, &value, HX_OS_CONFIG_JSON, &text,
 		      NULL, NULL) == HX_OS_OK);
 	CHECK(hx_os_codec_decode(NULL, &schema, HX_OS_CONFIG_JSON, text.data,
 		      text.size, NULL, &owner, NULL) == HX_OS_OK);
+
+	back = hx_os_codec_data(owner);
+	CHECK(back->precise == value.precise && back->ratio == value.ratio);
 
 	hx_os_codec_release(owner);
 	owner = NULL;

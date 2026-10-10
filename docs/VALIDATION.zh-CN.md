@@ -4,9 +4,22 @@
 
 [English](VALIDATION.md) · [README](../README.zh-CN.md)
 
-本文记录截至 2026-10-08 的开发验证。设计覆盖、已有适配源码、编译成功、目标运行成功是不同状态。本机测试不能证明所有系统版本、文件系统、 CPU、libc 或网络提供方均已通过。
+本文记录截至 2026-10-10 的开发验证。设计覆盖、已有适配源码、编译成功、目标运行成功是不同状态。本机测试不能证明所有系统版本、文件系统、 CPU、libc 或网络提供方均已通过。
 
 当前业务示例见下方 JSON 记录；此前独立文本示例、初版共用示例、IPC／KCP 实现及其他各批记录对应各自当时的版本。
+
+## 2026-10-10：INI 控制字符与 CODEC 独立浮点格式化
+
+修复在 `97a1147` 上复现的两处缺陷。INI 序列化现在拒绝键、值和 section 名称中除内部 Tab 外的 C0 控制字符，返回 `HX_OS_UNREPRESENTABLE` 并保留原输出。现有序列化套件覆盖这三个位置的全部 C0 字节值，并验证解析器原本接受的 Tab／DEL 行为。CONFIG、CONFIG_SERIALIZE 和 CODEC 开启时，现在会保留 CODEC 所需的内部浮点格式化实现，不再依赖 TEXT_NUMBER 或 SETTINGS。现有 CODEC 套件另补充高精度 double／float 的 JSON 往返检查。
+
+| 复用的配置 | 结果 |
+| --- | --- |
+| Windows MSVC x64 Debug，`build-shared-msvc` | config_serialize、codec、settings_config：3/3 |
+| WSL Linux Release，`build-shared-linux`，关闭 TEXT_NUMBER 和 SETTINGS | config_serialize、codec：2/2；关闭的公共数字转换接口仍返回 NOT_SUPPORTED |
+| 同一 Linux 目录，原开关恢复 ON | config_serialize、codec、settings_config：3/3 |
+| WSL ASan/UBSan，`build-sanitize-linux`，开启泄漏检测 | 上述三项加 lifecycle、local、power、linux_desktop_power：7/7 |
+
+AF_UNIX 实际运行通过，没有因环境限制跳过。隔离 D-Bus 的 13 个 C/C++ 服务及失败场景全部通过；测试使用真实独立总线和受控服务，不代表验证了物理桌面的防睡眠策略。这些路径未报告 sanitizer 错误或泄漏；此前的环境核实也确认 LeakSanitizer 能检出主动构造的 123 字节泄漏。Linux 缺少备用数字 locale，对应的可选 locale 检查仍待验证。本轮没有新增构建目录或测试程序，Linux 缓存和相关二进制最终恢复到原有模块开启的配置。
 
 ## 2026-10-08：不依赖源码生成的 C99 打印
 

@@ -311,7 +311,7 @@ static int hx_os_cfg_ini_representable(
 	for (i = 0; i < value.bytes; ++i) {
 		unsigned char c = (unsigned char)value.data[i];
 
-		if (c == 0 || c == '\r' || c == '\n' ||
+		if ((c < 0x20 && c != '\t') ||
 			(role == 1 && (c == '=' || c == ':')) ||
 			(role == 2 && c == ']') ||
 			(role == 0 && i && c == ';' &&
