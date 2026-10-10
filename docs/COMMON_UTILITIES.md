@@ -22,7 +22,7 @@ These interfaces follow OBS's direct-entry/shared-implementation pattern. No OBS
 | Close and release a pool | hx_os_thread_pool_shutdown / _ex | ThreadPool::shutdownUntil |
 | Select worker/queue counts | Existing pool options | ThreadPool::withThreads |
 
-Buildable examples: [direct_calls.cpp](../examples/direct_calls.cpp), [settings.c](../examples/settings.c), [common_tasks.c](../examples/common_tasks.c), [thread_pool.cpp](../examples/thread_pool.cpp); complete C++ call coverage: [test_cpp_utilities.cpp](../tests/test_cpp_utilities.cpp).
+Buildable examples: [direct_calls.cpp](../examples/direct_calls.cpp), [settings.c](../examples/settings.c), [common_tasks.c](../examples/common_tasks.c), [thread_pool.cpp](../examples/thread_pool.cpp).
 
 ## Strings and encoding
 

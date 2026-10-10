@@ -172,4 +172,4 @@ if (!notified)
 
 固定和可增长过程共用唯一名称空间。用不匹配的参数包类型调用，返回 TYPE_MISMATCH，不执行用户回调。创建、回收、截止时间和自有分配器重入保护沿用已有过程机制。回调可以使用普通参数 setter，但不能在调用期间销毁借用副本。
 
-C++11 使用 `ProcedureHandler::addParams(name, callback)`，回调接收 `ParametersRef`；`callParams(name, input)` 返回 `Result<Parameters>`，结果在处理器关闭后仍有效。完整的错误检查调用见 [C++ 契约测试](../tests/test_cpp_dispatch.cpp)，参数生命周期见[参数包说明](PARAMETERS.zh-CN.md)。
+C++11 使用 `ProcedureHandler::addParams(name, callback)`，回调接收 `ParametersRef`；`callParams(name, input)` 返回 `Result<Parameters>`，结果在处理器关闭后仍有效。C/C++ 调用见上面的示例，参数生命周期见[参数包说明](PARAMETERS.zh-CN.md)。

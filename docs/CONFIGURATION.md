@@ -74,14 +74,16 @@ The five optional parsers use the shared pinned dependency provider: Git submodu
 ~~~sh
 git submodule update --init --recursive
 cmake -S . -B build-parsers \
-  -DHX_OS_BUILD_TESTS=ON -DHX_OS_BUILD_EXAMPLES=ON \
+  -DHX_OS_BUILD_EXAMPLES=ON \
   -DHX_OS_ENABLE_CJSON=ON -DHX_OS_ENABLE_LIBYAML=ON \
   -DHX_OS_ENABLE_MINIXML=ON -DHX_OS_ENABLE_INIH=ON \
   -DHX_OS_ENABLE_TOMLC=ON \
   -DHX_OS_ENABLE_CRYPTO=OFF -DHX_OS_ENABLE_ARCHIVE=OFF
 cmake --build build-parsers --config Release --parallel 4
-ctest --test-dir build-parsers -C Release --output-on-failure
+build-parsers/bin/hx_os_configuration
 ~~~
+
+Windows multi-configuration builds place these programs in the corresponding `bin/Release/` directory with an `.exe` suffix.
 
 All five backend switches default OFF; HX_OS_ENABLE_CONFIG defaults ON. CONFIG=OFF removes format parsers but keeps ABI queries/error entry points; parse/load return NOT_SUPPORTED. Backend=ON with CONFIG=OFF is an error. Embedded consumers can select builtin-only or omit the entire module.
 

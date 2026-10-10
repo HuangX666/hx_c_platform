@@ -69,6 +69,6 @@ return request.value().close().status();
 
 The existing move-only facade releases synchronously and uses Result, without exceptions. Closing after deactivation is valid; it does not release another object's inhibitor.
 
-`ctest --test-dir build -R linux_desktop_power --output-on-failure` starts an isolated dbus-daemon and controlled services. It verifies all three service names with C/C++, copied Unicode reasons, independent consumers, deactivate/reactivate, cross-thread cleanup, access denial, wrong reply types, timeout, bus disconnection, nonlocal address rejection and missing runtime symbols. It requires Python 3, dbus-daemon and an sd-bus runtime; missing prerequisites are marked skipped. The test changes no real desktop power policy. Ordinary Linux power/C++ tests leave real desktop lease checks to this isolated fixture.
+The maintainer uses private isolated D-Bus checks for discovery, Unicode, permissions, deadlines and cleanup. Customers can build [sleep_inhibit.c](../examples/sleep_inhibit.c) and run it with a supported desktop service; the example requests a real temporary desktop lease. See [validation records](VALIDATION.md) for dated results.
 
 These are implemented-protocol and runtime/lifecycle tests. Actual GNOME/KDE desktop power-policy and suspend behavior, libelogind, older distributions, musl and embedded targets still require their own target validation. See the exact [verification record](VALIDATION.md); WSL protocol tests do not certify physical sleep prevention.

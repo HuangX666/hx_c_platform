@@ -87,4 +87,4 @@ return HX_OS_OK;
 
 Native::socket、Native::process、Native::thread 使用相同的 Result 方式。线程结果类型是 `hx::NativeThread`：Windows 对应 void 指针／HANDLE，POSIX 对应 pthread_t；便利头只在 POSIX 包含 pthread.h。不通过析构关闭借来的值，也不使用异常。
 
-完整的 [test_native_interop.c](../tests/test_native_interop.c) 演示原生文件查询／写入后由库读取、存活线程的原生身份检查、套接字类型查询、loop 管理 I/O 时拒绝借用，以及受控子进程的正常清理。运行 `ctest --test-dir build -C Release -R native_interop --output-on-failure`；测试使用自己创建的临时文件和子程序。具体环境见[验证记录](VALIDATION.zh-CN.md)。
+可运行的 [native_file.c](../examples/native_file.c) 演示先借用原生文件句柄，再通过库读取文件。构建 `hx_os_native_file` 后传入一个 UTF-8 文件路径运行；具体环境证据见[验证记录](VALIDATION.zh-CN.md)。

@@ -172,4 +172,4 @@ This differs deliberately from mutable signal notification: a named procedure re
 
 Names remain unique across fixed and growable procedure registrations. Calling one with the other kind of parameter pack returns TYPE_MISMATCH without invoking user code. Creation, retirement, deadlines and first-party allocator reentry guards match existing procedures. The callback may use ordinary parameter setters but cannot destroy the borrowed copy while invoked.
 
-C++11 uses `ProcedureHandler::addParams(name, callback)` with `ParametersRef`, and `callParams(name, input)` returning `Result<Parameters>`. The result stays valid after the handler closes. See [C/C++ contract tests](../tests/test_cpp_dispatch.cpp) for complete error-checked calls and [parameter ownership](PARAMETERS.md) for pack lifetime.
+C++11 uses `ProcedureHandler::addParams(name, callback)` with `ParametersRef`, and `callParams(name, input)` returning `Result<Parameters>`. The result stays valid after the handler closes. See [parameter ownership](PARAMETERS.md) for pack lifetime and the C/C++ call examples above.

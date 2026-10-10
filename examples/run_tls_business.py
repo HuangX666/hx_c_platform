@@ -1,10 +1,8 @@
-"""Run the two TLS JSON programs with a freshly generated local test CA."""
+"""Run the TLS JSON client and server with your certificate files."""
 
 import argparse
 from pathlib import Path
-import subprocess
-import tempfile
-from business_runner import checked_main, executable, json_messages, run_pair
+from business_runner import checked_main, json_messages, run_pair
 
 
 def verify(server, client):
@@ -27,16 +25,14 @@ def verify(server, client):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bin-dir", required=True)
+    parser.add_argument("--certificate", required=True, type=Path)
+    parser.add_argument("--private-key", required=True, type=Path)
+    parser.add_argument("--ca", required=True, type=Path)
     args = parser.parse_args()
-    generator = executable(args.bin_dir, "test_tls")
-    with tempfile.TemporaryDirectory(prefix="hx-tls-demo-") as directory:
-        root = Path(directory)
-        subprocess.run([str(generator), "--fixtures"], cwd=root,
-                       check=True, timeout=15)
-        run_pair(args.bin_dir, "tls_json_server", "tls_json_client", "0",
-                 verify, server_args=(str(root / "tls-server.pem"),
-                                      str(root / "tls-private.pem")),
-                 client_args=(str(root / "tls-ca.pem"),))
+    run_pair(args.bin_dir, "tls_json_server", "tls_json_client", "0",
+             verify, server_args=(str(args.certificate.resolve()),
+                                  str(args.private_key.resolve())),
+             client_args=(str(args.ca.resolve()),))
 
 
 if __name__ == "__main__":

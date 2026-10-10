@@ -11,7 +11,7 @@ UDP retains loss, duplication and reordering. The chosen application policy keep
 ## 2. Build and run
 
 ```sh
-cmake -S . -B build-net -DHX_OS_BUILD_TESTS=ON -DHX_OS_BUILD_EXAMPLES=ON
+cmake -S . -B build-net -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build-net --config Release --parallel 4
 ```
 
@@ -105,10 +105,11 @@ Default-enabled `CONFIG`, `CONFIG_SERIALIZE` and `SETTINGS` provide built-in par
 
 Short mutexes serialize nonblocking socket calls; retry sleeps occur outside locks. Main joins before cleanup. Real devices that reuse sequence numbers after restarting need application session IDs in their JSON protocol; address binding is not authentication.
 
-## 6. Automated tests
+## 6. Run the business example
 
 ```sh
-ctest --test-dir build-net -C Release -R "^udp_business_" --output-on-failure
+python examples/run_udp_business.py --bin-dir build-net/bin/Release
+python examples/run_udp_business.py --bin-dir build-net/bin/Release --simulate-gaps
 ```
 
-`udp_business_samples` and `udp_business_gaps` validate JSON samples, latest state, feedback and thread completion. Disabling required JSON modules omits these cases. See [KCP](KCP_BUSINESS.md) or [TCP](TCP_BUSINESS.md) for reliable workflows and [validation](VALIDATION.md) for target evidence.
+Run normal samples/feedback first, then add gaps, duplicates and late data to observe receiver behavior. Use build-net/bin on Linux.

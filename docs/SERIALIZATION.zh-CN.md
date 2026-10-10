@@ -233,9 +233,8 @@ C 对应调用 `hx_os_config_replace(source, target, &value, options, &out, &err
 在项目根目录运行：
 
 ```sh
-cmake -S . -B build-serialization -DHX_OS_BUILD_TESTS=ON -DHX_OS_BUILD_EXAMPLES=ON
+cmake -S . -B build-serialization -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build-serialization --config Release --parallel 4
-ctest --test-dir build-serialization -C Release -R 'config_tree|codec|serialization|nested_document' --output-on-failure
 ```
 
 Windows 程序在 `build-serialization/bin/Release`；单配置 Linux 构建在 `build-serialization/bin`。例如：
@@ -250,4 +249,4 @@ Windows 程序在 `build-serialization/bin/Release`；单配置 Linux 构建在 
 
 `hx_os_serialization` 还接受 `yaml`、`toml`，先编码再解码检查，stdout 只打印编码结果。嵌套设备包含数组，改用 `ini/env/properties` 会明确失败；用第 3 节的扁平连接结构体即可测试这些格式。
 
-`test_config_tree.c` 检查混合类型、空集合、嵌套 32/64/128 层、修改后的新旧文档、Unicode 和超限拒绝；`test_codec.c` 检查全部格式、宽度范围、数组、XML 属性、文件保存与逐次分配失败清理；`test_cpp_codec.cpp` 在关闭异常的 C++11 配置下验证便利层。`test_serialization_interop.py` 使用 Python 标准 JSON/XML/TOML 读取器和已安装时的 PyYAML，并对共享库执行 101 组固定种子的混合数据测试。TOML 需要 Python 3.11+；缺少可选解析器会明确标为跳过。具体运行结果见 [验证记录](VALIDATION.zh-CN.md)。
+混合嵌套、字段映射、错误与第三方互操作由维护者本机回归覆盖。客户可直接运行上述 C/C++ 示例；历史结果见[验证记录](VALIDATION.zh-CN.md)。

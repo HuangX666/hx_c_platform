@@ -8,6 +8,22 @@
 
 当前业务示例见下方 JSON 记录；此前独立文本示例、初版共用示例、IPC／KCP 实现及其他各批记录对应各自当时的版本。
 
+## 2026-10-10：回归仅本地维护，日常默认 20 项
+
+按项目维护约定，tests/、自动验证工具及远端回归工作流共 131 个原跟踪文件移出 Git，本机文件保留并加入忽略规则。客户示例独立编译运行；TLS 业务运行器改为接收调用者证书文件，不再依赖 test_tls 生成证书。更新中英文客户命令和私有文件引用。历史报告中的文件名、测试总数和构建路径仅表示当时的验证状态。
+
+本机默认生成 20 个现有测试程序：core、data、lifecycle、config、config_serialize、codec、containers、stl、variant、file_utils、format、pool、pool_wait、net、ipc、coroutine、coroutine_sync、tls、archive、cpp_utilities。关闭相应模块或没有 C++ 编译器时可少于 20。专项回归按需开启，不合并到这 20 项中；包括此前 INI 控制字符及 CODEC 浮点缺陷的回归源码仍保存在本机。此前重复的 40 个示例测试登记不再恢复。
+
+| 复用环境 | 本轮结果 |
+| --- | --- |
+| Windows MSVC x64 Debug，build-shared-msvc | 日常 20/20 通过 |
+| WSL2 Linux Release，build-shared-linux | 日常 19/20 通过；ipc 在普通 UDP 场景接收超时，单独重跑仍失败 |
+| 同一 WSL2 原生套接字对照 | 不经过本库，128 字节回环 UDP 收到，40,064 字节回环 UDP 超时；说明当前环境的大数据报同样受影响，不把 ipc 标为通过 |
+| 客户构建 | 暂时移开全部私有 tests/ 后，在原 Linux 目录关闭回归，hello、format、codec_macros 及 TLS 收发示例编译运行成功；测试目录原样恢复 |
+| 专项开关 | 原 Linux 目录开启专项后登记 141 项，只验证配置；随后恢复默认 20 项，未重跑全量 |
+
+本轮没有新增构建目录、修改库实现或第三方文件，也没有扩大到 Android、ARM 或 sanitizer 矩阵。远端 CI 保持关闭。私有回归未计入客户安装包；历史 Git 提交没有重写。
+
 ## 2026-10-10：INI 控制字符与 CODEC 独立浮点格式化
 
 修复在 `97a1147` 上复现的两处缺陷。INI 序列化现在拒绝键、值和 section 名称中除内部 Tab 外的 C0 控制字符，返回 `HX_OS_UNREPRESENTABLE` 并保留原输出。现有序列化套件覆盖这三个位置的全部 C0 字节值，并验证解析器原本接受的 Tab／DEL 行为。CONFIG、CONFIG_SERIALIZE 和 CODEC 开启时，现在会保留 CODEC 所需的内部浮点格式化实现，不再依赖 TEXT_NUMBER 或 SETTINGS。现有 CODEC 套件另补充高精度 double／float 的 JSON 往返检查。

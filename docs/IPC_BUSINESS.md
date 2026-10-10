@@ -13,7 +13,7 @@ This example accepts only `local://`, Windows `pipe://`, or POSIX `unix://` addr
 Build the default modules from the repository root:
 
 ```sh
-cmake -S . -B build-net -DHX_OS_BUILD_TESTS=ON -DHX_OS_BUILD_EXAMPLES=ON
+cmake -S . -B build-net -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build-net --config Release --parallel 4
 ```
 
@@ -125,14 +125,10 @@ hx_string_destroy(&request);
 
 Although general configuration getters accept numeric strings, this example explicitly checks JSON types: integer `250` is accepted; `"250"`, booleans and missing fields are not integers. Invalid syntax, duplicate keys and non-object roots never reach device operations. Payloads are capped at 1023 bytes, parsing depth at 8, nodes at 64 and parsing memory at 64 KiB.
 
-## 6. Ownership and tests
-
-Main owns the endpoint and thread parameters; workers borrow them. Join before close. Release every IPC message, parsed document and temporary `hx_string`; nodes/slices expire with their document. A close timeout retains the owner for retry, and request timeout does not prove the remote operation never ran.
+## 6. Ownership and running the example
 
 ```sh
-ctest --test-dir build-net -C Release -R "^ipc_business_local$" --output-on-failure
+python examples/run_ipc_business.py --bin-dir build-net/bin/Release
 ```
 
-The case checks 14 device replies, the final `bye`, and two notifications by parsed JSON fields, independent of key order. JSON examples require default-enabled `CONFIG`, `CONFIG_SERIALIZE` and `SETTINGS`; disabling required modules omits the business test.
-
-Waits use ordinary threads, not the Qt UI thread or a coroutine-suspending adapter. See the source for the CLI join-failure exit and retryable close policy, and [validation](VALIDATION.md) for platform evidence.
+Main owns the endpoint and worker parameters; join workers before closing. Release each message, parsed document and temporary string. Close timeout retains ownership for retry; request timeout does not prove non-execution. The runner starts both programs and checks 14 replies, bye and two notifications. Use build-net/bin on Linux.

@@ -233,9 +233,8 @@ File APIs are `hx_os_config_load/save` and `hx_os_codec_load/save`, with matchin
 From the project root:
 
 ```sh
-cmake -S . -B build-serialization -DHX_OS_BUILD_TESTS=ON -DHX_OS_BUILD_EXAMPLES=ON
+cmake -S . -B build-serialization -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build-serialization --config Release --parallel 4
-ctest --test-dir build-serialization -C Release -R 'config_tree|codec|serialization|nested_document' --output-on-failure
 ```
 
 Windows executables are in `build-serialization/bin/Release`; a single-configuration Linux build uses `build-serialization/bin`:
@@ -250,4 +249,4 @@ Windows executables are in `build-serialization/bin/Release`; a single-configura
 
 `hx_os_serialization` also accepts `yaml` and `toml`. It encodes and decodes before printing only the encoded document to stdout. The device contains an array, so selecting ini/env/properties fails explicitly; use the flat connection structure from section 3 for those formats.
 
-`test_config_tree.c` covers mixed types, empty collections, 32/64/128 levels, source/replacement lifetime, Unicode and limit failures. `test_codec.c` covers all formats, scalar widths, arrays, XML attributes, file persistence and allocation failure cleanup. `test_cpp_codec.cpp` validates the facade under C++11 with exceptions disabled. `test_serialization_interop.py` uses Python JSON/XML/TOML readers and already-installed PyYAML, plus 101 seeded mixed-data cases against shared builds. TOML requires Python 3.11+; unavailable optional readers report a skip. Actual run evidence is in [validation records](VALIDATION.md).
+Mixed nesting, field mappings, failures and third-party interoperability are covered by private maintainer regressions. Customers can run the C/C++ examples above directly; see [validation records](VALIDATION.md) for dated evidence.

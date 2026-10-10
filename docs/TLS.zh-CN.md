@@ -9,22 +9,24 @@
 先准备[依赖 SDK](DEPENDENCIES.zh-CN.md#4-构建依赖)。`HX_OS_ENABLE_TLS` 默认开启，依赖 CRYPTO、NETWORK、LOOP 和 FILE_UTILS。关闭任何必要模块后，`hx_os_tls_available()` 返回 0，TLS 操作明确返回 `HX_OS_NOT_SUPPORTED`。仅仅启用模块不会在程序加载时启动线程。
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/path/to/build-deps/prefix -DHX_OS_BUILD_EXAMPLES=ON -DHX_OS_BUILD_TESTS=ON
-cmake --build build --config Release --parallel 4
-ctest --test-dir build -C Release -R "tls" --output-on-failure
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/path/to/build-deps/prefix -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build build --config Release --target hx_os_tls_json_server hx_os_tls_json_client --parallel 4
 ```
 
-一条命令运行两个业务程序：
+已有证书时，把以下三个路径改为自己的文件后运行；证书 SAN 需包含 `localhost`。运行器自动选择空闲端口，启动独立收发程序并核对 JSON 回复，不依赖私有回归程序，也不修改你的证书文件。
 
 ```sh
-# Linux/macOS 的构建目录
-python3 examples/run_tls_business.py --bin-dir build/bin
-
-# Visual Studio 的构建目录
-python examples/run_tls_business.py --bin-dir build/bin/Release
+python examples/run_tls_business.py --bin-dir build/bin --certificate server-cert.pem --private-key server-key.pem --ca ca.pem
 ```
 
-运行器需要已构建测试目标。它会在临时目录生成本次测试专用的 CA 和服务端证书，选择空闲监听端口，启动独立客户端／服务端进程，核对所有 JSON 回复，并删除测试凭据。生成的身份只用于测试，不作为部署证书。
+Visual Studio 将 `--bin-dir` 改为 `build/bin/Release`。本机演示没有证书时，可用已安装的 OpenSSL 命令行生成一天有效的自签名演示证书：
+
+```sh
+openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=localhost -addext subjectAltName=DNS:localhost,IP:127.0.0.1 -keyout demo-key.pem -out demo-cert.pem
+python examples/run_tls_business.py --bin-dir build/bin --certificate demo-cert.pem --private-key demo-key.pem --ca demo-cert.pem
+```
+
+该命令用于本机演示；它会写入指定文件，请在空的演示目录中生成并使用实际路径。演示结束后可删除这两个文件。生产环境使用自己的证书和密钥管理方式，客户端仍执行证书与主机名验证。
 
 [C 客户端](../examples/tls_json_client.c)在同一条连接上启动一个发送线程和一个接收线程，发送三条温度读数。[C 服务端](../examples/tls_json_server.c)返回三条确认，并针对第二条高温读数额外发送一条告警。每条 JSON 带请求 `id`，读数还带 UTF-8 `device` 字段。成功输出包含：
 
@@ -81,7 +83,7 @@ auto closed = connection.closeUntil(hx_os_deadline_after_ms(2000));
  * The facade destructor does not close, kill or detach its worker. */
 ```
 
-上面是聚焦调用方式的片段。带完整检查的程序见业务示例和 [C++ 契约程序](../tests/test_cpp_tls.cpp)。宿主不能在仍持有端点时直接让所有者离开作用域；调用失败不会自动销毁这个端点。
+上面是聚焦调用方式的片段。带完整检查的程序见业务示例。宿主不能在仍持有端点时直接让所有者离开作用域；调用失败不会自动销毁这个端点。
 
 ## 3. 同一连接怎样分线程发送和接收
 

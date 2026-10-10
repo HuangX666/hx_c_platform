@@ -9,10 +9,12 @@
 先按[依赖说明](DEPENDENCIES.zh-CN.md#4-构建依赖)构建 SDK，再用绝对 prefix 路径配置本库：
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/project/build-deps/prefix -DHX_OS_BUILD_EXAMPLES=ON -DHX_OS_BUILD_TESTS=ON
-cmake --build build --config Release --parallel 4
-ctest --test-dir build -C Release -R "crypto|encrypt_text" --output-on-failure
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/project/build-deps/prefix -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build build --config Release --target hx_os_encrypt_text --parallel 4
+build/bin/hx_os_encrypt_text
 ```
+
+Windows 多配置构建的程序在对应 `bin/Release/` 目录，带 `.exe` 后缀。
 
 OpenSSL 默认动态链接。Windows 构建会把选中的 Crypto DLL 复制到本库的 `bin/<config>` 目录；通过 `add_subdirectory` 接入且可执行文件在其他目录时，业务也需要把该 DLL 放到程序旁，或者把安装后的 `bin` 加入 PATH。安装默认包含选中的 Crypto 运行库；业务自己管理部署时，可通过 `HX_OS_INSTALL_OPENSSL_RUNTIME=OFF` 关闭复制。Linux 将其安装在核心共享库旁，并设置相对运行库搜索路径。即便核心使用静态库，OpenSSL 默认仍为动态链接；安装后的静态库消费者执行 `find_package(hx_c_platform CONFIG REQUIRED)` 时，需要把 SDK prefix 加入 `CMAKE_PREFIX_PATH`。
 

@@ -464,11 +464,13 @@ HX_OS_ENABLE_VARIANT defaults ON. OFF keeps declarations/exports, reports NOT_SU
 
 ```sh
 cmake -S . -B build-variant -C cmake/minimal.cmake \
-  -DHX_OS_ENABLE_VARIANT=ON -DHX_OS_BUILD_TESTS=ON \
+  -DHX_OS_ENABLE_VARIANT=ON \
   -DHX_OS_BUILD_EXAMPLES=ON -DBUILD_SHARED_LIBS=ON
 cmake --build build-variant --config Release
-ctest --test-dir build-variant -C Release --output-on-failure
+build-variant/bin/hx_os_variant
 ```
+
+Windows multi-configuration builds place these programs in the corresponding `bin/Release/` directory with an `.exe` suffix.
 
 CONFIG, SETTINGS and CONTAINERS remain disabled here while the value module works. Container integration needs CONTAINERS. Container max_items/max_bytes bound container storage; nested structure/string allocations in copy callbacks are outside max_bytes. Bound value sizes, text lengths and callback resource consumption for untrusted input.
 

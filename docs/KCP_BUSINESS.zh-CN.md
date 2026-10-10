@@ -11,7 +11,7 @@ KCP 引擎本身不创建线程或 socket。示例明确演示由谁驱动更新
 ## 2. 构建与运行
 
 ```sh
-cmake -S . -B build-net -DHX_OS_BUILD_TESTS=ON -DHX_OS_BUILD_EXAMPLES=ON
+cmake -S . -B build-net -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build-net --config Release --parallel 4
 ```
 
@@ -97,10 +97,11 @@ json_field fields[] = {
 
 客户端收到最终结果后继续驱动 500 毫秒以便重发末尾 ACK，总会话期限为 10 秒。无限丢包时不保证正常结束。当前会话中无重复应用的检查不构成跨重启 exactly-once 承诺；更完整的 HXIP 会话见 [IPC 协议](IPC.zh-CN.md)，本例不依赖它。
 
-## 6. 自动测试
+## 6. 运行业务示例
 
 ```sh
-ctest --test-dir build-net -C Release -R "^kcp_business_" --output-on-failure
+python examples/run_kcp_business.py --bin-dir build-net/bin/Release
+python examples/run_kcp_business.py --bin-dir build-net/bin/Release --drop-first
 ```
 
-`kcp_business_transfer` 与 `kcp_business_loss` 检查实际 JSON 块、处理总值、确认与资源回收。KCP 底层乱序、重复、容量和时间回绕仍由 [test_kcp.c](../tests/test_kcp.c) 覆盖。JSON 模块关闭时不注册业务用例；目标结果见[验证记录](VALIDATION.zh-CN.md)。
+分别演示正常 JSON 块传输和首包丢失后的重传，核对总值、确认与资源回收。无需私有回归文件，Linux 的程序目录改为 build-net/bin。

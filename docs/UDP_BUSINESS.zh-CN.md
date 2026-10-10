@@ -11,7 +11,7 @@ UDP 保留丢失、重复和乱序的语义。这个例子选择“保留最新�
 ## 2. 构建与运行
 
 ```sh
-cmake -S . -B build-net -DHX_OS_BUILD_TESTS=ON -DHX_OS_BUILD_EXAMPLES=ON
+cmake -S . -B build-net -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build-net --config Release --parallel 4
 ```
 
@@ -105,10 +105,11 @@ json_field fields[] = {
 
 两个线程的非阻塞 socket 调用按既有契约在短互斥区内串行，重试休眠在锁外。主线程先 join 再释放资源。真实设备重启后如果复用序号，需要在自己的 JSON 协议中加入会话标识；地址绑定不是身份认证。
 
-## 6. 自动测试
+## 6. 运行业务示例
 
 ```sh
-ctest --test-dir build-net -C Release -R "^udp_business_" --output-on-failure
+python examples/run_udp_business.py --bin-dir build-net/bin/Release
+python examples/run_udp_business.py --bin-dir build-net/bin/Release --simulate-gaps
 ```
 
-`udp_business_samples` 和 `udp_business_gaps` 检查两个设备的 JSON 样本、最新状态、双向反馈和线程结束。所需 JSON 模块关闭时不注册这些业务用例。可靠业务另见 [KCP](KCP_BUSINESS.zh-CN.md) 或 [TCP](TCP_BUSINESS.zh-CN.md)；目标证据见[验证记录](VALIDATION.zh-CN.md)。
+第一条运行正常采样与反馈；第二条加入缺号、重复和迟到数据，演示接收方的处理方式。Linux 的程序目录改为 build-net/bin。

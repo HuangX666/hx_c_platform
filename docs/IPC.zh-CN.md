@@ -26,7 +26,7 @@ TCP/UDP/KCP 也接受 `[::1]`，拒绝非回环 IP。监听端口可以为 `0`�
 在仓库根目录构建。已有自己的构建目录时，可以继续使用它。
 
 ```sh
-cmake -S . -B build-ipc -DHX_OS_BUILD_TESTS=ON -DHX_OS_BUILD_EXAMPLES=ON
+cmake -S . -B build-ipc -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build-ipc --config Release --parallel 4
 ```
 
@@ -281,16 +281,10 @@ KCP 模式的 HELLO/WELCOME 是普通外层 HXIP UDP 帧。双方确定会话值
 
 高级使用者可以单独调用 [hx_os_kcp](../include/hx_os_kcp.h)，自行提供完整包、时间和输出回调；该低层引擎不创建 socket 或线程。普通 IPC 用户使用 `kcp://` 即可，不需要自己写 update 循环。
 
-## 9. 一条命令运行自动测试
+## 9. 运行示例
 
 ```sh
-ctest --test-dir build-ipc -C Release -R "ipc|kcp" --output-on-failure
+python examples/run_ipc_business.py --bin-dir build-ipc/bin/Release
 ```
 
-本机配置且安装 Python 时，测试包含 `ipc`、`kcp`、`ipc_examples`。想看每个演示的输出，可再加 `-V`；没有 Python 时前两组仍运行，手动双终端示例仍可使用。
-
-- `ipc`：四种传输、双向请求、多线程及乱序回复、多连接、重启换会话、超时晚到回复、队列满、关闭重试、分配失败及 context 归零。
-- `kcp`：有意丢包、重复和乱序、双向传送、32 位时间回绕、消息/队列限制、固定分配预算。
-- `ipc_examples`：实际启动独立服务端和 C/C++ 客户端；独立 Python TCP/Unix 对端；拆开的头、合并的帧、超长和未完成正文，以及旧 UDP 会话流量。
-
-测试命令与通过结果是两回事。Windows、WSL、Android、sanitizer 和安装消费的本次证据见[验证记录](VALIDATION.zh-CN.md)；macOS、Win7 和嵌入式板卡没有本次目标运行证据时仍标记待验证。
+该入口启动独立服务端和客户端，使用 JSON 完成设备命令与通知。跨语言协议与双终端手动运行方式见前文；自动回归仅由维护者本机保留。目标环境结果见验证记录。

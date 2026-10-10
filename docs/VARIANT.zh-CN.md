@@ -464,11 +464,13 @@ Windows MSVC 实测：64 位 hx_variant 为 48 字节、对齐 8，描述符 48 
 
 ```sh
 cmake -S . -B build-variant -C cmake/minimal.cmake \
-  -DHX_OS_ENABLE_VARIANT=ON -DHX_OS_BUILD_TESTS=ON \
+  -DHX_OS_ENABLE_VARIANT=ON \
   -DHX_OS_BUILD_EXAMPLES=ON -DBUILD_SHARED_LIBS=ON
 cmake --build build-variant --config Release
-ctest --test-dir build-variant -C Release --output-on-failure
+build-variant/bin/hx_os_variant
 ```
+
+Windows 多配置构建的程序在对应 `bin/Release/` 目录，带 `.exe` 后缀。
 
 该配置保持 CONFIG、SETTINGS、CONTAINERS 等关闭，variant 本身仍可使用；容器组合入口需要 CONTAINERS 支持。容器的 max_items/max_bytes 限制容器存储，copy 回调中的结构体和字符串分配不在 max_bytes 内。面对不可信输入时，调用方仍需限制值尺寸、文本长度和回调资源消耗。
 

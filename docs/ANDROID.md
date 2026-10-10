@@ -4,67 +4,30 @@
 
 The agreed baseline is **Android 5.0 / API 21**, **arm64-v8a and armeabi-v7a**. API 28 also covers newer native facilities. Android is an explicit target; desktop Linux, WSL and glibc/QEMU results are not Android runtime evidence.
 
-New runs reuse `out/android/`; `--build-root` can reuse an existing directory. Historical paths below identify the original runs. After local build cleanup, retained JSON reports are under `out/records/<original-build-name>/`; old binaries and logs are not retained indefinitely.
+## Build the library and examples
 
-## Build and run
-
-Use an existing NDK; the script does not download or modify the SDK. Optional dependency acquisition follows the selected provider:
-
-~~~text
-python tools/verify_android.py --ndk /absolute/path/to/ndk/28.2.13676358
-~~~
-
-Default: both ABIs at API 21/28, library, examples, benchmark, all test executables and standalone C99/C++11 public headers. Use --ninja to select Ninja explicitly. Local Windows paths are E:/Android/Sdk/ndk/28.2.13676358 and E:/Android/Sdk/cmake/3.22.1/bin/ninja.exe.
-
-~~~text
-python tools/verify_android.py --ndk /path/to/ndk --api 21 --minimal
-python tools/verify_android.py --ndk /path/to/ndk --api 21 --static
-~~~
-
-Minimal uses cmake/minimal.cmake. Shared is default; --static selects static. Use --build-root for separate records. Without --serial, the script only cross-compiles and never selects a device or executes ARM binaries.
-
-An empty adb list can mean an installed AVD is stopped. This host has Qt_Android_34:
-
-~~~text
-emulator -list-avds
-emulator -avd Qt_Android_34 -port 5580 -read-only -no-snapshot
-~~~
-
-Wait for boot and select emulator-5580. Read-only mode preserves AVD user data; no-snapshot disables snapshot load/save. Automated runs may add -no-window -no-audio. The AVD is x86_64; --abi x86_64 is now available as an additional emulator configuration. The two default ARM ABIs are unchanged.
-
-~~~text
-adb devices -l
-python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --serial DEVICE_SERIAL
-~~~
-
-Pass `--adb` for an absolute adb path. The runner checks the explicitly selected ABI/API, creates an isolated `/data/local/tmp/hx_c_platform-UUID` directory and discovers **all configured native CTest tests and examples** using `ctest --show-only=json-v1`. There is no manually maintained suite list. Arguments, fixture files, working directories, test environment, output expectations, skip codes and timeouts come from CTest. Host Python/tool commands are listed separately in `host_tests`; they are not counted as device executions.
-
-The list therefore includes the new crypto/TLS/archive, streams and buffered writer, queue, INI/backup/settings, signal/parameter, parser/preprocessor and profiler tests alongside the existing platform, container, coroutine and serialization suites. Module-off builds exercise their explicit unsupported behavior. A selected 7-Zip runtime adds `archive_7zip`; absent platform-only facilities remain separately identified.
-
-For the full optional dependency stack, first prepare one ABI/API SDK as described in [dependency builds](DEPENDENCIES.md#6-cross-build-linux-arm-and-android), then run:
+Run these commands in a Linux/WSL shell with an installed NDK. SDK sources are unchanged. Start with the minimal features and `hello` example; for TLS/archive, prepare an ABI/API-matched SDK using the [dependency guide](DEPENDENCIES.md#6-cross-build-linux-arm-and-android), then enable the required modules.
 
 ```sh
-python tools/verify_android.py --ndk /path/to/ndk --abi arm64-v8a --api 21 \
-  --dependency-prefix /path/to/build-deps-android-arm64/prefix \
-  --parsers --iconv --sevenzip-library /path/to/target/runtime/7z.so \
-  --serial DEVICE_SERIAL --build-root out/android
+cmake -C cmake/minimal.cmake -S . -B out/android/arm64-v8a -G Ninja \
+  -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake" \
+  -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21 \
+  -DCMAKE_BUILD_TYPE=Release -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build out/android/arm64-v8a --target hx_os_hello --parallel 4
+adb devices -l
+adb -s DEVICE_SERIAL shell mkdir -p /data/local/tmp/hx-platform-demo
+adb -s DEVICE_SERIAL push out/android/arm64-v8a/bin/hx_os_hello /data/local/tmp/hx-platform-demo/
+adb -s DEVICE_SERIAL shell chmod 755 /data/local/tmp/hx-platform-demo/hx_os_hello
+adb -s DEVICE_SERIAL shell /data/local/tmp/hx-platform-demo/hx_os_hello
 ```
 
-Omit `--sevenzip-library` if the separate optional native backend is not needed. Omit `--dependency-prefix` only for a deliberate crypto/archive-disabled build. A prefix must match one explicit ABI/API; it is never reused across both default ARM ABIs. `--parsers` enables the five optional adapters, `--iconv` enables the pinned GNU converter, and `--provider FETCHCONTENT` selects the alternative source provider.
+Set `ANDROID_NDK_ROOT` to the installed NDK and replace `DEVICE_SERIAL` with the selected device. Use `armeabi-v7a` for ARMv7 or `x86_64` for a matching emulator; reuse one build directory per ABI. The build minimum API is distinct from the device OS version. The library and examples need no private regression files.
 
-The runner reads the generated `hx_openssl_runtime_Release.txt` to deploy the exact selected **libssl and libcrypto**, including required versioned names, beside the test executables and core library. Missing runtimes fail deployment. Executables and the core use `$ORIGIN` RUNPATH plus a process-local library path. ARM translation also needs that explicit path for transitive dependencies. Only the distinct runtime SONAME files are deployed: ordinary `libssl.so` / `libcrypto.so` linker aliases must not shadow the x86_64 native bridge's system BoringSSL. This packaging behavior is covered by actual device runs, not just link success.
+For shared builds, deploy `libhx_c_platform.so` and required dependency runtimes beside the executable, then set a process-local `LD_LIBRARY_PATH`. Dynamic OpenSSL files are listed in `hx_openssl_runtime_Release.txt` in the build directory; deploy the runtime SONAME files and their targets, never host Windows/Linux libraries. The project Android SDK uses `libssl-hx.so` / `libcrypto-hx.so` to avoid system BoringSSL name collisions. Match ABI, API and dependency versions. The host application owns APK packaging and app directory permissions.
 
-The prepared Android SDK uses distinct `libssl-hx.so` / `libcrypto-hx.so` SONAMEs through an upstream-supported configuration overlay. This also prevents the translated guest from binding to an already loaded system BoringSSL with the ordinary `libcrypto.so` name. The manifest and its resolved symlink targets determine which files are uploaded; unversioned BoringSSL linker aliases stay in the SDK.
+The dated evidence and platform limits below are historical. Automated runners, logs and regression cases are kept only on the maintainer's machine, not required by these public build instructions.
 
-hx_os_portable_baseline also records atomic, ASCII, wide conversion, named-call and precise-wait observations without fixed timing thresholds. Logs include NDK, source revision/dirty status, ABI/API, device model, fingerprint, runtime API, emulator marker and command output. Cleanup removes only explicitly uploaded files, never recursively deleting test directories. Failed fixtures remain. An adb timeout may leave the target process running; preserve/report its directory without killing it. Record load/temperature/ frequency conditions and collect repeated performance samples.
-
-Reports distinguish build minimum API, runtime API, native machine and translation, with a result per executable. Failures do not remain labeled as unrun. Shared validation executables have $ORIGIN RUNPATH for newer Android; older native systems still use LD_LIBRARY_PATH. Validation executables and the Android core with dynamic OpenSSL use relative build RUNPATH. Installed shared libraries keep their existing relative install RUNPATH; no system library paths are changed.
-
-For a focused communication run, append `--suite ipc --suite kcp --suite lifecycle`. Without `--suite`, every configured native CTest test and example runs. Names are the actual CTest names, not binary filenames. `--timeout-scale` explicitly scales device test limits, without changing library deadlines. The portable benchmark still runs; the report records selected suites and explicit subcase skips.
-
-For serialization only, append `--suite config_tree --suite codec --suite cpp_codec`. See the [serialization tutorial](SERIALIZATION.md).
-
-## Current acceptance (2026-10-07)
+## Recorded acceptance (2026-10-07)
 
 All executions below use the same API 34 x86_64 `Qt_Android_34` emulator. The full profile enables Crypto, TLS, Archive, optional 7-Zip, all five native parser backends and GNU iconv. Its dependency SDK includes OpenSSL, zlib, XZ and Zstd for the selected target. Counts exclude the additional portable benchmark, which passed in every executed configuration.
 

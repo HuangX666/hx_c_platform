@@ -11,7 +11,7 @@ The KCP engine itself creates neither threads nor sockets. This example explicit
 ## 2. Build and run
 
 ```sh
-cmake -S . -B build-net -DHX_OS_BUILD_TESTS=ON -DHX_OS_BUILD_EXAMPLES=ON
+cmake -S . -B build-net -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build-net --config Release --parallel 4
 ```
 
@@ -97,10 +97,11 @@ One peer per process run uses fixed `conv=7301`, with no discovery, authenticati
 
 After the final result, the client drives 500 ms more for trailing ACK retransmission, within a 10-second overall deadline. Unlimited loss cannot guarantee successful shutdown. Checking no duplicate application in this run does not promise exactly-once across restarts. See the fuller [IPC session protocol](IPC.md), which this example does not depend on.
 
-## 6. Automated tests
+## 6. Run the business example
 
 ```sh
-ctest --test-dir build-net -C Release -R "^kcp_business_" --output-on-failure
+python examples/run_kcp_business.py --bin-dir build-net/bin/Release
+python examples/run_kcp_business.py --bin-dir build-net/bin/Release --drop-first
 ```
 
-`kcp_business_transfer` and `kcp_business_loss` check actual JSON blocks, totals, confirmations and cleanup. Engine reordering, duplication, capacity and clock rollover remain in [test_kcp.c](../tests/test_kcp.c). Disabling required JSON modules omits these business cases. See [validation](VALIDATION.md).
+These demonstrate normal JSON-block transfer and retransmission after dropping the first packet, checking totals, acknowledgements and cleanup. Private tests are not required. Use build-net/bin on Linux.

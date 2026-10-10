@@ -113,7 +113,6 @@ hx_c_platform/
 │   └── apple/                 Apple 后端部分
 ├── cmake/                     开关、安装包与 SDK 工具链
 ├── examples/                  可编译的常用任务示例
-├── tests/                     契约、独立头文件和安装消费测试
 ├── benchmarks/                开发用性能探针
 ├── tools/                     依赖准备与验证工具
 └── docs/                      分开的中英文文档
@@ -159,19 +158,17 @@ cmake --build out/windows --config Release --parallel 4
 
 CMake 3.16 早于 VS2022 生成器；使用该版本时，在配置好的 MSVC 开发者终端中选择 NMake。普通 C 库构建不探测 C++ 编译器。已有缓存保留原选项，若要关闭旧目录中的测试和示例，显式传入 `-DHX_OS_BUILD_TESTS=OFF -DHX_OS_BUILD_EXAMPLES=OFF`。
 
-例如修改字符串功能时，在同一个目录开启测试，只构建相关目标：
+开启示例后，只构建需要学习的程序，例如格式化打印：
 
 ```sh
-cmake -S . -B out/linux -DHX_OS_BUILD_TESTS=ON
-cmake --build out/linux --target hx_os_test_string_tools --parallel 4
-cd out/linux
-ctest -R '^string_tools$' --output-on-failure
-cd ../..
+cmake -S . -B out/linux -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build out/linux --target hx_os_format --parallel 4
+out/linux/bin/hx_os_format
 ```
 
-需要库内示例时传入 `-DHX_OS_BUILD_EXAMPLES=ON`。普通修改只验证受影响的目标和测试，纯文档修改通常不构建；涉及平台差异、内存问题、性能变化或发布验收时，再扩大验证范围。当前诊断放在对应构建目录，测量只保留必要记录，临时对照构建用完清理。不要跨平台搬用 CMake 缓存，也不要删除保留配置仍在引用的依赖 SDK。
+Windows 多配置生成器构建时加 `--config Release`，程序位于 `out/windows/bin/Release/`。客户示例独立于本地回归，具体参数见对应教程。自动回归文件不随公开仓库分发；使用库无需开启 `HX_OS_BUILD_TESTS`。日常修改复用构建目录，文档修改通常不需要重新构建。
 
-使用 Visual Studio 时，打开生成的 `hx_c_platform.sln`。解决方案按下面的方式收纳现有项目；可选项目只有开启后才显示：
+使用 Visual Studio 时打开生成的 `hx_c_platform.sln`。客户配置中按职责分组：
 
 ```text
 hx_c_platform
@@ -186,12 +183,11 @@ hx_c_platform
 ├── deps                    （依赖库构建项目）
 ├── examples
 │   ├── demos               （用法示例）
-│   ├── tests               （自动化测试及其辅助程序）
 │   └── benchmarks          （性能与对象布局工具）
 └── CMake                   （ALL_BUILD、INSTALL、ZERO_CHECK 等）
 ```
 
-这些是 IDE 中的虚拟文件夹，源码目录、可执行程序名称和 CTest 命令保持不变。在 CMake GUI 中选择原来的源码目录和构建目录，依次点击 **Configure**、**Generate**，再让 Visual Studio 重新加载解决方案即可。不要手动修改 `.sln`、`.vcxproj` 或 `.filters` 文件。`Public` 可以浏览全部公共 C/C++ 头文件；`Source Files` 显示当前平台及功能开关实际选中的源码。通过 `add_subdirectory` 接入时，全局 `USE_FOLDERS` 开关由宿主工程决定。只链接已安装 SDK 的业务项目显示自身的项目；阅读库实现时打开库源码生成的解决方案。
+这些是 IDE 中的虚拟文件夹，源码目录和可执行程序名称保持不变。在 CMake GUI 中选择原来的源码目录和构建目录，依次点击 **Configure**、**Generate**，再让 Visual Studio 重新加载解决方案即可。不要手动修改 `.sln`、`.vcxproj` 或 `.filters` 文件。`Public` 可以浏览全部公共 C/C++ 头文件；`Source Files` 显示当前平台及功能开关实际选中的源码。通过 `add_subdirectory` 接入时，全局 `USE_FOLDERS` 开关由宿主工程决定。只链接已安装 SDK 的业务项目显示自身的项目；阅读库实现时打开库源码生成的解决方案。
 
 ### 4.2 使用 C 读取 UTF-8 文本
 
@@ -1789,7 +1785,7 @@ int main(void)
 | 开关 | 默认 | 用途 |
 | --- | --- | --- |
 | `BUILD_SHARED_LIBS` | OFF | 共享库替代默认静态库 |
-| `HX_OS_BUILD_TESTS` | OFF | 契约测试与独立公共头验证 |
+| `HX_OS_BUILD_TESTS` | OFF | 高级选项，仅本机维护者回归；公开源码不含回归文件 |
 | `HX_OS_ENABLE_CRYPTO` | ON | OpenSSL 数据加密 |
 | `HX_OS_ENABLE_TLS` | ON | 校验证书的全双工 TLS |
 | `HX_OS_ENABLE_ARCHIVE` | ON | 压缩 SDK 提供文件／目录压缩 |
@@ -1876,20 +1872,7 @@ cmake --build build-parsers --config Release --parallel 4
 
 ### 28.1 Android NDK 和指定设备
 
-使用已经安装的 NDK，工具不修改 SDK 源码：
-
-```sh
-python tools/verify_android.py --ndk /absolute/path/to/ndk
-python tools/verify_android.py --ndk /absolute/path/to/ndk --api 21 --minimal
-python tools/verify_android.py --ndk /absolute/path/to/ndk --api 21 --static
-adb devices -l
-python tools/verify_android.py --ndk /absolute/path/to/ndk \
-  --api 21 --abi arm64-v8a --serial DEVICE_SERIAL
-```
-
-默认交叉编译两种 ARM ABI 的 API 21/28 配置，通过 `--serial` 明确选择运行设备。 `--abi x86_64` 用于匹配的模拟器。adb 列表为空时，可能只是已有 AVD 未启动；先用 `emulator -list-avds` 检查，不能直接认定机器没有模拟器。
-
-脚本从 CTest 自动取得全部已配置原生测试，不再维护固定子集。使用匹配 ABI/API 的 `--dependency-prefix` 启用加密、动态 TLS 和压缩，`--parsers --iconv` 启用可选文本后端，`--sevenzip-library` 指定可选目标 7-Zip 运行库。报告分别记录构建 API、运行 API、原生执行／转译，以及宿主测试／设备测试。API 21 已支持有限原生 join 和超时重试；启动进程仍要求最低 API 28。详见 [Android 操作与当前证据](ANDROID.zh-CN.md)。实体板卡、Android 5.0 系统和 APK 沙箱验收单独记录。
+使用已安装的 NDK 和匹配 ABI/API 的依赖 SDK，以 CMake 交叉编译库及示例，再用 adb 在明确选择的设备上运行。[Android 教程](ANDROID.zh-CN.md)给出完整命令、运行库部署和平台限制，不需要维护者私有脚本。API 21 支持有限 join；进程创建要求构建最低 API 28。
 
 ### 28.2 板卡的最小纯 C 配置
 
@@ -1945,41 +1928,15 @@ flowchart TD
 
 ## 30. 测试、CI 与性能证据
 
-### 30.1 本地验证
+### 30.1 客户示例与本机回归
 
-```sh
-python tools/verify_install.py build --config Release
-python tools/verify_abi.py build-shared --config Release
-```
+公开仓库提供库、接口文档和可运行的 `examples/`。开启 `HX_OS_BUILD_EXAMPLES=ON` 即可编译示例；业务运行脚本只使用示例程序，不需要自动回归。
 
-安装工具使用构建目录内的独立前缀，默认能力齐全时运行十五项 C/C++ 消费测试，再运行纯 C 工程的九项测试。ABI 命令要求已准备的共享库构建和仓库基线历史。它们是原生主机检查，不会自动模拟交叉编译目标。
+维护者本机保留默认 20 项日常回归，以及按需开启的专项检查。它们不进入 Git 或安装包，普通客户不需要配置。已有构建缓存若开启了 `HX_OS_BUILD_TESTS`，改成 OFF 后重新配置即可使用公开源码。
 
-GCC/Clang 内存检查使用单独构建目录：
+### 30.2 验证证据
 
-```sh
-cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug \
-  -DHX_OS_SANITIZER=address,undefined -DHX_OS_BUILD_TESTS=ON
-cmake --build build-asan --parallel 4
-cd build-asan
-ASAN_OPTIONS=detect_leaks=1 ctest --output-on-failure
-cd ..
-```
-
-TSan 在另一个目录配置 `HX_OS_SANITIZER=thread`，不与 ASan 混用。测试覆盖 UTF-8 路径、短 I/O、失败和上限、超时重试、取消、回调、TLS 清理、 C/C++ 独立头、模块裁剪与安装消费，并保留各目标的验证限制。
-
-### 30.2 已配置 CI 与已执行证据
-
-| 已配置任务 | 覆盖内容 |
-| --- | --- |
-| Desktop | Windows / Ubuntu / macOS、静态/共享、安装消费 |
-| Parser backends | 桌面可选 C 解析后端 |
-| Minimal | 模块关闭契约 |
-| Sanitizers | ASan/UBSan 与 TSan |
-| musl | Alpine 原生容器测试 |
-| ARM Linux | ARMv7/AArch64 交叉编译及 QEMU 兼容集合 |
-| Android | API 21/28、两种 ARM ABI 和最小配置 |
-
-工作流见 [build.yml](../.github/workflows/build.yml)。配置存在不等于远程已运行通过。本次全量 CTest 为 Windows 91/91、WSL Linux 93/93，递归查询相关 ASan/UBSan/LSan 为 3/3，C++ 工具测试也通过 TSan。此前全量 sanitizer 与 1,001 轮生命周期审查对应各自记录的版本，该次审查在每轮清理后观测到追踪存活字节为零。详见[验证记录](VALIDATION.zh-CN.md)。
+远端 CI 工作流不随公开源码提供，也没有开启远端自动测试。[验证记录](VALIDATION.zh-CN.md)保留各日期的实际结果；历史用例数量和本地路径不代表当前公开仓库的文件清单。实机、模拟器、QEMU、sanitizer 结果分别记录，不互相替代。
 
 ### 30.3 测量实际成本
 
@@ -2022,7 +1979,6 @@ TSan 在另一个目录配置 `HX_OS_SANITIZER=thread`，不与 ASan 混用。�
 | OBS 风格批次实现记录 | [OBS_COMPLETION.zh-CN.md](OBS_COMPLETION.zh-CN.md) |
 | 后续消费者迁移 | [MIGRATION.zh-CN.md](MIGRATION.zh-CN.md) |
 | 可编译示例 | [examples/](../examples) |
-| 安装消费验证 | [tests/install_consumer/](../tests/install_consumer) |
 
 [ci-badge]: https://img.shields.io/badge/CI-configured-lightgrey?logo=githubactions
 [c-badge]: https://img.shields.io/badge/C-99-blue?logo=c

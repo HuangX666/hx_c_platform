@@ -1,6 +1,6 @@
 # hx_c_platform
 
-[![CI 配置][ci-badge]](.github/workflows/build.yml) [![C99 核心][c-badge]](CMakeLists.txt) [![C++11 封装][cpp-badge]](docs/CPP_POOL.zh-CN.md) [![仅 C++ 封装为 header-only][header-badge]](docs/CPP_POOL.zh-CN.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![自有代码许可证待定][license-badge]](THIRD_PARTY_NOTICES.zh-CN.md) [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md) [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md) [![本地 Windows 179/179、Linux 181/181 项测试通过][tests-badge]](docs/VALIDATION.zh-CN.md) [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md) [![Android API 21 ARM 交叉编译通过][android-badge]](docs/ANDROID.zh-CN.md)
+[![C99 核心][c-badge]](CMakeLists.txt) [![C++11 封装][cpp-badge]](docs/CPP_POOL.zh-CN.md) [![仅 C++ 封装为 header-only][header-badge]](docs/CPP_POOL.zh-CN.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![自有代码许可证待定][license-badge]](THIRD_PARTY_NOTICES.zh-CN.md) [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md) [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md) [![本地验证记录][tests-badge]](docs/VALIDATION.zh-CN.md) [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md) [![Android API 21 ARM 交叉编译通过][android-badge]](docs/ANDROID.zh-CN.md)
 
 [English](README.md) · [常用任务教程](docs/USAGE.zh-CN.md) · [详细参考](docs/REFERENCE.zh-CN.md)
 
@@ -124,7 +124,7 @@ Linux 的 Makefile/Ninja 构建运行：
 
 结果应为 `Hello, hx_c_platform!`。输入文件按当前工作目录查找，因此这里先进入了 `build`。使用 C++ 时，把程序保存为 `main.cpp`，采用[教程中的完整 C++ CMake 配置](docs/USAGE.zh-CN.md#cpp-project)；其中也包含关闭异常的选项。
 
-维护本库时，参阅[复用构建目录与按需测试](docs/REFERENCE.zh-CN.md#section-4)。新配置默认关闭测试、示例和性能测试。Visual Studio 解决方案将库与依赖分别分组，示例／测试／基准统一收进 `examples`，库项目内部可以浏览头文件和源文件。
+客户可单独开启 `HX_OS_BUILD_EXAMPLES=ON` 编译使用示例。自动回归由维护者在本机运行，不随公开源码分发；示例无需回归文件。Visual Studio 将库、依赖和示例分别分组，库项目内可直接查看头文件与实现。
 
 <a id="section-4"></a>
 
@@ -517,11 +517,12 @@ HX_CODEC_STRUCT(connection,
 
 ## 7. 构建、验证与项目许可
 
-构建、测试、静态／共享安装和可选依赖见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。本地全量 CTest 为 Windows x64 179/179、Win32 176/176、WSL Linux 181/181。Android 现已带实际动态 OpenSSL 和压缩运行库执行全部已配置原生测试／示例：API 21 的 x86_64 与 ARM64 转译各通过 159 项、明确跳过 3 项；API 28 x86_64 通过 160 项、跳过 2 项，各另完成可移植基准。ARMv7／AArch64 Linux 有独立 QEMU 记录；Android ARMv7 编译通过，但当前模拟器不能执行它。[验证记录](docs/VALIDATION.zh-CN.md)列出配置、安装／ABI 检查及具体环境限制，不把模拟运行当作板卡实测。远端 CI 仅保留手动入口，本次未启动。
+构建、静态／共享库安装和裁剪选项见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。客户只需库和按需编译的 `examples/`；自动回归、ABI／泄漏专项脚本和 CI 工作流留在维护者本机，不进入公开源码。日常回归采用 20 项，额外检查按需启用。远端 CI 未启用。
 
-自有代码的发布许可证尚未确定，第三方许可证见[许可说明](THIRD_PARTY_NOTICES.zh-CN.md)。协程使用自研实现；hx_c_log 接入仍属于后续工作。
+[验证记录](docs/VALIDATION.zh-CN.md)保留带日期的历史结果与环境限制。Windows、WSL、Android 模拟器及 ARM Linux QEMU 的结果分别记录，不等同于所有系统版本或实体板卡均已通过。
 
-[ci-badge]: https://img.shields.io/badge/CI-manual%20only-lightgrey?logo=githubactions
+自有代码的发布许可证待确定，见[第三方许可](THIRD_PARTY_NOTICES.zh-CN.md)。协程为自研实现；hx_c_log 接入仍属于后续工作。
+
 [c-badge]: https://img.shields.io/badge/C-99-blue?logo=c
 [cpp-badge]: https://img.shields.io/badge/C%2B%2B-11-blue?logo=cplusplus
 [header-badge]: https://img.shields.io/badge/header--only-C%2B%2B%20facade-yellowgreen
@@ -530,6 +531,6 @@ HX_CODEC_STRUCT(connection,
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%20179%2F179%20Linux%20181%2F181-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-local%20validation-blue
 [embedded-badge]: https://img.shields.io/badge/ARM%20Linux-QEMU%20tested-blue
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

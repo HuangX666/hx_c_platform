@@ -26,7 +26,7 @@ IP addresses also accept `[::1]`; non-loopback addresses are rejected. A listene
 Build from the repository root, or use an existing build directory:
 
 ```sh
-cmake -S . -B build-ipc -DHX_OS_BUILD_TESTS=ON -DHX_OS_BUILD_EXAMPLES=ON
+cmake -S . -B build-ipc -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build-ipc --config Release --parallel 4
 ```
 
@@ -281,16 +281,10 @@ For KCP, HELLO/WELCOME are ordinary outer HXIP UDP frames. After exchanging sess
 
 Advanced users can drive [hx_os_kcp](../include/hx_os_kcp.h) directly with packets, time and an output callback; that engine creates no socket or worker thread. Ordinary IPC consumers select `kcp://` and need no update loop of their own.
 
-## 9. Run automated tests
+## 9. Run the examples
 
 ```sh
-ctest --test-dir build-ipc -C Release -R "ipc|kcp" --output-on-failure
+python examples/run_ipc_business.py --bin-dir build-ipc/bin/Release
 ```
 
-Native host builds with Python include `ipc`, `kcp` and `ipc_examples`. Add `-V` for individual demonstration output. Without Python, the first two suites and the manual two-terminal examples remain available.
-
-- `ipc`: four transports, simultaneous requests in both directions, concurrent/out-of-order replies, multiple peers, reconnect/session changes, late replies, capacity, retryable close, allocation failure and zero retained context allocations.
-- `kcp`: deliberate packet loss, duplication/reordering, duplex delivery, 32-bit clock rollover, message/queue limits and fixed allocation budgets.
-- `ipc_examples`: actual separate C server and C/C++ clients, independent Python TCP/Unix framing, split headers, coalesced frames, oversized/incomplete bodies and stale UDP sessions.
-
-Commands are not evidence of passing tests. See the current [validation record](VALIDATION.md) for Windows, WSL, Android, sanitizer and installed-consumer results. macOS, Win7 and embedded boards remain pending where no target run is recorded.
+This starts separate server/client processes for JSON device commands and notifications. See the earlier sections for the cross-language protocol and manual two-terminal usage. Regressions remain private to the maintainer; dated target results are in the validation records.

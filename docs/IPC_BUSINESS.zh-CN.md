@@ -13,7 +13,7 @@
 在仓库根目录构建默认模块：
 
 ```sh
-cmake -S . -B build-net -DHX_OS_BUILD_TESTS=ON -DHX_OS_BUILD_EXAMPLES=ON
+cmake -S . -B build-net -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build-net --config Release --parallel 4
 ```
 
@@ -125,14 +125,10 @@ hx_string_destroy(&request);
 
 配置模块的通用数字 getter 允许字符串转换，本例额外检查 JSON 类型：整数 `250` 可以使用，字符串 `"250"`、布尔值、缺失字段都不能代替整数。语法损坏、重复键、非对象根节点不会进入设备操作。消息正文最多 1023 字节，解析深度最多 8、节点最多 64，解析内存限额为 64 KiB。
 
-## 6. 所有权与测试
-
-主线程持有连接与线程参数，业务线程借用；先 join，再关闭连接。每条 IPC 消息、每个解析文档和临时 `hx_string` 都释放，文档中的节点/字符串在文档释放后失效。关闭超时保留对象供重试；请求超时不证明远端未执行操作。
+## 6. 所有权与运行示例
 
 ```sh
-ctest --test-dir build-net -C Release -R "^ipc_business_local$" --output-on-failure
+python examples/run_ipc_business.py --bin-dir build-net/bin/Release
 ```
 
-`ipc_business_local` 检查两个设备的 14 条业务回复、最终 `bye` 和两条主动通知，按 JSON 字段比较而不是比较序列化文本顺序。JSON 示例需要默认开启的 `CONFIG`、`CONFIG_SERIALIZE` 和 `SETTINGS`；关闭所需模块时不注册该业务测试。
-
-本例使用普通线程等待，不要放在 Qt UI 线程，也不声称具有协程挂起适配。CLI join 失败出口与可重试关闭边界见源码。目标平台证据见[验证记录](VALIDATION.zh-CN.md)。
+主线程持有端点和工作参数，先等待工作线程退出，再关闭端点。逐条释放消息、配置文档与临时字符串。关闭超时保留所有者以便重试；请求超时不代表对方未执行。运行器启动两个真实程序，检查 14 个回复、bye 和两条通知。Linux 的程序目录改为 build-net/bin。

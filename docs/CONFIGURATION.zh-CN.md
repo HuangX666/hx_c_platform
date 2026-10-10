@@ -73,14 +73,16 @@ cJSON 和 Mini-XML 执行原生解析，并共用严格校验和建树，以保�
 ~~~sh
 git submodule update --init --recursive
 cmake -S . -B build-parsers \
-  -DHX_OS_BUILD_TESTS=ON -DHX_OS_BUILD_EXAMPLES=ON \
+  -DHX_OS_BUILD_EXAMPLES=ON \
   -DHX_OS_ENABLE_CJSON=ON -DHX_OS_ENABLE_LIBYAML=ON \
   -DHX_OS_ENABLE_MINIXML=ON -DHX_OS_ENABLE_INIH=ON \
   -DHX_OS_ENABLE_TOMLC=ON \
   -DHX_OS_ENABLE_CRYPTO=OFF -DHX_OS_ENABLE_ARCHIVE=OFF
 cmake --build build-parsers --config Release --parallel 4
-ctest --test-dir build-parsers -C Release --output-on-failure
+build-parsers/bin/hx_os_configuration
 ~~~
+
+Windows 多配置构建的程序在对应 `bin/Release/` 目录，带 `.exe` 后缀。
 
 五个后端开关默认 OFF，HX_OS_ENABLE_CONFIG 默认 ON。 CONFIG=OFF 移除各格式实现，保留 ABI 查询/错误接口， parse/load 返回 NOT_SUPPORTED。关闭 CONFIG 时启用其后端属于配置错误。嵌入式消费者可以只选内置，也可以完全裁去配置模块。
 

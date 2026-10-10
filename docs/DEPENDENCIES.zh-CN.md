@@ -115,14 +115,12 @@ cmake -S tools/dependencies -B build-deps-aarch64 -G Ninja \
 cmake --build build-deps-aarch64 --parallel 2
 
 cmake -S . -B build-arm64 -G Ninja -DCMAKE_BUILD_TYPE=Release \
-  -DHX_OS_BUILD_TESTS=ON \
   -DCMAKE_TOOLCHAIN_FILE="$PWD/cmake/toolchains/embedded-linux.cmake" \
   -DHX_OS_TARGET_PROCESSOR=aarch64 \
   -DHX_OS_CROSS_PREFIX=aarch64-linux-gnu- -DHX_OS_SYSROOT=/ \
   -DHX_OS_DEPENDENCY_PREFIX="$PWD/build-deps-aarch64/prefix" \
   -DCMAKE_CROSSCOMPILING_EMULATOR="qemu-aarch64;-L;/usr/aarch64-linux-gnu"
 cmake --build build-arm64 --parallel 4
-ctest --test-dir build-arm64 --output-on-failure
 ```
 
 本机 ARMv7 hard-float GNU 工具链对应参数为 `armv7`、`arm-linux-gnueabihf-`、OpenSSL `linux-armv4`、`qemu-arm;-L;/usr/arm-linux-gnueabihf`。浮点 ABI 由工具链确定，不由 OpenSSL 目标名推断。QEMU 系统调用转换的限制与库缺陷分别记录，运行这些命令不能替代板卡验收。

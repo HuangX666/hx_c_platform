@@ -206,12 +206,12 @@ int main()
 
 C++ 层调用相同的 C 实现，返回 `Result<hx_os_archive_result>`。结果携带值时，失败也能查看部分完成计数。`forEach` 接受 `noexcept` 回调，可返回 void、状态码或 `Result<void>`；没有异常转发、隐藏后台队列或另一套 C++ 编解码实现。
 
-## 8. 运行对应测试
+## 8. 运行压缩示例
 
 ```sh
-ctest --test-dir build -C Release -R "archive" --output-on-failure
+build/bin/hx_os_archive_files pack input-folder records.zip
+build/bin/hx_os_archive_files list records.zip
+build/bin/hx_os_archive_files unpack records.zip restored-folder
 ```
 
-`archive` 覆盖各格式、密码、上限、已有文件、指定提取、取消和分配失败；`cpp_archive` 使用禁用异常的 C++ 封装。`archive_interop` 调用完整示例，与 Python 生成的 ZIP/TAR/Gzip/XZ 互读，并检查多层 Unicode 路径、空流、损坏尾部、非法路径、链接和并发独立进程。可选 `archive_7zip` 需要 `HX_OS_ENABLE_7ZIP=ON`，以及 `HX_OS_TEST_7ZIP_LIBRARY=/absolute/runtime/7z.so` 或 `.dll`；它还检查桥接所有权路径的分配失败。
-
-实际配置和结果见[验证记录](VALIDATION.zh-CN.md)。Windows／WSL 的执行证据，与 macOS、Windows 7/8.1、Android、ARMv7/AArch64、musl 和真实板卡验证分开记录，不把尚未执行的目标写成已通过原生压缩测试。
+先准备 input-folder，输出归档和 restored-folder 应不存在。Windows 程序位于 build/bin/Release，带 .exe 后缀。详细参数见前文；使用示例不依赖维护者的格式互操作和失败注入回归。历史平台结果见验证记录。

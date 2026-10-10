@@ -1,6 +1,10 @@
 /build*/
 /cmake-build*/
 /out/
+/tests/
+/tools/verify_*.py
+/tools/check_exports.py
+/.github/workflows/build.yml
 /dist/
 /install*/
 .deps/

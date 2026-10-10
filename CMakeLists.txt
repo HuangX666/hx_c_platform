@@ -10,10 +10,18 @@ include(cmake/HxFormat.cmake)
 include(cmake/HxDependencySources.cmake)
 
 option(BUILD_SHARED_LIBS "Build shared library" OFF)
-option(HX_OS_BUILD_TESTS "Build contract tests" OFF)
+option(HX_OS_BUILD_TESTS "Build local maintainer tests (not distributed)" OFF)
 option(HX_OS_BUILD_EXAMPLES "Build standalone C examples" OFF)
 option(HX_OS_BUILD_BENCHMARKS "Build development microbenchmarks" OFF)
 option(HX_OS_TEST_FORMAT_SYNTAX "Test optional host format generator" OFF)
+mark_as_advanced(HX_OS_BUILD_TESTS HX_OS_TEST_FORMAT_SYNTAX)
+
+if(HX_OS_BUILD_TESTS AND
+	NOT EXISTS "${PROJECT_SOURCE_DIR}/tests/CMakeLists.txt")
+	message(FATAL_ERROR
+		"Local maintainer tests are not distributed. "
+		"Use -DHX_OS_BUILD_TESTS=OFF and -DHX_OS_BUILD_EXAMPLES=ON.")
+endif()
 
 option(HX_OS_ENABLE_NETWORK "Build native networking" ON)
 option(HX_OS_ENABLE_KCP "Build bounded reliable UDP protocol adapter" ON)
@@ -826,6 +834,10 @@ endif()
 
 if(HX_OS_BUILD_EXAMPLES)
 	add_subdirectory(examples)
+
+	if(HX_OS_BUILD_TESTS AND HX_OS_EXTENDED_TESTS)
+		add_subdirectory(tests/examples)
+	endif()
 endif()
 
 if(HX_OS_BUILD_BENCHMARKS)

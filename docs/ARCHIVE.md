@@ -206,12 +206,12 @@ int main()
 
 The C++ facade forwards to the C implementation and uses `Result<hx_os_archive_result>`. When a result carries a value, partial counters remain accessible even on failure. `forEach` accepts a `noexcept` callback returning void, a status or `Result<void>`. There is no exception propagation, hidden background queue or separate C++ codec implementation.
 
-## 8. Run the relevant tests
+## 8. Run the archive example
 
 ```sh
-ctest --test-dir build -C Release -R "archive" --output-on-failure
+build/bin/hx_os_archive_files pack input-folder records.zip
+build/bin/hx_os_archive_files list records.zip
+build/bin/hx_os_archive_files unpack records.zip restored-folder
 ```
 
-`archive` covers supported formats, passwords, limits, existing files, explicit extraction, cancellation and allocator failures. `cpp_archive` uses the exception-free facade. `archive_interop` drives the runnable example against Python-generated ZIP/TAR/Gzip/XZ files, nested Unicode paths, empty streams, corrupt trailers, invalid paths, links and concurrent independent processes. Optional `archive_7zip` needs `HX_OS_ENABLE_7ZIP=ON` and `HX_OS_TEST_7ZIP_LIBRARY=/absolute/runtime/7z.so` (or `.dll`); it also injects failures in native-bridge ownership paths.
-
-See [VALIDATION](VALIDATION.md) for actual configurations and results. Windows/WSL execution is separate evidence from macOS, Windows 7/8.1, Android, ARMv7/AArch64, musl and physical-board verification. None of those untested targets is represented as having passed native archive tests.
+Prepare input-folder first; the output archive and restored-folder should not already exist. Windows executables are under build/bin/Release with .exe suffix. See the earlier sections for options. The example needs no private interoperability/failure-injection tests; historical platform results are in the validation records.

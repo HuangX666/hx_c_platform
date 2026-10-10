@@ -168,7 +168,7 @@ static hx_os_status format_user(const void *object, hx_string_view spec,
 HX_FORMATTER(user_info, format_user);
 ```
 
-注册放在启用生成步骤的源文件中，类型和回调必须已经声明。回调借用 `object`，使用 `out` 的 context 写入 UTF-8，遵守 `limit` 并返回状态；自定义说明符的语义由回调负责。不使用生成器时传 `hx_fmt_custom(&user, format_user)`。[生成源码测试](../tests/test_format_generated.c) 提供了完整回调及调用。[C++ 特化](../tests/test_cpp_format.cpp) 对应 `hx::Formatter<T>::format`，第一个参数改为具体类型引用，说明符用 `hx::StringView`。
+注册放在启用生成步骤的源文件中，类型和回调必须已经声明。回调借用 `object`，使用 `out` 的 context 写入 UTF-8，遵守 `limit` 并返回状态；自定义说明符的语义由回调负责。不使用生成器时传 `hx_fmt_custom(&user, format_user)`。C++ 特化 对应 `hx::Formatter<T>::format`，第一个参数改为具体类型引用，说明符用 `hx::StringView`。
 
 格式化先写临时结果，成功后才替换目标。语法、类型、UTF-8、分配失败或容量超限都会保持目标原样；参数借用了目标原有内容时同样成立。实参指针及回调数据只借用到本次同步调用结束。默认最多输出 16 MiB、最多 1,024 个参数；打印追加的 LF 也计入输出上限。回调必须在分配前遵守传入的限制，库在最后检查大小不能阻止应用回调提前大量分配自己的内存。这里没有全局格式化注册表，也不更换全局分配器。
 

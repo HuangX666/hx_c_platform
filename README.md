@@ -1,6 +1,6 @@
 # hx_c_platform
 
-[![CI configuration][ci-badge]](.github/workflows/build.yml) [![C99 core][c-badge]](CMakeLists.txt) [![C++11 facade][cpp-badge]](docs/CPP_POOL.md) [![Header-only C++ facade][header-badge]](docs/CPP_POOL.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![First-party license pending][license-badge]](THIRD_PARTY_NOTICES.md) [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md) [![macOS validation pending][macos-badge]](docs/VALIDATION.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.md) [![Windows 179/179 and Linux 181/181 local suites passed][tests-badge]](docs/VALIDATION.md) [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md) [![Android API 21 ARM cross-build passed][android-badge]](docs/ANDROID.md)
+[![C99 core][c-badge]](CMakeLists.txt) [![C++11 facade][cpp-badge]](docs/CPP_POOL.md) [![Header-only C++ facade][header-badge]](docs/CPP_POOL.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![First-party license pending][license-badge]](THIRD_PARTY_NOTICES.md) [![Linux GCC and Clang][linux-badge]](docs/VALIDATION.md) [![macOS validation pending][macos-badge]](docs/VALIDATION.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.md) [![Local validation records][tests-badge]](docs/VALIDATION.md) [![Embedded Linux target pending][embedded-badge]](docs/VALIDATION.md) [![Android API 21 ARM cross-build passed][android-badge]](docs/ANDROID.md)
 
 [简体中文](README.zh-CN.md) · [Task tutorials](docs/USAGE.md) · [Detailed reference](docs/REFERENCE.md)
 
@@ -124,7 +124,7 @@ For a Makefile/Ninja build on Linux, run:
 
 The result should be `Hello, hx_c_platform!`. Input paths use the current working directory, so these commands enter `build` first. For C++, save the program as `main.cpp` and use the [complete C++ CMake setup](docs/USAGE.md#cpp-project), including its options to disable exceptions.
 
-Library developers: [reuse build directories and run selected tests](docs/REFERENCE.md#section-4). Tests, examples and benchmarks are disabled in a fresh default build. The Visual Studio solution groups libraries and dependencies separately, with demos/tests/benchmarks under `examples`; library headers and sources are available inside the library project.
+Enable `HX_OS_BUILD_EXAMPLES=ON` to build the usage examples independently. Maintainer regressions stay local and are not distributed with the public sources; examples require no private test files. Visual Studio groups libraries, dependencies and examples, with headers and implementation inside the library project.
 
 <a id="section-4"></a>
 
@@ -517,11 +517,12 @@ For one-call text/file encryption, SHA-256, HMAC and signatures, see [cryptograp
 
 ## 7. Builds, validation and licensing
 
-See the [build reference](docs/REFERENCE.md#section-27) for tests, static/shared installation and optional dependencies. Local full CTest passes are Windows x64 179/179, Win32 176/176 and WSL Linux 181/181. Android now runs every configured native test/example with its actual dynamic OpenSSL and compression runtimes: API 21 x86_64 and translated ARM64 each pass 159 with 3 explicit skips; the API 28 x86_64 build passes 160 with 2 skips. Each also completes the portable benchmark. ARMv7/AArch64 Linux have separate QEMU records; Android ARMv7 compiles but this emulator cannot execute it. [Validation records](docs/VALIDATION.md) list configurations, installation/ABI checks and exact environment limits. Physical boards are not inferred from simulation. Remote CI is manual-only and was not started.
+See the [build reference](docs/REFERENCE.md#section-27) for static/shared installation and feature switches. Customers need the library and optional `examples/`. Automated regressions, ABI/leak-check scripts and CI workflows stay on the maintainer's machine, outside the public sources. Daily regression uses 20 suites; additional checks are opt-in. Remote CI is not enabled.
+
+[Dated validation records](docs/VALIDATION.md) retain historical results and environment limits. Windows, WSL, Android emulator and ARM Linux QEMU results are separate evidence, not proof for every OS version or physical board.
 
 The first-party distribution license is pending; see [third-party licensing](THIRD_PARTY_NOTICES.md). The coroutine implementation is self-developed; hx_c_log integration remains future work.
 
-[ci-badge]: https://img.shields.io/badge/CI-manual%20only-lightgrey?logo=githubactions
 [c-badge]: https://img.shields.io/badge/C-99-blue?logo=c
 [cpp-badge]: https://img.shields.io/badge/C%2B%2B-11-blue?logo=cplusplus
 [header-badge]: https://img.shields.io/badge/header--only-C%2B%2B%20facade-yellowgreen
@@ -530,6 +531,6 @@ The first-party distribution license is pending; see [third-party licensing](THI
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%20179%2F179%20Linux%20181%2F181-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-local%20validation-blue
 [embedded-badge]: https://img.shields.io/badge/ARM%20Linux-QEMU%20tested-blue
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

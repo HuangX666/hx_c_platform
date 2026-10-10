@@ -9,10 +9,12 @@ Enable `HX_OS_ENABLE_CRYPTO` (default ON). This adds the pinned OpenSSL 3.5 SDK 
 First prepare the dependency SDK using [the dependency instructions](DEPENDENCIES.md#4-build-the-native-dependency-stack), then configure the library with an absolute prefix:
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/project/build-deps/prefix -DHX_OS_BUILD_EXAMPLES=ON -DHX_OS_BUILD_TESTS=ON
-cmake --build build --config Release --parallel 4
-ctest --test-dir build -C Release -R "crypto|encrypt_text" --output-on-failure
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/project/build-deps/prefix -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build build --config Release --target hx_os_encrypt_text --parallel 4
+build/bin/hx_os_encrypt_text
 ```
+
+Windows multi-configuration builds place these programs in the corresponding `bin/Release/` directory with an `.exe` suffix.
 
 OpenSSL is dynamically linked by default. On Windows the build copies its selected Crypto DLL into the library's `bin/<config>` directory; applications using `add_subdirectory` with another executable directory must also place that DLL beside their executable, or use the installed `bin` directory on PATH. Installation includes the selected Crypto runtime by default (`HX_OS_INSTALL_OPENSSL_RUNTIME=OFF` disables copying when your application owns deployment). Linux installs it next to the core shared library with an origin-relative runtime path. Static core consumers still link OpenSSL dynamically unless explicitly configured otherwise. They need the SDK prefix in their `CMAKE_PREFIX_PATH` when calling `find_package(hx_c_platform CONFIG REQUIRED)`.
 

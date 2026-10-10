@@ -69,6 +69,6 @@ return request.value().close().status();
 
 沿用只可移动的同步便利类，以 Result 返回错误，不使用异常。停用后再 close 合法，也不会撤销别的对象持有的请求。
 
-运行 `ctest --test-dir build -R linux_desktop_power --output-on-failure`，测试会启动隔离的 dbus-daemon 和受控服务，验证三个服务名的 C/C++ 调用、Unicode 原因、独立消费者、停用／重新激活、跨线程清理、权限拒绝、错误回复类型、超时、总线断开、非本机地址拒绝及缺少运行库符号。需要 Python 3、dbus-daemon 和 sd-bus 运行库，缺少前提时明确标为 skipped。测试不修改真实桌面电源策略；普通 Linux power／C++ 测试将这部分行为交给隔离测试。
+维护者使用本机隔离 D-Bus 回归验证服务发现、Unicode、权限、超时与清理。客户可编译并运行 [sleep_inhibit.c](../examples/sleep_inhibit.c)，在有对应桌面服务的环境体验防睡眠申请；该示例实际申请临时桌面租约。历史运行结果见[验证记录](VALIDATION.zh-CN.md)。
 
 以上证明的是协议适配和资源生命周期。真实 GNOME／KDE 桌面的电源策略／休眠效果、libelogind、旧发行版、musl 与嵌入式目标，仍需分别进行目标验证，见[验证记录](VALIDATION.zh-CN.md)；WSL 协议测试不等于验证了物理机器不会休眠。

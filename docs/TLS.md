@@ -9,22 +9,24 @@ TLS here means Transport Layer Security. Thread-local storage still uses `hx_os_
 Prepare the [dependency SDK](DEPENDENCIES.md#4-build-the-native-dependency-stack). `HX_OS_ENABLE_TLS` defaults to ON and requires CRYPTO, NETWORK, LOOP and FILE_UTILS. Disabling a prerequisite makes `hx_os_tls_available()` return 0 and the TLS operations return `HX_OS_NOT_SUPPORTED`. It does not start a thread at program load.
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/path/to/build-deps/prefix -DHX_OS_BUILD_EXAMPLES=ON -DHX_OS_BUILD_TESTS=ON
-cmake --build build --config Release --parallel 4
-ctest --test-dir build -C Release -R "tls" --output-on-failure
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/path/to/build-deps/prefix -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build build --config Release --target hx_os_tls_json_server hx_os_tls_json_client --parallel 4
 ```
 
-Run the two actual business programs together:
+With existing certificates, replace the three paths below; the certificate SAN must contain `localhost`. The runner chooses an available port, launches both programs and checks the JSON replies. It needs no private regression executable and leaves your certificate files unchanged.
 
 ```sh
-# Linux/macOS build layout
-python3 examples/run_tls_business.py --bin-dir build/bin
-
-# Visual Studio build layout
-python examples/run_tls_business.py --bin-dir build/bin/Release
+python examples/run_tls_business.py --bin-dir build/bin --certificate server-cert.pem --private-key server-key.pem --ca ca.pem
 ```
 
-The runner needs the test targets built. It generates a fresh local test CA and server certificate in a temporary directory, chooses a free listening port and launches separate client/server processes. It checks all JSON replies and removes its test credentials. These generated identities are test fixtures, not deployment credentials.
+For Visual Studio, use `--bin-dir build/bin/Release`. To try the local demo without existing certificates, use an installed OpenSSL command-line tool to create a one-day self-signed demo certificate:
+
+```sh
+openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=localhost -addext subjectAltName=DNS:localhost,IP:127.0.0.1 -keyout demo-key.pem -out demo-cert.pem
+python examples/run_tls_business.py --bin-dir build/bin --certificate demo-cert.pem --private-key demo-key.pem --ca demo-cert.pem
+```
+
+Generate these files in an empty demo directory to avoid overwriting existing credentials, then pass their paths. Remove them after the demo. Use your own certificate/key management in production; certificate and hostname checks stay enabled.
 
 The [C client](../examples/tls_json_client.c) starts one sending thread and one receiving thread on the same connection. It sends three temperature readings. The [C server](../examples/tls_json_server.c) returns three acknowledgements and an additional alarm for the second reading. Each JSON carries its request `id`; the readings also carry a UTF-8 `device` value. The output includes:
 
@@ -81,7 +83,7 @@ auto closed = connection.closeUntil(hx_os_deadline_after_ms(2000));
  * The facade destructor does not close, kill or detach its worker. */
 ```
 
-These are focused API fragments. Complete checked programs are the business examples and [C++ contract program](../tests/test_cpp_tls.cpp). Do not return from a host scope that still owns an endpoint. A failed call does not automatically destroy that endpoint.
+These are focused API fragments. Complete checked programs are the business examples. Do not return from a host scope that still owns an endpoint. A failed call does not automatically destroy that endpoint.
 
 ## 3. One sender and one receiver on the same connection
 

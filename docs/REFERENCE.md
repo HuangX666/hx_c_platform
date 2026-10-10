@@ -113,7 +113,6 @@ hx_c_platform/
 │   └── apple/                 Apple backend pieces
 ├── cmake/                     Target options, packages and SDK toolchain
 ├── examples/                  Buildable common tasks
-├── tests/                     Contracts, headers and installed consumers
 ├── benchmarks/                Development performance probes
 ├── tools/                     Dependency preparation and verification
 └── docs/                      Separate English and Chinese documents
@@ -159,17 +158,15 @@ cmake --build out/windows --config Release --parallel 4
 
 CMake 3.16 predates the VS2022 generator; use NMake in a configured MSVC developer shell for that version. Ordinary C library builds do not probe for a C++ compiler. Existing caches retain their previous options; pass `-DHX_OS_BUILD_TESTS=OFF -DHX_OS_BUILD_EXAMPLES=OFF` to turn them off in an existing directory.
 
-When changing strings, for example, enable tests in the same directory and build only the relevant target:
+Enable examples and build the program you want to explore, such as formatted printing:
 
 ```sh
-cmake -S . -B out/linux -DHX_OS_BUILD_TESTS=ON
-cmake --build out/linux --target hx_os_test_string_tools --parallel 4
-cd out/linux
-ctest -R '^string_tools$' --output-on-failure
-cd ../..
+cmake -S . -B out/linux -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build out/linux --target hx_os_format --parallel 4
+out/linux/bin/hx_os_format
 ```
 
-Use `-DHX_OS_BUILD_EXAMPLES=ON` to build the bundled examples. Ordinary edits use the affected targets and tests; documentation-only edits normally need no build. Run broader platform, sanitizer or performance checks when the changed behavior or release acceptance requires them. Keep current diagnostics inside the build directory, retain only necessary measurement records, and remove finished temporary comparison builds. Do not move CMake caches between platforms or delete dependency SDKs still referenced by retained builds.
+With a Windows multi-configuration generator, add `--config Release`; executables are under `out/windows/bin/Release/`. Examples are independent of private regressions; their tutorials give the arguments. Regression files are not distributed in the public repository, and library users do not need `HX_OS_BUILD_TESTS`. Reuse build directories; documentation edits normally need no rebuild.
 
 For Visual Studio, open the generated `hx_c_platform.sln`. The solution groups existing targets as follows; optional targets appear only when enabled:
 
@@ -186,12 +183,11 @@ hx_c_platform
 ├── deps                    (dependency build targets)
 ├── examples
 │   ├── demos               (usage examples)
-│   ├── tests               (automated tests and fixtures)
 │   └── benchmarks          (performance and layout tools)
 └── CMake                   (ALL_BUILD, INSTALL, ZERO_CHECK, etc.)
 ```
 
-These are IDE folders. Source directories, executable names and CTest commands stay the same. In CMake GUI, select the existing source/build directories, then click **Configure** and **Generate**; reload the solution in Visual Studio. Do not edit `.sln`, `.vcxproj` or `.filters` files by hand. All public C/C++ headers are available under `Public`; `Source Files` shows the sources selected by the current platform and feature switches. When used via `add_subdirectory`, the enclosing project controls the global `USE_FOLDERS` setting. An installed SDK consumer shows its own targets; open the library's source solution to browse the implementation.
+These are IDE folders. Source directories and executable names stay the same. In CMake GUI, select the existing source/build directories, then click **Configure** and **Generate**; reload the solution in Visual Studio. Do not edit `.sln`, `.vcxproj` or `.filters` files by hand. All public C/C++ headers are available under `Public`; `Source Files` shows the sources selected by the current platform and feature switches. When used via `add_subdirectory`, the enclosing project controls the global `USE_FOLDERS` setting. An installed SDK consumer shows its own targets; open the library's source solution to browse the implementation.
 
 ### 4.2 Read UTF-8 text from C
 
@@ -1789,7 +1785,7 @@ All new native/common modules default to ON; optional third-party encoding and p
 | Option | Default | Purpose |
 | --- | --- | --- |
 | `BUILD_SHARED_LIBS` | OFF | Build shared library |
-| `HX_OS_BUILD_TESTS` | OFF | Build contract tests |
+| `HX_OS_BUILD_TESTS` | OFF | Advanced local maintainer option; regression sources are not distributed |
 | `HX_OS_ENABLE_CRYPTO` | ON | OpenSSL data cryptography |
 | `HX_OS_ENABLE_TLS` | ON | Verified full-duplex TLS endpoints |
 | `HX_OS_ENABLE_ARCHIVE` | ON | Files/directories through the archive SDK |
@@ -1876,20 +1872,7 @@ These are POSIX-shell continuations; PowerShell users can put the configure argu
 
 ### 28.1 Android NDK and a selected device
 
-Use an installed NDK; these tools do not modify SDK sources:
-
-```sh
-python tools/verify_android.py --ndk /absolute/path/to/ndk
-python tools/verify_android.py --ndk /absolute/path/to/ndk --api 21 --minimal
-python tools/verify_android.py --ndk /absolute/path/to/ndk --api 21 --static
-adb devices -l
-python tools/verify_android.py --ndk /absolute/path/to/ndk \
-  --api 21 --abi arm64-v8a --serial DEVICE_SERIAL
-```
-
-Defaults cross-build both ARM ABIs for API 21/28; `--serial` explicitly selects runtime validation. `--abi x86_64` supports compatible emulators. An empty adb list can mean an installed AVD is stopped; check `emulator -list-avds` before concluding no emulator exists.
-
-The runner discovers every configured native CTest test instead of maintaining a fixed subset. Pass `--dependency-prefix` for the selected ABI/API to enable crypto, dynamic TLS and compression, `--parsers --iconv` for optional text backends, and `--sevenzip-library` for the optional target 7-Zip runtime. Reports distinguish build API from runtime API, native execution from translation, and host-only tests from device tests. API 21 has finite native join with timeout/retry; process spawning requires a minimum API of 28. See [Android instructions and current evidence](ANDROID.md). Physical boards, an actual Android 5.0 system and APK sandbox acceptance remain separate.
+Use an installed NDK and dependency SDK matching the ABI/API. Cross-compile the library and examples with CMake, then run them on an explicitly selected device using adb. The [Android guide](ANDROID.md) covers commands, runtime deployment and platform limits without private maintainer scripts. API 21 supports finite joins; process creation requires a build minimum of API 28.
 
 ### 28.2 A small C-only board configuration
 
@@ -1945,41 +1928,15 @@ The library does not force process termination or kill business threads. Deadlin
 
 ## 30. Tests, CI and performance evidence
 
-### 30.1 Local verification
+### 30.1 Customer examples and local regressions
 
-```sh
-python tools/verify_install.py build --config Release
-python tools/verify_abi.py build-shared --config Release
-```
+The public repository provides the library, API documentation and runnable `examples/`. Enable `HX_OS_BUILD_EXAMPLES=ON` to build them; business runners use only example programs, with no regression dependency.
 
-The first command installs to an isolated prefix under the build directory, then runs fifteen C/C++ consumers and nine consumers in a C-only project when the default facilities are available. The ABI command requires a prepared shared build and the repository baseline history. These are native-host checks, not cross-target emulators.
+The maintainer keeps 20 daily suites and opt-in specialized checks locally. They are excluded from Git and installation packages; customers need no test configuration. If an existing cache enables `HX_OS_BUILD_TESTS`, turn it OFF before configuring the public sources.
 
-For GCC/Clang memory checking, configure a separate build:
+### 30.2 Validation evidence
 
-```sh
-cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug \
-  -DHX_OS_SANITIZER=address,undefined -DHX_OS_BUILD_TESTS=ON
-cmake --build build-asan --parallel 4
-cd build-asan
-ASAN_OPTIONS=detect_leaks=1 ctest --output-on-failure
-cd ..
-```
-
-Use a different directory with `HX_OS_SANITIZER=thread` for TSan; do not combine it with ASan. Tests cover UTF-8 paths, short I/O, failures and bounds, timeout/retry, cancellation, callbacks, TLS cleanup, C/C++ headers, module selection and installed consumption. Relevant target limits remain visible.
-
-### 30.2 CI configuration versus executed evidence
-
-| Configured job | Coverage |
-| --- | --- |
-| Desktop | Windows / Ubuntu / macOS, static/shared, installed consumers |
-| Parser backends | Optional C parser adapters on desktop targets |
-| Minimal | Disabled-module contracts |
-| Sanitizers | ASan/UBSan and TSan configurations |
-| musl | Native Alpine container contracts |
-| ARM Linux | ARMv7/AArch64 cross-build and QEMU-compatible subset |
-| Android | API 21/28 two-ARM-ABI matrix and minimal builds |
-
-The workflow file is [build.yml](../.github/workflows/build.yml). Configuration does not mean a remote job has passed. Current full CTest results are Windows 91/91 and WSL Linux 93/93. The recursive search change passed three affected ASan/UBSan/LSan tests and the C++ utility suite under TSan. Earlier full sanitizer runs and the 1,001-round lifecycle audit belong to their recorded versions; the audit observed zero tracked live bytes after cleanup. See [validation](VALIDATION.md).
+Remote CI workflows are not distributed or enabled. [Validation records](VALIDATION.md) retain dated results; historical counts and local paths do not describe the current public file inventory. Physical hardware, emulation, QEMU and sanitizer results are recorded separately.
 
 ### 30.3 Measure actual cost
 
@@ -2022,7 +1979,6 @@ Future work includes native target validation and measured improvements. hx_c_lo
 | Implemented OBS-inspired batches | [OBS_COMPLETION.md](OBS_COMPLETION.md) |
 | Future consumer migration | [MIGRATION.md](MIGRATION.md) |
 | Buildable examples | [examples/](../examples) |
-| Consumer installation checks | [tests/install_consumer/](../tests/install_consumer) |
 
 [ci-badge]: https://img.shields.io/badge/CI-configured-lightgrey?logo=githubactions
 [c-badge]: https://img.shields.io/badge/C-99-blue?logo=c

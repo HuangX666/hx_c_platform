@@ -22,7 +22,7 @@
 | 关闭并释放线程池 | hx_os_thread_pool_shutdown / _ex | hx::ThreadPool::shutdownUntil |
 | 指定线程数和队列容量 | 既有 pool options | hx::ThreadPool::withThreads |
 
-可编译示例：[direct_calls.cpp](../examples/direct_calls.cpp)、[settings.c](../examples/settings.c)、[common_tasks.c](../examples/common_tasks.c)、[thread_pool.cpp](../examples/thread_pool.cpp)。完整 C++ 调用覆盖见 [test_cpp_utilities.cpp](../tests/test_cpp_utilities.cpp)。
+可编译示例：[direct_calls.cpp](../examples/direct_calls.cpp)、[settings.c](../examples/settings.c)、[common_tasks.c](../examples/common_tasks.c)、[thread_pool.cpp](../examples/thread_pool.cpp)。
 
 ## 字符串与编码
 

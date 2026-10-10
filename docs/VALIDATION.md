@@ -8,6 +8,22 @@ This records development validation through 2026-10-10. A design, implemented ad
 
 The JSON entry below records the current examples. Earlier independent text examples, initial shared workflows, IPC/KCP implementation and other batches describe their historical versions.
 
+## 2026-10-10: Local-only regressions, 20 daily suites
+
+Under the project maintenance policy, 131 tracked files from tests/, automated verification tools and the regression workflow are removed from Git while their local copies remain ignored. Customer examples build and run independently. The TLS business runner accepts caller-supplied certificates instead of using test_tls to generate them. Bilingual customer commands and private-source references are updated. Historical report filenames, counts and paths describe their original validation states.
+
+The local daily profile generates 20 existing test programs: core, data, lifecycle, config, config_serialize, codec, containers, stl, variant, file_utils, format, pool, pool_wait, net, ipc, coroutine, coroutine_sync, tls, archive and cpp_utilities. Disabling relevant modules or lacking C++ can reduce this count. Specialized suites are opt-in, not folded into those 20; the INI control-character and CODEC floating-point regression sources remain local. The 40 redundant example registrations removed earlier are not restored.
+
+| Reused environment | Result in this change |
+| --- | --- |
+| Windows MSVC x64 Debug, build-shared-msvc | Daily profile: 20/20 passed |
+| WSL2 Linux Release, build-shared-linux | Daily profile: 19/20 passed; ipc timed out receiving ordinary UDP, also failing an isolated rerun |
+| Native socket comparison on the same WSL2 | Without this library, 128-byte loopback UDP arrived; 40,064-byte loopback UDP timed out. Large datagrams are also affected at the environment level; ipc is not marked passed |
+| Customer build | With the entire private tests/ directory temporarily absent and regressions disabled, hello, format, codec_macros and TLS duplex examples built and ran in the existing Linux directory; private files were restored intact |
+| Extended switch | The existing Linux directory registered 141 opt-in suites; configuration only, no full rerun. Restored the daily profile of 20 afterward |
+
+No new build directory, library implementation change, vendor edit, Android/ARM rerun or sanitizer matrix was introduced. Remote CI stays disabled. Private regressions are not installed for customers; Git history is not rewritten.
+
 ## 2026-10-10: INI controls and independent CODEC numeric formatting
 
 Fixed two defects reproduced against `97a1147`. INI serialization now rejects C0 controls other than embedded TAB in keys, values and section names, returning `HX_OS_UNREPRESENTABLE` while preserving the previous output. The existing serialization suite covers all C0 byte values in those three positions and retains the parser's existing TAB/DEL acceptance. CODEC now retains its internal floating-point formatter when CONFIG, CONFIG_SERIALIZE and CODEC are enabled, independently of TEXT_NUMBER and SETTINGS. The existing CODEC suite additionally checks precise double/float JSON round trips.

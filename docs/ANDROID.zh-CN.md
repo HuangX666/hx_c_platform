@@ -4,67 +4,30 @@
 
 确认基线为 **Android 5.0 / API 21**，覆盖 **arm64-v8a、armeabi-v7a**，补充 API 28 构建。Android 是独立目标，不能把桌面 Linux、WSL 或 glibc/QEMU 结果视为 Android 运行证据。
 
-新运行默认复用 `out/android/`，也可通过 `--build-root` 复用已有目录。下文历史路径表示当时的运行位置；本地构建清理后，保留的 JSON 报告归入 `out/records/<原构建目录名>/`，旧二进制和日志不长期保留。
+## 编译库与示例
 
-## 构建与运行
-
-使用现有 NDK，脚本不下载或修改 SDK。可选依赖准备遵循所选来源，不改写第三方源码：
-
-~~~text
-python tools/verify_android.py --ndk /absolute/path/to/ndk/28.2.13676358
-~~~
-
-默认构建两个 ABI × 两个 API，包含库、示例、基准和全部测试可执行文件，以及公共头 C99/C++11 独立编译。需要显式指定 Ninja 时追加 --ninja。 Windows 本地可用 NDK 路径 E:/Android/Sdk/ndk/28.2.13676358， Ninja 路径 E:/Android/Sdk/cmake/3.22.1/bin/ninja.exe。
-
-~~~text
-python tools/verify_android.py --ndk /path/to/ndk --api 21 --minimal
-python tools/verify_android.py --ndk /path/to/ndk --api 21 --static
-~~~
-
---minimal 使用现有 cmake/minimal.cmake。默认共享库，--static 选择静态库。 --build-root 隔离记录。脚本默认只交叉编译，不执行 ARM 文件或自动选择设备。
-
-adb 列表为空时，先检查未启动的 AVD。本机已有 Qt_Android_34：
-
-~~~text
-emulator -list-avds
-emulator -avd Qt_Android_34 -port 5580 -read-only -no-snapshot
-~~~
-
-等待启动完成后使用 emulator-5580。--read-only 保留原 AVD 用户数据， --no-snapshot 不加载或保存快照。自动验证可加 -no-window -no-audio。本机 AVD 为 x86_64；新增 --abi x86_64 作为模拟器补充配置，ARM 默认值不变。
-
-~~~text
-adb devices -l
-python tools/verify_android.py --ndk /path/to/ndk --api 21 --abi arm64-v8a --serial DEVICE_SERIAL
-~~~
-
-可用 `--adb` 指定 adb 绝对路径。脚本检查明确选中的 ABI/API，创建隔离的 `/data/local/tmp/hx_c_platform-随机值` 目录，并通过 `ctest --show-only=json-v1` 自动取得**全部已配置原生测试和示例**，不再手工维护套件列表。参数、测试文件、工作目录、环境变量、输出要求、跳过码和超时均来自 CTest。宿主 Python／工具命令另列为 `host_tests`，不计入设备运行。
-
-因此，新增加密／TLS／压缩、流和后台文件写出、字节队列、INI／备份／设置、信号／参数、解析／预处理、profiler 测试，都会与已有平台、容器、协程和序列化测试一起运行。关闭模块的配置验证明确的不支持行为。指定 7-Zip 运行库后增加 `archive_7zip`，平台专有能力的缺失单独说明。
-
-启用完整可选依赖时，先按[依赖构建](DEPENDENCIES.zh-CN.md#6-linux-arm-与-android-交叉构建)准备对应 ABI/API 的 SDK，再执行：
+以下命令在 Linux／WSL shell 执行，使用已有 NDK，不修改 SDK 源码。先构建最小功能和 `hello` 示例；需要 TLS／压缩时，按[依赖教程](DEPENDENCIES.zh-CN.md#6-交叉编译-linux-arm-和-android)准备匹配 ABI/API 的 SDK，再开启相关模块。
 
 ```sh
-python tools/verify_android.py --ndk /path/to/ndk --abi arm64-v8a --api 21 \
-  --dependency-prefix /path/to/build-deps-android-arm64/prefix \
-  --parsers --iconv --sevenzip-library /path/to/target/runtime/7z.so \
-  --serial DEVICE_SERIAL --build-root out/android
+cmake -C cmake/minimal.cmake -S . -B out/android/arm64-v8a -G Ninja \
+  -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake" \
+  -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21 \
+  -DCMAKE_BUILD_TYPE=Release -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build out/android/arm64-v8a --target hx_os_hello --parallel 4
+adb devices -l
+adb -s DEVICE_SERIAL shell mkdir -p /data/local/tmp/hx-platform-demo
+adb -s DEVICE_SERIAL push out/android/arm64-v8a/bin/hx_os_hello /data/local/tmp/hx-platform-demo/
+adb -s DEVICE_SERIAL shell chmod 755 /data/local/tmp/hx-platform-demo/hx_os_hello
+adb -s DEVICE_SERIAL shell /data/local/tmp/hx-platform-demo/hx_os_hello
 ```
 
-不需要独立原生 7-Zip 后端时可省略 `--sevenzip-library`。省略 `--dependency-prefix` 表示明确关闭加密／压缩。一个 prefix 必须匹配显式指定的一种 ABI/API，不能套用到默认两种 ARM ABI。`--parsers` 开启五种可选解析器，`--iconv` 开启固定版本 GNU 转换器，`--provider FETCHCONTENT` 选择替代源码来源。
+`ANDROID_NDK_ROOT` 是 NDK 目录，`DEVICE_SERIAL` 换成列表中的目标设备。ARMv7 将 ABI 改为 `armeabi-v7a`，x86_64 模拟器使用 `x86_64`；每种 ABI 复用各自的构建目录。构建最低 API 与设备实际 Android 版本不是一回事。库和示例不依赖维护者私有回归文件。
 
-脚本读取生成的 `hx_openssl_runtime_Release.txt`，部署实际选中的 **libssl 和 libcrypto** 及所需版本名称，与测试程序和核心库放在一起。运行库缺失时部署失败。程序和核心同时使用 `$ORIGIN` RUNPATH 及进程局部库路径，ARM 转译的间接依赖也需要显式路径。只部署独立 SONAME 的运行库，普通 `libssl.so`／`libcrypto.so` 链接别名不能覆盖 x86_64 转译启动器使用的系统 BoringSSL。部署效果需要设备运行验证，不能只以链接成功判断。
+动态构建还需把 `libhx_c_platform.so` 和所用依赖运行库放到设备同一目录，运行时设置该进程的 `LD_LIBRARY_PATH`。动态 OpenSSL 的实际文件见构建目录中的 `hx_openssl_runtime_Release.txt`，部署运行时 SONAME 文件及其目标，不能把宿主 Windows/Linux 库传到 Android。项目 Android SDK 使用 `libssl-hx.so`／`libcrypto-hx.so`，避免与系统 BoringSSL 名称冲突。ABI、API 和依赖版本都要匹配；APK 的 native library 打包与目录权限由宿主应用管理。
 
-准备好的 Android SDK 通过上游支持的独立配置使用 `libssl-hx.so`／`libcrypto-hx.so` SONAME，避免转译客体误绑定已经加载的同名系统 BoringSSL。上传的文件由运行库清单及其符号链接真实目标确定；与系统 BoringSSL 同名的链接别名留在 SDK 内。
+下方保留带日期的历史验收结果与平台限制。历史自动回归工具、日志和用例仅保存在维护者本机，不属于公开源码的运行步骤。
 
-另运行 hx_os_portable_baseline，记录原子、ASCII、宽位換算、命名过程、精细等待观察值，没有固定时间阈值。ADB 只负责部署和控制。记录 NDK、源码版本及是否有未提交修改、ABI/API、设备型号/指纹/API、模拟器标记和每项输出。清理只移除确切上传文件，不递归删除目录；失败夹保留排查。ADB 超时可能留下目标进程，保留目录并报告，不强杀。性能采样需记录负载、温度、调频状态并重复多轮。
-
-报告区分编译最低 API、实际系统 API、原生机器架构和翻译执行，逐程序记录结果。失败不会继续写成“未运行”。验证用共享库程序带 $ORIGIN RUNPATH，支持新版 Android 从程序所在目录加载依赖；旧系统仍使用 LD_LIBRARY_PATH。验证程序及使用动态 OpenSSL 的 Android 核心带相对构建 RUNPATH；安装后共享库保持既有相对安装 RUNPATH，不修改系统库路径。
-
-只复核通信时，可在运行命令后追加 `--suite ipc --suite kcp --suite lifecycle`。不指定 `--suite` 时运行全部已配置原生测试和示例。名称使用 CTest 测试名，不是可执行文件名；`--timeout-scale` 只缩放设备测试的超时上限，不改变库的截止时间。可移植基准仍会运行，报告保存本次选择的套件和明确跳过的子项。
-
-只验证序列化时，追加 `--suite config_tree --suite codec --suite cpp_codec`。用法与示例见[序列化教程](SERIALIZATION.zh-CN.md)。
-
-## 当前验收（2026-10-07）
+## 历史验收（2026-10-07）
 
 以下均在同一台 API 34 x86_64 `Qt_Android_34` 模拟器运行。完整配置开启 Crypto、TLS、Archive、可选 7-Zip、五种原生解析后端及 GNU iconv；目标 SDK 包含对应架构的 OpenSSL、zlib、XZ、Zstd。表中数量不含另外执行的可移植基准，每个已运行配置的基准均通过。
 

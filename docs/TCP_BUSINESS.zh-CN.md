@@ -13,7 +13,7 @@
 仓库根目录：
 
 ```sh
-cmake -S . -B build-net -DHX_OS_BUILD_TESTS=ON -DHX_OS_BUILD_EXAMPLES=ON
+cmake -S . -B build-net -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build-net --config Release --parallel 4
 ```
 
@@ -111,24 +111,12 @@ hx_string_destroy(&wire);
 
 每个非阻塞 socket 调用在短互斥区内串行，`WOULD_BLOCK` 后在锁外休眠 1 毫秒。只有一个线程发送完整帧、一个线程接收完整帧。主线程先 join，再释放锁、socket 和 network；解析文档与临时字符串在使用后释放。半帧超时/断开使本连接失败，不把残留当下一条消息。这是有限业务演示，不是高吞吐基准。
 
-## 5. 实际运行测试
+## 5. 运行业务示例
 
 ```sh
-ctest --test-dir build-net -C Release -R "^tcp_business_" --output-on-failure
+python examples/run_tcp_business.py --bin-dir build-net/bin/Release
+python examples/run_tcp_business.py --bin-dir build-net/bin/Release --fragmented
+python examples/run_tcp_business.py --bin-dir build-net/bin/Release --json-errors
 ```
 
-| 测试 | 检查内容 |
-| --- | --- |
-| `tcp_business_orders` | 两个 C 进程的 JSON 订单、回执、通知、拒绝与备注往返 |
-| `tcp_business_framing` | Python 普通 socket 分段写入一个头/正文，再合并后续帧；JSON 使用不同字段顺序和空白 |
-| `tcp_business_json_validation` | 7 类错误：字符串数量、布尔数量、实数数量、缺失数量、损坏 JSON、重复键、数组根节点 |
-
-最后一组也可以单独运行：
-
-```powershell
-python examples/run_tcp_business.py --json-errors --bin-dir build-net/bin/Release
-```
-
-Python 用标准 `json` 模块和 UTF-8 编解码，不实现 HXIP。错误类型/范围返回 `rejected`；无法作为有效订单对象解析时返回 `{"type":"error","ok":false,"reason":"invalid_json_request"}`。每轮仍检查之前两单合计 11500 分，错误输入不改变有效订单统计。
-
-原始 TCP 不自动提供跨重启会话或业务重试去重；本例覆盖当前连接。测试结果见[验证记录](VALIDATION.zh-CN.md)，其他独立业务见 [IPC](IPC_BUSINESS.zh-CN.md)、[UDP](UDP_BUSINESS.zh-CN.md)、[KCP](KCP_BUSINESS.zh-CN.md)。
+第一条运行正常订单流程；--fragmented 演示分段和合并收包；--json-errors 演示非法字段与错误回复。三种方式均只使用公开示例，Linux 的程序目录改为 build-net/bin。

@@ -114,14 +114,12 @@ cmake -S tools/dependencies -B build-deps-aarch64 -G Ninja \
 cmake --build build-deps-aarch64 --parallel 2
 
 cmake -S . -B build-arm64 -G Ninja -DCMAKE_BUILD_TYPE=Release \
-  -DHX_OS_BUILD_TESTS=ON \
   -DCMAKE_TOOLCHAIN_FILE="$PWD/cmake/toolchains/embedded-linux.cmake" \
   -DHX_OS_TARGET_PROCESSOR=aarch64 \
   -DHX_OS_CROSS_PREFIX=aarch64-linux-gnu- -DHX_OS_SYSROOT=/ \
   -DHX_OS_DEPENDENCY_PREFIX="$PWD/build-deps-aarch64/prefix" \
   -DCMAKE_CROSSCOMPILING_EMULATOR="qemu-aarch64;-L;/usr/aarch64-linux-gnu"
 cmake --build build-arm64 --parallel 4
-ctest --test-dir build-arm64 --output-on-failure
 ```
 
 For the tested ARMv7 hard-float GNU toolchain, use `armv7`, `arm-linux-gnueabihf-`, OpenSSL `linux-armv4`, and `qemu-arm;-L;/usr/arm-linux-gnueabihf`. The toolchain, not the OpenSSL target name, determines the float ABI. QEMU syscall limitations are reported separately from library defects; running these commands is not board acceptance.

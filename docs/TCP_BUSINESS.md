@@ -13,7 +13,7 @@ One client sender and one receiver share a TCP connection. The sender submits th
 From the repository root:
 
 ```sh
-cmake -S . -B build-net -DHX_OS_BUILD_TESTS=ON -DHX_OS_BUILD_EXAMPLES=ON
+cmake -S . -B build-net -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build-net --config Release --parallel 4
 ```
 
@@ -111,24 +111,12 @@ These helpers are private to the examples; business I/O remains raw TCP without 
 
 A short mutex serializes nonblocking socket calls; retries sleep 1 ms outside it. Exactly one thread writes complete frames and one reads them. Main joins before destroying mutex, socket and network. Documents and temporary strings are released after use. Mid-frame timeout/disconnect fails the connection instead of reinterpreting leftovers. This finite example is not a throughput benchmark.
 
-## 5. Executable tests
+## 5. Run the business example
 
 ```sh
-ctest --test-dir build-net -C Release -R "^tcp_business_" --output-on-failure
+python examples/run_tcp_business.py --bin-dir build-net/bin/Release
+python examples/run_tcp_business.py --bin-dir build-net/bin/Release --fragmented
+python examples/run_tcp_business.py --bin-dir build-net/bin/Release --json-errors
 ```
 
-| Test | Checks |
-| --- | --- |
-| `tcp_business_orders` | Two C processes: JSON orders, receipts, notifications, rejection and note round-trip |
-| `tcp_business_framing` | Python raw socket splits a header/body and coalesces following frames, using different JSON key order/whitespace |
-| `tcp_business_json_validation` | Seven faults: string quantity, bool quantity, real quantity, missing quantity, malformed JSON, duplicate key, array root |
-
-Run the last case directly:
-
-```powershell
-python examples/run_tcp_business.py --json-errors --bin-dir build-net/bin/Release
-```
-
-Python uses its standard `json` module and UTF-8, not HXIP. Invalid field types/ranges receive `rejected`; invalid order objects receive `{"type":"error","ok":false,"reason":"invalid_json_request"}`. Each run still verifies the preceding two orders total 11500 cents, unchanged by invalid input.
-
-Raw TCP does not supply cross-restart sessions or retry deduplication; this example covers the current connection. See [validation](VALIDATION.md), and the separate [IPC](IPC_BUSINESS.md), [UDP](UDP_BUSINESS.md) and [KCP](KCP_BUSINESS.md) workflows.
+The first command runs normal orders; --fragmented demonstrates split/coalesced frames; --json-errors demonstrates invalid fields and rejection replies. All use public example programs only. Use build-net/bin on Linux.
