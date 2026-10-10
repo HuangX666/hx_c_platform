@@ -8,6 +8,25 @@ This records development validation through 2026-10-10. A design, implemented ad
 
 The JSON entry below records the current examples. Earlier independent text examples, initial shared workflows, IPC/KCP implementation and other batches describe their historical versions.
 
+## 2026-10-10: WSL2 UDP fragmentation diagnosis and local loopback configuration
+
+Environment: WSL 3.0.1.0, Linux 6.18.40.1-microsoft-standard-WSL2, Windows 10.0.26200.8894. `wslinfo --networking-mode` reports mirrored. IPv4 policy routing sends `127.0.0.1` through `loopback0` at MTU 1500; `127.0.0.2` and IPv6 `::1` use native Linux `lo`. System routes, firewall, proxy, adapter settings and the WSL networking mode were unchanged.
+
+| Comparison | Observed result |
+| --- | --- |
+| Native UDP, 127.0.0.1, 1472-byte payload | Complete send and receive |
+| Same path, 1473-byte payload | Two fragments leave; only the first returns; receive times out |
+| Same path, 40,064-byte payload | 28 fragments leave; only the first returns; receive times out |
+| Native UDP, 127.0.0.2 / ::1 | Complete 1473-, 2000-, 40,064- and 65,507-byte payloads |
+| Same IPC binary, temporary isolated Linux network namespace, 127.0.0.1 | Existing UDP suite passes, including its 40,000-byte body |
+| Existing build-shared-linux, net and ipc | 2/2 pass; only the IPC datagram transport scenario explicitly uses [::1] |
+
+Capture was limited to the probe flow's IP identifiers, directions, lengths and fragment offsets, with no saved traffic from other applications. Missing later fragments prevent delivery of a complete datagram. The fault is localized to this host's Windows/WSL mirrored fragment-return path; the precise host filtering/forwarding component is not identified. The library implementation and 64 KiB receive buffer are unchanged. Native socket comparisons and the same IPC binary on an isolated network exclude library truncation or message assembly as the cause of this timeout.
+
+The existing private IPC test now accepts `HX_OS_TEST_UDP_HOST`, defaulting to 127.0.0.1. This machine's Linux build cache explicitly selects `[::1]`; TCP, KCP and local-socket scenarios retain their addresses. The original 40 KB content and cleanup assertions remain. The daily count stays 20, with no added test executable or build directory. Only the affected net/ipc suites were rerun; the mirrored IPv4 large-datagram path is not marked passed and the full daily suite was not rerun. Other platforms were not retested. WSL-internal loopback does not repair Windows-to-WSL mirrored fragmentation support.
+
+See [Microsoft's WSL implementation note](https://github.com/microsoft/WSL/blob/master/doc/docs/technical-documentation/localhost.md) for Windows port forwarding in mirrored mode. The fragment findings above come from actual local routes, packet capture and same-binary comparisons.
+
 ## 2026-10-10: Local-only regressions, 20 daily suites
 
 Under the project maintenance policy, 131 tracked files from tests/, automated verification tools and the regression workflow are removed from Git while their local copies remain ignored. Customer examples build and run independently. The TLS business runner accepts caller-supplied certificates instead of using test_tls to generate them. Bilingual customer commands and private-source references are updated. Historical report filenames, counts and paths describe their original validation states.

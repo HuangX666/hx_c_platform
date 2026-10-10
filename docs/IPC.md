@@ -177,6 +177,10 @@ Messages handed to the user no longer count toward endpoint queue limits. Releas
 
 Ordinary UDP bodies must fit `65507 - 64` bytes or sending returns `HX_OS_LIMIT`. Large datagrams are still subject to IP fragmentation; the theoretical maximum is not a recommended size. KCP bodies are also limited to 127 fragments at MTU 1200, minus 24 KCP header bytes per fragment and the 64-byte inner HXIP header. The 64 KiB default fits.
 
+**WSL2 mirrored networking:** In the measured WSL 3.0.1 / Windows 26200.8894 environment, IPv4 `127.0.0.1` is routed through `loopback0` with MTU 1500. A 1472-byte UDP payload arrives; at 1473 bytes, later IP fragments do not return, so the receiver cannot obtain a complete datagram. This is a fragmentation-path issue in that environment. More receive buffering or a longer application deadline cannot supply missing fragments; successful `send` still means only local transmission.
+
+When both peers share the same WSL network namespace, explicitly use the existing `udp://[::1]:39002` endpoint to use Linux IPv6 loopback; complete 40,000-byte bodies were verified locally. This address is not a substitute for Windows-to-WSL mirrored communication. For larger messages over that IPv4 path, use `kcp://127.0.0.1:39003` or TCP. Size ordinary UDP packets for the actual path MTU. The measured 1472 includes the 64-byte HXIP header, leaving 1408 body bytes at this MTU; it is not a universal network limit. See [validation records](VALIDATION.md) for observations.
+
 Control frames also share an endpoint-wide `max_peers * 64 KiB` limit. Frames retained from previous sessions remain charged during reconnect, so changing sessions cannot bypass the bound.
 
 Receiving a lifecycle or overflow event allocates its owned message outside the endpoint mutex, then rechecks queues and closure. Allocation failure leaves the event pending for retry. Another receiver may take it meanwhile; the original call then observes the current queue state and its original deadline. The endpoint remains retained throughout allocation and release of unused message storage.

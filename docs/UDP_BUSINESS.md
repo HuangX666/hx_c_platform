@@ -113,3 +113,5 @@ python examples/run_udp_business.py --bin-dir build-net/bin/Release --simulate-g
 ```
 
 Run normal samples/feedback first, then add gaps, duplicates and late data to observe receiver behavior. Use build-net/bin on Linux.
+
+With WSL2 mirrored networking, `127.0.0.1` can traverse a virtual network with MTU 1500. This machine lost fragments above 1472 bytes of IPv4 UDP payload. The example keeps JSON to 1023 bytes. For larger business messages, see the [KCP example](KCP_BUSINESS.md) or [TCP example](TCP_BUSINESS.md); the library does not silently split ordinary UDP or change its loss semantics. Validate WSL-internal loopback separately from Windows/WSL communication; see the [IPC platform note](IPC.md).

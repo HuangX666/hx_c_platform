@@ -113,3 +113,5 @@ python examples/run_udp_business.py --bin-dir build-net/bin/Release --simulate-g
 ```
 
 第一条运行正常采样与反馈；第二条加入缺号、重复和迟到数据，演示接收方的处理方式。Linux 的程序目录改为 build-net/bin。
+
+在 WSL2 镜像模式下，`127.0.0.1` 也可能经过 MTU 1500 的虚拟网络；本机实测超过 1472 字节的 IPv4 UDP 载荷出现分片丢失。此示例的 JSON 上限为 1023 字节，保持小数据报。较大业务消息可参考 [KCP 示例](KCP_BUSINESS.zh-CN.md) 或 [TCP 示例](TCP_BUSINESS.zh-CN.md)；库不会自动拆分普通 UDP 或改变其丢包语义。WSL 内回环与 Windows／WSL 通信需分别验证，详见 [IPC 的平台说明](IPC.zh-CN.md)。
