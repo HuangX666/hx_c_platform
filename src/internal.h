@@ -79,6 +79,10 @@ void hx_os_i_coro_local_clear(void *key);
 #endif
 uint32_t hx_os_i_wait_ms(hx_os_deadline deadline);
 
+/* Core clock conversion is available even with public WIDE_MATH disabled. */
+hx_os_status hx_os_i_muldiv_u64(uint64_t a, uint64_t b, uint64_t divisor,
+	int rounding, uint64_t *out, hx_os_error *error);
+
 int hx_os_i_add_size(size_t a, size_t b, size_t *out);
 
 int hx_os_i_alignment_valid(size_t alignment);

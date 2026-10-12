@@ -1,4 +1,5 @@
 #include "internal.h"
+#include "hx_os_wide.h"
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -8,6 +9,110 @@
 #include <mach/mach_time.h>
 #endif
 #endif
+
+#if defined(_WIN32)
+static INIT_ONCE g_counterInit_ = INIT_ONCE_STATIC_INIT;
+static uint64_t g_counterFrequency_;
+
+static BOOL CALLBACK hx_os_counter_init(
+	PINIT_ONCE once, PVOID parameter, PVOID *context)
+{
+	LARGE_INTEGER frequency;
+
+	(void)once;
+	(void)parameter;
+	(void)context;
+	if (!QueryPerformanceFrequency(&frequency)) {
+		SetLastError(ERROR_NOT_SUPPORTED);
+		return FALSE;
+	}
+	if (frequency.QuadPart <= 0) {
+		SetLastError(ERROR_NOT_SUPPORTED);
+		return FALSE;
+	}
+	g_counterFrequency_ = (uint64_t)frequency.QuadPart;
+	return TRUE;
+}
+#endif
+
+hx_os_status hx_os_high_resolution_read(
+	uint64_t *nanoseconds, hx_os_error *error)
+{
+	uint64_t value;
+
+	if (!nanoseconds)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+#if defined(_WIN32)
+	{
+		LARGE_INTEGER counter;
+		uint64_t whole, fraction;
+		hx_os_status status;
+
+		if (!InitOnceExecuteOnce(
+			    &g_counterInit_, hx_os_counter_init, NULL, NULL) ||
+			!QueryPerformanceCounter(&counter)) {
+			DWORD code = GetLastError();
+
+			return hx_os_i_win32(
+				error, code ? code : ERROR_GEN_FAILURE);
+		}
+		if (counter.QuadPart < 0)
+			return hx_os_i_error(error, HX_OS_RANGE, 0, 0);
+		whole = (uint64_t)counter.QuadPart / g_counterFrequency_;
+		status = hx_os_i_muldiv_u64(
+			(uint64_t)counter.QuadPart % g_counterFrequency_,
+			UINT64_C(1000000000), g_counterFrequency_,
+			HX_OS_ROUND_DOWN, &fraction, error);
+		if (status != HX_OS_OK)
+			return status;
+		if (whole > (UINT64_MAX - 1 - fraction) / 1000000000)
+			return hx_os_i_error(error, HX_OS_RANGE, 0, 0);
+		value = whole * UINT64_C(1000000000) + fraction;
+	}
+#elif defined(__APPLE__)
+	{
+		mach_timebase_info_data_t scale;
+		kern_return_t code = mach_timebase_info(&scale);
+		hx_os_status status;
+
+		if (code != KERN_SUCCESS || !scale.numer || !scale.denom)
+			return hx_os_i_error(
+				error, HX_OS_IO_ERROR, HX_OS_ERROR_MACH, code);
+		status = hx_os_i_muldiv_u64(mach_absolute_time(), scale.numer,
+			scale.denom, HX_OS_ROUND_DOWN, &value, error);
+		if (status != HX_OS_OK)
+			return status;
+	}
+#else
+	{
+		struct timespec stamp;
+
+		if (clock_gettime(CLOCK_MONOTONIC, &stamp))
+			return hx_os_i_errno(error, errno);
+		if (stamp.tv_sec < 0 || stamp.tv_nsec < 0 ||
+			stamp.tv_nsec >= 1000000000 ||
+			(uint64_t)stamp.tv_sec >
+				(UINT64_MAX - 1 - (uint64_t)stamp.tv_nsec) /
+					1000000000)
+			return hx_os_i_error(error, HX_OS_RANGE, 0, 0);
+		value = (uint64_t)stamp.tv_sec * UINT64_C(1000000000) +
+			(uint64_t)stamp.tv_nsec;
+	}
+#endif
+	if (value == UINT64_MAX)
+		return hx_os_i_error(error, HX_OS_RANGE, 0, 0);
+	*nanoseconds = value;
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+}
+
+uint64_t hx_os_high_resolution_ns(void)
+{
+	uint64_t value;
+
+	return hx_os_high_resolution_read(&value, NULL) == HX_OS_OK
+		? value
+		: UINT64_MAX;
+}
 
 hx_os_status hx_os_monotonic_read(uint64_t *nanoseconds, hx_os_error *error)
 {

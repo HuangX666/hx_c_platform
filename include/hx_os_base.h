@@ -158,6 +158,23 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_wall_time_read(
  */
 HX_OS_API uint64_t HX_OS_CALL hx_os_monotonic_ns(void);
 
+/* High-resolution interval clock, independent of UTC and wall-clock changes.
+ * Windows: QPC (includes suspend); Linux/Android: CLOCK_MONOTONIC;
+ * macOS: mach_absolute_time. Resolution and suspend behavior are native.
+ * Epoch is unspecified. Compare only values from this clock on one system;
+ * do not use them as hx_os_deadline or mix them with monotonic_ns values.
+ * No timer-resolution changes, allocation or worker. Always built in core.
+ * read preserves *nanoseconds on failure; valid output is 0..UINT64_MAX-1.
+ * Nanosecond conversion rounds down and reports RANGE instead of overflow.
+ * Convenience returns UINT64_MAX on failure. Native ticks can be coarser
+ * than 1 ns; adjacent reads may be equal. Cross-thread event ordering finer
+ * than the native counter tick is not guaranteed.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_high_resolution_read(
+	uint64_t *nanoseconds, hx_os_error *error);
+
+HX_OS_API uint64_t HX_OS_CALL hx_os_high_resolution_ns(void);
+
 HX_OS_API int64_t HX_OS_CALL hx_os_wall_time_ms(void);
 
 /* Overflow saturates to the largest finite deadline. */

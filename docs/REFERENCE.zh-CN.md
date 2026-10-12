@@ -926,6 +926,7 @@ C++11 的 Variant/TypedVariant 提供 set/get<T>/emplace/clone/visit，通过 Re
 | --- | --- |
 | `hx_os_wall_time_read` | Unix 毫秒，可能随系统校时跳变 |
 | `hx_os_monotonic_read` | 纳秒、排除系统休眠；单位不等于分辨率 |
+| `hx_os_high_resolution_read` / `hx_os_high_resolution_ns` | 用于测量间隔的高精度纳秒时间戳，与 deadline 分开 |
 | `hx_os_deadline_after_ms` | 相对毫秒转换为本库单调时钟的绝对截止时间 |
 | `HX_OS_DEADLINE_NOW` | 立即尝试，已就绪仍可成功 |
 | `HX_OS_DEADLINE_INFINITE` | 只在允许的接口中显式无限等待 |
@@ -933,6 +934,42 @@ C++11 的 Variant/TypedVariant 提供 set/get<T>/emplace/clone/visit，通过 Re
 | `hx_os_sleep_until_precise_ex` | 先睡眠，再在指定预算内短暂自旋 |
 
 组合关闭步骤应共用一个 deadline，不为每步重新发放完整超时。原生 timespec 换算放在 POSIX 边界，不能把本库时间值当作任意原生时钟的绝对值。
+
+短操作耗时、帧间隔和播放计时使用 `hx_os_high_resolution_read(&stamp, &error)`。
+C 接口位于 `hx_os_base.h`，始终属于核心功能，最小配置也可以使用；
+不需要初始化运行时、分配内存或开启可选的 `WIDE_MATH` 模块。
+
+| 平台 | 原生来源 | 是否计入系统休眠 |
+| --- | --- | --- |
+| Windows，保留 Win7 API 基线 | `QueryPerformanceCounter`，频率只查询并缓存一次 | 是 |
+| Linux / Android | `clock_gettime(CLOCK_MONOTONIC)` | 否 |
+| macOS | `mach_absolute_time` | 否 |
+
+时间戳起点不作规定，不随系统墙上时间的校准跳变。只比较同一运行系统中这个接口返回的值。
+**不要把它作为 `hx_os_deadline`，也不要与 `hx_os_monotonic_ns()` 的结果相减**；
+即使某个平台上两者数值接近，也不代表可以混用。Windows 的 QPC 与 deadline 时钟
+对系统休眠的计时语义不同；新增接口没有改变原 deadline 和 sleep 的行为。
+
+读取成功写入 `0..UINT64_MAX-1`；失败保留原输出，返回状态和原生错误。
+简便接口 `_ns()` 失败返回 `UINT64_MAX`。计数器换算采用带溢出检查的整数计算，
+向下取整为纳秒；超范围返回 `HX_OS_RANGE`。确认前后两次读取都成功后，先做整数差，
+再把耗时换算为毫秒或秒。纳秒单位不承诺 1 ns 分辨率或精确唤醒时间：连续读取可能相等，
+跨线程事件在一个原生 tick 内的先后顺序也不保证。接口不改变全局计时器精度，
+不自旋、不启动工作线程，也不承诺硬实时。
+
+[完整 C 示例](../examples/high_resolution_time.c)测量一次请求为 20 ms 的等待并打印
+实际耗时。在平台库根目录只构建这个可直接使用的示例：
+
+```sh
+cmake -S . -B build/clock -C cmake/minimal.cmake -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build build/clock --config Release --target hx_os_high_resolution_time
+```
+
+单配置构建运行 `build/clock/bin/hx_os_high_resolution_time`；Visual Studio 构建运行
+`build/clock/bin/Release/hx_os_high_resolution_time.exe`。
+操作系统负责唤醒调度，实际间隔可能超过 20 ms。Windows 计数器及休眠语义见
+[微软 QPC 说明](https://learn.microsoft.com/en-us/windows/win32/sysinfo/acquiring-high-resolution-time-stamps)。
+macOS 已提供实现，但本轮未在 Apple 主机执行验证。
 
 当前线程上的简单周期任务无需先搭建 loop：
 

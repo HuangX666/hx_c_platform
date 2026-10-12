@@ -12,7 +12,7 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 	random_uuid mapped_file file_attributes watch_directory capture_process
 	delayed_task duplex_message obfuscated_string localized_time
 	signal_notifications signal_observer signal_mutable parameters settings
-	profile_intervals profile_statistics
+	profile_intervals profile_statistics high_resolution_time
 	atomic_publication
 	common_tasks parse_script preprocess_config variant find_files
 	coroutine ordered_map

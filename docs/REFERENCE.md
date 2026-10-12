@@ -926,6 +926,7 @@ Full examples, custom copy/drop callbacks, costs, allocator and plugin lifetimes
 | --- | --- |
 | `hx_os_wall_time_read` | Unix milliseconds; may jump with wall-clock adjustment |
 | `hx_os_monotonic_read` | Nanoseconds, excluding suspend; units do not imply resolution |
+| `hx_os_high_resolution_read` / `hx_os_high_resolution_ns` | High-resolution interval timestamps in nanoseconds; separate from deadlines |
 | `hx_os_deadline_after_ms` | Relative milliseconds converted to this library's absolute monotonic deadline |
 | `HX_OS_DEADLINE_NOW` | Immediate attempt; success if already ready |
 | `HX_OS_DEADLINE_INFINITE` | Explicit unbounded wait only where the API permits it |
@@ -933,6 +934,50 @@ Full examples, custom copy/drop callbacks, costs, allocator and plugin lifetimes
 | `hx_os_sleep_until_precise_ex` | Sleep then spin within a caller-selected budget |
 
 Use one deadline across related shutdown steps rather than granting every step a fresh timeout. Native timespec conversion belongs at the POSIX seam; do not interpret these values as any arbitrary OS clock's absolute time.
+
+Use `hx_os_high_resolution_read(&stamp, &error)` to measure short operations,
+frame intervals or playback timing. The C API lives in `hx_os_base.h`, is always
+available in the core (including the minimal profile), and needs no runtime
+initialization, allocation or optional `WIDE_MATH` feature.
+
+| Platform | Native source | Includes system suspend |
+| --- | --- | --- |
+| Windows, including the Win7 API baseline | `QueryPerformanceCounter`, with cached frequency | Yes |
+| Linux / Android | `clock_gettime(CLOCK_MONOTONIC)` | No |
+| macOS | `mach_absolute_time` | No |
+
+These timestamps have an unspecified origin and are independent of wall-clock
+adjustments. Compare timestamps from this API on the same running system only.
+**Do not pass them to `hx_os_deadline` APIs or subtract `hx_os_monotonic_ns()`
+values from them**, even if their numbers look similar on a particular OS.
+Windows QPC and the deadline clock have different suspend behavior. The new
+API does not change existing deadline or sleep semantics.
+
+A successful read writes a value in `0..UINT64_MAX-1`; failure preserves the
+output and returns a status/native error. The convenience form returns
+`UINT64_MAX` on failure. Counter conversion uses checked integer arithmetic,
+rounds down to nanoseconds and returns `HX_OS_RANGE` on overflow. Check both
+read results, subtract the integer timestamps, then convert the duration to
+milliseconds or seconds. Nanosecond units do not promise 1 ns resolution or
+exact wake-up times: adjacent samples may be equal, and event ordering across
+threads finer than one native tick is not guaranteed. This API does not alter
+system timer resolution, spin, create a worker or promise hard real-time timing.
+
+The [complete C example](../examples/high_resolution_time.c) measures a requested
+20 ms wait and prints the actual elapsed time. Build only that useful example
+from the library root:
+
+```sh
+cmake -S . -B build/clock -C cmake/minimal.cmake -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build build/clock --config Release --target hx_os_high_resolution_time
+```
+
+Run `build/clock/bin/hx_os_high_resolution_time` on a single-configuration build,
+or `build/clock/bin/Release/hx_os_high_resolution_time.exe` with Visual Studio.
+The actual interval can exceed 20 ms because the OS schedules the wake-up.
+See Microsoft's [QPC guidance](https://learn.microsoft.com/en-us/windows/win32/sysinfo/acquiring-high-resolution-time-stamps)
+for the Windows counter and suspend contract. The macOS implementation is
+provided; this addition has not been executed on an Apple host.
 
 For simple periodic work on the calling thread, no loop setup is needed:
 

@@ -1,9 +1,9 @@
 #include "internal.h"
 #include "hx_os_wide.h"
 
-hx_os_status hx_os_u128_multiply(uint64_t a, uint64_t b, hx_os_uint128 *out)
+static hx_os_status hx_os_wide_multiply(
+	uint64_t a, uint64_t b, hx_os_uint128 *out)
 {
-#if HX_OS_ENABLE_WIDE_MATH
 	hx_os_uint128 product;
 
 	if (!out)
@@ -30,19 +30,11 @@ hx_os_status hx_os_u128_multiply(uint64_t a, uint64_t b, hx_os_uint128 *out)
 	*out = product;
 
 	return HX_OS_OK;
-#else
-	(void)a;
-	(void)b;
-	(void)out;
-
-	return HX_OS_NOT_SUPPORTED;
-#endif
 }
 
-hx_os_status hx_os_u128_divide(hx_os_uint128 value, uint64_t divisor,
+static hx_os_status hx_os_wide_divide(hx_os_uint128 value, uint64_t divisor,
 	hx_os_uint128 *quotient, uint64_t *remainder)
 {
-#if HX_OS_ENABLE_WIDE_MATH
 	hx_os_uint128 result = {0, 0};
 	uint64_t rest = 0;
 
@@ -83,20 +75,11 @@ hx_os_status hx_os_u128_divide(hx_os_uint128 value, uint64_t divisor,
 		*remainder = rest;
 
 	return HX_OS_OK;
-#else
-	(void)value;
-	(void)divisor;
-	(void)quotient;
-	(void)remainder;
-
-	return HX_OS_NOT_SUPPORTED;
-#endif
 }
 
-hx_os_status hx_os_muldiv_u64(uint64_t a, uint64_t b, uint64_t divisor,
+hx_os_status hx_os_i_muldiv_u64(uint64_t a, uint64_t b, uint64_t divisor,
 	int rounding, uint64_t *out, hx_os_error *error)
 {
-#if HX_OS_ENABLE_WIDE_MATH
 	hx_os_uint128 product, quotient;
 	uint64_t remainder, rounded;
 	hx_os_status status;
@@ -105,10 +88,20 @@ hx_os_status hx_os_muldiv_u64(uint64_t a, uint64_t b, uint64_t divisor,
 	if (!out || !divisor || rounding < HX_OS_ROUND_DOWN ||
 		rounding > HX_OS_ROUND_NEAREST)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
-	status = hx_os_u128_multiply(a, b, &product);
-	if (status == HX_OS_OK)
-		status = hx_os_u128_divide(
-			product, divisor, &quotient, &remainder);
+	if (!a || b <= UINT64_MAX / a) {
+		uint64_t value = a * b;
+
+		quotient.high = 0;
+		quotient.low = value / divisor;
+		remainder = value % divisor;
+		status = HX_OS_OK;
+	}
+	else {
+		status = hx_os_wide_multiply(a, b, &product);
+		if (status == HX_OS_OK)
+			status = hx_os_wide_divide(
+				product, divisor, &quotient, &remainder);
+	}
 
 	if (status != HX_OS_OK)
 		return hx_os_i_error(error, status, 0, 0);
@@ -124,13 +117,45 @@ hx_os_status hx_os_muldiv_u64(uint64_t a, uint64_t b, uint64_t divisor,
 	*out = rounded;
 
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+}
+
+hx_os_status hx_os_u128_multiply(uint64_t a, uint64_t b, hx_os_uint128 *out)
+{
+#if HX_OS_ENABLE_WIDE_MATH
+	return hx_os_wide_multiply(a, b, out);
+#else
+	(void)a;
+	(void)b;
+	(void)out;
+	return HX_OS_NOT_SUPPORTED;
+#endif
+}
+
+hx_os_status hx_os_u128_divide(hx_os_uint128 value, uint64_t divisor,
+	hx_os_uint128 *quotient, uint64_t *remainder)
+{
+#if HX_OS_ENABLE_WIDE_MATH
+	return hx_os_wide_divide(value, divisor, quotient, remainder);
+#else
+	(void)value;
+	(void)divisor;
+	(void)quotient;
+	(void)remainder;
+	return HX_OS_NOT_SUPPORTED;
+#endif
+}
+
+hx_os_status hx_os_muldiv_u64(uint64_t a, uint64_t b, uint64_t divisor,
+	int rounding, uint64_t *out, hx_os_error *error)
+{
+#if HX_OS_ENABLE_WIDE_MATH
+	return hx_os_i_muldiv_u64(a, b, divisor, rounding, out, error);
 #else
 	(void)a;
 	(void)b;
 	(void)divisor;
 	(void)rounding;
 	(void)out;
-
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 #endif
 }
