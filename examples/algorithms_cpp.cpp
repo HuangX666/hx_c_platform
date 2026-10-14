@@ -50,7 +50,7 @@ int main()
 	std::printf("Removed completed devices: %zu\n",
 		static_cast<size_t>(removed));
 
-	/* Linked-list iterators are not random access. Sort the whole list. */
+	// Linked-list iterators are not random access. Sort the whole list.
 	std::list<int> priorities = {3, 1, 2};
 	hx::algo::sort(priorities);
 	std::printf("First linked-list priority: %d\n", priorities.front());

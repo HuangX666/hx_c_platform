@@ -143,7 +143,7 @@ void HX_OS_CALL hx_ipc_i_pipe_accepted(
 	reader = endpoint->accept_pipe;
 	endpoint->accept_pipe = NULL;
 
-	/* Establish the next instance before giving up this instance's name. */
+	// Establish the next instance before giving up this instance's name.
 	status = hx_ipc_i_native_accept(endpoint, 0, &error);
 	if (status == HX_OS_OK)
 		status = hx_ipc_i_pipe_write_end(
@@ -398,10 +398,9 @@ hx_os_status hx_ipc_i_kcp_output(
 	hx_ipc_i_encode(wire, &header);
 	memcpy(wire + HX_IPC_I_HEADER, packet, bytes);
 
-	/* Retry a temporarily full native send buffer within the control
-	 * budget. This also preserves ACK-only packets during bounded close
-	 * draining.
-	 */
+	// Retry a temporarily full native send buffer within the control
+	// budget. This also preserves ACK-only packets during bounded close
+	// draining.
 	status = hx_os_socket_send_to(peer->endpoint->listener, &peer->address,
 		wire, HX_IPC_I_HEADER + bytes, &written, error);
 	if (status == HX_OS_WOULD_BLOCK)
@@ -815,9 +814,8 @@ void *HX_OS_CALL hx_ipc_i_worker(void *user)
 	hx_os_loop *loop = endpoint->loop;
 	hx_os_error error;
 
-	/* The private loop has no submissions yet. Transfer its sole ownership
-	 * exactly once before exposing any native asynchronous operation.
-	 */
+	// The private loop has no submissions yet. Transfer its sole ownership
+	// exactly once before exposing any native asynchronous operation.
 	loop->owner = hx_os_thread_id();
 	if (endpoint->transport == HX_IPC_I_UDP ||
 		endpoint->transport == HX_IPC_I_KCP)

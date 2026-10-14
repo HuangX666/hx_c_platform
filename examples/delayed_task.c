@@ -28,10 +28,9 @@ int main(void)
 			task, hx_os_deadline_after_ms(2000), &result, &error);
 
 	if (pool) {
-		/* This example's callback is bounded. The caller explicitly
-		 * chooses to finish closing after requesting pending
-		 * cancellation.
-		 */
+		// This example's callback is bounded. The caller explicitly
+		// chooses to finish closing after requesting pending
+		// cancellation.
 		hx_os_status closed = hx_os_thread_pool_close_until(pool,
 			HX_OS_POOL_CANCEL_PENDING, HX_OS_DEADLINE_INFINITE,
 			&error);

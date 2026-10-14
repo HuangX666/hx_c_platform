@@ -7,7 +7,11 @@
 
 namespace hx {
 
-/* Immutable shared document. Nodes borrow it; diagnostics are caller-owned. */
+/**
+ * \brief Immutable shared document.
+ *
+ * \details Nodes borrow it; diagnostics are caller-owned.
+ */
 class ConfigDocument {
 public:
 	ConfigDocument() noexcept
@@ -306,7 +310,9 @@ public:
 		return String::copy(found.value(), context);
 	}
 
-	/* The immutable document owns the borrowed bytes. */
+	/**
+	 * \brief The immutable document owns the borrowed bytes.
+	 */
 	Result<StringView> stringView(const char *pointer) const & noexcept
 	{
 		auto found = node(pointer);

@@ -38,10 +38,13 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_proc_create_with_options(
 	hx_os_context *context, const hx_os_proc_options *options,
 	hx_os_proc_handler **out, hx_os_error *error);
 
-/* Copies a strict UTF-8 name, 1..127 bytes. Duplicate active names are EXISTS.
- * register leaves lifetime with the handler. add optionally returns an ID
- * for unregister. Successful add adopts cleanup, called once outside locks
- * after in-flight calls finish; rejected add does not adopt user/cleanup.
+/**
+ * \brief Copies a strict UTF-8 name, 1..127 bytes.
+ *
+ * \details Duplicate active names are EXISTS. register leaves lifetime with the
+ * handler. add optionally returns an ID for unregister. Successful add adopts
+ * cleanup, called once outside locks after in-flight calls finish; rejected add
+ * does not adopt user/cleanup.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_proc_register(
 	hx_os_proc_handler *handler, const char *name, hx_os_proc_fn function,
@@ -52,20 +55,26 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_proc_add(hx_os_proc_handler *handler,
 	hx_os_proc_cleanup_fn cleanup, hx_os_proc_registration *out,
 	hx_os_error *error);
 
-/* Synchronous exactly-one lookup. Missing/disconnected-before-start is
- * NOT_FOUND. Concurrent calls can overlap; callbacks run outside locks.
- * params is copied for invocation and committed only on OK. Borrowed pointer
- * pointee effects cannot be rolled back. NULL params is an empty local pack.
- * No signature DSL or type coercion: use typed calldata getters/setters.
- * User code must return normally (no throw/longjmp/thread exit/fiber switch).
+/**
+ * \brief Synchronous exactly-one lookup.
+ *
+ * \details Missing/disconnected-before-start is NOT_FOUND. Concurrent calls can
+ * overlap; callbacks run outside locks. params is copied for invocation and
+ * committed only on OK. Borrowed pointer pointee effects cannot be rolled back.
+ * NULL params is an empty local pack. No signature DSL or type coercion: use
+ * typed calldata getters/setters. User code must return normally (no
+ * throw/longjmp/thread exit/fiber switch).
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_proc_call(hx_os_proc_handler *handler,
 	const char *name, hx_os_calldata *parameters, hx_os_error *error);
 
-/* Growable counterpart, requires PROCEDURES and PARAMETERS. Names are unique
- * across both callback types. Cross-type calls return TYPE_MISMATCH, with no
- * user callback. Lifetime/retirement matches add. Callback borrows its mutable
- * private pack; destruction during the invocation returns BUSY.
+/**
+ * \brief Growable counterpart, requires PROCEDURES and PARAMETERS.
+ *
+ * \details Names are unique across both callback types. Cross-type calls return
+ * TYPE_MISMATCH, with no user callback. Lifetime/retirement matches add.
+ * Callback borrows its mutable private pack; destruction during the invocation
+ * returns BUSY.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_proc_add_params(
 	hx_os_proc_handler *handler, const char *name,
@@ -73,9 +82,12 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_proc_add_params(
 	hx_os_proc_cleanup_fn cleanup, hx_os_proc_registration *out,
 	hx_os_error *error);
 
-/* Copies input and its limits using the handler context; NULL is empty with
- * default limits. Publishes a new owned result only on success (*out=NULL on
- * failure). Input stays alive and unchanged through the call. Own result with
+/**
+ * \brief Copies input and its limits using the handler context; NULL is empty
+ * with default limits.
+ *
+ * \details Publishes a new owned result only on success (*out=NULL on failure).
+ * Input stays alive and unchanged through the call. Own result with
  * params_destroy. Callback side effects through borrowed pointers/OS objects
  * cannot be rolled back. No implicit conversion to/from fixed calldata.
  */
@@ -83,9 +95,13 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_proc_call_params(
 	hx_os_proc_handler *handler, const char *name,
 	const hx_os_params *input, hx_os_params **out, hx_os_error *error);
 
-/* Immediately prevent later starts, then wait for active calls and cleanup.
- * Timeout retains the ID/handler; retry with the SAME ID. Self/ancestor wait
- * is DEADLOCK. A new registration gets a new ID even for the same name.
+/**
+ * \brief Immediately prevent later starts, then wait for active calls and
+ * cleanup.
+ *
+ * \details Timeout retains the ID/handler; retry with the SAME ID.
+ * Self/ancestor wait is DEADLOCK. A new registration gets a new ID even for the
+ * same name.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_proc_unregister_until(
 	hx_os_proc_handler *handler, hx_os_proc_registration registration,
@@ -93,13 +109,16 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_proc_unregister_until(
 
 HX_OS_API void HX_OS_CALL hx_os_proc_stop(hx_os_proc_handler *handler);
 
-/* Stop/retire/release. Timeout or self-close retains *handler. Slow synchronous
- * user callbacks/cleanup can exceed a deadline; no hard cancellation.
- * Finish registration/unregistration/control calls before final close;
- * accepted callbacks may finish concurrently. Exclude new API entrants and
- * parallel final closes. Same-handler allocator reentry during add/close
- * returns DEADLOCK; stop is ignored during that reentry. Finish host calls and
- * retire every callback/user pointer before unloading its module.
+/**
+ * \brief Stop/retire/release.
+ *
+ * \details Timeout or self-close retains *handler. Slow synchronous user
+ * callbacks/cleanup can exceed a deadline; no hard cancellation. Finish
+ * registration/unregistration/control calls before final close; accepted
+ * callbacks may finish concurrently. Exclude new API entrants and parallel
+ * final closes. Same-handler allocator reentry during add/close returns
+ * DEADLOCK; stop is ignored during that reentry. Finish host calls and retire
+ * every callback/user pointer before unloading its module.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_proc_close_until(
 	hx_os_proc_handler **handler, hx_os_deadline deadline,

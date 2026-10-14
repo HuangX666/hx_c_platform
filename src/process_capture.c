@@ -80,7 +80,7 @@ static hx_os_status hx_os_capture_submit(hx_os_process_capture *capture,
 			return stream->error.status;
 		}
 
-		/* Explicit abandonment of a failed stream, after retirement. */
+		// Explicit abandonment of a failed stream, after retirement.
 		hx_os_status status = hx_os_pipe_close_until(
 			&stream->pipe, HX_OS_DEADLINE_NOW, error);
 		if (status != HX_OS_OK)
@@ -251,7 +251,7 @@ hx_os_status hx_os_process_capture_run_with_options(hx_os_context *context,
 			&capture->streams[1].pipe, &spawn.standard_error,
 			error);
 
-	/* Allocate and accept both reads before accepting a child. */
+	// Allocate and accept both reads before accepting a child.
 	if (status == HX_OS_OK)
 		status = hx_os_capture_submit(
 			capture, &capture->streams[0], error);
@@ -434,9 +434,8 @@ hx_os_status hx_os_process_capture_discard(
 	if (!capture || capture->owner != hx_os_thread_id() || stream < 0 ||
 		stream > 1)
 		return HX_OS_INVALID;
-	/* An accepted read still commits its retained prefix. Subsequent
-	 * reads use scratch storage. No buffer moves while native I/O runs.
-	 */
+	// An accepted read still commits its retained prefix. Subsequent
+	// reads use scratch storage. No buffer moves while native I/O runs.
 	capture->streams[stream].discard = 1;
 
 	return HX_OS_OK;

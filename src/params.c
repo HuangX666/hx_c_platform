@@ -458,8 +458,7 @@ hx_os_status hx_os_params_clone(const hx_os_params *source,
 	if (status != HX_OS_OK)
 		return status;
 
-	/* Opaque heap storage is mutable; guard allocator reentry during copy.
-	 */
+	// Opaque heap storage is mutable; guard allocator reentry during copy.
 	((hx_os_params *)source)->busy = 1;
 	options.max_entries = source->max_entries;
 	options.max_bytes = source->max_bytes;

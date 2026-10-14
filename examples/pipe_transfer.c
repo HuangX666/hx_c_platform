@@ -41,7 +41,7 @@ int main(void)
 		status = hx_os_loop_run_until(
 			loop, hx_os_deadline_after_ms(2000), NULL);
 
-	/* This example explicitly waits for cancellation retirement at exit. */
+	// This example explicitly waits for cancellation retirement at exit.
 	(void)hx_os_pipe_close_until(&reader, HX_OS_DEADLINE_INFINITE, NULL);
 	(void)hx_os_pipe_close_until(&writer, HX_OS_DEADLINE_INFINITE, NULL);
 	if (loop) {

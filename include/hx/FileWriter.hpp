@@ -6,9 +6,12 @@
 
 namespace hx {
 
-/* Host-owned handle, like ThreadPool. Keep owner alive until close succeeds
- * or consumes it on a native close error. This facade's destructor does not
- * block, discard data, detach or terminate a worker.
+/**
+ * \brief Host-owned handle, like ThreadPool.
+ *
+ * \details Keep owner alive until close succeeds or consumes it on a native
+ * close error. This facade's destructor does not block, discard data, detach or
+ * terminate a worker.
  */
 class FileWriter {
 public:

@@ -30,7 +30,7 @@ int main()
 
 	std::puts(text.value().c_str());
 
-	/* decoded owns the strings and arrays; destruction releases them
-	 * together. */
+	// decoded owns the strings and arrays; destruction releases them
+	// together.
 	return 0;
 }

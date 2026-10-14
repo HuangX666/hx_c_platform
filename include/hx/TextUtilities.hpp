@@ -5,8 +5,11 @@
 #include <hx/Values.hpp>
 
 namespace hx {
-/* The source and delimiter are borrowed. Copies have independent positions,
- * but share the same source lifetime. Mutating their storage invalidates them.
+/**
+ * \brief The source and delimiter are borrowed.
+ *
+ * \details Copies have independent positions, but share the same source
+ * lifetime. Mutating their storage invalidates them.
  */
 class SplitView {
 public:

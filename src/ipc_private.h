@@ -91,9 +91,8 @@ struct hx_ipc_connection {
 	size_t controls;
 	size_t control_bytes;
 	hx_os_status rejected;
-	/* 0 free, 1 connecting, 2 handshake, 3 ready, 4 retiring, 5 retired.
-	 * The I/O owner changes state/identity under the endpoint mutex.
-	 */
+	// 0 free, 1 connecting, 2 handshake, 3 ready, 4 retiring, 5 retired.
+	// The I/O owner changes state/identity under the endpoint mutex.
 	int state;
 	int announced;
 	unsigned char prefix[HX_IPC_I_HEADER];

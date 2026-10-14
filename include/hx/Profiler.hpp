@@ -8,7 +8,9 @@ namespace hx {
 
 class ProfileSnapshot {
 public:
-	/* Adopts one snapshot reference; copying retains it without allocation.
+	/**
+	 * \brief Adopts one snapshot reference; copying retains it without
+	 * allocation.
 	 */
 	explicit ProfileSnapshot(hx_os_profiler_snapshot *value = NULL) noexcept
 	    : m_value_(value)
@@ -105,7 +107,9 @@ private:
 	hx_os_profiler_snapshot *m_value_;
 };
 
-/* Host owns the profiler through all threads and TLS retirement. */
+/**
+ * \brief Host owns the profiler through all threads and TLS retirement.
+ */
 class Profiler {
 public:
 	explicit Profiler(hx_os_profiler *&owner) noexcept
@@ -232,9 +236,12 @@ private:
 	hx_os_profiler **m_owner_;
 };
 
-/* A lexical, nonmovable thread/fiber scope. start() reports entry failure;
- * only successful entries are balanced. The profiler outlives this object.
- * Do not interleave external restart/leave with an active guard.
+/**
+ * \brief A lexical, nonmovable thread/fiber scope.
+ *
+ * \details start() reports entry failure; only successful entries are balanced.
+ * The profiler outlives this object. Do not interleave external restart/leave
+ * with an active guard.
  */
 class ProfileScope {
 public:

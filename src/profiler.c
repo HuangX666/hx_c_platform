@@ -130,9 +130,8 @@ static void HX_OS_CALL hx_os_profiler_thread_exit(void *value, void *user)
 
 	(void)hx_os_mutex_unlock(profiler->mutex, NULL);
 	hx_os_profile_current = guard.previous;
-	/* The common TLS wrapper finishes retiring after this callback.
-	 * close must also successfully destroy the key before freeing owner.
-	 */
+	// The common TLS wrapper finishes retiring after this callback.
+	// close must also successfully destroy the key before freeing owner.
 }
 
 hx_os_status hx_os_profiler_create(
@@ -565,8 +564,7 @@ hx_os_status hx_os_profiler_leave(hx_os_profiler *profiler, hx_os_error *error)
 		record->last_inclusive = elapsed;
 		record->last_exclusive = exclusive;
 
-		/* Welford updates need no retained samples or new allocations.
-		 */
+		// Welford updates need no retained samples or new allocations.
 		count = (double)record->completed;
 		delta = (double)elapsed - record->mean_inclusive;
 		record->mean_inclusive += delta / count;

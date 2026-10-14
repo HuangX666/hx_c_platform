@@ -33,9 +33,13 @@ static inline int hx_os_byte_order(void)
 					      : HX_OS_BIG_ENDIAN;
 }
 
-/* Division by zero or NULL quotient is INVALID, outputs remain unchanged.
- * Remainder is optional; outputs must not overlap. Native C division lets
- * supported 32-bit ARM toolchains select their __aeabi_uldivmod equivalent.
+/**
+ * \brief Division by zero or NULL quotient is INVALID, outputs remain
+ * unchanged.
+ *
+ * \details Remainder is optional; outputs must not overlap. Native C division
+ * lets supported 32-bit ARM toolchains select their __aeabi_uldivmod
+ * equivalent.
  */
 static inline hx_os_status hx_os_udiv64(uint64_t value, uint32_t divisor,
 	uint64_t *quotient, uint32_t *remainder)

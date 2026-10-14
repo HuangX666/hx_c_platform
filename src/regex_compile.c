@@ -98,8 +98,7 @@ static hx_os_rx_width hx_os_rx_width_of(
 			result = compiler->widths[node->value];
 			break;
 		}
-		/* A visiting group is recursive; finished widths are reusable.
-		 */
+		// A visiting group is recursive; finished widths are reusable.
 		compiler->width_states[node->value] = 1;
 		result = hx_os_rx_width_of(compiler,
 			compiler->regex->groups[node->value].node, depth + 1);

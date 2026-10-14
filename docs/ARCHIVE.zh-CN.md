@@ -40,7 +40,9 @@ ARCHIVE 默认开启，需要 FILE_UTILS、CONTAINERS，以及准备好的 libar
 先按[依赖构建说明](DEPENDENCIES.zh-CN.md)准备 SDK，再用它的绝对 prefix 路径配置本库：
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/project/build-deps/prefix -DHX_OS_BUILD_EXAMPLES=ON
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+  -DHX_OS_DEPENDENCY_PREFIX=/absolute/project/build-deps/prefix \
+  -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build --config Release --parallel 4
 ```
 
@@ -214,4 +216,4 @@ build/bin/hx_os_archive_files list records.zip
 build/bin/hx_os_archive_files unpack records.zip restored-folder
 ```
 
-先准备 input-folder，输出归档和 restored-folder 应不存在。Windows 程序位于 build/bin/Release，带 .exe 后缀。详细参数见前文；使用示例不依赖维护者的格式互操作和失败注入回归。历史平台结果见验证记录。
+先准备 input-folder，输出归档和 restored-folder 应不存在。Windows 程序位于 build/bin/Release，带 .exe 后缀。详细参数见前文；示例可独立运行，部署要求见[平台支持](PLATFORMS.zh-CN.md)。

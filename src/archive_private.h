@@ -65,7 +65,7 @@ hx_os_status hx_ar_i_walk(hx_ar_job *job, hx_ar_source_fn visit, void *user);
 hx_os_status hx_ar_i_split(hx_ar_job *job, const char *path,
 	hx_string *directory, hx_string *name);
 
-/* Native directory anchors keep extraction below the caller's root. */
+// Native directory anchors keep extraction below the caller's root.
 hx_os_status hx_ar_i_root_open(
 	hx_ar_job *job, const char *path, int create, hx_ar_root **out);
 void hx_ar_i_root_close(hx_ar_root *root);

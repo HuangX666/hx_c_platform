@@ -48,8 +48,11 @@ private:
 	std::array<unsigned char, Size - 1> m_bytes_;
 };
 
-/* Declare the result constexpr to request compile-time encoding. Toolchains
- * can retain source/debug strings; this is reversible obfuscation.
+/**
+ * \brief Declare the result constexpr to request compile-time encoding.
+ *
+ * \details Toolchains can retain source/debug strings; this is reversible
+ * obfuscation.
  */
 template <uint8_t Key, size_t Size>
 constexpr ObfuscatedString<Size, Key> obfuscate(const char (&text)[Size])

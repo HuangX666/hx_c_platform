@@ -77,7 +77,9 @@ public:
 			context);
 	}
 
-	/* Offset east of UTC in seconds for this instant; DST 0/1/-1. */
+	/**
+	 * \brief Offset east of UTC in seconds for this instant; DST 0/1/-1.
+	 */
 	static Result<std::pair<int, int>> localOffsetAt(
 		int64_t milliseconds) noexcept
 	{
@@ -91,7 +93,9 @@ public:
 		return std::make_pair(seconds, dst);
 	}
 
-	/* Offset east of UTC in minutes; DST 0/1/-1. */
+	/**
+	 * \brief Offset east of UTC in minutes; DST 0/1/-1.
+	 */
 	static Result<std::pair<int, int>> localOffset() noexcept
 	{
 		int minutes = 0, dst = 0;

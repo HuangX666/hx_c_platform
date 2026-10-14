@@ -39,9 +39,8 @@ static hx_os_status consume(hx_os_persistent_queue *queue, hx_os_error *error)
 		printf("Handle %s: %.*s\n",
 			hx_os_persistent_message_id(message), (int)data.size,
 			(const char *)data.data);
-		/* Replace the print with an upload. Ack only after the server
-		 * confirms the record; otherwise release it for a later retry.
-		 */
+		// Replace the print with an upload. Ack only after the server
+		// confirms the record; otherwise release it for a later retry.
 		status = hx_os_persistent_queue_ack(queue, message, error);
 		hx_os_persistent_message_destroy(&message);
 		if (status != HX_OS_OK)

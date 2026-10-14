@@ -131,7 +131,10 @@ public:
 		return String::copy(value.value(), context);
 	}
 
-	/* Borrows the pack until mutation/destruction; allocates no storage. */
+	/**
+	 * \brief Borrows the pack until mutation/destruction; allocates no
+	 * storage.
+	 */
 	Result<StringView> stringView(const char *name) const noexcept
 	{
 		hx_string_view value = {};
@@ -233,8 +236,11 @@ private:
 	hx_os_calldata m_data_;
 };
 
-/* Host-owned pointer survives close failure. Callbacks return void,
- * hx_os_status or Result<void>; noexcept captures retire outside native locks.
+/**
+ * \brief Host-owned pointer survives close failure.
+ *
+ * \details Callbacks return void, hx_os_status or Result<void>; noexcept
+ * captures retire outside native locks.
  */
 class SignalHandler {
 public:
@@ -384,7 +390,11 @@ public:
 #pragma push_macro("emit")
 #undef emit
 
-	/* Compatibility alias. notify() also works when Qt defines emit. */
+	/**
+	 * \brief Compatibility alias.
+	 *
+	 * \details notify() also works when Qt defines emit.
+	 */
 	Result<size_t> emit(
 		const char *signal, const CallData &data = CallData()) noexcept
 	{

@@ -463,7 +463,7 @@ static hx_os_config_node *hx_os_codec_encode_value(hx_os_cfg_parser *p,
 	if (t->kind == HX_OS_CODEC_NODE) {
 		const hx_os_config_node *source;
 
-		/* MSVC x86 otherwise diagnoses the nested pointer qualifier. */
+		// MSVC x86 otherwise diagnoses the nested pointer qualifier.
 		memcpy((void *)&source, data, sizeof(source));
 		if (!source ||
 			(format == HX_OS_CONFIG_XML &&

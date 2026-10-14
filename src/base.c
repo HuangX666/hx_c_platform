@@ -213,7 +213,7 @@ const char *hx_os_status_name(hx_os_status status)
 	}
 }
 
-/* Only the newly supported domains use this strict, bounded snapshot. */
+// Only the newly supported domains use this strict, bounded snapshot.
 static void hx_os_error_extra_text(
 	const hx_os_error *error, char *buffer, size_t capacity)
 {
@@ -228,7 +228,7 @@ static void hx_os_error_extra_text(
 		DWORD count = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM |
 				FORMAT_MESSAGE_IGNORE_INSERTS,
 			NULL, (DWORD)error->native_code, 0, wide, 1024, NULL);
-		/* gai_strerrorW shares static storage on Windows. */
+		// gai_strerrorW shares static storage on Windows.
 		if (count &&
 			!WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
 				wide, -1, buffer, (int)capacity, NULL, NULL))

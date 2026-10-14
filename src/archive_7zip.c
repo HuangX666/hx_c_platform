@@ -50,8 +50,10 @@ static hx_os_status hx_ar_seven_fail(
 		((hx_ar_seven *)user)->job, status, &error, message);
 }
 
-/* The pinned 7-Zip COM ABI stores UTF-16 units in wchar_t on POSIX too;
- * using the platform's native UTF-32 convention would lose non-BMP names. */
+/**
+ * \brief The pinned 7-Zip COM ABI stores UTF-16 units in wchar_t on POSIX too;
+ * using the platform's native UTF-32 convention would lose non-BMP names.
+ */
 static hx_os_status hx_ar_seven_to_wide(
 	void *user, const char *text, wchar_t **out)
 {

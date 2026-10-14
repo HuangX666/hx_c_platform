@@ -108,7 +108,11 @@ public:
 		return matched != 0;
 	}
 
-	/* Returned groups borrow subject. Keep its storage unchanged/alive. */
+	/**
+	 * \brief Returned groups borrow subject.
+	 *
+	 * \details Keep its storage unchanged/alive.
+	 */
 	Result<RegexMatch> find(StringView subject, size_t start = 0,
 		const hx_os_regex_limits *limits = NULL) const noexcept
 	{

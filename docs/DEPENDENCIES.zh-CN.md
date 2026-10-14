@@ -30,12 +30,13 @@ deps/
   .cache/          忽略的旧解析器／iconv 发布包缓存
 ```
 
-原有 `.deps/` 和 `deps/.cache/` 可通过显式源码路径继续使用。新构建统一经过 `cmake/HxDependencySources.cmake`；旧 Python 准备命令也委托给它，不再单独维护下载地址和版本表。历史验证记录保留当时的路径。
+原有 `.deps/` 和 `deps/.cache/` 可通过显式源码路径继续使用。新构建统一经过 `cmake/HxDependencySources.cmake`；旧 Python 准备命令也委托给它，不再单独维护下载地址和版本表。
 
 ## 2. 默认使用 Git submodule
 
 ```sh
-git clone --branch dev --recurse-submodules https://github.com/HuangX666/hx_c_platform.git
+git clone --branch dev --recurse-submodules \
+  https://github.com/HuangX666/hx_c_platform.git
 cd hx_c_platform
 # 已有仓库补齐子模块：
 git submodule update --init --recursive
@@ -61,7 +62,8 @@ SQLite 是另一个发布包例外：通过 FetchContent 下载官方 3.54.0 ama
 cmake -S tools/sources -B build-sources
 
 # 替代来源，版本不变：
-cmake -S tools/sources -B build-sources-fetch -DHX_OS_DEPENDENCY_PROVIDER=FETCHCONTENT
+cmake -S tools/sources -B build-sources-fetch \
+  -DHX_OS_DEPENDENCY_PROVIDER=FETCHCONTENT
 ```
 
 `HX_OS_DEPENDENCIES` 接受用分号隔开的名称列表，默认准备五种解析器、KCP、uthash、iconv。`tools/fetch_parsers.py` 和 `tools/fetch_iconv.py` 保留为这个 CMake 工程的兼容入口，不改写第三方源码。
@@ -88,7 +90,7 @@ cmake --build build-deps --config Release --parallel 2
 
 MSVC Debug 消费者应为压缩 SDK 指定 `-DHX_DEPS_CONFIGURATION=Debug`。Debug 与 Release SDK 使用不同 prefix，避免混用 `/MDd` 与 `/MD` 静态库；OpenSSL 动态运行库保持独立构建。
 
-Windows libarchive 配置面向 WIN7，并显式链接选定依赖；Windows 7／8.1 系统运行暂缓验证。本次 Windows OpenSSL 使用 ASM=OFF，不能当作汇编性能证据。交叉构建把目标编译器、sysroot、工具链变量、Android ABI/API 传递给各依赖。Android SDK 采用 POSIX 宿主／WSL 和 Linux NDK，因为上游 OpenSSL 使用 POSIX make／Perl；直接从 Windows 宿主构建该 SDK 会明确报错。当前 Android／Linux ARM 结果见[验证记录](VALIDATION.zh-CN.md)，Apple 不在本轮范围。
+Windows libarchive 配置以 WIN7 为目标，并显式链接选定依赖。交叉构建会把编译器、sysroot、工具链和 Android ABI/API 传给各依赖。Android SDK 需要 POSIX 宿主／WSL、Linux NDK、make 和 Perl；直接使用 Windows 宿主会明确拒绝。旧系统及实体设备的兼容要求见[平台支持](PLATFORMS.zh-CN.md)。
 
 SDK 保留已弃用的 ENGINE ABI 入口，因为其他 OpenSSL 3 消费者可能引用它们；动态加载的 engine 模块仍不构建。同一进程不要混用不兼容的 OpenSSL 构建。
 
@@ -97,7 +99,8 @@ SDK 保留已弃用的 ENGINE ABI 入口，因为其他 OpenSSL 3 消费者可�
 构建完之后，使用绝对 prefix 路径执行检查：
 
 ```sh
-cmake -S tools/dependencies/check -B build-deps-check -DCMAKE_PREFIX_PATH=/absolute/project/build-deps/prefix
+cmake -S tools/dependencies/check -B build-deps-check \
+  -DCMAKE_PREFIX_PATH=/absolute/project/build-deps/prefix
 cmake --build build-deps-check --config Release
 ctest --test-dir build-deps-check -C Release --output-on-failure
 ```
@@ -130,8 +133,10 @@ cmake --build build-arm64 --parallel 4
 本机 ARMv7 hard-float GNU 工具链对应参数为 `armv7`、`arm-linux-gnueabihf-`、OpenSSL `linux-armv4`、`qemu-arm;-L;/usr/arm-linux-gnueabihf`。浮点 ABI 由工具链确定，不由 OpenSSL 目标名推断。QEMU 系统调用转换的限制与库缺陷分别记录，运行这些命令不能替代板卡验收。
 
 ```sh
+hx_android_toolchain="$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake"
+
 cmake -S tools/dependencies -B build-deps-android-arm64 -G Ninja \
-  -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake" \
+  -DCMAKE_TOOLCHAIN_FILE="$hx_android_toolchain" \
   -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21 \
   -DHX_DEPS_OPENSSL_TARGET=android-arm64
 cmake --build build-deps-android-arm64 --parallel 2

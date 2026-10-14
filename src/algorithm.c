@@ -525,8 +525,7 @@ hx_os_status hx_os_array_nth_element(hx_os_context *context, void *data,
 	if (count == 1)
 		return hx_os_i_error(error, HX_OS_OK, 0, 0);
 
-	/* Preserve the alignment common to the base and every element stride.
-	 */
+	// Preserve the alignment common to the base and every element stride.
 	alignment = (uintptr_t)data | (uintptr_t)element_size;
 	alignment &= ~alignment + 1;
 	status = hx_os_array_scratch(context, element_size, (size_t)alignment,

@@ -39,8 +39,8 @@ int main(void)
 	int status = sqlite3_open(":memory:", &database);
 
 	if (status == SQLITE_OK)
-		status = sqlite3_exec(database, "CREATE TABLE sample(id INTEGER)",
-			NULL, NULL, NULL);
+		status = sqlite3_exec(database,
+			"CREATE TABLE sample(id INTEGER)", NULL, NULL, NULL);
 
 	if (database)
 		sqlite3_close(database);
@@ -72,8 +72,7 @@ build-shared-linux/bin/hx_os_native_dependencies
 
 安装包带有所选 SDK 的头文件、CMake 导入文件和运行所需产物。Windows 动态库放在 `bin/`，Linux 放在 `lib/`。Windows 发布时把 DLL 放在程序旁边，或把这套安装包的 `bin/` 加入 PATH。Linux 保留共享库符号链接和本地运行库搜索路径。
 
-Windows、WSL Linux 已用安装后的独立工程编译并运行原生调用示例。这不能写成 Android、ARM 实机、macOS 或旧 Windows 已通过。发布底层 SDK 时保留[第三方许可说明](../THIRD_PARTY_NOTICES.zh-CN.md)。
-
+在自己的目标环境运行安装后的消费者示例，检查头文件、链接与运行库部署；桌面结果不能代替 Android、板卡或旧系统验收。发布底层 SDK 时保留[第三方许可说明](../THIRD_PARTY_NOTICES.zh-CN.md)。
 
 可以通过 HX_OS_DEPENDENCY_PREFIX 或普通的 CMAKE_PREFIX_PATH 选择准备好的 SDK。安装时使用 find_package 实际选中目标的头文件目录和包配置位置，同时保留 Unix 库的符号链接链，不改写第三方 SDK 文件。
 

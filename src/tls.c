@@ -164,7 +164,7 @@ static hx_os_status hx_tls_start(hx_os_context *context, const char *host,
 			return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 	if (!server)
 		options.max_peers = 1;
-	/* Bound the complete first-party peer allocation, including records. */
+	// Bound the complete first-party peer allocation, including records.
 	bytes = options.queue_capacity * 2 + HX_TLS_RECORD * 4 +
 		sizeof(hx_tls_peer);
 	if (options.max_peers > (256 * 1024 * 1024u) / bytes)

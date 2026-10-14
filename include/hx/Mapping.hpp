@@ -6,8 +6,11 @@
 
 namespace hx {
 
-/* Explicit close reports native failures. Move assignment swaps ownership,
- * so a retryable close failure cannot be hidden by overwriting a handle.
+/**
+ * \brief Explicit close reports native failures.
+ *
+ * \details Move assignment swaps ownership, so a retryable close failure cannot
+ * be hidden by overwriting a handle.
  */
 class Pages {
 public:

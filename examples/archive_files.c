@@ -39,8 +39,8 @@ static int hx_example_main(int argc, const char *const *argv)
 			stderr);
 		return 2;
 	}
-	/* Passwords do not appear in the command line or diagnostic output.
-	 * A production UI can supply its own in-memory options.password. */
+	// Passwords do not appear in the command line or diagnostic output.
+	// A production UI can supply its own in-memory options.password.
 	status = hx_os_env_get_string("HX_ARCHIVE_PASSWORD", &password, &error);
 	if (status == HX_OS_NOT_FOUND)
 		status = HX_OS_OK;

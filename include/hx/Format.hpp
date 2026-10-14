@@ -7,8 +7,11 @@
 #include <string>
 
 namespace hx {
-/* Specialize format(value, specification, out, limit, error) noexcept for
- * application types. out is a borrowed UTF-8 hx_string owned by the engine.
+/**
+ * \brief Specialize format(value, specification, out, limit, error) noexcept
+ * for application types.
+ *
+ * \details out is a borrowed UTF-8 hx_string owned by the engine.
  */
 template <typename T> struct Formatter;
 
@@ -146,7 +149,7 @@ argument(const T &value) noexcept
 }
 } // namespace format_detail
 
-/* Named arguments are call-borrowed; do not store one past its value's life. */
+// Named arguments are call-borrowed; do not store one past its value's life.
 template <typename T>
 hx_format_arg named(const char *name, const T &value) noexcept
 {

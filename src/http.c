@@ -311,8 +311,7 @@ hx_os_status hx_os_http_request(hx_os_http *http, const char *method,
 		}
 	}
 finish:
-	/* Reset before releasing borrowed request buffers and callback state.
-	 */
+	// Reset before releasing borrowed request buffers and callback state.
 	curl_easy_reset(http->native);
 	curl_slist_free_all(list);
 	hx_os_http_response_destroy(&transfer.result);

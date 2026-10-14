@@ -242,8 +242,12 @@ hx_os_status hx_settings_i_array_retain(hx_os_context *context,
 		context, items, count, 0, limits, out, error);
 }
 
-/* Either public borrowed pairs or private immutable entries are supplied.
- * Retain mode is only used by same-context mutable-root updates/merges.
+/**
+ * \brief Either public borrowed pairs or private immutable entries are
+ * supplied.
+ *
+ * \details Retain mode is only used by same-context mutable-root
+ * updates/merges.
  */
 static hx_os_status hx_settings_object_build(hx_os_context *context,
 	const hx_settings_pair *pairs, const hx_settings_entry *existing,

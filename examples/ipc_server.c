@@ -2,8 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-/* Run in one terminal: hx_os_ipc_server local://demo 1
- * The last argument is the number of business messages before shutdown.
+/**
+ * \brief Run in one terminal: hx_os_ipc_server local://demo 1 The last argument
+ * is the number of business messages before shutdown.
  */
 int main(int argc, char **argv)
 {

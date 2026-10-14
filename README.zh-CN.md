@@ -1,100 +1,54 @@
 # hx_c_platform
 
-[![C99 核心][c-badge]](CMakeLists.txt) [![C++11 封装][cpp-badge]](docs/CPP_POOL.zh-CN.md) [![仅 C++ 封装为 header-only][header-badge]](docs/CPP_POOL.zh-CN.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![自有代码许可证待定][license-badge]](THIRD_PARTY_NOTICES.zh-CN.md) [![Linux GCC 与 Clang][linux-badge]](docs/VALIDATION.zh-CN.md) [![macOS 待验证][macos-badge]](docs/VALIDATION.zh-CN.md) [![Windows MSVC][windows-badge]](docs/VALIDATION.zh-CN.md) [![本地验证记录][tests-badge]](docs/VALIDATION.zh-CN.md) [![嵌入式 Linux 待目标验证][embedded-badge]](docs/VALIDATION.zh-CN.md) [![Android API 21 ARM 交叉编译通过][android-badge]](docs/ANDROID.zh-CN.md)
+[![C99 核心][c-badge]](CMakeLists.txt) [![C++11 封装][cpp-badge]](docs/CPP_POOL.zh-CN.md) [![仅 C++ 封装为 header-only][header-badge]](docs/CPP_POOL.zh-CN.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![自有代码许可证待定][license-badge]](THIRD_PARTY_NOTICES.zh-CN.md) [![Linux GCC 与 Clang][linux-badge]](docs/PLATFORMS.zh-CN.md) [![macOS 待验证][macos-badge]](docs/PLATFORMS.zh-CN.md) [![Windows MSVC][windows-badge]](docs/PLATFORMS.zh-CN.md) [![嵌入式 Linux 待目标验证][embedded-badge]](docs/PLATFORMS.zh-CN.md) [![Android API 21 ARM][android-badge]](docs/ANDROID.zh-CN.md)
 
-[English](README.md) · [常用任务教程](docs/USAGE.zh-CN.md) · [详细参考](docs/REFERENCE.zh-CN.md) · [高精度时钟](docs/REFERENCE.zh-CN.md#section-13)
-
-- [1. 这个库能帮你做什么](#section-1)
-- [2. 使用要求与平台状态](#section-2)
-- [3. 把库接入自己的项目](#section-3)
-- [4. 常用任务示例](#section-4)
-- [5. 先记住的几条规则](#section-5)
-- [6. 更多功能到哪里找](#section-6)
-- [7. 构建、验证与项目许可](#section-7)
+[English](README.md) · [完整入门教程](docs/USAGE.zh-CN.md) · [按功能查找](#section-6) · [接口参考](docs/REFERENCE.zh-CN.md)
 
 <a id="section-1"></a>
 
-## 1. 这个库能帮你做什么
+## 1. 这个库用来做什么
 
-`hx_c_platform` 给 C/C++ 项目提供一套常用工具：读写文件、处理 UTF-8 字符串、读取配置、使用容器和 variant、创建线程、提交后台任务和运行协程。你调用同一个函数，库负责处理 Windows、Linux 等系统的差异。
+你在写 C/C++ 程序时，经常要读取文件、解析配置、处理字符串、给数组排序，或者把任务交给后台线程。`hx_c_platform` 把这些常用操作整理成一套接口，并在内部处理 Windows、Linux 等平台的差异。
 
-核心用 C99 实现；C++11 开发者可以选择更方便的 C++ 接口，C++20 协程语法是单独启用的可选层。普通使用不需要创建全局运行环境，也不依赖 Qt 或 OBS。当前版本为 0.1.0。
-
-下面这张图表示调用关系：业务代码调用库，由库选择对应的系统实现。
+比如，要读取一个 UTF-8 文本文件，调用 `hx_os_file_read_text()` 就可以取得文字；要把一组整数从小到大排列，调用 `hx_os_sort_i32()`。本页先带你运行几个小程序，再给出更多功能的入口。
 
 ```mermaid
 flowchart LR
-    A["你的 C / C++ 程序"] --> B["hx_c_platform"]
-    B --> C["Windows 实现"]
-    B --> D["Linux / Android 实现"]
-    B --> E["macOS 实现"]
+    A["你的 C / C++ 业务"] --> B["文件、配置、字符串、容器、任务等接口"]
+    B --> C["hx_c_platform 的平台适配"]
+    C --> D["Windows / Linux / Android / macOS"]
 ```
+
+核心需要编译成库，使用 C99；C++11 包装提供自动资源管理和显式结果检查。普通使用没有全局初始化步骤，不依赖 Qt 或 OBS。C++20 协程层按需开启。平台基线与限制见[平台支持](docs/PLATFORMS.zh-CN.md)。
 
 <a id="section-2"></a>
-
-## 2. 使用要求与平台状态
-
-需要 CMake 3.16 或更新版本，以及 C 编译器；使用 C++ 示例时还需要支持 C++11 的编译器。Windows 可使用 MSVC，Linux 可使用 GCC 或 Clang。核心需要编译成库，C++ 接口是头文件包装。
-
-| 平台 | 当前情况 |
-| --- | --- |
-| Windows | MSVC x86/x64 已构建和运行；Win7 SP1/8.1 保留为兼容目标，旧系统待实测 |
-| Linux | 已在 WSL Linux 构建和运行 |
-| macOS | 有平台实现；Intel 10.13 / ARM64 11.0 为基线，Apple 主机待验证 |
-| Android | API 21 两种 ARM ABI 编译；API 34 上完整运行 x86_64 原生与 ARM64 转译测试，包含动态 TLS 和压缩 |
-| 嵌入式 Linux | ARMv7／AArch64 glibc 交叉编译与 QEMU 运行；模拟器排除项、实体板卡结果分别记录 |
-
 <a id="section-3"></a>
 
-## 3. 把库接入自己的项目
+## 2. 先准备一个能运行的项目
 
-先建立下面的目录，把本库源码放到 `external/hx_c_platform`。`main.c` 使用第 4.1 节的完整 C 程序。每个示例单独运行，程序会打印自己的结果。
-
-拉取库源码时一并初始化固定版本子模块，当前开发分支是 `dev`：
+需要 CMake 3.16 或更新版本和 C 编译器。Windows 使用 MSVC 开发者终端；Linux 使用 GCC 或 Clang。下面按“从源码接入”操作，第三方源码放在你的项目 `deps` 中：
 
 ```sh
-git clone --branch dev --recurse-submodules https://github.com/HuangX666/hx_c_platform.git external/hx_c_platform
+mkdir hx_demo
+cd hx_demo
+mkdir deps
+cd deps
+git clone --branch dev https://github.com/HuangX666/hx_c_platform.git
+git -C hx_c_platform submodule update --init --recursive
+cd ..
 ```
 
-已有工作区执行 `git submodule update --init --recursive`。[依赖说明](docs/DEPENDENCIES.zh-CN.md)还提供 FetchContent 方式和可选解析／编码后端的准备方法。
-
-```text
-hx_demo/
-├── CMakeLists.txt
-├── main.c
-├── hello.txt
-├── config.json
-└── external/
-    └── hx_c_platform/
-```
-
-`hello.txt` 保存为 UTF-8，内容是：
-
-```text
-Hello, hx_c_platform!
-```
-
-`config.json` 保存以下内容，稍后的配置示例会用到它：
-
-```json
-{"port": 8080}
-```
-
-`CMakeLists.txt` 使用以下内容。库默认不构建自身的测试和示例。下面的开关关闭这个入门程序用不到的可选原生依赖模块。需要加密功能时，保留 `HX_OS_ENABLE_CRYPTO` 开启并先准备 [OpenSSL 依赖包](docs/CRYPTO.zh-CN.md#1-构建与发布)。`configure_file` 把输入文件复制到运行目录，避免找不到文件。
+在 `hx_demo` 中创建 `CMakeLists.txt`，填写下面的内容。`main.c` 使用第 3.1 节的完整程序。
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
 project(hx_demo LANGUAGES C)
 
-set(HX_OS_ENABLE_CRYPTO OFF CACHE BOOL "" FORCE)
-set(HX_OS_ENABLE_ARCHIVE OFF CACHE BOOL "" FORCE)
-set(HX_OS_ENABLE_HTTP OFF CACHE BOOL "" FORCE)
-set(HX_OS_ENABLE_URL OFF CACHE BOOL "" FORCE)
-set(HX_OS_ENABLE_COMPRESSION OFF CACHE BOOL "" FORCE)
-set(HX_OS_ENABLE_UNICODE OFF CACHE BOOL "" FORCE)
-set(HX_OS_ENABLE_PERSISTENT_QUEUE OFF CACHE BOOL "" FORCE)
+foreach(module CRYPTO ARCHIVE COMPRESSION HTTP URL UNICODE PERSISTENT_QUEUE)
+	set(HX_OS_ENABLE_${module} OFF CACHE BOOL "")
+endforeach()
 
-add_subdirectory(external/hx_c_platform)
+add_subdirectory(deps/hx_c_platform)
 
 add_executable(hx_demo main.c)
 target_link_libraries(hx_demo PRIVATE hx_c_platform::hx_c_platform)
@@ -102,46 +56,34 @@ set_target_properties(hx_demo PROPERTIES
 	C_STANDARD 99
 	C_STANDARD_REQUIRED YES
 	C_EXTENSIONS NO)
-
-configure_file(hello.txt hello.txt COPYONLY)
-configure_file(config.json config.json COPYONLY)
 ```
 
-在 `hx_demo` 目录执行；Windows 使用装好 MSVC 和 CMake 的开发者终端：
+这份入门配置保留文件、字符串、内置配置解析、容器及线程池等能力，并关闭需要另行准备原生 SDK 的几个模块。以后需要 HTTP、加密或压缩时，按[依赖指南](docs/DEPENDENCIES.zh-CN.md)准备 SDK，再开启对应模块。
+
+在 `hx_demo` 中编译：
 
 ```sh
 cmake -S . -B build
 cmake --build build --config Release
-cd build
 ```
 
-Windows 的 Visual Studio 构建运行：
-
-```powershell
-.\Release\hx_demo.exe
-```
-
-Linux 的 Makefile/Ninja 构建运行：
-
-```sh
-./hx_demo
-```
-
-结果应为 `Hello, hx_c_platform!`。输入文件按当前工作目录查找，因此这里先进入了 `build`。使用 C++ 时，把程序保存为 `main.cpp`，采用[教程中的完整 C++ CMake 配置](docs/USAGE.zh-CN.md#cpp-project)；其中也包含关闭异常的选项。
-
-客户可单独开启 `HX_OS_BUILD_EXAMPLES=ON` 编译使用示例。自动回归由维护者在本机运行，不随公开源码分发；示例无需回归文件。Visual Studio 将库、依赖和示例分别分组，库项目内可直接查看头文件与实现。
+后面的运行命令都从 `hx_demo` 目录执行。每次只选择一个完整程序作为 `main.c`；换一个例子后重新构建即可。C++ 程序保存为 `main.cpp`，使用[教程中的 C++ CMake 配置](docs/USAGE.zh-CN.md#cpp-project)。已有 `include/lib/bin` 安装包时，可直接采用[安装包接入方式](docs/USAGE.zh-CN.md#installed-project)。
 
 <a id="section-4"></a>
 
-## 4. 常用任务示例
+## 3. 常用操作：照着运行，再换成自己的数据
 
-下面保留几个常用任务。读取文本给出完整程序；其余短片段标明所需头文件和已有对象，完整程序、运行步骤和更多 C/C++ 写法见各任务所链接的教程。
+### 3.1 读取一个文本文件：C
 
-### 4.1 读取并显示文本文件：C / C++
+假设程序需要读取 `hello.txt`，然后显示里面的文字。库会完成打开、读取和关闭文件，把内容放进 `text`。
 
-任务：读取第 3 节的 `hello.txt`，把内容显示出来。这个入口在内部完成打开、读取和关闭文件，你只需要使用返回的字符串。
+**准备文件：**在 `hx_demo` 目录创建 UTF-8 编码的 `hello.txt`：
 
-**C：保存为 `main.c`，可以直接编译。**
+```text
+Hello, hx_c_platform!
+```
+
+**完整程序：**保存为 `main.c`，使用第 2 节配置编译。
 
 ```c
 #include <hx_os.h>
@@ -151,11 +93,14 @@ int main(void)
 {
 	hx_string text = HX_STRING_INIT;
 
-	hx_os_status status = hx_os_file_read_text("hello.txt", &text, NULL);
+	hx_os_status status =
+		hx_os_file_read_text("hello.txt", &text, NULL);
+
 	if (status == HX_OS_OK)
 		puts(hx_string_c_str(&text));
 	else
-		fprintf(stderr, "Read failed: %s\n", hx_os_status_name(status));
+		fprintf(stderr, "Read failed: %s\n",
+			hx_os_status_name(status));
 
 	hx_string_destroy(&text);
 
@@ -163,313 +108,106 @@ int main(void)
 }
 ```
 
-`text` 接收文件内容，`HX_OS_OK` 表示成功，`hx_string_c_str` 取得可打印的文本。最后的 `hx_string_destroy` 释放字符串占用的内存；文件已经由读取函数关闭。
+这次读取的三个参数分别是：
 
-**C++：保存为 `main.cpp`，使用第 3 节链接的 C++ 构建配置。**
+| 参数 | 在这里的作用 |
+| --- | --- |
+| `"hello.txt"` | 要读取的文件路径，也可以换成 `"data/config.txt"` |
+| `&text` | 接收文件内容的字符串 |
+| `NULL` | 本例只检查返回状态，暂时不取详细系统错误 |
+
+`HX_STRING_INIT` 初始化空字符串；`HX_OS_OK` 表示读取成功。成功后，`hx_string_c_str(&text)` 取得可以交给 `puts()` 使用的字符指针。最后用 `hx_string_destroy()` 释放读出来的文字。文件已经由读取函数关闭。
+
+**运行：**在 `hx_demo` 目录执行 Windows 命令，或下方 Linux 命令。
+
+```powershell
+.\build\Release\hx_demo.exe
+```
+
+```sh
+./build/hx_demo
+```
+
+正常输出 `Hello, hx_c_platform!`。若找不到文件，先确认终端当前目录中有 `hello.txt`：相对路径从当前工作目录查找。
+
+换成业务代码时，把文件路径改成自己的路径，把 `puts()` 改成处理文件内容的逻辑，用完文字后再销毁字符串。[更多文件操作与 C++ 写法](docs/USAGE.zh-CN.md#files)。
+
+### 3.2 整理用户输入的文字：C
+
+假设用户输入了 `"  DEVICE_A  "`，你想去掉两端空格，并得到小写的 `device_a`。替换 `main.c` 后重新构建；这个例子不需要输入文件。
+
+```c
+#include <hx_os.h>
+#include <stdio.h>
+
+int main(void)
+{
+	hx_string name = HX_STRING_INIT;
+
+	hx_os_status status =
+		hx_string_assign_cstr(&name, "  DEVICE_A  ", NULL);
+	if (status == HX_OS_OK) {
+		hx_string_trim_ascii_in_place(&name);
+		hx_string_lower_ascii_in_place(&name);
+		puts(hx_string_c_str(&name));
+	}
+	else
+		fprintf(stderr, "String failed: %s\n",
+			hx_os_status_name(status));
+
+	hx_string_destroy(&name);
+
+	return status == HX_OS_OK ? 0 : 1;
+}
+```
+
+输出 `device_a`。`assign_cstr` 复制输入文字；`trim_ascii_in_place` 去掉两端 ASCII 空白；`lower_ascii_in_place` 转换 ASCII 大写字母。三个调用处理同一个字符串，最后统一销毁。
+
+这适合英文设备名、标记和普通 ASCII 输入；中文等非 ASCII 字符会保留。需要 Unicode 规范化或大小写折叠时，使用[对应工具](docs/UNICODE.zh-CN.md)。
+
+### 3.3 从 JSON 配置中读取端口：C++11
+
+在 `hx_demo` 目录准备 `config.json`：
+
+```json
+{"port": 8080}
+```
+
+使用[完整 C++ 构建配置](docs/USAGE.zh-CN.md#cpp-project)，把下面程序保存为 `main.cpp`。它先加载文件，再读取 `port`。
 
 ```cpp
-#include <hx/Files.hpp>
+#include <hx/Config.hpp>
 #include <cstdio>
 
 int main()
 {
-	auto text = hx::Files::readText("hello.txt");
-	if (!text) {
-		std::fprintf(stderr, "Read failed: %s\n",
-			hx_os_status_name(text.status()));
-
+	auto config = hx::ConfigDocument::load("config.json");
+	if (!config) {
+		std::fprintf(stderr, "Config failed: %s\n",
+			hx_os_status_name(config.status()));
 		return 1;
 	}
 
-	std::puts(text.value().c_str());
+	auto port = config.value().integer("/port");
+	if (!port) {
+		std::fprintf(stderr, "Port failed: %s\n",
+			hx_os_status_name(port.status()));
+		return 1;
+	}
+
+	std::printf("Port: %lld\n", static_cast<long long>(port.value()));
 
 	return 0;
 }
 ```
 
-`if (!text)` 检查读取是否失败；成功后，`text.value()` 取得字符串，`c_str()` 取得可打印的字符指针。C++ 字符串离开作用域时自动释放内存。两份程序的输出相同：`Hello, hx_c_platform!`。
+输出 `Port: 8080`。`load` 返回的结果包含“成功／失败”和成功时的文档；`if (!config)` 检查失败，成功后用 `config.value()` 取得文档。`integer("/port")` 读取根对象的整数 `port`；`/port` 表示 JSON 中的位置。
 
-### 4.2 去掉两端空白并转换为小写：C++
+`port` 缺失或类型不对时会进入错误分支。文件里的数字要写成 `8080`，字符串 `"8080"` 是另一种类型。C++ 对象离开作用域时自动释放。[完整 C 写法、嵌套对象与错误说明](docs/USAGE.zh-CN.md#configuration)。
 
-任务：把 `"  Hello  "` 变为 `"hello"`。包含 `<hx/Values.hpp>` 和 `<cstdio>`，把以下片段放入 `main()`：
+### 3.4 给现有整数数组排序：C
 
-```cpp
-auto text = hx::String::copy("  Hello  ");
-if (!text)
-	return 1;
-
-text.value().trimAscii().lowerAscii();
-std::puts(text.value().c_str());
-```
-
-`trimAscii()` 去掉两端 ASCII 空白，`lowerAscii()` 转换 ASCII 大写字母；原地处理同一个字符串。输出：`hello`。中文等非 ASCII 字符不会被转换。[完整 C/C++ 示例](docs/USAGE.zh-CN.md#strings)。
-
-### 4.3 从 JSON 文件读取端口：C++
-
-任务：从 `config.json` 的 `{"port":8080}` 中读取数字 `8080`。包含 `<hx/Config.hpp>` 和 `<cstdio>`，把片段放入 `main()`：
-
-```cpp
-auto config = hx::ConfigDocument::load("config.json");
-if (!config)
-	return 1;
-
-auto port = config.value().integer("/port");
-if (!port)
-	return 1;
-
-std::printf("Port: %lld\n", static_cast<long long>(port.value()));
-```
-
-`load()` 加载并解析 JSON；`integer("/port")` 读取根对象的 `port`，并检查它能否按整数读取。`/port` 是查询位置，不是文件路径。输出：`Port: 8080`。[完整程序和失败说明](docs/USAGE.zh-CN.md#configuration)。
-
-### 4.4 连续修改两个设置：C++
-
-任务：给内存中的设置写入 `port=8080` 和 `enabled=true`。包含 `<hx/Settings.hpp>` 和 `<cstdio>`；这里的 `settings` 是已通过 `settings.create()` 创建成功的 `hx::Settings` 对象。完整创建和关闭代码见[设置教程](docs/USAGE.zh-CN.md#settings)。
-
-```cpp
-auto changed = settings.update()
-		       .setInt("port", 8080)
-		       .setBool("enabled", true)
-		       .finish();
-if (!changed)
-	std::fprintf(stderr, "%s\n", hx_os_status_name(changed.status()));
-```
-
-`finish()` 检查这组写入的结果。成功后两个值已生效；首次失败会跳过后续写入，之前成功的值保留。这段代码不保存文件；文件保存是另一个明确的操作。
-
-### 4.5 用 C 的 vector 保存整数
-
-任务：保存 `10` 和 `20`，显示数量和第一个值。包含 `<hx_os.h>` 和 `<stdio.h>`，先在 `main()` 外声明整数容器：
-
-```c
-HX_OS_DECLARE_VECTOR(int_vector, int)
-```
-
-宏生成 `int_vector_create/push/at/destroy` 等函数，下面放入 `main()`：
-
-```c
-int_vector *numbers = NULL;
-
-hx_os_status status = int_vector_create(NULL, 16, &numbers, NULL);
-if (status == HX_OS_OK)
-	status = int_vector_push(numbers, 10, NULL);
-
-if (status == HX_OS_OK)
-	status = int_vector_push(numbers, 20, NULL);
-
-if (status == HX_OS_OK)
-	printf("Count: %zu, first: %d\n", int_vector_size(numbers),
-		*int_vector_at(numbers, 0));
-
-hx_os_status closed = int_vector_destroy(&numbers, NULL);
-if (status == HX_OS_OK)
-	status = closed;
-
-if (status != HX_OS_OK)
-	return 1;
-```
-
-`16` 是元素数量上限；`push` 追加，`at(..., 0)` 访问第一个元素，`destroy` 释放容器。输出：`Count: 2, first: 10`。[完整 vector/queue 程序](docs/USAGE.zh-CN.md#containers)。
-
-### 4.6 提交一个后台计算任务：C++
-
-任务：在线程池计算 `21 × 2`。包含 `<hx/ThreadPool.hpp>` 和 `<cstdio>`；这里的 `pool` 是已创建的线程池。创建两个工作线程及最终关闭的完整程序见[线程池教程](docs/USAGE.zh-CN.md#thread-pool)。
-
-```cpp
-auto submitted = pool.submit([](int value) noexcept { return value * 2; }, 21);
-if (submitted) {
-	auto answer = submitted.value().getUntil(hx_os_deadline_after_ms(2000));
-	if (answer)
-		std::printf("Answer: %d\n", answer.value());
-	else
-		std::fprintf(
-			stderr, "%s\n", hx_os_status_name(answer.status()));
-}
-else
-	std::fprintf(stderr, "%s\n", hx_os_status_name(submitted.status()));
-```
-
-`submit` 成功表示任务被接受；`getUntil` 等待计算结果，本例最多等待 2 秒。正常输出：`Answer: 42`。`noexcept` 表示任务不使用异常机制。用完必须显式关闭线程池；等待或关闭超时后，要保留对象再处理，不能当作已经释放。
-
-### 4.7 同一个变量保存不同类型：C / C++
-
-任务：先保存整数 42，再改为字符串 hello。C 包含 `<hx_variant.h>` 和 `<stdio.h>`，把下面片段放入 main()：
-
-```c
-hx_variant value = HX_VARIANT_INIT;
-hx_string_view text;
-
-hx_os_status status = hx_variant_set_i32(&value, 42, NULL);
-if (status == HX_OS_OK)
-	status = hx_variant_set_cstr(&value, "hello", NULL);
-
-if (status == HX_OS_OK)
-	status = hx_variant_get_string_view(&value, &text, NULL);
-
-if (status == HX_OS_OK)
-	printf("String: %.*s\n", (int)text.size, text.data);
-
-hx_variant_destroy(&value);
-if (status != HX_OS_OK)
-	return 1;
-```
-
-输出：`String: hello`。variant 每次只保存一个值，设置字符串会替换整数；字符串内容由 variant 持有，最后的 destroy 负责释放。
-
-C++ 也可以直接保存你定义的结构体。包含 `<hx/Variant.hpp>` 和 `<cstdio>`，下面放入 main()：
-
-```cpp
-struct Point { double x; double y; };
-hx::Variant value;
-
-if (!value.set(Point{2, 5}))
-	return 1;
-
-auto position = value.get<Point>();
-
-if (!position)
-	return 1;
-
-std::printf("Point: %.1f, %.1f\n", position.value().x,
-	position.value().y);
-```
-
-输出：`Point: 2.0, 5.0`。set 保存独立副本，get<Point> 检查类型并返回结构体引用，离开作用域时自动释放。C 自定义结构体、复制、访问器和容器混合值的完整示例见[variant 教程](docs/VARIANT.zh-CN.md)。
-
-### 4.8 在多层目录中找到文件：C++
-
-任务：递归查找 assets 中第一个 config.json。包含 `<hx/Files.hpp>` 和 `<cstdio>`，把下面片段放入 main()：
-
-```cpp
-auto path = hx::Directory::findFirstFile("assets", "config.json");
-if (!path)
-	return 1;
-
-std::puts(path.value().c_str());
-```
-
-例如文件位于 assets/nested/config.json，就输出这个路径。没有匹配会明确失败。这个调用同步扫描；界面程序应放进现有线程池。逐个返回全部匹配的入口是 Directory::findFiles，完整 C/C++ 程序和后台示例见[递归查找教程](docs/FILE_SEARCH.zh-CN.md)。
-
-### 4.9 启动协程，不必为普通任务保存句柄
-
-协程在调用本库等待接口时可以暂停，让工作线程执行其他任务。先创建一次 `runtime` 并进入它的 `Scope`，最后包含可选的 `hx/GoKeywords.hpp`，后面的任务就可以这样写：
-
-```cpp
-co_chan<int> answers(1); // 可以暂存一个值。
-if (!answers)
-	return 1;
-
-go [answers]() noexcept { return answers << 6 * 7; };
-
-auto done = runtime.waitUntil(hx_os_deadline_after_ms(2000));
-if (!done)
-	return 1;
-
-auto answer = answers.receive(HX_OS_DEADLINE_NOW);
-if (answer)
-	std::printf("Answer: %d\n", answer.value());
-```
-
-输出：`Answer: 42`。运行时自动持有普通 `go` 任务，清理完成后回收，并保留提交／执行失败供统一检查。[完整 C++11 程序](examples/go.cpp) 展示一次性创建和显式关闭。需要任务返回值时仍可用 `runtime.submit(...)` 获取 `Task<T>`。[协程教程](docs/COROUTINES.zh-CN.md) 继续说明 `co_sleep`、拥有字符串等资源的 channel、协程锁、局部值、可选任务组和 C++20 `co_await`。普通阻塞调用仍会占住工作线程，长时间计算需要主动 yield。
-
-### 4.10 格式化并打印文本
-
-C++11 包含 `hx/Format.hpp` 后可以直接写：
-
-```cpp
-auto printed = hx::println("{}: {:.2f}", "张三", 3.75);
-if (!printed)
-	return 1;
-```
-
-输出：`张三: 3.75`。`{}` 取下一个实参，`.2f` 表示保留小数点后两位。C99 可以直接复用同一个格式化器，不需要生成步骤：
-
-```c
-#include <hx_print.h>
-
-hx_os_status status = HX_PRINTLN("{}: {:.2f}",
-	hx_fmt_str("张三"), hx_fmt_f64(3.75));
-```
-
-包含头文件并正常链接库即可。宏自动组织最多 64 个类型化参数，自定义结构体使用 `hx_fmt_custom`。[格式化教程](docs/FORMAT.zh-CN.md) 继续说明大量参数数组、容量限制，以及自动识别类型或嵌入 C 表达式的可选生成器写法。
-
-需要有序键或重复键时，[红黑树 multimap 示例](examples/ordered_map.c) 与[容器说明](docs/CONTAINERS.zh-CN.md) 包含有序遍历、排序、筛选、链表 splice 和集合运算。
-
-### 4.11 和另一个进程通信：C / C++
-
-四种通信分别提供独立的业务程序、运行器和教程。业务正文全部使用 UTF-8 JSON：发送端序列化，接收端解析并校验字段类型，数字、字符串和布尔值不会混用。打开对应文件即可修改自己的业务：
-
-| 想用什么 | 实际业务与线程 | 教程 |
-| --- | --- | --- |
-| 本地 IPC：命名管道 / Unix 域套接字 | 两个设备请求线程与一个主动通知接收线程 | [设备控制](docs/IPC_BUSINESS.zh-CN.md) |
-| TCP | 订单发送线程与回执接收线程，处理消息长度与短读短写 | [订单业务](docs/TCP_BUSINESS.zh-CN.md) |
-| UDP | 传感器发送线程与反馈接收线程，处理缺号、重复、晚到 | [采样业务](docs/UDP_BUSINESS.zh-CN.md) |
-| KCP | 数据块生产线程与 KCP I/O 线程，检查重传与业务完成确认 | [可靠传输](docs/KCP_BUSINESS.zh-CN.md) |
-| 验证证书的 TLS 连接、分线程收发 JSON | [TLS 教程与可运行程序](docs/TLS.zh-CN.md) |
-
-按教程构建后，Windows 上分别执行对应入口，每条命令自动运行两个进程并检查结果：
-
-```powershell
-python examples/run_ipc_business.py --bin-dir build-net/bin/Release
-python examples/run_tcp_business.py --bin-dir build-net/bin/Release
-python examples/run_udp_business.py --bin-dir build-net/bin/Release
-python examples/run_kcp_business.py --bin-dir build-net/bin/Release
-```
-
-例如，TCP 发送的订单正文是：
-
-```json
-{"type":"order","id":1,"sku":101,"quantity":2,"note":"桌面设备"}
-```
-
-在本地 IPC 设备示例中，客户端创建好 `connection` 并发送 `type="open"` 打开设备 `101` 后，C++11 查询采样间隔只需：
-
-```cpp
-auto reply = connection.requestText(
-	R"({"type":"get","device_id":101})", 101);
-if (reply)
-	std::printf("Reply: %s\n", reply.value().text());
-```
-
-JSON 的 `type="get"` 表示查询，`device_id=101` 与设备通道相同；请求编号由库自动管理。C 对应使用 `hx_ipc_request_text_until`。完整业务程序继续解析 JSON 回复，不用文本相等代替字段检查。JSON 示例依赖默认开启的 `CONFIG`、`CONFIG_SERIALIZE`、`SETTINGS`，复用现有解析与字符串转义能力。
-
-TCP／UDP 业务直接使用 `hx_os_socket_*`，KCP 业务使用 `hx_os_kcp_*` 与 UDP；三个网络示例均不调用 `hx_ipc_*`，关闭 IPC 模块也能运行。完整接口契约与跨语言 HXIP 协议见 [IPC 参考](docs/IPC.zh-CN.md)。这些示例使用普通线程，超时、断开与资源释放都需要明确处理。
-
-### 4.12 读写多层 JSON，并转换成 YAML
-
-下面的数组同时包含整数、文字、null 和嵌套对象，转换后仍保留各自的类型。包含 `<hx/Config.hpp>` 和 `<cstdio>`，把下面片段放在 `main` 中：
-
-```cpp
-auto document = hx::ConfigDocument::parse(
-	"{\"items\":[1,\"文字\",null,{\"children\":[true,2.5]}]}");
-if (!document)
-	return 1;
-
-auto yaml = document.value().serialize(HX_OS_CONFIG_YAML);
-if (!yaml)
-	return 1;
-
-std::puts(yaml.value().c_str());
-```
-
-固定业务结构体可以声明一次字段映射，然后直接调用 `hx_os_codec_encode/decode`，C++ 对应 `hx::Codec<T>`。七种格式的范围、C/C++ 完整程序、嵌套数组和资源释放见[序列化教程](docs/SERIALIZATION.zh-CN.md)。普通文档默认最多 64 层，可显式调到 128 层；INI、ENV、properties 继续遵守各自的简单结构限制。
-
-### 4.13 结构体字段只声明一次：C / C++
-
-包含 `<hx_codec_macros.h>`，下面这几行同时定义普通结构体和序列化映射，`host`、`port` 不需要在另一张表里再写一次：
-
-```c
-HX_CODEC_STRUCT(connection,
-	HX_CODEC_STRING(host),
-	HX_CODEC_I32(port)
-);
-```
-
-生成的 `connection` 可以像普通结构体一样使用；`connection_schema` 可直接传给 `hx_os_codec_encode/decode` 或 `hx::Codec<connection>`。宏由当前编译器处理，嵌入式 Linux 交叉编译时使用目标架构的布局，不需要增加生成工具。完整的初始化、编码、解码和释放程序见 [codec_macros.c](examples/codec_macros.c)；数组、嵌套和可选字段见[序列化教程](docs/SERIALIZATION.zh-CN.md)。
-
-### 4.14 直接排序、查找自己的数据：C / C++
-
-C99 接口可以直接处理普通数组。下面的完整程序输出 `2 2 7 9`；整数快捷入口不需要手写比较函数：
+你已经有普通 C 数组 `{5, 1, 3}`，希望按从小到大排序。保存为 `main.c` 后构建运行：
 
 ```c
 #include <hx_algorithm.h>
@@ -477,47 +215,79 @@ C99 接口可以直接处理普通数组。下面的完整程序输出 `2 2 7 9`
 
 int main(void)
 {
-	int32_t values[] = {7, 2, 9, 2};
-	hx_os_status status = hx_os_sort_i32(values, 4, NULL);
-	if (status != HX_OS_OK)
-		return 1;
+	int32_t values[] = {5, 1, 3};
 
-	for (size_t i = 0; i < 4; ++i)
-		printf("%ld%c", (long)values[i], i == 3 ? '\n' : ' ');
+	hx_os_status status = hx_os_sort_i32(values, 3, NULL);
+	if (status != HX_OS_OK) {
+		fprintf(stderr, "Sort failed: %s\n",
+			hx_os_status_name(status));
+		return 1;
+	}
+
+	printf("%d %d %d\n", (int)values[0], (int)values[1],
+		(int)values[2]);
 
 	return 0;
 }
 ```
 
-包含 `<hx/Algorithms.hpp>`，普通数组就能直接使用，不需要换成 `hx` 容器，也不需要复制一份数据：
+输出 `1 3 5`。`values` 是要修改的数组，`3` 是元素个数，最后的 `NULL` 表示不取详细错误。排序结果直接保留在原数组中；数组是普通局部变量，用完无需调用本库的销毁函数。
 
-```cpp
-int values[] = {7, 2, 9, 2};
+自定义结构体排序、二分查找、筛选，以及 C++ 迭代器写法见[算法教程](docs/ALGORITHMS.zh-CN.md)。需要动态增长的集合时再看[容器教程](docs/USAGE.zh-CN.md#containers)。
 
-hx::algo::sort(std::begin(values), std::end(values));
-// 排序后为 {2, 2, 7, 9}。
+### 3.5 把计算交给后台线程：C++11
 
-auto found = hx::algo::binary_search(
-	std::begin(values), std::end(values), 7);
-// found 为 true。二分查找前需要按相同规则排序。
+例如在后台计算 `21 × 2`，主线程取得结果后显示 `42`。线程池的完整使用顺序是：
+
+1. 创建线程池，指定两个工作线程。
+2. 提交计算函数和参数 `21`。
+3. 等待并取得计算结果。
+4. 显式关闭线程池。
+
+把 [thread_pool.cpp](examples/thread_pool.cpp) 的完整内容作为 `main.cpp`，按 C++ 配置编译，正常输出：
+
+```text
+Task result: 42
 ```
 
-自定义结构体可以传入比较函数。算法接受符合各自要求的标准迭代器：`sort(first, last)` 要求随机访问，查找等接口也能使用符合要求的链表迭代器；整个 `std::list` 或 `std::forward_list` 可用 `hx::algo::sort(list)` 排序。C 则提供 `hx_os_array_sort` 等普通数组接口。完整 C/C++ 程序和可用接口见[排序、查找与数组处理](docs/ALGORITHMS.zh-CN.md)。
+程序中的 `submit()` 负责提交，`getUntil()` 等待结果，`shutdownUntil()` 关闭。例子使用 2 秒等待预算，业务可以自行设置。超时表示操作尚未完成，服务程序要保留 `owner` 和任务数据，之后继续处理或重试关闭。
+
+[逐步教程](docs/USAGE.zh-CN.md#thread-pool)包含完整程序、每个对象的用途，以及失败和关闭的处理方法。
+
+### 3.6 用 `{}` 打印文字和数字：C99
+
+想输出设备电压，并保留两位小数，可以把下面程序保存为 `main.c`：
+
+```c
+#include <hx_print.h>
+
+int main(void)
+{
+	hx_os_status status = HX_PRINTLN("{}: {:.2f}",
+		hx_fmt_str("Voltage"), hx_fmt_f64(3.75));
+
+	return status == HX_OS_OK ? 0 : 1;
+}
+```
+
+输出 `Voltage: 3.75`。`{}` 取下一个参数，`{:.2f}` 把浮点数显示为两位小数；`hx_fmt_str` 表示字符串参数，`hx_fmt_f64` 表示浮点参数。正常包含头文件并链接库即可使用，本例不需要生成代码。
+
+C++ 自动按参数类型选择格式化方式。自定义结构体和更多占位符用法见[格式化教程](docs/FORMAT.zh-CN.md)。
 
 <a id="section-5"></a>
 
-## 5. 先记住的几条规则
+## 4. 先记住这几件事
 
-- **先检查，再读结果。** C 检查是否为 `HX_OS_OK`；C++ 检查结果后再调用 `value()`。类型错误、内存不足和文件错误仍需处理。
-- **文本默认 UTF-8。** 文件路径也使用 UTF-8；其他字符编码通过明确的转换接口处理。
-- **资源用完要释放。** C 的字符串、文档和容器有对应释放函数；C++ 同步对象通常自动释放，线程池等对象需要显式关闭。
-- **超时不等于任务已停止。** 保留仍在使用的对象和数据，按应用策略继续等待或重试关闭。
+- **C 调用先检查状态。**`HX_OS_OK` 是成功；其他状态要按接口含义处理。`hx_os_status_name()` 可把状态显示成英文文字。
+- **C++ 先检查结果，再取值。**`if (!result)` 是失败；成功后才能使用 `result.value()`。本库使用显式错误返回，不使用异常捕获。
+- **C 创建的资源要按对应接口释放。**例如字符串用 `hx_string_destroy()`，配置文档用 `hx_os_config_release()`。接口说明会给出具体释放方式。
+- **带线程或 I/O 的对象需要完成关闭。**等待超时后对象仍可能在工作，要保留它以及任务借用的数据。
 
-`NULL` 的含义按参数位置决定：分配器或选项位置表示使用默认设置；错误记录位置表示本例不额外接收错误详情。首页示例采用默认模块配置。[初次使用常见问题](docs/USAGE.zh-CN.md#questions)解释报错、输入文件和关闭问题。
+这些规则的具体例子见[初次使用常见问题](docs/USAGE.zh-CN.md#questions)。
 
 <a id="section-6"></a>
 
-## 6. 更多功能到哪里找
+## 5. 更多功能到哪里找
 
 一行调用文本／文件加密、SHA-256、HMAC 和签名，见[加密教程及完整 C/C++ 示例](docs/CRYPTO.zh-CN.md)。
 
@@ -577,13 +347,11 @@ auto found = hx::algo::binary_search(
 
 <a id="section-7"></a>
 
-## 7. 构建、验证与项目许可
+## 6. 构建、平台与项目许可
 
-构建、静态／共享库安装和裁剪选项见[构建参考](docs/REFERENCE.zh-CN.md#section-27)。客户只需库和按需编译的 `examples/`；自动回归、ABI／泄漏专项脚本和 CI 工作流留在维护者本机，不进入公开源码。日常回归采用 20 项，额外检查按需启用。远端 CI 未启用。
+公开示例独立提供，开启 `HX_OS_BUILD_EXAMPLES=ON` 可直接构建。详细构建／安装选项见[构建参考](docs/REFERENCE.zh-CN.md#section-27)，平台要求见[平台支持](docs/PLATFORMS.zh-CN.md)。回归源码、执行日志和临时报告由维护者本地保存，远端 CI 保持关闭。
 
-[验证记录](docs/VALIDATION.zh-CN.md)保留带日期的历史结果与环境限制。Windows、WSL、Android 模拟器及 ARM Linux QEMU 的结果分别记录，不等同于所有系统版本或实体板卡均已通过。
-
-自有代码的发布许可证待确定，见[第三方许可](THIRD_PARTY_NOTICES.zh-CN.md)。协程为自研实现；hx_c_log 接入仍属于后续工作。
+自有代码的分发许可证尚未确定；第三方组件各自遵循原许可证。使用和分发前阅读[第三方声明](THIRD_PARTY_NOTICES.zh-CN.md)。
 
 [c-badge]: https://img.shields.io/badge/C-99-blue?logo=c
 [cpp-badge]: https://img.shields.io/badge/C%2B%2B-11-blue?logo=cplusplus
@@ -593,6 +361,5 @@ auto found = hx::algo::binary_search(
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-local%20validation-blue
-[embedded-badge]: https://img.shields.io/badge/ARM%20Linux-QEMU%20tested-blue
-[android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android
+[embedded-badge]: https://img.shields.io/badge/ARM%20Linux-ARMv7%20%7C%20AArch64-blue
+[android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM-blue?logo=android

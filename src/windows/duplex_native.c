@@ -36,9 +36,8 @@ hx_os_status hx_os_i_duplex_pair(hx_os_context *context,
 		goto done;
 	}
 
-	/* Each published endpoint balances one native provider reference.
-	 * No process-wide mutable library network singleton is introduced.
-	 */
+	// Each published endpoint balances one native provider reference.
+	// No process-wide mutable library network singleton is introduced.
 	while (starts < 2) {
 		code = WSAStartup(MAKEWORD(2, 2), &data);
 		if (code) {

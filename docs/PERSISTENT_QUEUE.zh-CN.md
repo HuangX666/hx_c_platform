@@ -20,7 +20,7 @@ if (status == HX_OS_OK) {
 	hx_os_bytes_view body = hx_os_persistent_message_data(message);
 
 	printf("%.*s\n", (int)body.size, (const char *)body.data);
-	/* Replace printing with real work; acknowledge only on success. */
+	// Replace printing with real work; acknowledge only on success.
 	status = hx_os_persistent_queue_ack(queue, message, NULL);
 }
 

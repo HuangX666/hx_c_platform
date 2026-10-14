@@ -24,9 +24,12 @@ enum {
 	HX_OS_PARAM_U64
 };
 
-/* Borrowed value descriptor, never an owner. Select the corresponding union
- * member; bool uses integer 0/1. String lengths exclude the trailing NUL;
- * byte spans have no encoding restriction. Pointers remain borrowed.
+/**
+ * \brief Borrowed value descriptor, never an owner.
+ *
+ * \details Select the corresponding union member; bool uses integer 0/1. String
+ * lengths exclude the trailing NUL; byte spans have no encoding restriction.
+ * Pointers remain borrowed.
  */
 typedef struct hx_os_param_value {
 	union {
@@ -56,8 +59,11 @@ HX_OS_API int HX_OS_CALL hx_os_params_available(void);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_params_options_init(
 	hx_os_params_options *options, size_t capacity);
 
-/* Independent optional module; no global init, workers or container/variant
- * dependency. Default context is NULL. Defaults: 256 entries, 1 MiB retained
+/**
+ * \brief Independent optional module; no global init, workers or
+ * container/variant dependency.
+ *
+ * \details Default context is NULL. Defaults: 256 entries, 1 MiB retained
  * name/value storage; limits are 65535 entries and 64 MiB. Names are strict
  * case-sensitive UTF-8, 1..127 bytes. Strings allow embedded NUL; getters
  * expose a trailing NUL but retain the explicit length.
@@ -78,16 +84,22 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_params_create_with_options(
 	hx_os_context *context, const hx_os_params_options *options,
 	hx_os_params **out, hx_os_error *error);
 
-/* Deep-copy names, strings and bytes; raw pointers remain borrowed. Uses the
- * explicitly selected destination context (NULL = default), and source limits.
- * Clone requires exclusive source access for its allocator reentry guard.
- * Values are unchanged. Creation/clone failure sets *out to NULL.
+/**
+ * \brief Deep-copy names, strings and bytes; raw pointers remain borrowed.
+ *
+ * \details Uses the explicitly selected destination context (NULL = default),
+ * and source limits. Clone requires exclusive source access for its allocator
+ * reentry guard. Values are unchanged. Creation/clone failure sets *out to
+ * NULL.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_params_clone(const hx_os_params *source,
 	hx_os_context *context, hx_os_params **out, hx_os_error *error);
 
-/* A synchronous signal/procedure borrow keeps the owner alive. Destruction
- * during that borrow returns BUSY; keep the owner for destruction afterward.
+/**
+ * \brief A synchronous signal/procedure borrow keeps the owner alive.
+ *
+ * \details Destruction during that borrow returns BUSY; keep the owner for
+ * destruction afterward.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_params_destroy(
 	hx_os_params **params, hx_os_error *error);
@@ -97,8 +109,10 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_params_clear(
 
 HX_OS_API size_t HX_OS_CALL hx_os_params_count(const hx_os_params *params);
 
-/* Retained name/value capacity; excludes entries and allocator metadata.
- * Null or reentrant count/storage queries return zero.
+/**
+ * \brief Retained name/value capacity; excludes entries and allocator metadata.
+ *
+ * \details Null or reentrant count/storage queries return zero.
  */
 HX_OS_API size_t HX_OS_CALL hx_os_params_storage_bytes(
 	const hx_os_params *params);
@@ -106,11 +120,14 @@ HX_OS_API size_t HX_OS_CALL hx_os_params_storage_bytes(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_params_remove(
 	hx_os_params *params, const char *name, hx_os_error *error);
 
-/* set copies input before invalidating any aliased borrowed bytes. Get/at
- * preserve outputs on failure; returned names/values borrow until mutation or
- * destruction. at enumerates names in UTF-8 byte order, index starts at zero.
- * Missing key is NOT_FOUND, wrong typed getter is TYPE_MISMATCH. No implicit
- * numeric, string or encoding conversions. Nonfinite doubles are preserved.
+/**
+ * \brief set copies input before invalidating any aliased borrowed bytes.
+ *
+ * \details Get/at preserve outputs on failure; returned names/values borrow
+ * until mutation or destruction. at enumerates names in UTF-8 byte order, index
+ * starts at zero. Missing key is NOT_FOUND, wrong typed getter is
+ * TYPE_MISMATCH. No implicit numeric, string or encoding conversions. Nonfinite
+ * doubles are preserved.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_params_set(hx_os_params *params,
 	const char *name, hx_os_param_value value, hx_os_error *error);
@@ -174,8 +191,11 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_params_get_bytes(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_params_set_cstr(hx_os_params *params,
 	const char *name, const char *value, hx_os_error *error);
 
-/* Immediate edit cursor; the first failure skips later setters. Earlier
- * successful edits remain. It borrows the pack through all setter calls.
+/**
+ * \brief Immediate edit cursor; the first failure skips later setters.
+ *
+ * \details Earlier successful edits remain. It borrows the pack through all
+ * setter calls.
  */
 typedef struct hx_os_params_edit {
 	hx_os_error error;

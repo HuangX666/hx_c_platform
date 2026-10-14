@@ -266,7 +266,7 @@ hx_os_status hx_os_sleep_until(hx_os_deadline deadline, hx_os_error *error)
 		struct timespec duration;
 		uint64_t left = deadline > now ? deadline - now : 0;
 
-		/* Bound the time_t conversion on 32-bit embedded libcs. */
+		// Bound the time_t conversion on 32-bit embedded libcs.
 		if (left > UINT64_C(3600000000000))
 			left = UINT64_C(3600000000000);
 

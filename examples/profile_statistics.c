@@ -11,8 +11,8 @@ static hx_os_status collect_samples(hx_os_profiler *profiler)
 		if (status != HX_OS_OK)
 			return status;
 
-		/* Replace this simulated work with the operation being
-		 * measured. */
+		// Replace this simulated work with the operation being
+		// measured.
 		status = hx_os_sleep_until(
 			hx_os_deadline_after_ms(1 + i % 3), NULL);
 		if (status != HX_OS_OK)
@@ -78,7 +78,7 @@ int main(void)
 			status = closed;
 	}
 
-	/* The snapshot remains valid after the profiler has closed. */
+	// The snapshot remains valid after the profiler has closed.
 	if (status == HX_OS_OK)
 		status = show_statistics(snapshot);
 	hx_os_profiler_snapshot_release(snapshot);

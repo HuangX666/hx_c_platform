@@ -10,8 +10,8 @@ BSTR makeString(const wchar_t *text, size_t units)
 #if defined(_WIN32)
 	return SysAllocStringLen(text, static_cast<UINT>(units));
 #else
-	/* Native 7-Zip 23+ BSTR ABI: uint32 byte length before wchar_t data.
-	 * Its DLL uses libc malloc/free for this interface-owned storage. */
+	// Native 7-Zip 23+ BSTR ABI: uint32 byte length before wchar_t data.
+	// Its DLL uses libc malloc/free for this interface-owned storage.
 	size_t bytes = units * sizeof(wchar_t);
 	auto memory = static_cast<unsigned char *>(
 		std::malloc(sizeof(uint32_t) + bytes + sizeof(wchar_t)));

@@ -153,11 +153,11 @@ static la_ssize_t hx_ar_write_block(
 	(void)hx_ar_i_progress(job, 0, job->output_position);
 	if (status != HX_OS_OK) {
 		(void)hx_ar_i_fail(job, status, &error, "Write archive output");
-		/* Retain the real failure but drain native finalization to a
-		 * discard sink. The pinned ZIP writer otherwise skips
-		 * deflateEnd when a client write callback makes it enter its
-		 * fatal state. The owner checks job.failed before publishing
-		 * the temporary. */
+		// Retain the real failure but drain native finalization to a
+		// discard sink. The pinned ZIP writer otherwise skips
+		// deflateEnd when a client write callback makes it enter its
+		// fatal state. The owner checks job.failed before publishing
+		// the temporary.
 		return (la_ssize_t)bytes;
 	}
 

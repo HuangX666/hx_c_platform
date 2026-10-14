@@ -87,4 +87,4 @@ return HX_OS_OK;
 
 Native::socket、Native::process、Native::thread 使用相同的 Result 方式。线程结果类型是 `hx::NativeThread`：Windows 对应 void 指针／HANDLE，POSIX 对应 pthread_t；便利头只在 POSIX 包含 pthread.h。不通过析构关闭借来的值，也不使用异常。
 
-可运行的 [native_file.c](../examples/native_file.c) 演示先借用原生文件句柄，再通过库读取文件。构建 `hx_os_native_file` 后传入一个 UTF-8 文件路径运行；具体环境证据见[验证记录](VALIDATION.zh-CN.md)。
+可运行的 [native_file.c](../examples/native_file.c) 演示先借用原生文件句柄，再通过库读取文件。构建 `hx_os_native_file` 后传入一个 UTF-8 文件路径运行。 平台边界见[平台支持](PLATFORMS.zh-CN.md)。

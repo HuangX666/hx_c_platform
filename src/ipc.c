@@ -229,10 +229,9 @@ hx_os_status hx_ipc_i_queue(hx_ipc_connection *peer,
 		status = HX_OS_CLOSED;
 	else {
 		if (control) {
-			/* Control frames can pass queued data, never bytes
-			 * already handed to the transport. Keep control order
-			 * stable.
-			 */
+			// Control frames can pass queued data, never bytes
+			// already handed to the transport. Keep control order
+			// stable.
 			hx_ipc_frame **cursor = &endpoint->outbox;
 
 			while (*cursor && (*cursor)->control)
@@ -457,10 +456,9 @@ static hx_os_status hx_ipc_prepare(
 		endpoint->transport == HX_IPC_I_TCP ? HX_OS_TCP : HX_OS_UDP,
 		&endpoint->listener, error);
 #if !defined(_WIN32)
-	/* A restarted TCP listener may reuse its own TIME_WAIT local address.
-	 * The raw socket API remains opt-in; IPC explicitly selects this
-	 * policy.
-	 */
+	// A restarted TCP listener may reuse its own TIME_WAIT local address.
+	// The raw socket API remains opt-in; IPC explicitly selects this
+	// policy.
 	if (status == HX_OS_OK && endpoint->transport == HX_IPC_I_TCP) {
 		int reuse = 1;
 
@@ -483,8 +481,7 @@ static hx_os_status hx_ipc_prepare(
 		BOOL enabled = FALSE;
 		DWORD completed;
 
-		/* A closed UDP peer must not fail every peer on this listener.
-		 */
+		// A closed UDP peer must not fail every peer on this listener.
 		if (WSAIoctl(endpoint->listener->native, SIO_UDP_CONNRESET,
 			    &enabled, sizeof(enabled), NULL, 0, &completed,
 			    NULL, NULL))
@@ -986,10 +983,9 @@ hx_os_status hx_ipc_receive_until(hx_ipc *endpoint, hx_os_deadline deadline,
 							: HX_OS_CLOSED;
 		else if (endpoint->overflow || endpoint->event_count) {
 			if (!event) {
-				/* enter() retains the endpoint while
-				 * allocating. Recheck queues and close after
-				 * user code runs.
-				 */
+				// enter() retains the endpoint while
+				// allocating. Recheck queues and close after
+				// user code runs.
 				hx_ipc_i_unlock(endpoint);
 				event = hx_os_i_zero(
 					endpoint->context, sizeof(*event));

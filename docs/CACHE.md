@@ -28,7 +28,7 @@ if (status == HX_OS_OK)
 if (status == HX_OS_OK)
 	status = hx_os_cache_get(cache, "sensor-01", 9, &value, NULL);
 
-/* On success, read *(const int *)value before replacing/removing its entry. */
+// On success, read *(const int *)value before replacing/removing its entry.
 (void)hx_os_cache_destroy(&cache, NULL);
 ```
 
@@ -67,11 +67,11 @@ The wrapper uses `Result`, requires no exceptions and accepts trivially copyable
 ## 4. Add a lifetime when writing
 
 ```c
-/* Keep this result for five seconds from this write. */
+// Keep this result for five seconds from this write.
 status = hx_os_cache_put_for(cache, "sensor-01", 9, &temperature, 5000,
 	NULL);
 
-/* Alternatively, reuse an existing monotonic deadline. */
+// Alternatively, reuse an existing monotonic deadline.
 status = hx_os_cache_put_until(cache, "sensor-01", 9, &temperature,
 	hx_os_deadline_after_ms(5000), NULL);
 

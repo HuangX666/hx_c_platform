@@ -6,7 +6,6 @@ This reference covers platform differences, interface limits, resource managemen
 
 The default SDK-backed modules need the matching dependencies: OpenSSL for CRYPTO/TLS, libcurl for HTTP/URL, utf8proc for UNICODE, and archive/compression codecs. PERSISTENT_QUEUE uses the pinned SQLite adapter. Prepare the [dependency SDK](DEPENDENCIES.md), then pass its prefix through `CMAKE_PREFIX_PATH` or `HX_OS_DEPENDENCY_PREFIX`. Disable unused modules explicitly or select `cmake/minimal.cmake`. The [native dependency guide](NATIVE_DEPENDENCIES.md) also shows direct SDK calls.
 
-
 TLS connections, bounded full-duplex queues and JSON business programs: [TLS guide](TLS.md).
 - [1. Purpose and interface boundaries](#section-1)
 - [2. Platforms, languages and verification status](#section-2)
@@ -76,7 +75,7 @@ The library builds, tests, installs and runs independently of hx_c_log. It does 
 
 The C core is a compiled library, **not header-only**. Only the optional C++ facade is header-only. C++11 is verified; a C++14/17/20 matrix is not claimed. CMake **3.16** is the baseline; compiler/SDK support must be checked separately from operating system API compatibility, especially for a Win7 deployment.
 
-The current local daily profile contains 20 maintainer suites; regression sources remain local and are not distributed. Customer examples are separate. Remote CI is disabled. [Dated validation records](VALIDATION.md) identify which suites and targets ran for each change; older counts are historical, and API 21 cross-compilation is separate from API 34 emulator execution.
+See [platform support](PLATFORMS.md) for build requirements and capability limits. Regression sources, detailed execution records and temporary reports remain local; public examples are independent and remote CI is disabled.
 
 <a id="section-3"></a>
 
@@ -311,7 +310,7 @@ int main()
 		if (!label)
 			return report_failure(label.status());
 
-		/* The lease owns immutable bytes after the settings close. */
+		// The lease owns immutable bytes after the settings close.
 		std::puts(label.value().c_str());
 	}
 
@@ -350,14 +349,13 @@ int main()
 
 ### 5.1 Use a source subdirectory
 
-For an application with the library checkout in `external/hx_c_platform`:
+For an application with the library checkout in `deps/hx_c_platform`:
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
 project(my_app LANGUAGES C)
 
-
-add_subdirectory(external/hx_c_platform)
+add_subdirectory(deps/hx_c_platform)
 
 add_executable(my_app main.c)
 set_target_properties(my_app PROPERTIES
@@ -556,7 +554,10 @@ Built-in conversion covers UTF-8, UTF-16LE/BE, UTF-32LE/BE, ASCII and ISO-8859-1
 
 ```sh
 cmake -S . -B build-text -DHX_OS_ENABLE_ICONV=ON \
-  -DHX_OS_ENABLE_CRYPTO=OFF -DHX_OS_ENABLE_ARCHIVE=OFF
+  -DHX_OS_ENABLE_CRYPTO=OFF -DHX_OS_ENABLE_ARCHIVE=OFF \
+  -DHX_OS_ENABLE_COMPRESSION=OFF -DHX_OS_ENABLE_HTTP=OFF \
+  -DHX_OS_ENABLE_URL=OFF -DHX_OS_ENABLE_UNICODE=OFF \
+  -DHX_OS_ENABLE_PERSISTENT_QUEUE=OFF
 cmake --build build-text --config Release --parallel 4
 ```
 
@@ -1007,7 +1008,7 @@ int main(void)
 }
 ```
 
-`repeat` starts after one interval, coalesces missed periods and lets EOF stop successfully. Callbacks cannot be preempted. Precise wait defaults to a 200 us spin window; `_ex` accepts 0..10 ms, with zero using ordinary sleep. INFINITE is invalid for precise wait. There are no global timer-resolution changes, hidden threads or hard-real-time guarantees. The Win7-compatible tick clock can limit short waits; QPC bounds spinning without changing clock semantics. Target measurements are in the [audit](BUG_MEMORY_LEAK_AUDIT.md).
+`repeat` starts after one interval, coalesces missed periods and lets EOF stop successfully. Callbacks cannot be preempted. Precise wait defaults to a 200 us spin window; `_ex` accepts 0..10 ms, with zero using ordinary sleep. INFINITE is invalid for precise wait. There are no global timer-resolution changes, hidden threads or hard-real-time guarantees. The Win7-compatible tick clock can limit short waits; QPC bounds spinning without changing clock semantics.
 
 <a id="section-14"></a>
 
@@ -1115,7 +1116,7 @@ int main(void)
 		fprintf(stderr, "Close pending: %s\n",
 			hx_os_status_name(closed));
 
-		/* A service retains pool in its shutdown state and retries. */
+		// A service retains pool in its shutdown state and retries.
 		return 1;
 	}
 
@@ -1186,9 +1187,8 @@ int main()
 		std::fprintf(stderr, "Close pending: %s\n",
 			hx_os_status_name(closed.status()));
 
-		/* A service keeps owner in its shutdown state and retries.
-		 * This command-line example reports the pending close.
-		 */
+		// A service keeps owner in its shutdown state and retries.
+		// This command-line example reports the pending close.
 		return 1;
 	}
 
@@ -1240,7 +1240,7 @@ int main(void)
 	if (status != HX_OS_OK)
 		return 1;
 
-	/* For a long wait use an event/condition, not a busy loop. */
+	// For a long wait use an event/condition, not a busy loop.
 	while (!hx_os_atomic32_load(&result.ready, HX_OS_ACQUIRE))
 		hx_os_cpu_relax();
 
@@ -1919,7 +1919,10 @@ cmake -S . -B build-parsers \
   -DHX_OS_ENABLE_CJSON=ON -DHX_OS_ENABLE_LIBYAML=ON \
   -DHX_OS_ENABLE_MINIXML=ON -DHX_OS_ENABLE_INIH=ON \
   -DHX_OS_ENABLE_TOMLC=ON \
-  -DHX_OS_ENABLE_CRYPTO=OFF -DHX_OS_ENABLE_ARCHIVE=OFF
+  -DHX_OS_ENABLE_CRYPTO=OFF -DHX_OS_ENABLE_ARCHIVE=OFF \
+  -DHX_OS_ENABLE_COMPRESSION=OFF -DHX_OS_ENABLE_HTTP=OFF \
+  -DHX_OS_ENABLE_URL=OFF -DHX_OS_ENABLE_UNICODE=OFF \
+  -DHX_OS_ENABLE_PERSISTENT_QUEUE=OFF
 cmake --build build-parsers --config Release --parallel 4
 ```
 
@@ -1993,15 +1996,15 @@ The public repository provides the library, API documentation and runnable `exam
 
 The maintainer keeps 20 daily suites and opt-in specialized checks locally. They are excluded from Git and installation packages; customers need no test configuration. If an existing cache enables `HX_OS_BUILD_TESTS`, turn it OFF before configuring the public sources.
 
-### 30.2 Validation evidence
+### 30.2 Platform boundaries
 
-Remote CI workflows are not distributed or enabled. [Validation records](VALIDATION.md) retain dated results; historical counts and local paths do not describe the current public file inventory. Physical hardware, emulation, QEMU and sanitizer results are recorded separately.
+See [platform support](PLATFORMS.md) for build requirements and capability limits. Regression sources, detailed execution records and temporary reports remain local; public examples are independent and remote CI is disabled.
 
 ### 30.3 Measure actual cost
 
 Enable `HX_OS_BUILD_BENCHMARKS=ON` for development benchmarks. Record throughput/latency, allocations, locks, system calls, contention and target configuration. Object size/alignment matters for arrays and frequently allocated objects, but a smaller object is not itself runtime speed evidence.
 
-The [performance and memory audit](BUG_MEMORY_LEAK_AUDIT.md) identifies repeated-prefix search, large-capacity procedure scans and the MSVC wide division fallback as optimization candidates. C tasks allocate four context blocks, and the measured C++ integer-result case five. These are costs at the audit's stated baseline, not fresh measurements of the migrated C++ Result facade. hx_c_log's locked five-times baseline and no-single-thread-regression targets await actual integration.
+Compare performance using a fixed workload and toolchain, measuring time, memory and call overhead. Keep measurements local. hx_c_log's five-times locked baseline and no single-thread regression remain acceptance requirements for its future integration.
 
 <a id="section-31"></a>
 
@@ -2011,7 +2014,9 @@ First-party source is UTF-8 without BOM, LF, Tab width 8, with an 80-column sour
 
 Source and document examples use one blank line between distinct logical steps, while keeping an operation with its error check. CMake groups project setup, dependencies, targets, feature/platform blocks and installation by responsibility. Literal data and macro continuations are preserved.
 
-Native APIs and compiler builtins come first; assembly is reserved for measured local improvements with correct supported-target fallbacks. Most Apple code remains C; the optional Apple performance request adapter alone uses Objective-C/Foundation. Linux power/performance requests return NOT_SUPPORTED. Registry access is an explicit Windows extension. Strict affinity is not promised where the OS cannot implement it.
+Comments default to English: use `//` for short notes and `/** ... */` for multiline contracts, with applicable `\brief`, directed `\param`, `\returns`, `\note` and `\warning` tags. Simple functions need no boilerplate documentation. Use scoped diffs and relevant checks for routine edits, without generating hash manifests. Keep detailed regression and audit records local.
+
+Native APIs and compiler builtins come first; assembly is reserved for measured local improvements with correct supported-target fallbacks. Most Apple code remains C; the optional Apple performance request adapter alone uses Objective-C/Foundation. Linux desktop sleep inhibition uses optional D-Bus services; unsupported power/performance operations return NOT_SUPPORTED. Registry access is an explicit Windows extension. Strict affinity is not promised where the OS cannot implement it.
 
 Future work includes native target validation and measured improvements. hx_c_log migration, crash-policy frameworks and FreeRTOS/bare metal adaptation are not delivered features. The first-party distribution license is **not yet selected**; third-party licenses remain independently applicable. See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
 
@@ -2033,9 +2038,8 @@ Future work includes native target validation and measured improvements. hx_c_lo
 | Interval profiling | [Profiler contracts](PLATFORM_UTILITIES.md#bounded-interval-profiler-batch-23c) |
 | Atomics and ordering | [ATOMICS.md](ATOMICS.md) |
 | Android baseline | [ANDROID.md](ANDROID.md) |
-| Validation and pending targets | [VALIDATION.md](VALIDATION.md) |
-| Performance and memory | [BUG_MEMORY_LEAK_AUDIT.md](BUG_MEMORY_LEAK_AUDIT.md) |
-| Implemented OBS-inspired batches | [OBS_COMPLETION.md](OBS_COMPLETION.md) |
+| Platform requirements and limits | [platform support](PLATFORMS.md) |
+
 | Future consumer migration | [MIGRATION.md](MIGRATION.md) |
 | Buildable examples | [examples/](../examples) |
 
@@ -2051,7 +2055,6 @@ Future work includes native target validation and measured improvements. hx_c_lo
 [tests-badge]: https://img.shields.io/badge/tests-local%20records-blue
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android
-
 
 For complete calls, see [cryptography](CRYPTO.md), [TLS](TLS.md) and [archives](ARCHIVE.md). Archive options define overwrite, partial publication, path restrictions, passwords, resource bounds and native dependency deployment.
 

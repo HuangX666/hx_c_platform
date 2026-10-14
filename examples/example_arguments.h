@@ -31,11 +31,10 @@ int main(int argc, char **argv)
 	else
 #endif
 	{
-		/* A trimmed build requires the host to provide UTF-8 argv.
-		 * Windows narrow CRT argv cannot promise Unicode fidelity.
-		 * POSIX main receives application arguments even when procfs
-		 * describes an interpreter or native-bridge launcher.
-		 */
+		// A trimmed build requires the host to provide UTF-8 argv.
+		// Windows narrow CRT argv cannot promise Unicode fidelity.
+		// POSIX main receives application arguments even when procfs
+		// describes an interpreter or native-bridge launcher.
 		for (i = 0; i < argc; ++i)
 			if (hx_os_text_validate_utf8(argv[i], strlen(argv[i]),
 				    &invalid) != HX_OS_OK)

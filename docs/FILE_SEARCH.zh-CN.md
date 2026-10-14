@@ -239,4 +239,4 @@ options.max_bytes = 4 * 1024 * 1024;
 
 Windows/WSL 的控制测试覆盖 2,052 个匹配文件、96 层嵌套、Unicode、空结果、首次命中、停止/错误回调、限额、分配失败和资源回收；POSIX 另覆盖循环/外部链接及无效字节文件名。文件数量增长对照的查询 context 分配次数和峰值不随匹配数量增长；这不包含系统内部或回调另行分配。WSL 测试使用原生 /tmp，避免把 Windows 挂载层的名称转换当作 POSIX 字节文件名语义。
 
-功能、后台线程身份、安装后调用、sanitizer、模块关闭及 Android 的实际结果见[验证记录](VALIDATION.zh-CN.md)。实时扫描、预先建立文件索引、通用 foreach 宏、红黑树和 STL 算法是不同能力；当前有序 map 使用 AVL，更多容器/算法并未因为这次文件搜索而自动加入。
+递归查询边扫描边返回，不维护文件索引。需要内存中的排序／查找或有序集合时，分别使用[通用算法](ALGORITHMS.zh-CN.md)和[容器](CONTAINERS.zh-CN.md)；平台要求见[平台支持](PLATFORMS.zh-CN.md)。

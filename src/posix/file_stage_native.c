@@ -22,8 +22,7 @@ hx_os_status hx_os_i_file_check_private(hx_os_file *file, hx_os_error *error)
 	if (code)
 		return hx_os_i_errno(error, code);
 #endif
-	/* Mode bits alone do not exclude inherited named-user ACEs on Darwin.
-	 */
+	// Mode bits alone do not exclude inherited named-user ACEs on Darwin.
 	if (fstat(file->descriptor, &info))
 		return hx_os_i_errno(error, errno);
 	if ((info.st_mode & 077) || info.st_uid != geteuid())
@@ -41,8 +40,8 @@ hx_os_status hx_os_i_file_create_private(hx_os_context *context,
 
 	if (status != HX_OS_OK)
 		return status;
-	/* Some mounted filesystems ignore the 0600 creation mode. Never stage
-	 * plaintext there under a false promise of private permissions. */
+	// Some mounted filesystems ignore the 0600 creation mode. Never stage
+	// plaintext there under a false promise of private permissions.
 	status = hx_os_i_file_check_private(*out, error);
 	if (status != HX_OS_OK) {
 		(void)hx_os_file_close(out, NULL);
@@ -59,10 +58,9 @@ hx_os_status hx_os_i_file_publish(const char *temporary, const char *path,
 
 	if (status != HX_OS_NOT_SUPPORTED || replace)
 		return status;
-	/* This is our completed regular temporary, not a general move. link()
-	 * publishes the new name atomically without replacing any old name.
-	 * Removing the private staging name is best-effort after publication.
-	 */
+	// This is our completed regular temporary, not a general move. link()
+	// publishes the new name atomically without replacing any old name.
+	// Removing the private staging name is best-effort after publication.
 	if (link(temporary, path))
 		return hx_os_i_errno(error, errno);
 	(void)unlink(temporary);

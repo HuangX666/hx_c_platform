@@ -10,8 +10,11 @@ typedef struct hx_settings_measure {
 	size_t memory;
 } hx_settings_measure;
 
-/* Validate the complete destination budget before allocating converted
- * children. Temporary pair arrays are bounded by the source node count.
+/**
+ * \brief Validate the complete destination budget before allocating converted
+ * children.
+ *
+ * \details Temporary pair arrays are bounded by the source node count.
  */
 static hx_os_status hx_settings_measure_node(const hx_os_config_node *node,
 	size_t depth, hx_settings_measure *measure, hx_os_error *error)
@@ -163,7 +166,7 @@ static hx_os_status hx_settings_convert_node(hx_os_context *context,
 	if (status != HX_OS_OK)
 		return hx_os_i_error(error, status, 0, 0);
 
-	/* JSON-compatible kind values match the first seven settings kinds. */
+	// JSON-compatible kind values match the first seven settings kinds.
 	return hx_settings_i_scalar(
 		context, kind, scalar, text, limits, out, error);
 }
@@ -278,10 +281,9 @@ static hx_os_config_node *hx_settings_export_node(
 			if (parser->status != HX_OS_OK)
 				break;
 
-			/* Sorted immutable keys are already unique. The
-			 * parser's duplicate-key search is unnecessary for this
-			 * builder.
-			 */
+			// Sorted immutable keys are already unique. The
+			// parser's duplicate-key search is unnecessary for this
+			// builder.
 			if (node->last)
 				node->last->next = copy;
 			else

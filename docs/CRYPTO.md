@@ -9,7 +9,9 @@ Enable `HX_OS_ENABLE_CRYPTO` (default ON). This adds the pinned OpenSSL 3.5 SDK 
 First prepare the dependency SDK using [the dependency instructions](DEPENDENCIES.md#4-build-the-native-dependency-stack), then configure the library with an absolute prefix:
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/project/build-deps/prefix -DHX_OS_BUILD_EXAMPLES=ON
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+  -DHX_OS_DEPENDENCY_PREFIX=/absolute/project/build-deps/prefix \
+  -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build --config Release --target hx_os_encrypt_text --parallel 4
 build/bin/hx_os_encrypt_text
 ```
@@ -20,7 +22,7 @@ OpenSSL is dynamically linked by default. On Windows the build copies its select
 
 With TLS enabled, the selected SSL runtime is included alongside Crypto; see the [TLS guide](TLS.md).
 
-To embed OpenSSL statically, build its SDK with `HX_DEPS_OPENSSL_SHARED=OFF` and configure the library with `HX_OS_OPENSSL_STATIC=ON`. Read section 5 before using external threads or unloading a plugin. Keep the license materials of the actual libraries you distribute. Android and Linux ARM SDK commands are in [cross builds](DEPENDENCIES.md#6-cross-build-linux-arm-and-android), with current emulator/QEMU results in [validation](VALIDATION.md). Physical-board results are separate; Apple and old Windows runtime checks are deferred.
+To embed OpenSSL statically, build its SDK with `HX_DEPS_OPENSSL_SHARED=OFF` and configure the library with `HX_OS_OPENSSL_STATIC=ON`. Read section 5 before using external threads or unloading a plugin. Keep the license materials of the actual libraries you distribute. Android and Linux ARM SDK commands are in [cross builds](DEPENDENCIES.md#6-cross-build-linux-arm-and-android). See [platform support](PLATFORMS.md) for target requirements.
 
 Android SDKs use `libcrypto-hx.so` and `libssl-hx.so` SONAMEs through a first-party OpenSSL configuration overlay, avoiding system BoringSSL names. The CMake targets and runtime manifest carry the chosen files; do not manually rename a desktop runtime or copy one ABI's library to another. See [Android deployment](ANDROID.md).
 
@@ -171,6 +173,6 @@ flowchart LR
     F --> G["Publish only after success"]
 ```
 
-## 7. Verification
+## 7. Try the example
 
-`crypto` tests SHA/HMAC known answers, binary and empty inputs, every envelope byte's alteration, wrong secrets, limits, UTF-8/NUL handling, file publication and allocation failure. `crypto_native` checks the RFC 8032 Ed25519 vector, native OpenSSL AES-GCM interoperability, host error/property isolation and concurrent use. `cpp_crypto` exercises exception-free result ownership. `encrypt_text_example` runs the developer example. Full platform, sanitizer and installed-consumer evidence is recorded in [VALIDATION.md](VALIDATION.md); unavailable targets remain explicitly unverified.
+Build and run the public [encrypt_text.c](../examples/encrypt_text.c) to try encryption and decryption. Handle authentication failure for a wrong password or modified data before using output. See [platform support](PLATFORMS.md) for target requirements.

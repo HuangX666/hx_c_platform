@@ -2,6 +2,25 @@
 
 [English](UTILITY_EXTENSIONS.md)
 
+先选一个你要完成的动作。下表链接到完整程序；本文后面的短代码块只展示关键步骤，需要放进自己的函数中。还没接入库时，先按[入门教程](USAGE.zh-CN.md#project)配置工程。
+
+| 要做什么 | 完整程序 | 运行时会看到什么 |
+| --- | --- | --- |
+| 把 JSON 字节压缩后再还原 | [compress_memory.c](../examples/compress_memory.c) | 压缩前后大小，以及还原后的 JSON |
+| 给 URL 添加设备名参数 | [url_query.c](../examples/url_query.c) | 编码后的地址，以及读回的设备名称；不会访问网络 |
+| 从命令行读取端口和名称 | [command_line.c](../examples/command_line.c) | 解析后的选项；`--help` 显示用法 |
+| 向自己的服务发送 JSON | [http_json.c](../examples/http_json.c) | HTTP 状态与响应；地址必须换成自己的接口 |
+| 写入临时文件并在用完后删除 | [temporary_file.c](../examples/temporary_file.c) | 临时路径，以及删除完成的提示 |
+
+压缩、URL 和 HTTP 示例需要对应的[依赖 SDK](DEPENDENCIES.zh-CN.md)。在库源码目录，使用已配置且开启 `HX_OS_BUILD_EXAMPLES=ON` 的构建目录，例如编译并运行压缩示例：
+
+```sh
+cmake --build build --config Release --target hx_os_compress_memory
+./build/bin/hx_os_compress_memory
+```
+
+`build` 替换成已有目录；Windows Visual Studio 的运行路径是 `.\build\bin\Release\hx_os_compress_memory.exe`。其余示例使用 `hx_os_` 加文件名作为构建目标。
+
 ## 1. 在内存中压缩字节
 
 `hx_os_compress`／`hx_os_decompress` 接收格式、字节数据、可选限制和已初始化的 `hx_bytes` 输出，处理单个 Zlib、Gzip、XZ 或 Zstd 压缩帧。它与包含文件的 ZIP 归档不同。失败保持原输出不变，输入直接引用输出内存时也适用。

@@ -11,8 +11,7 @@ static hx_os_status fill_request(hx_os_params *params)
 	hx_os_params_edit_set_bool(&edit, "enabled", 1);
 	hx_os_params_edit_set_bytes(&edit, "frame", frame, sizeof(frame));
 
-	/* Strings and bytes have been copied; local frame storage can expire.
-	 */
+	// Strings and bytes have been copied; local frame storage can expire.
 	return hx_os_params_edit_finish(&edit, NULL);
 }
 

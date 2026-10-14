@@ -17,10 +17,8 @@ int hx_os_cfg_minixml(hx_os_cfg_parser *parser, hx_os_config_node **out)
 	mxml_options_t *options;
 	mxml_node_t *container = NULL, *result = NULL;
 
-	/*
-	 * Shared validation/materialization guarantees XML character rules,
-	 * attribute normalization and lossless mixed content on both backends.
-	 */
+	// Shared validation/materialization guarantees XML character rules,
+	// attribute normalization and lossless mixed content on both backends.
 	if (!hx_os_cfg_xml(parser, out))
 		return 0;
 

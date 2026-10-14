@@ -209,8 +209,10 @@ hx_os_status hx_settings_create_with_options(hx_os_context *context,
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
 
-/* prepared is independently held by the caller, so every retry may retain it
- * in a new root without invoking a caller allocator while the mutex is held.
+/**
+ * \brief prepared is independently held by the caller, so every retry may
+ * retain it in a new root without invoking a caller allocator while the mutex
+ * is held.
  */
 static hx_os_status hx_settings_store(hx_settings_frame *frame,
 	hx_string_view key, hx_settings_value *prepared, int layer,

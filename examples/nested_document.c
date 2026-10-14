@@ -2,8 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
-/* Descriptions borrow input only until create() returns. Values retain types.
- */
+// Descriptions borrow input only until create() returns. Values retain types.
 int main(void)
 {
 	hx_os_config_value children[] = {

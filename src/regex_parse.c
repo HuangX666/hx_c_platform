@@ -460,7 +460,7 @@ static void hx_os_rx_range_add(hx_os_rx_parser *parser, hx_os_rx_range range)
 		return;
 	parser->status = hx_os_i_regex_compile_work(parser->regex,
 		range.last - range.first + 1, parser->position, parser->error);
-	/* Folding is not monotonic: retain the union, not folded endpoints. */
+	// Folding is not monotonic: retain the union, not folded endpoints.
 	for (point = range.first;
 		point <= range.last && parser->status == HX_OS_OK; ++point) {
 		uint32_t folded = hx_os_i_regex_fold(point);

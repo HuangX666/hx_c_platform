@@ -156,7 +156,10 @@ public:
 		return result;
 	}
 
-	/* Sensitive unencrypted PEM. Encrypt before storing private material.
+	/**
+	 * \brief Sensitive unencrypted PEM.
+	 *
+	 * \details Encrypt before storing private material.
 	 */
 	Result<CryptoBytes> exportPrivate() const noexcept
 	{
@@ -203,8 +206,12 @@ private:
 	hx_os_crypto_key *m_key_;
 };
 
-/* Common operations need no owned engine. For repeated native C calls, use
- * create() and native(); children retain the reusable private engine. */
+/**
+ * \brief Common operations need no owned engine.
+ *
+ * \details For repeated native C calls, use create() and native(); children
+ * retain the reusable private engine.
+ */
 class Crypto {
 public:
 	Crypto() noexcept

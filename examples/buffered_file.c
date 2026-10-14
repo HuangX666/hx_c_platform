@@ -32,10 +32,9 @@ int main(void)
 
 	if (status != HX_OS_OK) {
 		fprintf(stderr, "Save failed: %s\n", hx_os_status_name(status));
-		/* This console example explicitly waits for safe abandonment.
-		 * A GUI host keeps writer and retries close/abort on its own
-		 * schedule.
-		 */
+		// This console example explicitly waits for safe abandonment.
+		// A GUI host keeps writer and retries close/abort on its own
+		// schedule.
 		hx_os_file_writer_abort_until(
 			&writer, HX_OS_DEADLINE_INFINITE, NULL);
 		return 1;

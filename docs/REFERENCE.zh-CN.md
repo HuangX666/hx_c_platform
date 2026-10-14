@@ -6,7 +6,6 @@
 
 默认 SDK 模块需要匹配的依赖：CRYPTO／TLS 使用 OpenSSL，HTTP／URL 使用 libcurl，UNICODE 使用 utf8proc，归档／内存压缩使用对应编解码库，PERSISTENT_QUEUE 使用锁定版本的 SQLite 适配。先准备[依赖 SDK](DEPENDENCIES.zh-CN.md)，再通过 `CMAKE_PREFIX_PATH` 或 `HX_OS_DEPENDENCY_PREFIX` 传入 prefix。不用的模块显式关闭，或采用 `cmake/minimal.cmake`。[底层依赖教程](NATIVE_DEPENDENCIES.zh-CN.md)也说明直接调用 SDK 的方法。
 
-
 TLS 连接、有界全双工队列及 JSON 业务程序见 [TLS 教程](TLS.zh-CN.md)。
 - [1. 项目定位与接口边界](#section-1)
 - [2. 平台、语言与验证状态](#section-2)
@@ -76,7 +75,7 @@ TLS 连接、有界全双工队列及 JSON 业务程序见 [TLS 教程](TLS.zh-C
 
 C 核心需要编译成库，**不是 header-only**；只有可选 C++ 便利层是仅头文件。已验证 C++11，不宣称 C++14/17/20 矩阵通过。CMake 最低基线为 **3.16**。编译器、CRT 和 SDK 的兼容性需要与操作系统 API 兼容性分别确认，尤其是 Win7 部署，不能因接口保留兼容就宣称当前工具链生成的所有二进制都能直接运行。
 
-当前本地日常配置有 20 个维护者套件，回归源码只保留本地、不随项目发布，客户使用示例独立提供。远端 CI 保持关闭。[带日期的验证记录](VALIDATION.zh-CN.md)分别列出每次实际运行的套件和目标环境；旧数量属于历史，API 21 交叉编译与 API 34 模拟器运行也是不同证据。
+平台的构建要求和能力限制见[平台支持](PLATFORMS.zh-CN.md)。回归源码、详细执行记录和临时报告仅在维护者本地保存；公开示例独立提供，远端 CI 保持关闭。
 
 <a id="section-3"></a>
 
@@ -311,7 +310,7 @@ int main()
 		if (!label)
 			return report_failure(label.status());
 
-		/* The lease owns immutable bytes after the settings close. */
+		// The lease owns immutable bytes after the settings close.
 		std::puts(label.value().c_str());
 	}
 
@@ -350,14 +349,13 @@ int main()
 
 ### 5.1 通过源码子目录接入
 
-假设库源码位于应用的 `external/hx_c_platform`：
+假设库源码位于应用的 `deps/hx_c_platform`：
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
 project(my_app LANGUAGES C)
 
-
-add_subdirectory(external/hx_c_platform)
+add_subdirectory(deps/hx_c_platform)
 
 add_executable(my_app main.c)
 set_target_properties(my_app PROPERTIES
@@ -556,7 +554,10 @@ int main(void)
 
 ```sh
 cmake -S . -B build-text -DHX_OS_ENABLE_ICONV=ON \
-  -DHX_OS_ENABLE_CRYPTO=OFF -DHX_OS_ENABLE_ARCHIVE=OFF
+  -DHX_OS_ENABLE_CRYPTO=OFF -DHX_OS_ENABLE_ARCHIVE=OFF \
+  -DHX_OS_ENABLE_COMPRESSION=OFF -DHX_OS_ENABLE_HTTP=OFF \
+  -DHX_OS_ENABLE_URL=OFF -DHX_OS_ENABLE_UNICODE=OFF \
+  -DHX_OS_ENABLE_PERSISTENT_QUEUE=OFF
 cmake --build build-text --config Release --parallel 4
 ```
 
@@ -999,7 +1000,7 @@ int main(void)
 }
 ```
 
-repeat 在一个间隔后首次调用，错过多个周期时合并，回调返回 EOF 可正常停止。不能抢占正在执行的回调。精细等待默认自旋窗口为 200 us，`_ex` 允许 0..10 ms， 0 退回普通睡眠；精细等待不接受 INFINITE。不改变系统全局计时器精度，不创建隐藏线程，也不保证硬实时。兼容 Win7 的 tick 时钟会限制短等待，QPC 只用于约束自旋预算而不改变时钟语义。目标实测见[审查报告](BUG_MEMORY_LEAK_AUDIT.zh-CN.md)。
+repeat 在一个间隔后首次调用，错过多个周期时合并，回调返回 EOF 可正常停止。不能抢占正在执行的回调。精细等待默认自旋窗口为 200 us，`_ex` 允许 0..10 ms， 0 退回普通睡眠；精细等待不接受 INFINITE。不改变系统全局计时器精度，不创建隐藏线程，也不保证硬实时。兼容 Win7 的 tick 时钟会限制短等待，QPC 只用于约束自旋预算而不改变时钟语义。
 
 <a id="section-14"></a>
 
@@ -1107,7 +1108,7 @@ int main(void)
 		fprintf(stderr, "Close pending: %s\n",
 			hx_os_status_name(closed));
 
-		/* A service retains pool in its shutdown state and retries. */
+		// A service retains pool in its shutdown state and retries.
 		return 1;
 	}
 
@@ -1178,9 +1179,8 @@ int main()
 		std::fprintf(stderr, "Close pending: %s\n",
 			hx_os_status_name(closed.status()));
 
-		/* A service keeps owner in its shutdown state and retries.
-		 * This command-line example reports the pending close.
-		 */
+		// A service keeps owner in its shutdown state and retries.
+		// This command-line example reports the pending close.
 		return 1;
 	}
 
@@ -1232,7 +1232,7 @@ int main(void)
 	if (status != HX_OS_OK)
 		return 1;
 
-	/* For a long wait use an event/condition, not a busy loop. */
+	// For a long wait use an event/condition, not a busy loop.
 	while (!hx_os_atomic32_load(&result.ready, HX_OS_ACQUIRE))
 		hx_os_cpu_relax();
 
@@ -1911,7 +1911,10 @@ cmake -S . -B build-parsers \
   -DHX_OS_ENABLE_CJSON=ON -DHX_OS_ENABLE_LIBYAML=ON \
   -DHX_OS_ENABLE_MINIXML=ON -DHX_OS_ENABLE_INIH=ON \
   -DHX_OS_ENABLE_TOMLC=ON \
-  -DHX_OS_ENABLE_CRYPTO=OFF -DHX_OS_ENABLE_ARCHIVE=OFF
+  -DHX_OS_ENABLE_CRYPTO=OFF -DHX_OS_ENABLE_ARCHIVE=OFF \
+  -DHX_OS_ENABLE_COMPRESSION=OFF -DHX_OS_ENABLE_HTTP=OFF \
+  -DHX_OS_ENABLE_URL=OFF -DHX_OS_ENABLE_UNICODE=OFF \
+  -DHX_OS_ENABLE_PERSISTENT_QUEUE=OFF
 cmake --build build-parsers --config Release --parallel 4
 ```
 
@@ -1985,15 +1988,15 @@ flowchart TD
 
 维护者本机保留默认 20 项日常回归，以及按需开启的专项检查。它们不进入 Git 或安装包，普通客户不需要配置。已有构建缓存若开启了 `HX_OS_BUILD_TESTS`，改成 OFF 后重新配置即可使用公开源码。
 
-### 30.2 验证证据
+### 30.2 平台边界
 
-远端 CI 工作流不随公开源码提供，也没有开启远端自动测试。[验证记录](VALIDATION.zh-CN.md)保留各日期的实际结果；历史用例数量和本地路径不代表当前公开仓库的文件清单。实机、模拟器、QEMU、sanitizer 结果分别记录，不互相替代。
+平台的构建要求和能力限制见[平台支持](PLATFORMS.zh-CN.md)。回归源码、详细执行记录和临时报告仅在维护者本地保存；公开示例独立提供，远端 CI 保持关闭。
 
 ### 30.3 测量实际成本
 
 设置 `HX_OS_BUILD_BENCHMARKS=ON` 构建开发基准，记录吞吐、延迟、分配、锁、系统调用、争用以及目标配置。对象大小和对齐会影响数组与高频分配，但对象变小本身不是运行变快的证据。
 
-[性能与内存审查](BUG_MEMORY_LEAK_AUDIT.zh-CN.md)记录了重复前缀搜索、大容量命名过程扫描、MSVC 宽位除法回退的优化空间。C 任务分配四个 context 块，报告基线中的 C++ 整数结果任务为五个。这些是该基线的成本，不能替代新版 C++ Result 便利层的性能测量。 hx_c_log 的锁定原版五倍、单线程不回退门槛，需要真正接入后再验证。
+性能优化应使用固定工作负载和工具链对比耗时、内存及调用开销，测量记录本地保存。hx_c_log 的锁定原版五倍、单线程不回退要求属于后续实际接入的验收条件。
 
 <a id="section-31"></a>
 
@@ -2003,7 +2006,9 @@ flowchart TD
 
 源码与文档示例用一行空白区分不同逻辑步骤，函数调用和对应错误检查保持相邻。CMake 按项目设置、依赖、目标、功能／平台块和安装等职责分段；字符串数据和宏续行保持原样。
 
-优先原生 API 与编译器内建；汇编用于有测量依据的局部优化，并保留受支持目标的正确回退。Apple 实现以 C 为主，仅可选性能请求适配使用 Objective-C/Foundation。 Linux 电源/性能请求明确返回 NOT_SUPPORTED，注册表是显式 Windows 扩展，系统无法提供时不承诺严格 CPU 亲和性。
+注释默认使用英文。简短说明用 `//`，多行契约用 `/** ... */`，按实际内容填写 `\brief`、有方向的 `\param`、`\returns`、`\note` 和 `\warning`；不要求每个简单函数都有模板注释。普通修改通过差异和相关检查核对，不额外生成哈希清单。详细回归及审查记录只在本地保留。
+
+优先原生 API 与编译器内建；汇编用于有测量依据的局部优化，并保留受支持目标的正确回退。Apple 实现以 C 为主，仅可选性能请求适配使用 Objective-C/Foundation。 Linux 桌面防睡眠使用可选 D-Bus 服务；不支持的电源／性能操作返回 NOT_SUPPORTED。注册表是显式 Windows 扩展，系统无法提供时不承诺严格 CPU 亲和性。
 
 后续工作包括真实目标验证与有依据的性能改进。hx_c_log 迁移、崩溃策略框架、FreeRTOS/裸机适配均不是已经交付的功能。自有代码的发布许可证**尚未选定**，第三方许可独立适用，见 [THIRD_PARTY_NOTICES.zh-CN.md](../THIRD_PARTY_NOTICES.zh-CN.md)。
 
@@ -2025,9 +2030,8 @@ flowchart TD
 | 区间 profiler | [平台工具中的 profiler 契约](PLATFORM_UTILITIES.zh-CN.md) |
 | 原子操作与内存序 | [ATOMICS.zh-CN.md](ATOMICS.zh-CN.md) |
 | Android 基线 | [ANDROID.zh-CN.md](ANDROID.zh-CN.md) |
-| 验证与待测目标 | [VALIDATION.zh-CN.md](VALIDATION.zh-CN.md) |
-| 性能与内存 | [BUG_MEMORY_LEAK_AUDIT.zh-CN.md](BUG_MEMORY_LEAK_AUDIT.zh-CN.md) |
-| OBS 风格批次实现记录 | [OBS_COMPLETION.zh-CN.md](OBS_COMPLETION.zh-CN.md) |
+| 平台要求与限制 | [平台支持](PLATFORMS.zh-CN.md) |
+
 | 后续消费者迁移 | [MIGRATION.zh-CN.md](MIGRATION.zh-CN.md) |
 | 可编译示例 | [examples/](../examples) |
 
@@ -2043,7 +2047,6 @@ flowchart TD
 [tests-badge]: https://img.shields.io/badge/tests-local%20records-blue
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android
-
 
 完整调用见[加密](CRYPTO.zh-CN.md)、[TLS](TLS.zh-CN.md)与[压缩](ARCHIVE.zh-CN.md)教程。压缩选项明确区分覆盖、部分发布、路径限制、密码、资源上限以及原生依赖部署。
 

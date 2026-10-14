@@ -26,7 +26,7 @@ typedef struct device_sample {
 	double value;
 } device_sample;
 
-/* queue was created for sizeof(device_sample); main owns its lifetime. */
+// queue was created for sizeof(device_sample); main owns its lifetime.
 device_sample sample = {17, 1, 20.5};
 hx_os_status status = hx_os_message_queue_send_until(
 	queue, &sample, hx_os_deadline_after_ms(1000), NULL);

@@ -2,6 +2,8 @@
 
 [简体中文](CONTAINERS.zh-CN.md) · [README](../README.md)
 
+Start with [storing two integers and taking items in order](USAGE.md#containers). A vector is a growable array; a queue removes the oldest item first. Both introductory examples include complete programs and expected output. This page then covers strings, structures, maps and resource ownership.
+
 Include `hx_container.h`, or the C umbrella `hx_os.h`. The implementation is C99 and exposes only C types and opaque handles. No C++ runtime is required. `HX_OS_ENABLE_CONTAINERS=ON` is the default. OFF excludes sequence, tree and uthash implementation code; constructors return `HX_OS_NOT_SUPPORTED` and `HX_OS_CAP_CONTAINERS` is cleared. No global initialization is needed.
 
 Related tools: [LRU caches](CACHE.md) reuse hash storage and recency links; [dynamic bitsets](BITSET.md) provide word-based counting, search and set operations; [fixed byte rings](RING.md) borrow caller storage. These share the CONTAINERS switch. For complete messages across threads, use the independent [message/ring queues](QUEUES.md), controlled by `HX_OS_ENABLE_QUEUES` without a coroutine runtime.
@@ -86,7 +88,7 @@ if (status == HX_OS_OK)
 if (status == HX_OS_OK)
 	status = hx_os_sequence_push_back(names, &source, NULL);
 
-/* On OK the vector owns an independent copy. Inspect status in the host. */
+// On OK the vector owns an independent copy. Inspect status in the host.
 hx_string_destroy(&source);
 (void)hx_os_sequence_destroy(&names, NULL);
 ~~~
@@ -162,4 +164,4 @@ For dense numbered flags, the [bitset algorithms](BITSET.md) provide `hx_os_bits
 
 Unless documented otherwise, structural algorithms reject heaps to preserve heap invariants. Predicates must not mutate the same container. A successful reorder invalidates iterators; allocation failure before sorting does not. Temporary container scratch is charged to its byte budget. For transform/copy callbacks, a failed element construction must release its own partial resources. Result vectors inherit source context/limits; sorted merge requires matching element/callback/user policies. A list splice requires compatible context and value policy, checks destination limits and transfers accounted node bytes. Self-splice into its own moved range is a no-op.
 
-AVL and RB have the same measured node allocation footprint in the supplied workloads. Neither is universally faster. [Validation and microbenchmarks](VALIDATION.md) separate allocation bytes, operation timing and runtime claims; smaller metadata alone is not a performance result.
+AVL and red-black trees provide ordered-key semantics. Choose using the actual workload, allocation cost and access pattern; node size alone does not establish which is faster.

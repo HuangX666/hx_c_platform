@@ -9,7 +9,9 @@
 先按[依赖说明](DEPENDENCIES.zh-CN.md#4-构建依赖)构建 SDK，再用绝对 prefix 路径配置本库：
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/project/build-deps/prefix -DHX_OS_BUILD_EXAMPLES=ON
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+  -DHX_OS_DEPENDENCY_PREFIX=/absolute/project/build-deps/prefix \
+  -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build --config Release --target hx_os_encrypt_text --parallel 4
 build/bin/hx_os_encrypt_text
 ```
@@ -20,7 +22,7 @@ OpenSSL 默认动态链接。Windows 构建会把选中的 Crypto DLL 复制到�
 
 启用 TLS 时，同时包含选定的 SSL 运行库，详见 [TLS 教程](TLS.zh-CN.md)。
 
-需要静态集成 OpenSSL 时，用 `HX_DEPS_OPENSSL_SHARED=OFF` 构建 SDK，并给主项目传入 `HX_OS_OPENSSL_STATIC=ON`。外部线程和插件卸载还需遵守第 5 节。分发时保留实际组件的许可证材料。Android 和 Linux ARM SDK 操作见[交叉构建](DEPENDENCIES.zh-CN.md#6-linux-arm-与-android-交叉构建)，当前模拟器／QEMU 结果见[验证记录](VALIDATION.zh-CN.md)。实体板卡结果单列，Apple 和旧版 Windows 运行验证暂缓。
+需要静态集成 OpenSSL 时，用 `HX_DEPS_OPENSSL_SHARED=OFF` 构建 SDK，并给主项目传入 `HX_OS_OPENSSL_STATIC=ON`。外部线程和插件卸载还需遵守第 5 节。分发时保留实际组件的许可证材料。Android 和 Linux ARM SDK 操作见[交叉构建](DEPENDENCIES.zh-CN.md#6-linux-arm-与-android-交叉构建)。目标要求见[平台支持](PLATFORMS.zh-CN.md)。
 
 Android SDK 通过自有 OpenSSL 配置使用 `libcrypto-hx.so`、`libssl-hx.so` SONAME，避开系统 BoringSSL 名称。CMake 目标和运行库清单记录实际文件，不要手工改名桌面运行库，也不能混用不同 ABI 的库。详见 [Android 部署](ANDROID.zh-CN.md)。
 
@@ -171,6 +173,6 @@ flowchart LR
     F --> G["成功后才发布结果"]
 ```
 
-## 7. 验证入口
+## 7. 运行示例入口
 
-`crypto` 检查 SHA／HMAC 标准结果、二进制与空输入、逐字节篡改封装、错误秘密、容量限制、UTF-8／NUL、文件发布与分配失败。`crypto_native` 检查 RFC 8032 Ed25519 测试向量、原生 OpenSSL AES-GCM 互操作、宿主错误和属性隔离以及并发调用。`cpp_crypto` 验证关闭异常后的结果和所有权，`encrypt_text_example` 运行开发者示例。全量平台、检查器和安装后消费证据见[验证记录](VALIDATION.zh-CN.md)，尚未测试的目标单独标明。
+编译并运行公开的 [encrypt_text.c](../examples/encrypt_text.c) 可以体验加密和解密。错误密码或内容被修改时，要处理认证失败，不能继续使用输出。目标要求见[平台支持](PLATFORMS.zh-CN.md)。

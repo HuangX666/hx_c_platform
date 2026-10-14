@@ -11,9 +11,11 @@ typedef struct tls_session {
 	hx_os_deadline deadline;
 } tls_session;
 
-/* This example's wire format is uint32 big-endian length + UTF-8 JSON.
- * One send call owns the whole frame. A partial frame on failure ends this
- * demo session; never resend its prefix or parse an incomplete document.
+/**
+ * \brief This example's wire format is uint32 big-endian length + UTF-8 JSON.
+ *
+ * \details One send call owns the whole frame. A partial frame on failure ends
+ * this demo session; never resend its prefix or parse an incomplete document.
  */
 static inline int tls_json_send(
 	tls_session *session, const json_field *fields, size_t count)
@@ -88,9 +90,9 @@ static inline int tls_json_close(hx_os_tls **owner, int success)
 	int ok = net_demo_check(status, &error, "TLS close");
 
 	if (*owner) {
-		/* This finite CLI demo explicitly abandons unsent data on
-		 * failure. A long-lived application can retain its owner and
-		 * retry close. */
+		// This finite CLI demo explicitly abandons unsent data on
+		// failure. A long-lived application can retain its owner and
+		// retry close.
 		(void)hx_os_tls_abort_until(
 			owner, hx_os_deadline_after_ms(2000), NULL);
 		if (*owner)

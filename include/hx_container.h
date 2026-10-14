@@ -29,26 +29,29 @@ typedef struct hx_os_container_options {
 	void *user;
 } hx_os_container_options;
 
-/*
- * Values must be bitwise relocatable. copy constructs an independent value;
- * on failure it must leave no owned resources in destination. drop releases
- * a live value. Callbacks cannot throw, longjmp or mutate this container.
- * Without copy/drop, insertion copies plain bytes. With drop but no copy,
- * only the explicit _take insertions are supported.
- * _take transfers the release obligation on success only; source bytes are
- * unchanged and must then be treated as moved-from. Its source must not be
- * an owned value in this container. A non-NULL pop/erase output takes the
- * value without drop; NULL discards it with drop. Output storage must be
- * uninitialized and outside all container-owned storage.
- * Containers have no internal locks: serialize mutation and exclude readers
- * during mutation/destruction. Failed mutation preserves logical contents,
- * but reserve/capacity may change. Iterators expire on successful structural
+/**
+ * \brief Values must be bitwise relocatable.
+ *
+ * \details copy constructs an independent value; on failure it must leave no
+ * owned resources in destination. drop releases a live value. Callbacks cannot
+ * throw, longjmp or mutate this container. Without copy/drop, insertion copies
+ * plain bytes. With drop but no copy, only the explicit _take insertions are
+ * supported. _take transfers the release obligation on success only; source
+ * bytes are unchanged and must then be treated as moved-from. Its source must
+ * not be an owned value in this container. A non-NULL pop/erase output takes
+ * the value without drop; NULL discards it with drop. Output storage must be
+ * uninitialized and outside all container-owned storage. Containers have no
+ * internal locks: serialize mutation and exclude readers during
+ * mutation/destruction. Failed mutation preserves logical contents, but
+ * reserve/capacity may change. Iterators expire on successful structural
  * mutation. Iterators and borrowed pointers cannot outlive their container.
  */
 HX_OS_API void HX_OS_CALL hx_os_container_options_init(
 	hx_os_container_options *options, size_t element_size);
 
-/* Deep-copy/drop preset for hx_string; context is borrowed for this lifetime.
+/**
+ * \brief Deep-copy/drop preset for hx_string; context is borrowed for this
+ * lifetime.
  */
 HX_OS_API void HX_OS_CALL hx_os_string_container_options_init(
 	hx_os_container_options *options, hx_os_context *context);
@@ -62,15 +65,18 @@ typedef hx_os_sequence hx_os_stack;
 typedef hx_os_sequence hx_os_queue;
 typedef hx_os_sequence hx_os_byte_queue;
 
-/* Byte FIFO backed by the existing deque. max_bytes=0 selects 64 KiB of
- * queued payload. Storage grows on demand; growth may temporarily retain
- * old and new buffers, bounded by twice the payload limit plus metadata.
- * No copy/drop callbacks. External synchronization is required.
- * write copies the entire input or leaves contents unchanged. read/peek
- * require the entire requested range, otherwise NEED_INPUT without mutation.
- * NULL read output discards bytes; peek output must be non-NULL for bytes>0.
- * Input/output must not overlap queue-owned storage. Offsets are bytes.
- * Successful nonempty writes/reads invalidate existing container iterators.
+/**
+ * \brief Byte FIFO backed by the existing deque.
+ *
+ * \details max_bytes=0 selects 64 KiB of queued payload. Storage grows on
+ * demand; growth may temporarily retain old and new buffers, bounded by twice
+ * the payload limit plus metadata. No copy/drop callbacks. External
+ * synchronization is required. write copies the entire input or leaves contents
+ * unchanged. read/peek require the entire requested range, otherwise NEED_INPUT
+ * without mutation. NULL read output discards bytes; peek output must be
+ * non-NULL for bytes>0. Input/output must not overlap queue-owned storage.
+ * Offsets are bytes. Successful nonempty writes/reads invalidate existing
+ * container iterators.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_byte_queue_create(
 	hx_os_context *context, size_t max_bytes, hx_os_byte_queue **out,
@@ -87,13 +93,16 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_byte_queue_peek(
 	const hx_os_byte_queue *queue, size_t offset, void *data, size_t bytes,
 	hx_os_error *error);
 
-/* capacity is allocated payload storage; limit is the configured payload
- * ceiling; space is limit-size and may require allocation. NULL queries give
- * zero. reserve retains contents; clear retains allocated storage.
- * some operations copy min(requested, available) bytes and report OK with
- * completed, including partial progress. A nonempty request with no progress
- * returns NEED_INPUT for read or LIMIT for write. Errors set completed to zero.
- * completed is required and must not alias data or queue-owned storage.
+/**
+ * \brief capacity is allocated payload storage; limit is the configured payload
+ * ceiling; space is limit-size and may require allocation.
+ *
+ * \details NULL queries give zero. reserve retains contents; clear retains
+ * allocated storage. some operations copy min(requested, available) bytes and
+ * report OK with completed, including partial progress. A nonempty request with
+ * no progress returns NEED_INPUT for read or LIMIT for write. Errors set
+ * completed to zero. completed is required and must not alias data or
+ * queue-owned storage.
  */
 HX_OS_API size_t HX_OS_CALL hx_os_byte_queue_capacity(
 	const hx_os_byte_queue *queue);
@@ -133,7 +142,9 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_list_create(hx_os_context *context,
 	const hx_os_container_options *options, hx_os_list **out,
 	hx_os_error *error);
 
-/* A max-heap under options.compare; compare is required. */
+/**
+ * \brief A max-heap under options.compare; compare is required.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_heap_create(hx_os_context *context,
 	const hx_os_container_options *options, hx_os_heap **out,
 	hx_os_error *error);
@@ -143,7 +154,9 @@ HX_OS_API size_t HX_OS_CALL hx_os_sequence_size(const hx_os_sequence *sequence);
 HX_OS_API size_t HX_OS_CALL hx_os_sequence_capacity(
 	const hx_os_sequence *sequence);
 
-/* Library allocation bytes, including metadata, excluding callback allocations.
+/**
+ * \brief Library allocation bytes, including metadata, excluding callback
+ * allocations.
  */
 HX_OS_API size_t HX_OS_CALL hx_os_sequence_memory(
 	const hx_os_sequence *sequence);
@@ -151,7 +164,10 @@ HX_OS_API size_t HX_OS_CALL hx_os_sequence_memory(
 HX_OS_API const void *HX_OS_CALL hx_os_sequence_at(
 	const hx_os_sequence *sequence, size_t index);
 
-/* Only vector/stack exposes a contiguous mutable array; others return NULL. */
+/**
+ * \brief Only vector/stack exposes a contiguous mutable array; others return
+ * NULL.
+ */
 HX_OS_API void *HX_OS_CALL hx_os_vector_data(hx_os_vector *vector);
 
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sequence_reserve(
@@ -189,12 +205,18 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_sequence_clear(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sequence_destroy(
 	hx_os_sequence **sequence, hx_os_error *error);
 
-/* Vector-only in-place heapsort. Comparator must define a strict weak order. */
+/**
+ * \brief Vector-only in-place heapsort.
+ *
+ * \details Comparator must define a strict weak order.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_vector_sort(
 	hx_os_vector *vector, hx_os_error *error);
 
-/* Requires vector sorted by compare; returns insertion position and exact
- * match. */
+/**
+ * \brief Requires vector sorted by compare; returns insertion position and
+ * exact match.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_vector_lower_bound(
 	const hx_os_vector *vector, const void *key, size_t *index, int *found);
 
@@ -241,10 +263,13 @@ typedef int(HX_OS_CALL *hx_os_value_predicate_fn)(
 typedef hx_os_status(HX_OS_CALL *hx_os_value_visit_fn)(
 	const void *value, void *user, hx_os_error *error);
 
-/* Predicates are synchronous, non-failing and must not mutate the container.
- * find_if returns NOT_FOUND at exhaustion; count_if succeeds with zero.
- * visit counts callbacks started, EOF stops successfully; other statuses keep
- * callback details. Callback effects are not rolled back on failure.
+/**
+ * \brief Predicates are synchronous, non-failing and must not mutate the
+ * container.
+ *
+ * \details find_if returns NOT_FOUND at exhaustion; count_if succeeds with
+ * zero. visit counts callbacks started, EOF stops successfully; other statuses
+ * keep callback details. Callback effects are not rolled back on failure.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sequence_find_if(
 	const hx_os_sequence *sequence, hx_os_value_predicate_fn predicate,
@@ -258,11 +283,14 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_sequence_visit(hx_os_sequence *sequence,
 	hx_os_value_visit_fn visit, void *user, size_t *completed,
 	hx_os_error *error);
 
-/* Stable linear filtering; discarded values are dropped once. unique removes
- * adjacent equivalents using options.compare. Reordering/filtering heap
- * containers is NOT_SUPPORTED. reverse/rotate do not allocate. stable_sort
- * uses O(n) scratch bytes for arrays and O(1) scratch for lists; it preserves
- * equal-element order. Allocation failure preserves contents and iterators.
+/**
+ * \brief Stable linear filtering; discarded values are dropped once.
+ *
+ * \details unique removes adjacent equivalents using options.compare.
+ * Reordering/filtering heap containers is NOT_SUPPORTED. reverse/rotate do not
+ * allocate. stable_sort uses O(n) scratch bytes for arrays and O(1) scratch for
+ * lists; it preserves equal-element order. Allocation failure preserves
+ * contents and iterators.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sequence_remove_if(
 	hx_os_sequence *sequence, hx_os_value_predicate_fn predicate,
@@ -283,16 +311,21 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_sequence_stable_sort(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_vector_upper_bound(
 	const hx_os_vector *vector, const void *key, size_t *index);
 
-/* Move [first, first+count) before destination's position. Lists must share
- * context, element layout and copy/drop/compare/user policy. No allocation,
- * copy or drop. Capacity/memory limits still apply. Self-splice into its own
- * range is a no-op. Other successful moves invalidate both sets of iterators.
+/**
+ * \brief Move [first, first+count) before destination's position.
+ *
+ * \details Lists must share context, element layout and copy/drop/compare/user
+ * policy. No allocation, copy or drop. Capacity/memory limits still apply.
+ * Self-splice into its own range is a no-op. Other successful moves invalidate
+ * both sets of iterators.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_list_splice(hx_os_list *destination,
 	size_t position, hx_os_list *source, size_t first, size_t count,
 	hx_os_error *error);
 
-/* Short-circuit predicates; empty sequences satisfy all_of and none_of. */
+/**
+ * \brief Short-circuit predicates; empty sequences satisfy all_of and none_of.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sequence_any_of(
 	const hx_os_sequence *sequence, hx_os_value_predicate_fn predicate,
 	void *user, int *result);
@@ -305,14 +338,21 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_sequence_none_of(
 	const hx_os_sequence *sequence, hx_os_value_predicate_fn predicate,
 	void *user, int *result);
 
-/* Linear, no allocation. Lists retain relative order; vectors/deques do not
- * promise stability. boundary is the count of matching elements. */
+/**
+ * \brief Linear, no allocation.
+ *
+ * \details Lists retain relative order; vectors/deques do not promise
+ * stability. boundary is the count of matching elements.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sequence_partition(
 	hx_os_sequence *sequence, hx_os_value_predicate_fn predicate,
 	void *user, size_t *boundary, hx_os_error *error);
 
-/* Clone replacement once to permit an aliased source value, then copy into
- * each match. First copy failure stops and keeps prior replacements; replaced
+/**
+ * \brief Clone replacement once to permit an aliased source value, then copy
+ * into each match.
+ *
+ * \details First copy failure stops and keeps prior replacements; replaced
  * reports progress. Scratch uses two elements charged to the byte limit.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sequence_replace_if(
@@ -320,8 +360,10 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_sequence_replace_if(
 	void *user, const void *replacement, size_t *replaced,
 	hx_os_error *error);
 
-/* Sorted prefix [0,count); the remaining suffix has unspecified order.
- * nth_element puts the element of sorted rank index at that index and
+/**
+ * \brief Sorted prefix [0,count); the remaining suffix has unspecified order.
+ *
+ * \details nth_element puts the element of sorted rank index at that index and
  * partitions the rest. Neither algorithm changes element ownership.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_vector_partial_sort(
@@ -336,10 +378,13 @@ typedef hx_os_status(HX_OS_CALL *hx_os_value_transform_fn)(
 typedef hx_os_status(HX_OS_CALL *hx_os_value_fold_fn)(
 	void *accumulator, const void *value, void *user, hx_os_error *error);
 
-/* New owned vectors inherit context/options from source unless transform
- * supplies a different destination policy. Output is NULL on failure; source
- * stays intact. transform constructs one destination value and must clean up
- * its partial construction on failure. All callbacks run synchronously.
+/**
+ * \brief New owned vectors inherit context/options from source unless transform
+ * supplies a different destination policy.
+ *
+ * \details Output is NULL on failure; source stays intact. transform constructs
+ * one destination value and must clean up its partial construction on failure.
+ * All callbacks run synchronously.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sequence_clone(
 	const hx_os_sequence *source, hx_os_vector **out, hx_os_error *error);
@@ -353,8 +398,12 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_sequence_transform(
 	hx_os_value_transform_fn transform, void *user, hx_os_vector **out,
 	hx_os_error *error);
 
-/* fold updates a caller-owned accumulator; completed counts callbacks
- * started. First error stops, retaining prior accumulator changes. */
+/**
+ * \brief fold updates a caller-owned accumulator; completed counts callbacks
+ * started.
+ *
+ * \details First error stops, retaining prior accumulator changes.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sequence_fold(
 	const hx_os_sequence *source, void *accumulator,
 	hx_os_value_fold_fn fold, void *user, size_t *completed,
@@ -368,9 +417,12 @@ enum {
 	HX_OS_SET_SYMMETRIC_DIFFERENCE
 };
 
-/* Sorted inputs must have identical element/callback/user policy. Result
- * inherits left's context and limits. Multiset counts follow max/min/subtract
- * rules. Merge is stable with left preceding right for equivalent elements.
+/**
+ * \brief Sorted inputs must have identical element/callback/user policy.
+ *
+ * \details Result inherits left's context and limits. Multiset counts follow
+ * max/min/subtract rules. Merge is stable with left preceding right for
+ * equivalent elements.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_sequence_merge(
 	const hx_os_sequence *left, const hx_os_sequence *right, int operation,
@@ -392,16 +444,18 @@ typedef struct hx_os_map_iterator {
 	uint64_t generation;
 } hx_os_map_iterator;
 
-/*
- * Keys are copied bytes (including zero length/NUL); hash keys use byte
- * equality. Ordered maps use key_compare or unsigned-byte lexicographic order.
+/**
+ * \brief Keys are copied bytes (including zero length/NUL); hash keys use byte
+ * equality.
+ *
+ * \details Ordered maps use key_compare or unsigned-byte lexicographic order.
  * value_options.element_size=0 creates a set; value/copy/drop then are NULL.
  * Ordered lookups/inserts/erases are O(log n); hash iteration is insertion
- * order. RED_BLACK selects a red-black tree; ORDERED retains AVL behavior.
- * OR a kind with MULTI to allow duplicate keys. insert(replace=0) then adds
- * another entry; replace=1 replaces one existing entry. Ordered duplicates
- * retain insertion order. find/erase choose the first ordered equivalent;
- * hash duplicates have unspecified lookup order.
+ * order. RED_BLACK selects a red-black tree; ORDERED retains AVL behavior. OR a
+ * kind with MULTI to allow duplicate keys. insert(replace=0) then adds another
+ * entry; replace=1 replaces one existing entry. Ordered duplicates retain
+ * insertion order. find/erase choose the first ordered equivalent; hash
+ * duplicates have unspecified lookup order.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_map_create(hx_os_context *context,
 	int kind, const hx_os_container_options *value_options,
@@ -434,10 +488,13 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_map_entry(
 	const hx_os_map_iterator *iterator, const void **key, size_t *key_bytes,
 	const void **value);
 
-/* Bounds are ordered-only, O(log n), and produce EOF at the end. Equal range
- * returns OK even for an empty range; last is excluded. Duplicate counting
- * is O(log n + matches) for trees, O(bucket entries) for hash maps.
- * Last/previous follow reverse iteration, including insertion order in hashes.
+/**
+ * \brief Bounds are ordered-only, O(log n), and produce EOF at the end.
+ *
+ * \details Equal range returns OK even for an empty range; last is excluded.
+ * Duplicate counting is O(log n + matches) for trees, O(bucket entries) for
+ * hash maps. Last/previous follow reverse iteration, including insertion order
+ * in hashes.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_map_lower_bound(const hx_os_map *map,
 	const void *key, size_t bytes, hx_os_map_iterator *iterator);
@@ -458,9 +515,12 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_map_last(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_map_previous(
 	hx_os_map_iterator *iterator);
 
-/* On success erase_at advances iterator to the following entry and refreshes
- * its generation. Other iterators expire. out follows map_erase ownership.
- * erase_all discards all equivalents; a missing key succeeds with count zero.
+/**
+ * \brief On success erase_at advances iterator to the following entry and
+ * refreshes its generation.
+ *
+ * \details Other iterators expire. out follows map_erase ownership. erase_all
+ * discards all equivalents; a missing key succeeds with count zero.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_map_erase_at(hx_os_map *map,
 	hx_os_map_iterator *iterator, void *out, hx_os_error *error);
@@ -468,8 +528,13 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_map_erase_at(hx_os_map *map,
 HX_OS_API hx_os_status HX_OS_CALL hx_os_map_erase_all(hx_os_map *map,
 	const void *key, size_t bytes, size_t *count, hx_os_error *error);
 
-/* Read-only logical invariant check for diagnostics/tests; O(n), no allocation.
- * This does not validate arbitrary damaged pointers or replace memory tools. */
+/**
+ * \brief Read-only logical invariant check for diagnostics/tests; O(n), no
+ * allocation.
+ *
+ * \details This does not validate arbitrary damaged pointers or replace memory
+ * tools.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_map_validate(const hx_os_map *map);
 
 HX_OS_API hx_os_status HX_OS_CALL hx_os_map_clear(
@@ -478,9 +543,12 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_map_clear(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_map_destroy(
 	hx_os_map **map, hx_os_error *error);
 
-/* Declare iterator and status first. Container is evaluated once. Normal
- * exhaustion leaves EOF; break leaves OK; structural mutation reports INVALID
- * on the next step. These macros introduce one loop, so break/continue work.
+/**
+ * \brief Declare iterator and status first.
+ *
+ * \details Container is evaluated once. Normal exhaustion leaves EOF; break
+ * leaves OK; structural mutation reports INVALID on the next step. These macros
+ * introduce one loop, so break/continue work.
  */
 #define HX_OS_SEQUENCE_FOR_EACH(iterator, container, status)                   \
 	for ((status) = hx_os_sequence_begin((container), &(iterator));        \
@@ -499,10 +567,13 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_map_destroy(
 		(status) == HX_OS_OK;                                          \
 		(status) = hx_os_sequence_previous(&(iterator)))
 
-/* Thin typed adapters for trivially byte-copyable values, not owning strings
- * or nontrivial C++ objects. name must be a lowercase C identifier.
- * Generated static functions reuse the same C sequence implementation.
- * max_items=0 keeps the existing default bound. Views expire on mutation.
+/**
+ * \brief Thin typed adapters for trivially byte-copyable values, not owning
+ * strings or nontrivial C++ objects.
+ *
+ * \details name must be a lowercase C identifier. Generated static functions
+ * reuse the same C sequence implementation. max_items=0 keeps the existing
+ * default bound. Views expire on mutation.
  */
 #define HX_OS_DECLARE_POD_SEQUENCE(name, type, factory, popper)                \
 	typedef hx_os_sequence name;                                           \

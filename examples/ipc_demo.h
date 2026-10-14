@@ -7,7 +7,7 @@
 #include <string.h>
 #include "business_json.h"
 
-/* Helpers for these standalone demos, not another communication API. */
+// Helpers for these standalone demos, not another communication API.
 static inline int demo_check(
 	hx_os_status status, const hx_os_error *error, const char *operation)
 {
@@ -52,10 +52,9 @@ static inline void demo_join(hx_os_thread **thread, hx_os_deadline deadline)
 		hx_os_thread_join_until(*thread, deadline, NULL, &error);
 
 	if (!demo_check(status, &error, "join")) {
-		/* Fatal CLI-demo failure: exit while borrowed stack data is
-		 * still alive. The library neither detaches nor kills these
-		 * threads.
-		 */
+		// Fatal CLI-demo failure: exit while borrowed stack data is
+		// still alive. The library neither detaches nor kills these
+		// threads.
 		exit(EXIT_FAILURE);
 	}
 

@@ -2,7 +2,7 @@
 #include "duplex_private.h"
 #include <wchar.h>
 
-/* CRT/CommandLineToArgvW quoting, including empty and trailing backslashes. */
+// CRT/CommandLineToArgvW quoting, including empty and trailing backslashes.
 static size_t hx_os_process_quote(wchar_t *out, const wchar_t *input)
 {
 	size_t used = 0, slashes;
@@ -173,7 +173,7 @@ hx_os_status hx_os_i_process_spawn(hx_os_context *context, const char *path,
 	qsort(env, environment->count, sizeof(*env), hx_os_process_env_compare);
 
 	for (i = 0; i < environment->count; ++i) {
-		/* Inherited Windows blocks include hidden =C: drive entries. */
+		// Inherited Windows blocks include hidden =C: drive entries.
 		const wchar_t *equal =
 			wcschr(env[i] + (env[i][0] == L'='), L'=');
 

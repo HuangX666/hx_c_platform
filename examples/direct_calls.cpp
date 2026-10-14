@@ -44,7 +44,7 @@ int main()
 		if (!label)
 			return report_failure(label.status());
 
-		/* The lease owns immutable bytes after the settings close. */
+		// The lease owns immutable bytes after the settings close.
 		std::puts(label.value().c_str());
 	}
 

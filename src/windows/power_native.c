@@ -3,9 +3,8 @@
 
 static POWER_REQUEST_TYPE hx_os_power_kind(const hx_os_i_power *power)
 {
-	/* Execution-required (3) is unsupported before Windows 8. Keeping the
-	 * enum value local allows the public baseline to remain Windows 7.
-	 */
+	// Execution-required (3) is unsupported before Windows 8. Keeping the
+	// enum value local allows the public baseline to remain Windows 7.
 	return power->kind == HX_OS_I_SLEEP_REQUEST ? PowerRequestSystemRequired
 						    : (POWER_REQUEST_TYPE)3;
 }

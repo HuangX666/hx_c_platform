@@ -74,8 +74,8 @@ static hx_os_status hx_os_env_read_wide(const wchar_t *name, char *buffer,
 	if (needed > INT_MAX || needed > SIZE_MAX / sizeof(*value))
 		return hx_os_i_error(error, HX_OS_RANGE, 0, 0);
 
-	/* Native scratch allocation cannot invoke the injected output allocator
-	 * while the environment lock is held. */
+	// Native scratch allocation cannot invoke the injected output allocator
+	// while the environment lock is held.
 	value = HeapAlloc(GetProcessHeap(), 0, (size_t)needed * sizeof(*value));
 	if (!value)
 		return hx_os_i_error(error, HX_OS_NO_MEMORY, 0, 0);
@@ -226,8 +226,8 @@ hx_os_status hx_os_i_env_snapshot(
 		}
 
 		if (status == HX_OS_OK) {
-			/* No injected allocator callback while holding the
-			 * lock. */
+			// No injected allocator callback while holding the
+			// lock.
 			copy = malloc(total ? total : 1);
 			if (!copy)
 				status = hx_os_i_error(

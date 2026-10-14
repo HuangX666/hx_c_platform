@@ -36,10 +36,9 @@ public:
 		return detail::Status(status, error);
 	}
 
-	/* Synchronous: borrows the callable for this call. false stops
-	 * normally. Result<bool> additionally preserves a callback's explicit
-	 * error details.
-	 */
+	// Synchronous: borrows the callable for this call. false stops
+	// normally. Result<bool> additionally preserves a callback's explicit
+	// error details.
 	template <typename F>
 	static Result<size_t> repeat(uint64_t intervalMs, size_t ticks,
 		F &&callback,

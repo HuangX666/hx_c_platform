@@ -80,7 +80,7 @@ const hx_settings_value *hx_settings_i_member(
 const hx_settings_entry *hx_settings_i_find(
 	const hx_settings_value *object, hx_string_view name);
 
-/* Object replacement/merge retain immutable same-context children. */
+// Object replacement/merge retain immutable same-context children.
 hx_os_status hx_settings_i_replace(hx_os_context *context,
 	const hx_settings_value *object, hx_string_view key,
 	hx_settings_value *value, const hx_settings_limits *limits,

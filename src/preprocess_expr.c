@@ -169,7 +169,7 @@ done:
 	return status;
 }
 
-/* Every compound operator is adjacent in the expanded token stream. */
+// Every compound operator is adjacent in the expanded token stream.
 static hx_os_status hx_os_pp_expr_operator(hx_os_pp_expression *expression,
 	const char *allowed, int *operation, hx_os_error *error)
 {

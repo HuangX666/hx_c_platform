@@ -49,7 +49,7 @@ static hx_os_status example_ring(void)
 	if (status != HX_OS_OK)
 		return status;
 
-	/* Fill both free segments directly; data is invisible until commit. */
+	// Fill both free segments directly; data is invisible until commit.
 	for (i = 0; i < 2; ++i)
 		if (writable[i].size)
 			memset(writable[i].data, 'x', writable[i].size);

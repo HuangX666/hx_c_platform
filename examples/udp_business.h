@@ -45,8 +45,11 @@ static inline int udp_send_text(
 	}
 }
 
-/* One datagram per call, no stream framing or implicit session protocol.
- * The mutex covers only a nonblocking call, never an entire receive wait.
+/**
+ * \brief One datagram per call, no stream framing or implicit session protocol.
+ *
+ * \details The mutex covers only a nonblocking call, never an entire receive
+ * wait.
  */
 static inline hx_os_status udp_receive_text(udp_endpoint *endpoint,
 	hx_os_address *peer, char text[UDP_TEXT_CAPACITY],

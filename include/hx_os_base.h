@@ -97,11 +97,13 @@ typedef struct hx_os_context hx_os_context;
 typedef void *(HX_OS_CALL *hx_os_allocate_fn)(size_t bytes, void *user);
 typedef void(HX_OS_CALL *hx_os_deallocate_fn)(void *memory, void *user);
 
-/*
- * Callbacks must have malloc-equivalent fundamental alignment, be thread-safe
- * and support cross-thread release. The copied table and borrowed user state
- * remain valid until context destruction succeeds. Alignment above the
- * fundamental alignment is supplied by the library's allocation wrapper.
+/**
+ * \brief Callbacks must have malloc-equivalent fundamental alignment, be
+ * thread-safe and support cross-thread release.
+ *
+ * \details The copied table and borrowed user state remain valid until context
+ * destruction succeeds. Alignment above the fundamental alignment is supplied
+ * by the library's allocation wrapper.
  */
 typedef struct hx_os_allocator {
 	hx_os_allocate_fn allocate;
@@ -119,10 +121,20 @@ HX_OS_API const char *HX_OS_CALL hx_os_status_name(hx_os_status status);
 
 HX_OS_API void HX_OS_CALL hx_os_error_clear(hx_os_error *error);
 
-/* required includes NUL; a small buffer is NUL-terminated when capacity > 0.
- * Native GAI text and Apple Mach text are appended only when valid UTF-8.
- * Other targets retain numeric Mach diagnostics. No network initialization.
- * Locale-dependent text is diagnostic, not a stable machine-readable key.
+/**
+ * \brief Format a status and its native details for a person to read.
+ * \param[in] error Error record from the operation being diagnosed.
+ * \param[out] buffer Receives text; may be NULL when capacity is zero.
+ * \param[in] capacity Writable buffer bytes, including space for NUL.
+ * \param[out] required Required bytes including the terminating NUL.
+ * \returns OK if the message fits, OUTPUT_FULL if more space is needed,
+ * or an argument/formatting error.
+ * \note A small buffer is NUL-terminated whenever capacity is nonzero.
+ *
+ * \details Native GAI text and Apple Mach text are appended only when valid
+ * UTF-8. Other targets retain numeric Mach diagnostics. No network
+ * initialization. Locale-dependent text is diagnostic, not a stable
+ * machine-readable key.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_error_message(const hx_os_error *error,
 	char *buffer, size_t capacity, size_t *required);
@@ -134,14 +146,26 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_context_create(
 	const hx_os_context_options *options, hx_os_context **out,
 	hx_os_error *error);
 
-/* NULL context selects an immutable default allocator, not global settings. */
+/**
+ * \brief Release a context after its allocations and leases are gone.
+ * \param[in,out] context Cleared on success; retained when still in use.
+ * \param[out] error Optional error details.
+ * \returns OK on release, BUSY while allocations or leases remain.
+ * \warning Exclude new users before destroying the context.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_context_destroy(
 	hx_os_context **context, hx_os_error *error);
 
 HX_OS_API size_t HX_OS_CALL hx_os_context_allocations(
 	const hx_os_context *context);
 
-/* Zero-byte allocation is valid. alignment=0 selects fundamental alignment. */
+/**
+ * \brief Zero-byte allocation is valid.
+ *
+ * \details alignment=0 selects fundamental alignment.
+ * \note A NULL context uses the immutable default allocator. Allocations
+ * retain their originating allocator until hx_os_memory_free().
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_memory_alloc(hx_os_context *context,
 	size_t bytes, size_t alignment, void **out, hx_os_error *error);
 
@@ -151,31 +175,40 @@ typedef uint64_t hx_os_deadline;
 #define HX_OS_DEADLINE_NOW UINT64_C(0)
 #define HX_OS_DEADLINE_INFINITE UINT64_MAX
 
-/* Read variants retain native failures. Units do not imply resolution. */
+/**
+ * \brief Read variants retain native failures.
+ *
+ * \details Units do not imply resolution.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_monotonic_read(
 	uint64_t *nanoseconds, hx_os_error *error);
 
 HX_OS_API hx_os_status HX_OS_CALL hx_os_wall_time_read(
 	int64_t *milliseconds, hx_os_error *error);
 
-/*
- * Monotonic time excludes suspend. Convenience reads return UINT64_MAX
- * (monotonic) or INT64_MIN (wall) on failure. Deadline creation then returns
- * NOW; use the status-returning read when clock failures need diagnosis.
+/**
+ * \brief Monotonic time excludes suspend.
+ *
+ * \details Convenience reads return UINT64_MAX (monotonic) or INT64_MIN (wall)
+ * on failure. Deadline creation then returns NOW; use the status-returning read
+ * when clock failures need diagnosis.
  */
 HX_OS_API uint64_t HX_OS_CALL hx_os_monotonic_ns(void);
 
-/* High-resolution interval clock, independent of UTC and wall-clock changes.
- * Windows: QPC (includes suspend); Linux/Android: CLOCK_MONOTONIC;
- * macOS: mach_absolute_time. Resolution and suspend behavior are native.
- * Epoch is unspecified. Compare only values from this clock on one system;
- * do not use them as hx_os_deadline or mix them with monotonic_ns values.
- * No timer-resolution changes, allocation or worker. Always built in core.
- * read preserves *nanoseconds on failure; valid output is 0..UINT64_MAX-1.
+/**
+ * \brief High-resolution interval clock, independent of UTC and wall-clock
+ * changes.
+ *
+ * \details Windows: QPC (includes suspend); Linux/Android: CLOCK_MONOTONIC;
+ * macOS: mach_absolute_time. Resolution and suspend behavior are native. Epoch
+ * is unspecified. Compare only values from this clock on one system; do not use
+ * them as hx_os_deadline or mix them with monotonic_ns values. No
+ * timer-resolution changes, allocation or worker. Always built in core. read
+ * preserves *nanoseconds on failure; valid output is 0..UINT64_MAX-1.
  * Nanosecond conversion rounds down and reports RANGE instead of overflow.
- * Convenience returns UINT64_MAX on failure. Native ticks can be coarser
- * than 1 ns; adjacent reads may be equal. Cross-thread event ordering finer
- * than the native counter tick is not guaranteed.
+ * Convenience returns UINT64_MAX on failure. Native ticks can be coarser than 1
+ * ns; adjacent reads may be equal. Cross-thread event ordering finer than the
+ * native counter tick is not guaranteed.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_high_resolution_read(
 	uint64_t *nanoseconds, hx_os_error *error);
@@ -184,7 +217,9 @@ HX_OS_API uint64_t HX_OS_CALL hx_os_high_resolution_ns(void);
 
 HX_OS_API int64_t HX_OS_CALL hx_os_wall_time_ms(void);
 
-/* Overflow saturates to the largest finite deadline. */
+/**
+ * \brief Overflow saturates to the largest finite deadline.
+ */
 HX_OS_API hx_os_deadline HX_OS_CALL hx_os_deadline_after_ms(uint64_t ms);
 
 HX_OS_API int HX_OS_CALL hx_os_deadline_expired(hx_os_deadline deadline);
@@ -264,7 +299,11 @@ HX_OS_API const char *HX_OS_CALL hx_os_cpu_name(void);
 #define HX_OS_CAP_IPC (UINT64_C(1) << 57)
 #define HX_OS_CAP_STREAM (UINT64_C(1) << 60)
 
-/* required includes NUL. These queries do not need initialization. */
+/**
+ * \brief required includes NUL.
+ *
+ * \details These queries do not need initialization.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_version_string(
 	char *buffer, size_t capacity, size_t *required);
 

@@ -35,7 +35,7 @@ Date caches, locale-stable numeric formatting, console/system sinks, regex behav
 
 ## Stages and acceptance gates
 
-1. Capture the current public header/ABI, functional results and locked performance artifacts. Freeze workload/compiler/runtime settings and hashes.
+1. Capture the current public header/ABI, functional results and locked performance artifacts. Freeze the workload, compiler/runtime settings and baseline revision.
 2. Add an optional foundation dependency and a private adapter target. Keep hx_log.h and its public ABI unchanged.
 3. Migrate status/clock/path helpers, then files, synchronization, native thread lifetime and TLS. Keep each stage independently reversible and measurable.
 4. Migrate network primitives only after preserving sink framing, reconnection, backpressure and close behavior. Do not substitute the general thread pool for the logger's ordered asynchronous output queue.
@@ -43,7 +43,7 @@ Date caches, locale-stable numeric formatting, console/system sinks, regex behav
 6. Retain the logger's default 2-second shared close budget. A timeout keeps its resources/user data alive and allows retry. The platform library receives that deadline and does not impose it on other consumers.
 7. Run the exact locked performance contract independently on Windows and WSL2. Only then make the new adapter the default and remove retired private code.
 
-The observed hx_c_log performance contract uses medians of three complete processing runs with durable final flush: the new eight-producer throughput must reach at least five times the locked original single-producer baseline, and the new single-producer throughput must not regress against that baseline. Original baseline values are 201,186.88 records/s on Windows and 381,704.17 on WSL2; the eight-producer thresholds are 1,005,934.40 and 1,908,520.85. Treat the original evidence files and their hashes as authoritative when performing migration; this document is not a new performance result.
+The hx_c_log performance contract compares medians of three complete runs with durable final flush: eight-producer throughput must reach at least five times the locked original single-producer baseline, and single-producer throughput must not regress. Keep the frozen baseline and detailed measurements in the local migration records; this plan does not claim a new performance result.
 
 Report latency percentiles, completed/dropped/error counts, drain time, allocations, new locks/indirect calls/syscalls and absolute throughput. A cleaner directory or wrapper API is not performance evidence. New memory-pool use, malloc_trim and other allocator experiments require separate changes and benchmarks; do not combine them with seam migration.
 

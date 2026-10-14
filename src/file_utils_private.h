@@ -39,7 +39,7 @@ hx_os_status hx_os_i_path_current(hx_string *out, hx_os_error *error);
 
 hx_os_status hx_os_i_path_absolute(
 	const char *path, hx_string *out, hx_os_error *error);
-/* Capture the current directory without opening/resolving the target. */
+// Capture the current directory without opening/resolving the target.
 hx_os_status hx_os_i_path_full(
 	const char *path, hx_string *out, hx_os_error *error);
 

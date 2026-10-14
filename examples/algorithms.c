@@ -55,7 +55,7 @@ int main(void)
 	hx_os_status status;
 	int found = 0;
 
-	/* Ordinary integer arrays need no comparator callback. */
+	// Ordinary integer arrays need no comparator callback.
 	status = hx_os_sort_i32(ids, count, NULL);
 	if (status == HX_OS_OK)
 		status = hx_os_binary_search_i32(ids, count, 23, &found, NULL);
@@ -89,7 +89,7 @@ int main(void)
 
 	printf("Devices needing work: %zu\n", pending);
 
-	/* Build a separate work list, then collect its pending count. */
+	// Build a separate work list, then collect its pending count.
 	status = hx_os_array_copy_if(devices, count, sizeof(devices[0]),
 		device_pending, NULL, work, 3, &progress, NULL);
 	if (status == HX_OS_OK)

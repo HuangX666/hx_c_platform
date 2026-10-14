@@ -9,21 +9,28 @@
 先准备[依赖 SDK](DEPENDENCIES.zh-CN.md#4-构建依赖)。`HX_OS_ENABLE_TLS` 默认开启，依赖 CRYPTO、NETWORK、LOOP 和 FILE_UTILS。关闭任何必要模块后，`hx_os_tls_available()` 返回 0，TLS 操作明确返回 `HX_OS_NOT_SUPPORTED`。仅仅启用模块不会在程序加载时启动线程。
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/path/to/build-deps/prefix -DHX_OS_BUILD_EXAMPLES=ON
-cmake --build build --config Release --target hx_os_tls_json_server hx_os_tls_json_client --parallel 4
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+  -DHX_OS_DEPENDENCY_PREFIX=/absolute/path/to/build-deps/prefix \
+  -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build build --config Release --target hx_os_tls_json_server \
+  hx_os_tls_json_client --parallel 4
 ```
 
 已有证书时，把以下三个路径改为自己的文件后运行；证书 SAN 需包含 `localhost`。运行器自动选择空闲端口，启动独立收发程序并核对 JSON 回复，不依赖私有回归程序，也不修改你的证书文件。
 
 ```sh
-python examples/run_tls_business.py --bin-dir build/bin --certificate server-cert.pem --private-key server-key.pem --ca ca.pem
+python examples/run_tls_business.py --bin-dir build/bin --certificate \
+  server-cert.pem --private-key server-key.pem --ca ca.pem
 ```
 
 Visual Studio 将 `--bin-dir` 改为 `build/bin/Release`。本机演示没有证书时，可用已安装的 OpenSSL 命令行生成一天有效的自签名演示证书：
 
 ```sh
-openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=localhost -addext subjectAltName=DNS:localhost,IP:127.0.0.1 -keyout demo-key.pem -out demo-cert.pem
-python examples/run_tls_business.py --bin-dir build/bin --certificate demo-cert.pem --private-key demo-key.pem --ca demo-cert.pem
+openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=localhost \
+  -addext subjectAltName=DNS:localhost,IP:127.0.0.1 -keyout demo-key.pem \
+  -out demo-cert.pem
+python examples/run_tls_business.py --bin-dir build/bin --certificate \
+  demo-cert.pem --private-key demo-key.pem --ca demo-cert.pem
 ```
 
 该命令用于本机演示；它会写入指定文件，请在空的演示目录中生成并使用实际路径。演示结束后可删除这两个文件。生产环境使用自己的证书和密钥管理方式，客户端仍执行证书与主机名验证。
@@ -57,8 +64,12 @@ options.ca_file = "ca.pem";
 hx_os_status status = hx_os_tls_connect(
 	"localhost", 4433, &options, &connection, &error);
 
-/* Use connection only after checking status. On timeout/failure, an already
- * accepted startup still leaves an owner that must be closed or aborted. */
+/**
+ * \brief Use connection only after checking status.
+ *
+ * \details On timeout/failure, an already accepted startup still leaves an
+ * owner that must be closed or aborted.
+ */
 ```
 
 希望创建工作线程后立即返回时，用 `hx_os_tls_start_connect`／`start_listen`，随后通过 `wait_ready_until` 等待。`connect_until`／`listen_until` 封装这两个步骤，接收单调时钟截止时间；简单入口默认等待五秒。工作线程创建前的失败保持 `*out=NULL`，接受启动后的失败则保留对象。原生 DNS、证书处理和文件访问无法被强制打断。
@@ -75,12 +86,16 @@ auto opened = connection.connect("localhost", 4433, &options);
 if (opened) {
 	const char data[] = "hello";
 	auto sent = connection.send(data, sizeof(data) - 1);
-	/* sent.value() is the accepted byte count, including on failure. */
+	// sent.value() is the accepted byte count, including on failure.
 }
 
 auto closed = connection.closeUntil(hx_os_deadline_after_ms(2000));
-/* If owner is still non-NULL, keep it alive and retry, or explicitly abort.
- * The facade destructor does not close, kill or detach its worker. */
+/**
+ * \brief If owner is still non-NULL, keep it alive and retry, or explicitly
+ * abort.
+ *
+ * \details The facade destructor does not close, kill or detach its worker.
+ */
 ```
 
 上面是聚焦调用方式的片段。带完整检查的程序见业务示例。宿主不能在仍持有端点时直接让所有者离开作用域；调用失败不会自动销毁这个端点。
@@ -138,10 +153,10 @@ TLS 提供字节流，一次读取不保证对应一条 JSON。示例的[小型�
 
 OpenSSL 继续默认动态链接。构建及安装会包含选定的 SSL 和 Crypto 两个运行库，静态核心消费者也需要对应 SDK 包；仍可显式选择 `HX_OS_OPENSSL_STATIC=ON`。端点的私有 context 只在所属工作线程使用，该线程退出前完成原生线程清理。卸载本库或 OpenSSL 前，停止业务调用、回收端点并等待工作线程真正退出。外部原始加密调用者仍遵守单独的[静态链接清理契约](CRYPTO.zh-CN.md#5-线程内存与插件卸载)。
 
-## 6. 关闭、重试与验证
+## 6. 关闭、重试与示例
 
 `close_until` 停止接受新业务，排空已接受的发送数据，交换 `close_notify`。显式关闭会丢弃未读取的业务数据。不配合的对端可以延迟正常关闭；到达截止时间时保留同一个所有者并继续关闭，可以重试，或者明确选择 `abort_until` 丢弃队列、取消传输请求，再等待它们真正退出。两者都不强杀或分离线程。原生错误也可能与“所有者已经变为 NULL”同时返回，应同时检查状态与所有权。
 
 销毁端点前停止发起新调用，已经在途的调用会被唤醒并退出，同一时刻只允许一个关闭者。`peer_close_until`／`peer_abort_until` 对一个服务端 peer 应用相同规则。端点仍被持有时，分配器、其 user 数据以及库代码都必须保持有效。
 
-测试覆盖双向同时传输、双向认证、错误主机名、过期证书、明确／系统信任拒绝、接收取消后继续使用、突然 EOF、部分输入、分配失败、C++ 错误及进度结果，以及原生 Python TLS 1.2／1.3 互通。发送背压和正常关闭停滞时保留所有者。JSON 测试启动两个进程，并实际运行独立业务发送／接收线程。具体宿主、sanitizer、安装消费及目标状态见[验证记录](VALIDATION.zh-CN.md)；宿主通过不能代替 macOS、Win7、Android 或嵌入式板卡验证。
+目标平台的编译、部署要求及限制见[平台支持](PLATFORMS.zh-CN.md)。公开示例独立于维护者的本地回归。

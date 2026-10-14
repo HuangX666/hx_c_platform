@@ -2,6 +2,10 @@
 
 [简体中文](CONFIGURATION.zh-CN.md) · [README](../README.md)
 
+To read a port or device name from `config.json`, start with the [complete JSON program](USAGE.md#configuration). Loading creates a read-only document: query fields, then release it. Editing the original file does not change an already loaded value; load again to read the change.
+
+This page explains format limits, parser selection and data lifetimes. Use the [settings tutorial](USAGE.md#settings) to edit values in memory and save them, or the [serialization tutorial](SERIALIZATION.md) to convert your own structures to JSON and other text formats.
+
 This optional, synchronous C99 module returns immutable documents through a C ABI. Application settings, reload watchers, environment mutation, variable expansion, defaults, schema validation, includes and save timing remain consumer policies. All seven formats now have output APIs; nested document construction, explicit replacement and schema-based object conversion are described in [serialization](SERIALIZATION.md). No background thread or queue is created.
 
 The default backend is always BUILTIN. Installing dependencies never changes parsing implicitly. Select options.backend and check hx_os_config_backend_available. Disabled or mismatched backends return NOT_SUPPORTED and publish no document.

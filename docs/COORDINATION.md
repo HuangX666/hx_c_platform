@@ -26,7 +26,7 @@ if (status == HX_OS_OK) {
 		(void)hx_os_wait_group_done(group, 1, NULL);
 }
 
-/* At the end of every worker path: */
+// At the end of every worker path:
 (void)hx_os_wait_group_done(group, 1, NULL);
 ```
 
@@ -72,7 +72,7 @@ auto added = group.add();
 if (!added)
 	return 1;
 
-/* Publish work here; every accepted task must eventually call group.done(). */
+// Publish work here; every accepted task must eventually call group.done().
 ```
 
 Keep the owner pointer, facade and worker data in the host's lifetime state. Facade destruction does not wait or free the resource; call `close()` explicitly. `WaitGroup::closeUntil(deadline)` first waits, then destroys when safe. `BUSY`, `TIMEOUT` or `CANCELLED` leaves the owner available for retry. Close requires exclusion of new callers and submissions.

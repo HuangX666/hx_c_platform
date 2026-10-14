@@ -87,4 +87,4 @@ return HX_OS_OK;
 
 `Native::socket`, `Native::process` and `Native::thread` follow the same Result pattern. The thread result holds `hx::NativeThread` (void pointer/HANDLE on Windows, pthread_t on POSIX); this facade includes pthread.h only on POSIX. No destructor closes a borrowed native value, and no exception is used.
 
-The runnable [native_file.c](../examples/native_file.c) demonstrates borrowing a native file handle and reading through the library. Build `hx_os_native_file` and pass a UTF-8 file path. See [validation](VALIDATION.md) for recorded environments.
+The runnable [native_file.c](../examples/native_file.c) demonstrates borrowing a native file handle and reading through the library. Build `hx_os_native_file` and pass a UTF-8 file path. See [platform support](PLATFORMS.md) for target boundaries.

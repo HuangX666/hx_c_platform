@@ -8,7 +8,7 @@ hx_os_status hx_os_i_duplex_pair(hx_os_context *context,
 	hx_os_file *ends[2];
 	hx_os_status status;
 
-	(void)deadline; /* One local native operation, no connection wait. */
+	(void)deadline; // One local native operation, no connection wait.
 	ends[0] = hx_os_i_zero(context, sizeof(*ends[0]));
 	ends[1] = hx_os_i_zero(context, sizeof(*ends[1]));
 	if (!ends[0] || !ends[1]) {

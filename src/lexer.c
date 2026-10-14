@@ -71,7 +71,7 @@ static int hx_os_lex_hex4(
 	return 1;
 }
 
-/* Shared validation/decoding pass. No allocation when output is NULL. */
+// Shared validation/decoding pass. No allocation when output is NULL.
 static hx_os_status hx_os_lex_unquote(
 	hx_string_view source, char *output, size_t *written)
 {

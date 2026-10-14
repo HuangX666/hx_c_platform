@@ -51,8 +51,11 @@ static size_t hx_os_signal_depth(hx_os_signal_handler *handler)
 	return depth;
 }
 
-/* Caller owns mutex; temporarily releases it for user code. Slot stays
- * CLEANING until cleanup has returned. No slot reuse or early wait success.
+/**
+ * \brief Caller owns mutex; temporarily releases it for user code.
+ *
+ * \details Slot stays CLEANING until cleanup has returned. No slot reuse or
+ * early wait success.
  */
 static void hx_os_signal_retire(hx_os_signal_handler *handler, size_t index)
 {
@@ -274,8 +277,8 @@ static hx_os_status hx_os_signal_connect_impl(hx_os_signal_handler *handler,
 			slot->cleanup = cleanup;
 			slot->user = user;
 			slot->state = HX_OS_SIGNAL_CONNECTED;
-			/* Empty names are reserved internally for all-signal
-			 * slots. */
+			// Empty names are reserved internally for all-signal
+			// slots.
 			if (signal)
 				memcpy(slot->name, signal, bytes + 1);
 			else

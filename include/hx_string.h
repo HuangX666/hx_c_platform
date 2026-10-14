@@ -13,12 +13,14 @@ typedef struct hx_string_view {
 	size_t size;
 } hx_string_view;
 
-/*
- * Owning UTF-8 value. Initialize exactly once, destroy when finished.
- * Do not copy by assignment; use copy/move. Members are implementation
- * storage and must not be modified directly. Embedded U+0000 is allowed;
- * c_str consumers still stop at the first NUL. Views borrow storage and
- * must not outlive the owner or subsequent mutation. No concurrent mutation.
+/**
+ * \brief Owning UTF-8 value.
+ *
+ * \details Initialize exactly once, destroy when finished. Do not copy by
+ * assignment; use copy/move. Members are implementation storage and must not be
+ * modified directly. Embedded U+0000 is allowed; c_str consumers still stop at
+ * the first NUL. Views borrow storage and must not outlive the owner or
+ * subsequent mutation. No concurrent mutation.
  */
 typedef struct hx_string {
 	char *data;
@@ -65,7 +67,9 @@ HX_OS_API hx_os_status HX_OS_CALL hx_string_append(
 HX_OS_API hx_os_status HX_OS_CALL hx_string_append_cstr(
 	hx_string *string, const char *text, hx_os_error *error);
 
-/* Offsets/counts are bytes and must lie on UTF-8 codepoint boundaries. */
+/**
+ * \brief Offsets/counts are bytes and must lie on UTF-8 codepoint boundaries.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_string_insert(hx_string *string,
 	size_t offset, hx_string_view text, hx_os_error *error);
 
@@ -91,10 +95,14 @@ HX_OS_API size_t HX_OS_CALL hx_string_find(
 HX_OS_API int HX_OS_CALL hx_string_compare(
 	const hx_string *string, hx_string_view other);
 
-/* Locale-independent ASCII case-insensitive operations, without allocation.
- * A-Z compare as a-z; non-ASCII UTF-8 bytes remain exact (no Unicode folding).
- * compare requires valid views and returns -1/0/1. find uses byte offsets;
- * invalid needles/starts return NOT_FOUND, like the case-sensitive version.
+/**
+ * \brief Locale-independent ASCII case-insensitive operations, without
+ * allocation.
+ *
+ * \details A-Z compare as a-z; non-ASCII UTF-8 bytes remain exact (no Unicode
+ * folding). compare requires valid views and returns -1/0/1. find uses byte
+ * offsets; invalid needles/starts return NOT_FOUND, like the case-sensitive
+ * version.
  */
 HX_OS_API int HX_OS_CALL hx_string_compare_ascii_nocase(
 	const hx_string *string, hx_string_view other);
@@ -102,7 +110,10 @@ HX_OS_API int HX_OS_CALL hx_string_compare_ascii_nocase(
 HX_OS_API size_t HX_OS_CALL hx_string_find_ascii_nocase(
 	const hx_string *string, hx_string_view needle, size_t start);
 
-/* printf formatting uses the caller's locale; resulting bytes must be UTF-8. */
+/**
+ * \brief printf formatting uses the caller's locale; resulting bytes must be
+ * UTF-8.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_string_vformat(hx_string *string,
 	hx_os_error *error, const char *format, va_list arguments);
 
@@ -112,25 +123,33 @@ HX_OS_API hx_os_status HX_OS_CALL hx_string_format(
 HX_OS_API hx_os_status HX_OS_CALL hx_string_append_format(
 	hx_string *string, hx_os_error *error, const char *format, ...);
 
-/* Strict decoding is transactional: failure leaves the string unchanged. */
+/**
+ * \brief Strict decoding is transactional: failure leaves the string unchanged.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_string_assign_encoded(hx_string *string,
 	hx_os_encoding encoding, const void *input, size_t bytes,
 	hx_os_error *error);
 
-/* units counts wchar_t elements, excluding an optional trailing NUL.
- * Strict native-wide conversion. Failure preserves the owning string.
+/**
+ * \brief units counts wchar_t elements, excluding an optional trailing NUL.
+ *
+ * \details Strict native-wide conversion. Failure preserves the owning string.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_string_assign_wide(hx_string *string,
 	const wchar_t *input, size_t units, hx_os_error *error);
 
-/* Encoding adds no terminator; the result reports exact byte progress. */
+/**
+ * \brief Encoding adds no terminator; the result reports exact byte progress.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_string_encode(const hx_string *string,
 	hx_os_encoding encoding, void *output, size_t capacity,
 	hx_os_text_result *result, hx_os_error *error);
 
-/* Common operations preserve UTF-8 and use the string's own context.
- * Trimming/case conversion affects ASCII only (Unicode bytes stay intact).
- * Prefix/suffix predicates return false for an invalid view.
+/**
+ * \brief Common operations preserve UTF-8 and use the string's own context.
+ *
+ * \details Trimming/case conversion affects ASCII only (Unicode bytes stay
+ * intact). Prefix/suffix predicates return false for an invalid view.
  */
 HX_OS_API int HX_OS_CALL hx_string_starts_with(
 	const hx_string *string, hx_string_view prefix);
@@ -147,8 +166,11 @@ HX_OS_API hx_os_status HX_OS_CALL hx_string_lower_ascii(
 HX_OS_API hx_os_status HX_OS_CALL hx_string_upper_ascii(
 	hx_string *string, hx_os_error *error);
 
-/* Allocation-free edits on a valid initialized string. No Unicode folding.
- * string must be non-NULL; borrowed views may change after these calls.
+/**
+ * \brief Allocation-free edits on a valid initialized string.
+ *
+ * \details No Unicode folding. string must be non-NULL; borrowed views may
+ * change after these calls.
  */
 HX_OS_API void HX_OS_CALL hx_string_trim_ascii_in_place(hx_string *string);
 
@@ -156,17 +178,22 @@ HX_OS_API void HX_OS_CALL hx_string_lower_ascii_in_place(hx_string *string);
 
 HX_OS_API void HX_OS_CALL hx_string_upper_ascii_in_place(hx_string *string);
 
-/* Left-to-right nonoverlapping replacement; empty needle is INVALID.
- * Inputs may borrow from string. Failure preserves string and replaced.
+/**
+ * \brief Left-to-right nonoverlapping replacement; empty needle is INVALID.
+ *
+ * \details Inputs may borrow from string. Failure preserves string and
+ * replaced.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_string_replace_all(hx_string *string,
 	hx_string_view needle, hx_string_view replacement, size_t *replaced,
 	hx_os_error *error);
 
-/* Owns a copy of the input; views remain valid until parts_destroy.
- * Embedded NUL is supported. Default: retain empty pieces, at most 4096.
- * ex max_parts is 1..65536; excess pieces fail with LIMIT, never truncate.
- * Empty separator is INVALID. Failure sets *out=NULL.
+/**
+ * \brief Owns a copy of the input; views remain valid until parts_destroy.
+ *
+ * \details Embedded NUL is supported. Default: retain empty pieces, at most
+ * 4096. ex max_parts is 1..65536; excess pieces fail with LIMIT, never
+ * truncate. Empty separator is INVALID. Failure sets *out=NULL.
  */
 typedef struct hx_string_parts hx_string_parts;
 
@@ -184,9 +211,12 @@ HX_OS_API hx_os_status HX_OS_CALL hx_string_parts_at(
 
 HX_OS_API void HX_OS_CALL hx_string_parts_destroy(hx_string_parts **parts);
 
-/* Transactional, validates each UTF-8 view. Parts may borrow from out.
- * count=0 produces an empty string. Parts array and output object may not
- * overlap. No locale collation, Unicode normalization or case folding.
+/**
+ * \brief Transactional, validates each UTF-8 view.
+ *
+ * \details Parts may borrow from out. count=0 produces an empty string. Parts
+ * array and output object may not overlap. No locale collation, Unicode
+ * normalization or case folding.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_string_join(hx_string *out,
 	const hx_string_view *parts, size_t count, hx_string_view separator,

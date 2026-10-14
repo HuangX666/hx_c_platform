@@ -1,7 +1,7 @@
 #include <hx_os.h>
 #include <stdio.h>
 
-/* A typed POD vector still uses the same bounded C container underneath. */
+// A typed POD vector still uses the same bounded C container underneath.
 HX_OS_DECLARE_VECTOR(sample_values, int)
 
 static hx_os_status HX_OS_CALL twice(
@@ -85,7 +85,7 @@ int main(void)
 			printf("procedure result: %ld\n", (long)result);
 	}
 
-	/* Synchronous periodic work needs no event-loop setup. */
+	// Synchronous periodic work needs no event-loop setup.
 	if (status == HX_OS_OK)
 		status = hx_os_repeat(1, 2, tick, &count, &error);
 

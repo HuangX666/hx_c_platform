@@ -20,7 +20,7 @@ uint64_t elapsed;
 hx_os_status status = hx_os_stopwatch_start(&watch, NULL);
 
 if (status == HX_OS_OK) {
-	/* Perform the operation whose duration is needed. */
+	// Perform the operation whose duration is needed.
 	status = hx_os_stopwatch_elapsed_ns(&watch, &elapsed, NULL);
 }
 ```
@@ -65,7 +65,7 @@ if (status == HX_OS_OK)
 	status = hx_os_token_bucket_try_take(&bucket, 1, &retry_at, NULL);
 
 if (status == HX_OS_WOULD_BLOCK) {
-	/* Defer work until retry_at, or report backpressure to the caller. */
+	// Defer work until retry_at, or report backpressure to the caller.
 }
 ```
 

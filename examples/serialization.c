@@ -2,8 +2,11 @@
 #include <stdio.h>
 #include <string.h>
 
-/* Run with json, yaml, xml or toml. Only the encoded document goes to stdout.
- * INI/ENV/properties cannot represent this array; use a flat schema for them.
+/**
+ * \brief Run with json, yaml, xml or toml.
+ *
+ * \details Only the encoded document goes to stdout. INI/ENV/properties cannot
+ * represent this array; use a flat schema for them.
  */
 int main(int argc, char **argv)
 {
@@ -51,7 +54,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	/* All decoded strings and sample elements stay valid until release. */
+	// All decoded strings and sample elements stay valid until release.
 	(void)fwrite(text.data, 1, text.size, stdout);
 	putchar('\n');
 

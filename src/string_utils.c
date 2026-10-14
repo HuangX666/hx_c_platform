@@ -5,7 +5,7 @@
 struct hx_string_parts {
 	hx_string text;
 	size_t count;
-	/* Views follow this header. */
+	// Views follow this header.
 };
 
 static hx_os_status hx_string_check_view(hx_string_view view)

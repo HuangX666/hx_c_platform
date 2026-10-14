@@ -109,7 +109,7 @@ static hx_os_cache_entry *hx_os_cache_victim(hx_os_cache *cache, uint64_t now)
 				earliest = entry->expires;
 		}
 
-		/* Deletion may leave an early bound; this scan refreshes it. */
+		// Deletion may leave an early bound; this scan refreshes it.
 		cache->earliest = earliest;
 	}
 

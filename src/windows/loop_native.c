@@ -42,7 +42,7 @@ hx_os_status hx_os_i_loop_refresh(hx_os_socket *socket, hx_os_error *error)
 	(void)socket;
 	(void)error;
 
-	/* IOCP associations last until the socket is closed. */
+	// IOCP associations last until the socket is closed.
 	return HX_OS_OK;
 }
 

@@ -48,8 +48,10 @@ public:
 		hx_os_request_cancel(m_request_);
 	}
 
-	/* Wait failure has no value; completed I/O failure retains byte
-	 * progress. */
+	/**
+	 * \brief Wait failure has no value; completed I/O failure retains byte
+	 * progress.
+	 */
 	Result<hx_os_completion> waitUntil(
 		hx_os_deadline deadline) const noexcept
 	{
@@ -95,7 +97,9 @@ private:
 	}
 };
 
-/* Native owner outlives facade and every associated request/resource. */
+/**
+ * \brief Native owner outlives facade and every associated request/resource.
+ */
 class IoLoop {
 public:
 	explicit IoLoop(

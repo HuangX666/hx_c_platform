@@ -1,7 +1,10 @@
 #include "power_private.h"
 #import <Foundation/Foundation.h>
-/* Foundation's public activity API is Objective-C. This implementation
- * stays behind the C ABI; disable PERFORMANCE_REQUEST for a C-only adapter.
+/**
+ * \brief Foundation's public activity API is Objective-C.
+ *
+ * \details This implementation stays behind the C ABI; disable
+ * PERFORMANCE_REQUEST for a C-only adapter.
  */
 hx_os_status hx_os_i_activity_set(
 	hx_os_i_power *power, int active, hx_os_error *error)

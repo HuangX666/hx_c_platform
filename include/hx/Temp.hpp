@@ -5,7 +5,9 @@
 #include <hx/Status.hpp>
 
 namespace hx {
-/* Durable caller-owned handle permits cleanup retry after I/O failure. */
+/**
+ * \brief Durable caller-owned handle permits cleanup retry after I/O failure.
+ */
 class Temp {
 public:
 	explicit Temp(hx_os_temp *&owner) noexcept

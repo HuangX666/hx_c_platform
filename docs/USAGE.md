@@ -17,38 +17,47 @@
 
 ## 1. How to use these tutorials
 
-These tutorials are for developers who can write basic C/C++ and are using this library for the first time. Each task gives its purpose, input, complete program, expected output and key calls. Save C programs as `main.c` and C++ programs as `main.cpp`. Choose one at a time; do not combine several `main` functions.
+Each section solves one concrete problem, such as reading a port from configuration or sending a calculation to a worker. Complete section 2, then pick a task. Each C/C++ block is an independent program: save one as `main.c` or `main.cpp`; do not combine several main functions.
 
-Prepare the project in section 2, then select a task. Examples use default modules without external parser or encoding backends. Symbols match the current interface. Find platform-specific behavior, limits and lifetime details in the [detailed reference](REFERENCE.md).
+Follow this order: prepare input, build/run, compare output, then substitute application data. Custom allocators and platform internals are unnecessary for these tasks; consult the [reference](REFERENCE.md) when you need them.
 
 <a id="project"></a>
 
 ## 2. Prepare a small project
 
-### 2.1 Directory and input files
+### 2.1 Directory and source
 
-Use CMake 3.16+ and a suitable compiler. Use a developer terminal for MSVC on Windows, or GCC/Clang on Linux. Copy the library source to `external/hx_c_platform` and create:
+For source integration, run in an MSVC developer terminal or Linux shell:
+
+```sh
+mkdir hx_demo
+cd hx_demo
+mkdir deps
+cd deps
+git clone --branch dev https://github.com/HuangX666/hx_c_platform.git
+git -C hx_c_platform submodule update --init --recursive
+cd ..
+```
+
+You are now in `hx_demo`. Create `CMakeLists.txt` and the selected program here. Only file/configuration examples need input files; other examples run without them.
 
 ```text
 hx_demo/
 ├── CMakeLists.txt
-├── main.c          # Select a C program below.
-├── main.cpp        # Select a C++ program below.
-├── hello.txt
-├── config.json
-└── external/
+├── main.c
+├── hello.txt       # Needed by the text-file example.
+├── config.json     # Needed by the configuration example.
+└── deps/
     └── hx_c_platform/
 ```
 
-Only the selected program is compiled; the CMake setup chooses it. Keep both input files for the configure step, even when trying a string/container task.
-
-Save `hello.txt` as UTF-8. This example uses ASCII text so terminal display settings do not obscure file reading:
+The file example uses UTF-8 `hello.txt`:
 
 ```text
 Hello, hx_c_platform!
 ```
 
-Save `config.json` as UTF-8:
+The configuration example uses UTF-8 `config.json`:
 
 ```json
 {"port": 8080}
@@ -58,16 +67,17 @@ Save `config.json` as UTF-8:
 
 ### 2.2 Build a C program
 
-Save the selected C program as `main.c` and use this `CMakeLists.txt`:
+Save the selected C program as `main.c` and use this complete `CMakeLists.txt`:
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
 project(hx_demo LANGUAGES C)
 
-set(HX_OS_ENABLE_CRYPTO OFF CACHE BOOL "" FORCE)
-set(HX_OS_ENABLE_ARCHIVE OFF CACHE BOOL "" FORCE)
+foreach(module CRYPTO ARCHIVE COMPRESSION HTTP URL UNICODE PERSISTENT_QUEUE)
+	set(HX_OS_ENABLE_${module} OFF CACHE BOOL "")
+endforeach()
 
-add_subdirectory(external/hx_c_platform)
+add_subdirectory(deps/hx_c_platform)
 
 add_executable(hx_demo main.c)
 target_link_libraries(hx_demo PRIVATE hx_c_platform::hx_c_platform)
@@ -75,49 +85,46 @@ set_target_properties(hx_demo PROPERTIES
 	C_STANDARD 99
 	C_STANDARD_REQUIRED YES
 	C_EXTENSIONS NO)
-
-configure_file(hello.txt hello.txt COPYONLY)
-configure_file(config.json config.json COPYONLY)
 ```
 
-`add_subdirectory` builds the library; `target_link_libraries` connects it to your program. The library's own tests and examples are disabled by default. The default static build needs no separate DLL lookup.
+`add_subdirectory` builds the library; `target_link_libraries` connects it to your program. The seven switches disable modules needing a separate native SDK. Files, strings, built-in JSON, settings, containers and pools remain available for these tutorials. To add those modules, prepare their SDKs using the [dependency guide](DEPENDENCIES.md), then enable them with the corresponding `-DHX_OS_ENABLE_MODULE=ON` configure option.
 
 Run from `hx_demo`:
 
 ```sh
-cmake -S . -B build-c
-cmake --build build-c --config Release
-cd build-c
+cmake -S . -B build
+cmake --build build --config Release
 ```
 
-Run a Visual Studio build on Windows with:
+For a Visual Studio Release build on Windows:
 
 ```powershell
-.\Release\hx_demo.exe
+.\build\Release\hx_demo.exe
 ```
 
-Run a Makefile/Ninja build on Linux with:
+For a Ninja/Makefile build on Linux:
 
 ```sh
-./hx_demo
+./build/hx_demo
 ```
 
-To try another task, replace `main.c`, rebuild and run. Configure from `hx_demo`; run from `build-c`.
+Stay in `hx_demo` when running so relative input paths resolve here. Replace `main.c` and rebuild to try another task; reuse the directory with the same toolchain. A Windows Ninja executable is normally `build/hx_demo.exe`.
 
 <a id="cpp-project"></a>
 
 ### 2.3 Build a C++ program
 
-Save the selected C++ program as `main.cpp` and use this complete `CMakeLists.txt`. It selects C++11, links the same C library, and disables C++ exceptions for your program.
+Save the selected C++ program as `main.cpp` and use this complete configuration. Build/run commands remain the same as section 2.2.
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
-project(hx_demo LANGUAGES CXX)
+project(hx_demo LANGUAGES C CXX)
 
-set(HX_OS_ENABLE_CRYPTO OFF CACHE BOOL "" FORCE)
-set(HX_OS_ENABLE_ARCHIVE OFF CACHE BOOL "" FORCE)
+foreach(module CRYPTO ARCHIVE COMPRESSION HTTP URL UNICODE PERSISTENT_QUEUE)
+	set(HX_OS_ENABLE_${module} OFF CACHE BOOL "")
+endforeach()
 
-add_subdirectory(external/hx_c_platform)
+add_subdirectory(deps/hx_c_platform)
 
 add_executable(hx_demo main.cpp)
 target_link_libraries(hx_demo PRIVATE hx_c_platform::cpp)
@@ -132,20 +139,65 @@ if(MSVC)
 else()
 	target_compile_options(hx_demo PRIVATE -fno-exceptions)
 endif()
-
-configure_file(hello.txt hello.txt COPYONLY)
-configure_file(config.json config.json COPYONLY)
 ```
 
-Use a separate build directory and run from `hx_demo`:
+`hx_c_platform::cpp` supplies C++ wrappers and links the same C core. This setup selects C++11 and disables exceptions. Check a C++ Result for success before using its `.value()`.
 
-```sh
-cmake -S . -B build-cpp
-cmake --build build-cpp --config Release
-cd build-cpp
+<a id="installed-project"></a>
+
+### 2.4 Use an existing include/lib/bin SDK
+
+If you have a compiled SDK, place the whole package in `deps/hx_c_platform` with this layout; no source clone is needed.
+
+```text
+deps/hx_c_platform/
+├── include/
+├── lib/
+│   └── cmake/hx_c_platform/
+└── bin/
 ```
 
-From `build-cpp`, run `.\Release\hx_demo.exe` for Visual Studio on Windows, or `./hx_demo` for Makefile/Ninja on Linux. Windows Ninja builds place the executable at the build root: `.\hx_demo.exe`.
+Use this `CMakeLists.txt` for a C program and the build commands from section 2.2:
+
+```cmake
+cmake_minimum_required(VERSION 3.16)
+project(hx_demo LANGUAGES C)
+
+list(PREPEND CMAKE_PREFIX_PATH
+	"${CMAKE_CURRENT_SOURCE_DIR}/deps/hx_c_platform")
+find_package(hx_c_platform CONFIG REQUIRED)
+
+add_executable(hx_demo main.c)
+target_link_libraries(hx_demo PRIVATE hx_c_platform::hx_c_platform)
+set_target_properties(hx_demo PROPERTIES
+	C_STANDARD 99
+	C_STANDARD_REQUIRED YES
+	C_EXTENSIONS NO)
+```
+
+Match library/application architecture and configuration, for example x64 Release. In CMake GUI, select `hx_demo` as the source directory and the matching Visual Studio generator and x64 architecture. Configure/Generate, then open the generated `.sln`.
+
+A Windows shared SDK places DLLs in `bin`. For a PowerShell run, add it to the current terminal's PATH:
+
+```powershell
+$env:PATH = "$PWD\deps\hx_c_platform\bin;$env:PATH"
+.\build\Release\hx_demo.exe
+```
+
+For a Linux shared package, follow the [runtime deployment guide](NATIVE_DEPENDENCIES.md#4-installation-and-deployment). C++ installed consumers also use find_package; select the language, source, target and exception options from section 2.3.
+
+### 2.5 Read the recurring notation
+
+| Form | Meaning you need here |
+| --- | --- |
+| `hx_os_status status` | The operation's outcome; compare with `HX_OS_OK` for success |
+| `hx_string text = HX_STRING_INIT` | An empty string ready to receive or store text |
+| `&text` | Allows the function to write into that string |
+| Final `NULL` error argument | Omits detailed native diagnostics; still check the status |
+| C++ `if (!result)` | Checks failure |
+| C++ `result.value()` | Obtains the actual string, number or object after success |
+
+The meaning of NULL depends on its parameter position; not every pointer is optional. Each task explains the arguments it uses.
 
 <a id="files"></a>
 
@@ -457,15 +509,13 @@ Port: 8080
 
 ### 6.3 Write several values
 
-After creating `settings`, you can use the homepage's grouped writes:
+In the program in section 6.2, replace `auto changed = settings.setInt("port", 8080);` with the assignment below to write two values. Keep the following result check, read and close steps from that program:
 
 ```cpp
 auto changed = settings.update()
 		       .setInt("port", 8080)
 		       .setBool("enabled", true)
 		       .finish();
-if (!changed)
-	std::fprintf(stderr, "%s\n", hx_os_status_name(changed.status()));
 ```
 
 On success, read with `settings.integer("port")` and `settings.boolean("enabled")`, checking each result. `finish()` does not commit delayed work; it reports the writes already performed. Every setter applies immediately.
@@ -814,7 +864,7 @@ Library paths/strings use UTF-8. File reading and terminal display are separate:
 
 ### 10.5 Why does a task fail after disabling modules?
 
-Tutorials use default modules. JSON needs CONFIG; containers need CONTAINERS; variant needs VARIANT; settings need SETTINGS; pools need THREAD_POOL. Disabled/unsupported features return a clear unsupported result rather than fake success. See [build options](REFERENCE.md#section-27) for switches, optional parser/encoding dependencies and minimal embedded builds.
+The starter project keeps the modules used in these examples enabled. JSON needs CONFIG; containers need CONTAINERS; variant needs VARIANT; settings need SETTINGS; pools need THREAD_POOL. Disabled/unsupported features return a clear unsupported result rather than fake success. See [build options](REFERENCE.md#section-27) for switches, optional parser/encoding dependencies and minimal embedded builds.
 
 ### 10.6 I need another feature
 
@@ -825,4 +875,4 @@ Tutorials use default modules. JSON needs CONFIG; containers need CONTAINERS; va
 | Network, processes, pipes, mappings and metrics | [Platform utilities](PLATFORM_UTILITIES.md) |
 | Locks, events, thread-local storage and resource lifetimes | [Core contracts](CONTRACTS.md) |
 | Installed static/shared find_package integration | [Installation reference](REFERENCE.md#section-5) |
-| Exact target validation status | [Validation records](VALIDATION.md) |
+| Platform requirements and limits | [Platform support](PLATFORMS.md) |

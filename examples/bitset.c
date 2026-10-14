@@ -7,7 +7,7 @@ int main(void)
 	hx_os_status status;
 	size_t next = 0;
 
-	/* Track 100 numbered jobs, permitting growth to 1,000 jobs. */
+	// Track 100 numbered jobs, permitting growth to 1,000 jobs.
 	status = hx_os_bitset_create(NULL, 100, 1000, &completed, NULL);
 	if (status == HX_OS_OK)
 		status = hx_os_bitset_set_range(completed, 0, 10, 1, NULL);

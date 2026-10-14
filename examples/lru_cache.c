@@ -23,7 +23,7 @@ int main(void)
 	if (status == HX_OS_OK)
 		printf("Recent sensor-a: %d\n", *(const int *)value);
 
-	/* Reading sensor-a protected it; inserting sensor-c evicts sensor-b. */
+	// Reading sensor-a protected it; inserting sensor-c evicts sensor-b.
 	if (status == HX_OS_OK)
 		status = hx_os_cache_put(cache, "sensor-c", 8, &third, NULL);
 	if (status == HX_OS_OK) {
@@ -37,7 +37,7 @@ int main(void)
 			status = lookup == HX_OS_OK ? HX_OS_IO_ERROR : lookup;
 	}
 
-	/* Expiry starts on write. Reading does not refresh its lifetime. */
+	// Expiry starts on write. Reading does not refresh its lifetime.
 	if (status == HX_OS_OK)
 		status = hx_os_cache_put_for(
 			cache, "temporary", 9, &first, 10, NULL);

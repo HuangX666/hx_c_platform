@@ -12,7 +12,7 @@ hx_os_status hx_os_i_socket_configure(
 	if (!SetHandleInformation((HANDLE)native, HANDLE_FLAG_INHERIT, 0))
 		return hx_os_i_win32(error, GetLastError());
 #else
-	/* Only newly created/accepted, privately owned sockets reach here. */
+	// Only newly created/accepted, privately owned sockets reach here.
 	if (fcntl(native, F_SETFL, nonblocking ? O_NONBLOCK : 0) ||
 		fcntl(native, F_SETFD, FD_CLOEXEC))
 		return hx_os_i_errno(error, errno);

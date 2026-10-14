@@ -44,8 +44,8 @@ static int inspect_file(const char *path)
 	else
 		fprintf(stderr, "Borrow: %s\n", hx_os_status_name(status));
 
-	/* The library still owns the file; never close the borrowed native
-	 * value. */
+	// The library still owns the file; never close the borrowed native
+	// value.
 	status = hx_os_file_close(&file, NULL);
 	if (status != HX_OS_OK || result) {
 		fputs("Native inspection or file close failed.\n", stderr);

@@ -61,7 +61,7 @@ static int hx_ar_writer_options(hx_ar_job *job, struct archive *native)
 		filter = ARCHIVE_FILTER_ZSTD;
 	if (result == ARCHIVE_OK)
 		result = archive_write_add_filter(native, filter);
-	/* WARN can select an external helper: do not open such a writer. */
+	// WARN can select an external helper: do not open such a writer.
 	if (result != ARCHIVE_OK || filter == ARCHIVE_FILTER_NONE)
 		return result;
 	if (filter == ARCHIVE_FILTER_ZSTD)
@@ -234,9 +234,9 @@ static hx_os_status hx_ar_pack_write(
 		if (opened && job->format == HX_OS_ARCHIVE_ZIP)
 			(void)archive_write_finish_entry(native);
 		(void)archive_write_fail(native);
-		/* FATAL skips unfinished entry padding. Close still releases
-		 * filters and joins the 7z empty/directory lists to the list
-		 * that format_free owns. Failed output is discarded. */
+		// FATAL skips unfinished entry padding. Close still releases
+		// filters and joins the 7z empty/directory lists to the list
+		// that format_free owns. Failed output is discarded.
 		if (opened)
 			(void)archive_write_close(native);
 	}

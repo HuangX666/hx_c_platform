@@ -55,8 +55,11 @@ void hx_os_i_profiler_end(hx_os_profile_guard *guard);
 
 #define HX_OS_PROFILE_BUCKETS 252
 
-/* Names immediately follow the record; optional bins follow at uint64
- * alignment. Feature flags never change after creation.
+/**
+ * \brief Names immediately follow the record; optional bins follow at uint64
+ * alignment.
+ *
+ * \details Feature flags never change after creation.
  */
 static inline size_t hx_os_profile_bins_offset(size_t name_bytes)
 {

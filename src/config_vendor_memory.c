@@ -14,7 +14,7 @@ union hx_os_cfg_vendor_block {
 	hx_os_i_alignment alignment;
 };
 
-/* Calls are synchronous; scopes nest, and no destructor or TLS key is owned. */
+// Calls are synchronous; scopes nest, and no destructor or TLS key is owned.
 #if defined(_MSC_VER)
 static __declspec(thread) hx_os_cfg_parser *hx_os_cfg_vendor_parser;
 #elif defined(__GNUC__)

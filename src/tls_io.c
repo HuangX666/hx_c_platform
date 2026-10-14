@@ -1,9 +1,11 @@
 #include "tls_private.h"
 
 #if HX_OS_HAVE_TLS
-/* SSL/BIO/request fields belong exclusively to the owned I/O thread.
- * Public flags, errors, queues and progress counters use the endpoint mutex.
- * No native operation or allocator callback runs under that mutex.
+/**
+ * \brief SSL/BIO/request fields belong exclusively to the owned I/O thread.
+ *
+ * \details Public flags, errors, queues and progress counters use the endpoint
+ * mutex. No native operation or allocator callback runs under that mutex.
  */
 void hx_tls_i_fail(hx_os_tls *tls, const hx_os_error *error)
 {
@@ -198,9 +200,8 @@ static int hx_tls_ssl_result(
 	size_t after = BIO_ctrl_pending(peer->bio);
 	hx_os_error error;
 
-	/* SSL only appends to this side of the BIO. Stable wire offsets let a
-	 * flush complete even while later application calls continue sending.
-	 */
+	// SSL only appends to this side of the BIO. Stable wire offsets let a
+	// flush complete even while later application calls continue sending.
 	if (after < before || after - before > UINT64_MAX - peer->produced) {
 		hx_tls_peer_status(peer, HX_OS_LIMIT);
 
@@ -381,7 +382,7 @@ static void hx_tls_retire(hx_tls_peer *peer)
 	peer->bio = NULL;
 	hx_tls_i_lock(peer->owner);
 	peer->retired = 1;
-	/* Failed, never announced server handshakes do not consume a slot. */
+	// Failed, never announced server handshakes do not consume a slot.
 	if (peer->owner->server && !peer->ready)
 		peer->release = 1;
 	hx_os_condition_notify_all(peer->owner->condition);
@@ -725,7 +726,7 @@ void *HX_OS_CALL hx_tls_i_worker(void *user)
 	SSL_CTX_free(tls->ssl_context);
 	if (tls->crypto)
 		hx_os_i_crypto_leave(&scope);
-	/* This thread is library-owned, including when OpenSSL is static. */
+	// This thread is library-owned, including when OpenSSL is static.
 	hx_os_crypto_thread_cleanup();
 	hx_tls_i_lock(tls);
 	hx_os_condition_notify_all(tls->condition);

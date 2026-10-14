@@ -90,8 +90,11 @@ static hx_os_status hx_os_pp_separator(hx_os_pp_state *state, hx_string *out,
 	return hx_os_pp_append(state, out, text, error);
 }
 
-/* Called only when a push would exceed capacity. Ownership of byte-relocatable
- * entries transfers on success; failure leaves the old array intact.
+/**
+ * \brief Called only when a push would exceed capacity.
+ *
+ * \details Ownership of byte-relocatable entries transfers on success; failure
+ * leaves the old array intact.
  */
 static void *hx_os_pp_grow(hx_os_pp_state *state, void *old, size_t *capacity,
 	size_t maximum, size_t item_bytes)
@@ -217,8 +220,11 @@ static hx_os_status hx_os_pp_push_macro(hx_os_pp_state *state, size_t depth,
 		&frame->lexer, error);
 }
 
-/* All conditions are expanded as text before evaluation, preserving operator
- * precedence. The defined operand is exempt even across replacement frames.
+/**
+ * \brief All conditions are expanded as text before evaluation, preserving
+ * operator precedence.
+ *
+ * \details The defined operand is exempt even across replacement frames.
  */
 static hx_os_status hx_os_pp_expand(hx_os_pp_state *state, hx_string_view input,
 	const char *initial_name, int condition, hx_string *out,

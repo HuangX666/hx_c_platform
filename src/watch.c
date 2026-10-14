@@ -178,7 +178,7 @@ static void *hx_os_watch_worker(void *user)
 
 		hx_os_watch_stop(watch);
 		(void)hx_os_i_watch_native_run(watch, &ignored);
-		/* Preserve a gate failure while still retiring native work. */
+		// Preserve a gate failure while still retiring native work.
 		if (watch->cleanup)
 			watch->cleanup(watch->user);
 

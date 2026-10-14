@@ -21,10 +21,8 @@ int hx_os_cfg_cjson(hx_os_cfg_parser *parser, hx_os_config_node **out)
 	const char *end = NULL;
 	int outer;
 
-	/*
-	 * The shared materializer retains exact integers and embedded NULs;
-	 * cJSON's double/NUL-terminated DOM cannot preserve those values.
-	 */
+	// The shared materializer retains exact integers and embedded NULs;
+	// cJSON's double/NUL-terminated DOM cannot preserve those values.
 	if (!hx_os_cfg_json(parser, out))
 		return 0;
 
@@ -45,8 +43,8 @@ int hx_os_cfg_cjson(hx_os_cfg_parser *parser, hx_os_config_node **out)
 #endif
 	}
 
-	/* All calls that write cJSON's private global error state are
-	 * serialized. */
+	// All calls that write cJSON's private global error state are
+	// serialized.
 	native = cJSON_ParseWithLengthOpts(
 		parser->text, parser->length, &end, 0);
 	--hx_os_cfg_json_nesting;

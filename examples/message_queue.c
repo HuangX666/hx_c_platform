@@ -49,7 +49,7 @@ static void *HX_OS_CALL produce_samples(void *user)
 
 int main(void)
 {
-	/* Static state remains valid even if a bounded join cannot finish. */
+	// Static state remains valid even if a bounded join cannot finish.
 	static producer_state state;
 	static hx_os_thread *producer;
 	hx_os_status status, close_status;
@@ -88,7 +88,7 @@ int main(void)
 		}
 	}
 
-	/* Also wake a blocked sender if receiving failed. */
+	// Also wake a blocked sender if receiving failed.
 	close_status = hx_os_message_queue_close(state.queue, NULL);
 	failed |= report_failure("Close queue", close_status);
 

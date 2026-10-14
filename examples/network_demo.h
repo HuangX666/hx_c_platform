@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Only setup, diagnostics and thread lifetime are shared by socket demos. */
+// Only setup, diagnostics and thread lifetime are shared by socket demos.
 static inline int net_demo_check(
 	hx_os_status status, const hx_os_error *error, const char *operation)
 {
@@ -96,8 +96,8 @@ static inline void net_demo_join(hx_os_thread **thread, hx_os_deadline deadline)
 	if (!net_demo_check(
 		    hx_os_thread_join_until(*thread, deadline, NULL, &error),
 		    &error, "join")) {
-		/* CLI-only fatal failure. Borrowed task storage is still alive;
-		 * a persistent host must retain its owner and retry instead. */
+		// CLI-only fatal failure. Borrowed task storage is still alive;
+		// a persistent host must retain its owner and retry instead.
 		exit(EXIT_FAILURE);
 	}
 

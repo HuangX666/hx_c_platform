@@ -37,12 +37,16 @@ typedef struct hx_os_http_response {
 		HX_BYTES_INIT, HX_BYTES_INIT, HX_STRING_INIT, 0                \
 	}
 
-/* Bounded synchronous HTTP/HTTPS with certificate + hostname verification.
- * create balances native curl initialization; not from DllMain. One request
- * per client at a time (concurrent/reentrant requests return BUSY/DEADLOCK).
- * Different clients can run concurrently. No library-created worker. The
- * supplied SDK uses blocking DNS, so deadline/cancel cannot interrupt DNS.
- * Exclude close from all callers; host coordinates native global cleanup.
+/**
+ * \brief Bounded synchronous HTTP/HTTPS with certificate + hostname
+ * verification.
+ *
+ * \details create balances native curl initialization; not from DllMain. One
+ * request per client at a time (concurrent/reentrant requests return
+ * BUSY/DEADLOCK). Different clients can run concurrently. No library-created
+ * worker. The supplied SDK uses blocking DNS, so deadline/cancel cannot
+ * interrupt DNS. Exclude close from all callers; host coordinates native global
+ * cleanup.
  */
 HX_OS_API int HX_OS_CALL hx_os_http_available(void);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_http_create(
@@ -53,13 +57,15 @@ HX_OS_API void HX_OS_CALL hx_os_http_response_init(
 	hx_os_http_response *response, hx_os_context *context);
 HX_OS_API void HX_OS_CALL hx_os_http_response_destroy(
 	hx_os_http_response *response);
-/* HTTP 4xx/5xx are successful exchanges; inspect status_code. Transfer failure
- * preserves the old response. All inputs are borrowed through the call.
- * Up to 64 headers (8 KiB each, no CR/LF), URL 16 KiB, upload 64 MiB,
- * response body max 64 MiB, headers max 1 MiB. Defaults: body 16 MiB,
+/**
+ * \brief HTTP 4xx/5xx are successful exchanges; inspect status_code.
+ *
+ * \details Transfer failure preserves the old response. All inputs are borrowed
+ * through the call. Up to 64 headers (8 KiB each, no CR/LF), URL 16 KiB, upload
+ * 64 MiB, response body max 64 MiB, headers max 1 MiB. Defaults: body 16 MiB,
  * headers 64 KiB, timeout 5 s, redirects disabled, proxy disabled. Native
- * codec/TLS allocations are additional. Redirects never downgrade HTTPS.
- * No credential-bearing URLs, automatic cookies or arbitrary file schemes.
+ * codec/TLS allocations are additional. Redirects never downgrade HTTPS. No
+ * credential-bearing URLs, automatic cookies or arbitrary file schemes.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_http_request(hx_os_http *http,
 	const char *method, const char *url, hx_os_bytes_view body,

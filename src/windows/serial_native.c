@@ -123,8 +123,8 @@ hx_os_status hx_os_i_serial_transfer(hx_os_serial *serial, void *data,
 					break;
 				}
 			}
-			/* Keep operation and caller buffer alive through
-			 * retirement. */
+			// Keep operation and caller buffer alive through
+			// retirement.
 			success = GetOverlappedResult(
 				handle, &operation, &count, TRUE);
 			if (!success && stop == HX_OS_OK)

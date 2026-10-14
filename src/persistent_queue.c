@@ -317,8 +317,8 @@ hx_os_status hx_os_persistent_queue_open(hx_os_context *context,
 	}
 	(void)sqlite3_extended_result_codes(queue->database, 1);
 	(void)sqlite3_busy_timeout(queue->database, 5000);
-	/* A rollback journal bounds journal growth by the current transaction.
-	 * EXTRA synchronizes directory removal at commit as well as data. */
+	// A rollback journal bounds journal growth by the current transaction.
+	// EXTRA synchronizes directory removal at commit as well as data.
 	code = hx_os_store_exec(queue,
 		"PRAGMA synchronous=EXTRA;"
 		"PRAGMA cache_size=-1024;PRAGMA temp_store=MEMORY;"
@@ -402,7 +402,7 @@ static hx_os_status hx_os_store_insert(hx_os_persistent_queue *queue,
 	if (code == SQLITE_OK) {
 		(void)sqlite3_bind_text(
 			statement, 1, item->id, -1, SQLITE_STATIC);
-		/* A zero-byte message is an empty blob, not SQL NULL. */
+		// A zero-byte message is an empty blob, not SQL NULL.
 		(void)sqlite3_bind_blob64(statement, 2,
 			item->data.size ? item->data.data : "",
 			(sqlite3_uint64)item->data.size, SQLITE_STATIC);

@@ -30,12 +30,13 @@ deps/
   .cache/          Ignored legacy parser/iconv release cache
 ```
 
-Old `.deps/` and `deps/.cache/` caches remain usable through explicit source overrides. New builds use one provider in `cmake/HxDependencySources.cmake`; the legacy Python preparation commands delegate to that provider. They no longer maintain separate download/version lists. Historical records retain their original paths.
+Old `.deps/` and `deps/.cache/` caches remain usable through explicit source overrides. New builds use one provider in `cmake/HxDependencySources.cmake`; the legacy Python preparation commands delegate to that provider. They no longer maintain separate download/version lists.
 
 ## 2. Default: Git submodules
 
 ```sh
-git clone --branch dev --recurse-submodules https://github.com/HuangX666/hx_c_platform.git
+git clone --branch dev --recurse-submodules \
+  https://github.com/HuangX666/hx_c_platform.git
 cd hx_c_platform
 # For an existing checkout:
 git submodule update --init --recursive
@@ -60,7 +61,8 @@ Use `-DHX_OS_DEPENDENCY_PROVIDER=FETCHCONTENT` in the main project, `tools/depen
 ```sh
 cmake -S tools/sources -B build-sources
 # Alternative provider, same versions:
-cmake -S tools/sources -B build-sources-fetch -DHX_OS_DEPENDENCY_PROVIDER=FETCHCONTENT
+cmake -S tools/sources -B build-sources-fetch \
+  -DHX_OS_DEPENDENCY_PROVIDER=FETCHCONTENT
 ```
 
 `HX_OS_DEPENDENCIES` selects a semicolon-separated list; its default includes the five parsers, KCP, uthash and iconv. The Python commands `tools/fetch_parsers.py` and `tools/fetch_iconv.py` are compatibility frontends for this CMake project. Neither rewrites vendor source.
@@ -87,7 +89,7 @@ The prefix is `build-deps/prefix` unless `CMAKE_INSTALL_PREFIX` is supplied. The
 
 For an MSVC Debug consumer, configure its compression SDK with `-DHX_DEPS_CONFIGURATION=Debug`. Keep Debug and Release SDKs in separate prefixes; do not mix `/MDd` and `/MD` static libraries. The OpenSSL shared runtime stays independently built.
 
-Windows libarchive configuration targets WIN7 and links the selected dependencies explicitly. Actual Windows 7/8.1 execution is deferred. The tested Windows OpenSSL configuration used ASM=OFF; those results are not assembly-performance evidence. Cross compilation forwards the target compiler, sysroot, toolchain variables and Android ABI/API into each dependency build. Android SDK builds use a POSIX host/WSL and a Linux NDK, since upstream OpenSSL uses POSIX make/Perl there. Windows-host Android SDK construction is rejected explicitly. Current Android/Linux ARM evidence is recorded in [validation](VALIDATION.md); Apple is outside this acceptance round.
+Windows libarchive configuration targets WIN7 and links selected dependencies explicitly. Cross builds pass the compiler, sysroot, toolchain and Android ABI/API to each dependency. Android SDK builds require a POSIX host/WSL, Linux NDK, make and Perl; a Windows host is rejected explicitly. See [platform support](PLATFORMS.md) for older-system and device compatibility boundaries.
 
 The SDK retains deprecated ENGINE ABI entry points because other OpenSSL 3 consumers can reference them; dynamically loaded engine modules remain disabled. Do not mix incompatible OpenSSL builds in one process.
 
@@ -96,7 +98,8 @@ The SDK retains deprecated ENGINE ABI entry points because other OpenSSL 3 consu
 After the build, use an absolute prefix path:
 
 ```sh
-cmake -S tools/dependencies/check -B build-deps-check -DCMAKE_PREFIX_PATH=/absolute/project/build-deps/prefix
+cmake -S tools/dependencies/check -B build-deps-check \
+  -DCMAKE_PREFIX_PATH=/absolute/project/build-deps/prefix
 cmake --build build-deps-check --config Release
 ctest --test-dir build-deps-check -C Release --output-on-failure
 ```
@@ -129,8 +132,10 @@ cmake --build build-arm64 --parallel 4
 For the tested ARMv7 hard-float GNU toolchain, use `armv7`, `arm-linux-gnueabihf-`, OpenSSL `linux-armv4`, and `qemu-arm;-L;/usr/arm-linux-gnueabihf`. The toolchain, not the OpenSSL target name, determines the float ABI. QEMU syscall limitations are reported separately from library defects; running these commands is not board acceptance.
 
 ```sh
+hx_android_toolchain="$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake"
+
 cmake -S tools/dependencies -B build-deps-android-arm64 -G Ninja \
-  -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake" \
+  -DCMAKE_TOOLCHAIN_FILE="$hx_android_toolchain" \
   -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21 \
   -DHX_DEPS_OPENSSL_TARGET=android-arm64
 cmake --build build-deps-android-arm64 --parallel 2

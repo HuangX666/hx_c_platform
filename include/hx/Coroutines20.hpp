@@ -9,7 +9,7 @@
 namespace hx {
 namespace coro {
 namespace async {
-/* The poll object, including every output buffer, lives in the C++ frame. */
+// The poll object, including every output buffer, lives in the C++ frame.
 template <typename Poll> class Awaiter {
 public:
 	explicit Awaiter(Poll poll) noexcept
@@ -212,7 +212,7 @@ template <typename T> struct Join {
 	}
 };
 
-/* The task owner must outlive this await. */
+// The task owner must outlive this await.
 template <typename T>
 Awaiter<Join<T>> join(Task<T> &task,
 	hx_os_deadline deadline = HX_OS_DEADLINE_INFINITE) noexcept
@@ -344,9 +344,12 @@ namespace impl {
 template <typename T> struct FrameJob;
 }
 
-/* Frames are allocated with the default C allocator; creation is fallible.
- * Only library awaiters are accepted: foreign executors cannot resume this
- * pinned frame. co_return supplies a value, Result<T>, or Result<void>().
+/**
+ * \brief Frames are allocated with the default C allocator; creation is
+ * fallible.
+ *
+ * \details Only library awaiters are accepted: foreign executors cannot resume
+ * this pinned frame. co_return supplies a value, Result<T>, or Result<void>().
  */
 template <typename T = void> class Routine {
 public:
@@ -356,9 +359,8 @@ public:
 		static void *operator new(size_t bytes) noexcept
 		{
 			void *memory = NULL;
-			/* MSVC's max_align_t is 8 on x64, but coroutine frames
-			 * can use aligned SSE stores under ordinary new's ABI.
-			 */
+			// MSVC's max_align_t is 8 on x64, but coroutine frames
+			// can use aligned SSE stores under ordinary new's ABI.
 			constexpr size_t baseAlignment =
 				alignof(std::max_align_t) >
 					__STDCPP_DEFAULT_NEW_ALIGNMENT__

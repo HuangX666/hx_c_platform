@@ -52,8 +52,8 @@ static int hx_example_main(int argc, const char *const *argv)
 
 	hx_os_status work = submitted.status();
 	if (submitted) {
-		/* A GUI continues its event loop here; it must not block on
-		 * get. */
+		// A GUI continues its event loop here; it must not block on
+		// get.
 		auto result = submitted.value().getUntil(
 			hx_os_deadline_after_ms(2000));
 		work = result.status();
@@ -67,8 +67,7 @@ static int hx_example_main(int argc, const char *const *argv)
 	auto closed = pool.shutdownUntil(
 		hx_os_deadline_after_ms(2000), HX_OS_POOL_CANCEL_PENDING);
 	if (!closed) {
-		/* A service retains owner/task state and retries close later.
-		 */
+		// A service retains owner/task state and retries close later.
 		std::fprintf(stderr, "Close pending: %s\n",
 			hx_os_status_name(closed.status()));
 

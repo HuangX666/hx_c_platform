@@ -382,7 +382,7 @@ hx_os_status hx_os_ring_queue_create(hx_os_context *context,
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
 
-/* Preserve counter bits without signed overflow or an out-of-range cast. */
+// Preserve counter bits without signed overflow or an out-of-range cast.
 static int64_t hx_os_queue_counter(uint64_t value)
 {
 	int64_t result;
@@ -445,10 +445,9 @@ static hx_os_status hx_os_ring_multi(
 			expected = hx_os_atomic_load(cursor, HX_OS_RELAXED);
 	}
 
-	/* Acquire of the slot tag owns its bytes until the release below. A
-	 * paused owner can stall this slot: this multi-party algorithm is not
-	 * lock-free.
-	 */
+	// Acquire of the slot tag owns its bytes until the release below. A
+	// paused owner can stall this slot: this multi-party algorithm is not
+	// lock-free.
 	slot = hx_os_queue_slot(&queue->storage,
 		(size_t)(position & (queue->storage.capacity - 1)));
 	if (sending)

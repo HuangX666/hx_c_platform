@@ -13,7 +13,7 @@ hx_os_status status = hx_os_sleep_inhibit_create(
 if (status != HX_OS_OK)
 	return status;
 
-/* Perform the application's work while request remains alive. */
+// Perform the application's work while request remains alive.
 return hx_os_sleep_inhibit_destroy(&request, NULL);
 ```
 
@@ -69,6 +69,6 @@ return request.value().close().status();
 
 沿用只可移动的同步便利类，以 Result 返回错误，不使用异常。停用后再 close 合法，也不会撤销别的对象持有的请求。
 
-维护者使用本机隔离 D-Bus 回归验证服务发现、Unicode、权限、超时与清理。客户可编译并运行 [sleep_inhibit.c](../examples/sleep_inhibit.c)，在有对应桌面服务的环境体验防睡眠申请；该示例实际申请临时桌面租约。历史运行结果见[验证记录](VALIDATION.zh-CN.md)。
+运行公开的 [sleep_inhibit.c](../examples/sleep_inhibit.c)，可以向当前桌面服务申请临时防睡眠。先确认服务可用，再检查返回状态。
 
-以上证明的是协议适配和资源生命周期。真实 GNOME／KDE 桌面的电源策略／休眠效果、libelogind、旧发行版、musl 与嵌入式目标，仍需分别进行目标验证，见[验证记录](VALIDATION.zh-CN.md)；WSL 协议测试不等于验证了物理机器不会休眠。
+申请能否阻止机器休眠，取决于 GNOME／KDE、logind／elogind、会话权限及机器电源策略。需要在实际桌面环境确认效果；WSL 协议通信不能证明物理机器不会休眠。其他边界见[平台支持](PLATFORMS.zh-CN.md)。

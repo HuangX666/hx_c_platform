@@ -107,8 +107,11 @@ struct hx_os_coro_runtime {
 	int closed;
 };
 
-/* The runtime mutex protects scheduler/wait lists. No user callback runs with
- * it held. Wait completion never resumes a coroutine on a foreign worker.
+/**
+ * \brief The runtime mutex protects scheduler/wait lists.
+ *
+ * \details No user callback runs with it held. Wait completion never resumes a
+ * coroutine on a foreign worker.
  */
 void hx_os_i_coro_runtime_retain(hx_os_coro_runtime *runtime);
 

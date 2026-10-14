@@ -4,6 +4,8 @@
 
 ## 1. Match a whole value
 
+Save the complete program below as `main.c` and build the [minimal project](USAGE.md#c-project). It checks the device ID `AB1234`: `[A-Z]{2}` requires two uppercase ASCII letters and `[0-9]{4}` requires four digits. It prints `Valid`; changing the input to `A1234` prints `Invalid`.
+
 ```c
 #include <hx_os.h>
 #include <stdio.h>
@@ -34,12 +36,12 @@ C++11 uses `hx::Regex::matches(pattern, text)` and checks its Result. No try/cat
 The complete [C example](../examples/regex.c) extracts device and request fields from `device=Door_01 request=42`, then replaces the record with `Door_01: #42`. [The C++ example](../examples/regex_cpp.cpp) finds a repeated word with a named backreference.
 
 ```sh
-cmake --build build-shared-linux --target hx_os_regex hx_os_regex_cpp
-build-shared-linux/bin/hx_os_regex
-build-shared-linux/bin/hx_os_regex_cpp
+cmake --build build --target hx_os_regex hx_os_regex_cpp
+build/bin/hx_os_regex
+build/bin/hx_os_regex_cpp
 ```
 
-Reuse the matching build directory; Windows adds `--config Debug` and runs `bin/Debug/` executables. The expected C output is:
+Run from the library checkout, replacing `build` with your existing build directory. Configure the SDKs using the [dependency guide](DEPENDENCIES.md) and enable `HX_OS_BUILD_EXAMPLES=ON` first. Windows adds `--config Release` and runs `bin/Release/` executables. The expected C output is:
 
 ```text
 Device: Door_01
@@ -130,7 +132,7 @@ Replace supports numeric dollar references, dollar-braced group names and a doub
 
 Global empty matches advance one Unicode code point; this defined convenience behavior is not PCRE2's full global-substitution retry protocol. Split includes empty parts, excludes delimiter captures, and reports successful callback count even on failure. Callbacks must not destroy the regex, mutate the subject, throw or longjmp.
 
-REGEX can be disabled independently. Basic UTF-8 exact matching needs no external regex library; Unicode-enhanced modes require UNICODE. Windows/Linux evidence is recorded separately in [validation](VALIDATION.md); Android, ARM hardware, macOS and old Windows results are not inferred from it.
+REGEX can be disabled independently. Basic UTF-8 exact matching needs no external regex library; Unicode-enhanced modes require UNICODE. See [platform support](PLATFORMS.md) for target boundaries.
 
 
 Recursion conditions include `R`, `R0/Rn` and `R&name`; existing capture names take precedence where PCRE2 does so. `(*ACCEPT)` closes active captures and accepts its enclosing subroutine/assertion or the whole match; an ordinary atomic group is not an acceptance boundary. Control labels accept up to 255 UTF-8 bytes, with at most 64 distinct labels. Global prefix directives must appear before the pattern body. `\K` inside lookarounds is rejected, matching PCRE2's default restriction. Case-insensitive POSIX classes retain PCRE2's distinction between ASCII mode and UCP mode.

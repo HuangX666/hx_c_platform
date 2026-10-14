@@ -182,9 +182,8 @@ static hx_os_status hx_os_profiler_render(const hx_os_profile_copy *records,
 		hx_os_profiler_write(&writer, "\n", 1);
 	}
 
-	/* A fixed snapshot and integer-only rendering make the measured second
-	 * pass deterministic. Include NUL in the configured byte budget.
-	 */
+	// A fixed snapshot and integer-only rendering make the measured second
+	// pass deterministic. Include NUL in the configured byte budget.
 	hx_os_profiler_write(&writer, "", 1);
 	if (writer.status == HX_OS_OK)
 		*required = writer.bytes;

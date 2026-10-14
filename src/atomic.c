@@ -3,8 +3,11 @@
 #if defined(_MSC_VER)
 #include <intrin.h>
 #else
-/* Memory-order arguments must be constants: runtime GCC orders may silently
- * become seq_cst. Keep the dispatch shared across integer and pointer types.
+/**
+ * \brief Memory-order arguments must be constants: runtime GCC orders may
+ * silently become seq_cst.
+ *
+ * \details Keep the dispatch shared across integer and pointer types.
  */
 #define HX_OS_ATOMIC_RMW(builtin)                                              \
 	switch (order) {                                                       \

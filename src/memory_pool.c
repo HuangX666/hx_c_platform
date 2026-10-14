@@ -126,10 +126,8 @@ static hx_os_status hx_os_pool_page_create(hx_os_memory_pool *pool,
 	if (pool->options.maximum_bytes &&
 		cost > pool->options.maximum_bytes - pool->stats.reserved_bytes)
 		return HX_OS_LIMIT;
-	/*
-	 * Reserve under the lock, allocate outside it. The operation lease
-	 * prevents destruction while an allocator callback is in flight.
-	 */
+	// Reserve under the lock, allocate outside it. The operation lease
+	// prevents destruction while an allocator callback is in flight.
 	pool->stats.reserved_bytes += cost;
 	if (pool->stats.reserved_bytes > pool->stats.peak_reserved_bytes)
 		pool->stats.peak_reserved_bytes = pool->stats.reserved_bytes;

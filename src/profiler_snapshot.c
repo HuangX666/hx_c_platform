@@ -19,9 +19,8 @@ static size_t hx_os_profile_histogram_bytes(uint32_t features)
 static size_t hx_os_profile_snapshot_bytes(
 	const hx_os_profiler *profiler, size_t *bins_offset)
 {
-	/* Creation bounds records/names, so even the largest 32-bit layout fits
-	 * size_t. The configured snapshot budget imposes the tighter limit.
-	 */
+	// Creation bounds records/names, so even the largest 32-bit layout fits
+	// size_t. The configured snapshot budget imposes the tighter limit.
 	size_t bytes = sizeof(hx_os_profiler_snapshot) +
 		profiler->records * sizeof(hx_os_profiler_entry) +
 		profiler->name_bytes;
@@ -51,7 +50,7 @@ static void hx_os_profile_entry_copy(
 	entry->last_exclusive_ns = record->last_exclusive;
 	entry->mean_inclusive_ns = record->mean_inclusive;
 	entry->mean_exclusive_ns = record->mean_exclusive;
-	/* Carry M2 in the unpublished entry; sqrt runs outside the lock. */
+	// Carry M2 in the unpublished entry; sqrt runs outside the lock.
 	entry->deviation_inclusive_ns = record->m2_inclusive;
 	entry->deviation_exclusive_ns = record->m2_exclusive;
 	entry->identifier = record->identifier;
@@ -74,8 +73,7 @@ static void hx_os_profile_snapshot_finish(hx_os_profiler_snapshot *snapshot)
 	for (i = 0; i < snapshot->count; ++i) {
 		hx_os_profiler_entry *entry = entries + i;
 
-		/* Record names are immutable and the operation guard pins them.
-		 */
+		// Record names are immutable and the operation guard pins them.
 		memcpy(names, entry->name, entry->name_bytes + 1);
 		entry->name = names;
 		names += entry->name_bytes + 1;
@@ -294,7 +292,7 @@ hx_os_status hx_os_profiler_snapshot_quantile(
 		return hx_os_i_error(error, HX_OS_OK, 0, 0);
 	}
 
-	/* Split the product before multiplication; denominator is uint32_t. */
+	// Split the product before multiplication; denominator is uint32_t.
 	rank = (entry->completed / denominator) * numerator +
 		((entry->completed % denominator) * numerator + denominator -
 			1) /

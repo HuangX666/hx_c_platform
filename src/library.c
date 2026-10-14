@@ -32,7 +32,7 @@ static void hx_os_library_diagnostic(const char *message, hx_string *out)
 	if (!out || !message)
 		return;
 
-	/* Snapshot before calling an allocator that may reenter the loader. */
+	// Snapshot before calling an allocator that may reenter the loader.
 	while (bytes < sizeof(snapshot) - 1 && message[bytes]) {
 		snapshot[bytes] = message[bytes];
 		++bytes;

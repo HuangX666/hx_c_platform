@@ -50,8 +50,7 @@ hx_os_status hx_os_i_pipe_write(int descriptor, const void *data, size_t bytes,
 		sigismember(&pending, SIGPIPE)) {
 		int signal_number;
 
-		/* Only consume a newly pending signal while it remains blocked.
-		 */
+		// Only consume a newly pending signal while it remains blocked.
 		(void)sigwait(&mask, &signal_number);
 	}
 

@@ -81,7 +81,7 @@ int main(void)
 			status = requested;
 	}
 
-	/* Cancellation requests cooperation. Completion still needs a wait. */
+	// Cancellation requests cooperation. Completion still needs a wait.
 	deadline = hx_os_deadline_after_ms(2000);
 	if (state.group) {
 		hx_os_status waited = hx_os_wait_group_wait_until(
@@ -91,11 +91,10 @@ int main(void)
 			fprintf(stderr, "Completion pending: %s\n",
 				hx_os_status_name(waited));
 
-			/* A service retains state and retries its shutdown
-			 * later. This command-line demo reports failure without
-			 * freeing resources that unfinished workers could still
-			 * access.
-			 */
+			// A service retains state and retries its shutdown
+			// later. This command-line demo reports failure without
+			// freeing resources that unfinished workers could still
+			// access.
 			return 1;
 		}
 	}

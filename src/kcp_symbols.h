@@ -1,7 +1,7 @@
 #ifndef HX_C_PLATFORM_KCP_SYMBOLS_H
 #define HX_C_PLATFORM_KCP_SYMBOLS_H
 
-/* Private names prevent collisions with an application's own KCP copy. */
+// Private names prevent collisions with an application's own KCP copy.
 #define ikcp_create hx_os_i_kcp_create
 #define ikcp_release hx_os_i_kcp_release
 #define ikcp_setoutput hx_os_i_kcp_setoutput

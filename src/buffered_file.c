@@ -75,7 +75,7 @@ static void hx_os_writer_transfer(hx_os_file_writer *writer)
 		count > writer->flush_target - writer->written)
 		count = (size_t)(writer->flush_target - writer->written);
 
-	/* This occupied span cannot be overwritten by a producer. */
+	// This occupied span cannot be overwritten by a producer.
 	hx_os_mutex_unlock(writer->mutex, NULL);
 	status = hx_os_stream_write_some(writer->sink,
 		writer->queue + writer->head, count, &completed, &error);

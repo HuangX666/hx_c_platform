@@ -25,15 +25,17 @@ typedef struct hx_os_frame_callbacks {
 	hx_os_frame_flush_fn flush;
 } hx_os_frame_callbacks;
 
-/* Wire: four-byte big-endian unsigned length, followed by exact payload.
- * No device/request/session protocol or authentication is added. Empty
- * messages are valid. Default maximum is 1 MiB, up to 64 MiB. Read/write
- * state each retain at most that payload, excluding output copies/overhead.
- * Callbacks are copied; user/backend is borrowed until destruction and must
- * not retain I/O buffers or reenter this frame. Native errors are retained.
- * Directions serialize independently; backend must allow full duplex for
- * concurrent read/write. Stream adapters require external serialization.
- * Mutex admission, native I/O and flush are not hard deadline guarantees.
+/**
+ * \brief Wire: four-byte big-endian unsigned length, followed by exact payload.
+ *
+ * \details No device/request/session protocol or authentication is added. Empty
+ * messages are valid. Default maximum is 1 MiB, up to 64 MiB. Read/write state
+ * each retain at most that payload, excluding output copies/overhead. Callbacks
+ * are copied; user/backend is borrowed until destruction and must not retain
+ * I/O buffers or reenter this frame. Native errors are retained. Directions
+ * serialize independently; backend must allow full duplex for concurrent
+ * read/write. Stream adapters require external serialization. Mutex admission,
+ * native I/O and flush are not hard deadline guarantees.
  */
 HX_OS_API int HX_OS_CALL hx_os_frame_available(void);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_frame_create(hx_os_context *context,
@@ -42,8 +44,11 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_frame_create(hx_os_context *context,
 HX_OS_API hx_os_status HX_OS_CALL hx_os_frame_from_stream(
 	hx_os_context *context, hx_os_stream *stream, size_t max_bytes,
 	hx_os_frame **out, hx_os_error *error);
-/* Separate read/write streams permit pipe pairs without callback glue.
- * NULL selects an absent direction; at least one must be supplied. */
+/**
+ * \brief Separate read/write streams permit pipe pairs without callback glue.
+ *
+ * \details NULL selects an absent direction; at least one must be supplied.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_frame_from_streams(
 	hx_os_context *context, hx_os_stream *reader, hx_os_stream *writer,
 	size_t max_bytes, hx_os_frame **out, hx_os_error *error);
@@ -54,11 +59,14 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_frame_from_tls(hx_os_context *context,
 	hx_os_tls *tls, uint64_t peer, size_t max_bytes, hx_os_frame **out,
 	hx_os_error *error);
 
-/* Copies the complete message before sending. *accepted is 0 on failure
- * before this copy, 1 once owned (also for empty messages). On timeout after
- * acceptance, retry flush, NOT send of the same message. Later sends first
- * flush an older accepted frame before admitting their own message. Delivery
- * remains uncertain until peer acknowledgement. No silent retransmission.
+/**
+ * \brief Copies the complete message before sending.
+ *
+ * \details *accepted is 0 on failure before this copy, 1 once owned (also for
+ * empty messages). On timeout after acceptance, retry flush, NOT send of the
+ * same message. Later sends first flush an older accepted frame before
+ * admitting their own message. Delivery remains uncertain until peer
+ * acknowledgement. No silent retransmission.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_frame_send_until(hx_os_frame *frame,
 	hx_os_bytes_view message, hx_os_deadline deadline, int *accepted,
@@ -69,21 +77,27 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_frame_send_text_until(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_frame_flush_until(
 	hx_os_frame *frame, hx_os_deadline deadline, hx_os_error *error);
 
-/* Returns one full message, retaining partial framing on timeout and output
- * allocation failure. Outputs keep their old value on failure. Clean EOF
- * before a new header is EOF; partial EOF is TRUNCATED_INPUT. Excessive length
- * poisons reading, requiring transport abandonment. Invalid text preserves
- * the received frame: retry bytes_receive to inspect the raw payload.
+/**
+ * \brief Returns one full message, retaining partial framing on timeout and
+ * output allocation failure.
+ *
+ * \details Outputs keep their old value on failure. Clean EOF before a new
+ * header is EOF; partial EOF is TRUNCATED_INPUT. Excessive length poisons
+ * reading, requiring transport abandonment. Invalid text preserves the received
+ * frame: retry bytes_receive to inspect the raw payload.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_frame_receive_until(hx_os_frame *frame,
 	hx_os_deadline deadline, hx_bytes *out, hx_os_error *error);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_frame_receive_text_until(
 	hx_os_frame *frame, hx_os_deadline deadline, hx_string *out,
 	hx_os_error *error);
-/* Abort explicitly discards pending state. Afterwards the borrowed transport
- * must be abandoned/closed by its owner; it cannot resume this wire stream.
- * Exclude callers before abort/destroy. Destroy returns BUSY while partial
- * framing is retained; flush/receive or abort first. It never closes backend.
+/**
+ * \brief Abort explicitly discards pending state.
+ *
+ * \details Afterwards the borrowed transport must be abandoned/closed by its
+ * owner; it cannot resume this wire stream. Exclude callers before
+ * abort/destroy. Destroy returns BUSY while partial framing is retained;
+ * flush/receive or abort first. It never closes backend.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_frame_abort(
 	hx_os_frame *frame, hx_os_error *error);

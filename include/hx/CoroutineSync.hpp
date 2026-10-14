@@ -54,8 +54,11 @@ protected:
 	hx_os_coro_sync *m_sync_;
 };
 
-/* Keep guards on the acquiring coroutine/native thread. Destruction unlocks,
- * never waits. A condition wait temporarily releases and then reacquires it.
+/**
+ * \brief Keep guards on the acquiring coroutine/native thread.
+ *
+ * \details Destruction unlocks, never waits. A condition wait temporarily
+ * releases and then reacquires it.
  */
 class Lock {
 	friend class Mutex;

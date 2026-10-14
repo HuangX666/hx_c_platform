@@ -71,7 +71,7 @@ T *make(const hx_ar_bridge *host, Args... args)
 	return new (memory) T(host, args...);
 }
 
-/* COM method names/signatures follow the vendor interface exactly. */
+// COM method names/signatures follow the vendor interface exactly.
 #define HX_AR_REFERENCES                                                       \
 	ULONG STDMETHODCALLTYPE AddRef() noexcept override                     \
 	{                                                                      \

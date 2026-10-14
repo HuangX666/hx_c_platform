@@ -38,9 +38,8 @@ hx_os_status hx_os_sleep_until_precise_ex(
 			return status;
 	}
 #if defined(_WIN32)
-	/* The deadline clock is tick-based on the Win7-compatible path.
-	 * QPC bounds spinning without changing its epoch/suspend semantics.
-	 */
+	// The deadline clock is tick-based on the Win7-compatible path.
+	// QPC bounds spinning without changing its epoch/suspend semantics.
 	if (!QueryPerformanceFrequency(&frequency))
 		return hx_os_i_win32(error, GetLastError());
 

@@ -7,9 +7,12 @@
 namespace hx {
 
 namespace detail {
-/* One native lease and any facade leases share state. Native retirement
- * destroys captures before close completes; the error record can outlive it.
- * Error inspection requires the native wait/close synchronization first.
+/**
+ * \brief One native lease and any facade leases share state.
+ *
+ * \details Native retirement destroys captures before close completes; the
+ * error record can outlive it. Error inspection requires the native wait/close
+ * synchronization first.
  */
 struct CallbackState {
 	hx_os_atomic references;

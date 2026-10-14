@@ -253,7 +253,7 @@ hx_os_status hx_os_local_socket_connect(hx_os_socket *value,
 	}
 #if !defined(_WIN32)
 	if (code == EAGAIN || code == EWOULDBLOCK) {
-		/* AF_UNIX queue-full has not started a connection. */
+		// AF_UNIX queue-full has not started a connection.
 		value->local->connecting = 1;
 
 		return hx_os_i_socket_error(error, code);

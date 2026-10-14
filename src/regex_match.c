@@ -51,7 +51,7 @@ uint32_t hx_os_i_regex_fold(uint32_t point)
 
 	if (count == 1)
 		return (uint32_t)folded[0];
-	/* Unicode 17 simple folds not exposed by full fold or lowercase. */
+	// Unicode 17 simple folds not exposed by full fold or lowercase.
 	if (point == 0xfb05)
 		return 0xfb06;
 	if (point == 0x1fd3)
@@ -63,7 +63,7 @@ uint32_t hx_os_i_regex_fold(uint32_t point)
 		return point;
 	lower_count = utf8proc_decompose_char(
 		lower, lower_folded, 4, UTF8PROC_CASEFOLD, NULL);
-	/* Lowercasing alone would incorrectly merge dotted I with ASCII i. */
+	// Lowercasing alone would incorrectly merge dotted I with ASCII i.
 	return lower_count == count &&
 			!memcmp(folded, lower_folded,
 				(size_t)count * sizeof(*folded))
@@ -293,8 +293,7 @@ static int hx_os_rx_push(hx_os_rx_state *state, uint32_t pc, size_t position,
 		return 0;
 	}
 	capacity = state->stack.size + bytes;
-	/* Reserve growth is capped by the same retained stack budget.
-	 */
+	// Reserve growth is capped by the same retained stack budget.
 	if (capacity > state->stack.capacity) {
 		size_t grown = state->stack.capacity ? state->stack.capacity * 2
 						     : 1024;
@@ -444,7 +443,7 @@ static int hx_os_rx_scope(hx_os_rx_state *state,
 		}
 		if (!count)
 			return hx_os_rx_backtrack(state);
-		/* Farthest admissible beginning is attempted first. */
+		// Farthest admissible beginning is attempted first.
 		for (i = 0; i + 1 < count; ++i)
 			if (!hx_os_rx_push(state, instruction->x, positions[i],
 				    HX_OS_RX_FRAME_BRANCH, 0, 0, 0))

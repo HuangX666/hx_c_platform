@@ -226,9 +226,8 @@ hx_os_status hx_os_i_pipe_attach(
 	hx_os_loop *loop, hx_os_pipe *pipe, hx_os_error *error)
 {
 #if defined(_WIN32)
-	/* Duplicate pipe handles share the underlying IOCP association. The
-	 * owning endpoint attaches its reader before submitting writer I/O.
-	 */
+	// Duplicate pipe handles share the underlying IOCP association. The
+	// owning endpoint attaches its reader before submitting writer I/O.
 	if (pipe->association)
 		return hx_os_i_error(error,
 			pipe->association->loop == loop ? HX_OS_OK

@@ -14,7 +14,7 @@ int hx_os_i_number_valid(
 hx_os_status hx_os_i_number_integer(
 	const char *text, size_t bytes, uint64_t *magnitude, int *negative);
 
-/* Setup status is separate from strtod's conversion errno/partial end. */
+// Setup status is separate from strtod's conversion errno/partial end.
 hx_os_status hx_os_i_strtod_c(
 	const char *text, char **end, double *value, int *native_error);
 

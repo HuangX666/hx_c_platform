@@ -83,9 +83,9 @@ static void *HX_OS_CALL receive_confirmations(void *user)
 		}
 
 		if (received == 4 && kcp_drained(job->session)) {
-			/* Keep servicing duplicate packets briefly so lost
-			 * final ACKs can be sent again. This is a finite demo
-			 * policy. */
+			// Keep servicing duplicate packets briefly so lost
+			// final ACKs can be sent again. This is a finite demo
+			// policy.
 			if (linger == HX_OS_DEADLINE_INFINITE)
 				linger = hx_os_deadline_after_ms(500);
 

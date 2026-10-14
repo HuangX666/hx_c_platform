@@ -16,7 +16,7 @@ int main(void)
 	}
 
 	puts("Sleep inhibition requested for this work interval.");
-	/* Replace this short demonstration interval with application work. */
+	// Replace this short demonstration interval with application work.
 	status = hx_os_sleep_until(hx_os_deadline_after_ms(20), NULL);
 	released = hx_os_sleep_inhibit_destroy(&request, NULL);
 

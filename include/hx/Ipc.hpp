@@ -50,7 +50,7 @@ public:
 		return m_message_ ? m_message_->bytes : 0;
 	}
 
-	/* Storage has a trailing NUL; binary data may contain earlier NULs. */
+	// Storage has a trailing NUL; binary data may contain earlier NULs.
 	const char *text() const noexcept
 	{
 		return data() ? static_cast<const char *>(data()) : "";
@@ -75,10 +75,13 @@ private:
 	hx_ipc_message *m_message_;
 };
 
-/* Borrowed facade over a durable host-owned pointer. closeUntil() stops the
- * I/O thread; a timeout keeps owner valid for retry. The facade destructor
- * never waits, detaches or destroys an unfinished endpoint. Concurrent calls
- * share one endpoint; serialize close and prevent new calls during teardown.
+/**
+ * \brief Borrowed facade over a durable host-owned pointer.
+ *
+ * \details closeUntil() stops the I/O thread; a timeout keeps owner valid for
+ * retry. The facade destructor never waits, detaches or destroys an unfinished
+ * endpoint. Concurrent calls share one endpoint; serialize close and prevent
+ * new calls during teardown.
  */
 class Ipc {
 public:

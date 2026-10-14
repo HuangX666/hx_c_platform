@@ -79,7 +79,7 @@ hx_os_status hx_os_condition_wait_until(hx_os_condition *condition,
 		return hx_os_i_error(error, HX_OS_OK, 0, 0);
 	code = GetLastError();
 	if (code == ERROR_TIMEOUT) {
-		/* Early OS timeout (including suspend) is a spurious wakeup. */
+		// Early OS timeout (including suspend) is a spurious wakeup.
 		return hx_os_i_error(error,
 			hx_os_deadline_expired(deadline) ? HX_OS_TIMEOUT
 							 : HX_OS_OK,

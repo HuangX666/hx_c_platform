@@ -492,9 +492,8 @@ hx_os_status hx_os_file_read_text_encoded(const char *path,
 		size_t expected_bytes = 0;
 		hx_os_status detected;
 
-		/* Explicit UTF-16LE plus U+0000 shares the UTF-32LE signature.
-		 * Prefer the caller's matching marker before generic detection.
-		 */
+		// Explicit UTF-16LE plus U+0000 shares the UTF-32LE signature.
+		// Prefer the caller's matching marker before generic detection.
 		if (hx_os_text_bom_bytes(encoding, expected, &expected_bytes) ==
 				HX_OS_OK &&
 			expected_bytes <= size &&

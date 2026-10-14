@@ -49,10 +49,13 @@ struct hx_os_kcp {
 	int updated;
 };
 
-/* Only the integration's private KCP copy uses this dispatch. It is restored
- * around each call, so independent contexts and threads never replace one
- * another's allocator. The adapter has no owned TLS heap or destructor;
- * compiler TLS support may allocate its own storage on older Android.
+/**
+ * \brief Only the integration's private KCP copy uses this dispatch.
+ *
+ * \details It is restored around each call, so independent contexts and threads
+ * never replace one another's allocator. The adapter has no owned TLS heap or
+ * destructor; compiler TLS support may allocate its own storage on older
+ * Android.
  */
 #if defined(_MSC_VER)
 static __declspec(thread) hx_os_kcp *hx_os_kcp_current;
@@ -169,9 +172,8 @@ hx_os_status hx_os_kcp_create(hx_os_context *context, uint32_t conv,
 		!options.max_message_bytes ||
 		options.max_message_bytes > (size_t)(options.mtu - 24) * 127)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
-	/* Send queues + both receive queues + one input packet + control state.
-	 * ACK storage is reserved once; input flushes before it could grow.
-	 */
+	// Send queues + both receive queues + one input packet + control state.
+	// ACK storage is reserved once; input flushes before it could grow.
 	small_count = options.max_send_segments + 2 * options.receive_window +
 		options.mtu / 24 + 8;
 	stride = hx_os_kcp_stride(sizeof(struct IKCPSEG) + options.mtu);
@@ -322,9 +324,8 @@ hx_os_status hx_os_kcp_input(
 
 	saved = hx_os_kcp_enter(value);
 	if (value->native->ackcount + pushes > value->native->ackblock) {
-		/* flush requires initialization; update(0) is valid before the
-		 * caller's first update and does not allocate memory.
-		 */
+		// flush requires initialization; update(0) is valid before the
+		// caller's first update and does not allocate memory.
 		if (!value->native->updated)
 			ikcp_update(value->native, (IUINT32)value->clock);
 

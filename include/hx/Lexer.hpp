@@ -6,7 +6,9 @@
 
 namespace hx {
 
-/* A token owns its UTF-8 text independently of the lexer. */
+/**
+ * \brief A token owns its UTF-8 text independently of the lexer.
+ */
 struct Token {
 	String text;
 	size_t offset, line, column;
@@ -91,8 +93,8 @@ public:
 		if (!text)
 			return Failure(text.error());
 
-		/* Allocate before advancing so OOM leaves the next token
-		 * available. */
+		// Allocate before advancing so OOM leaves the next token
+		// available.
 		(void)hx_os_lexer_next(m_handle_, &token, NULL);
 
 		return Result<Token>::withValue(

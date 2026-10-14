@@ -162,7 +162,7 @@ HX_CODEC_STRUCT_NAMED(connection_options, "connection",
 
 只需用实际 SDK 正常交叉编译。宏展开产生标准 C99/C++11 声明，`sizeof`、`offsetof` 由 ARM 等目标编译器计算，不包含宿主机生成的数值偏移。Windows/x86 上构建 ARM 程序时，板子不需要 Python、Clang 或其他生成工具。没有额外运行时注册和初始化；编解码仍调用同一份 codec 实现。
 
-使用正确的 sysroot、libc、浮点 ABI、头文件及对齐配置；它们是普通 C/C++ 工程的兼容要求。不能把某套 glibc 交叉编译结果推广到所有 musl、旧 SDK 或板卡。新宏的 ARMv7/AArch64 编译和 QEMU 证据见[验证记录](VALIDATION.zh-CN.md)，QEMU 通过不等于板卡实测。
+使用正确的 sysroot、libc、浮点 ABI、头文件及对齐配置；它们是普通 C/C++ 工程的兼容要求。不能把某套 glibc 交叉编译结果推广到所有 musl、旧 SDK 或板卡。 平台边界见[平台支持](PLATFORMS.zh-CN.md)。
 
 ## 5. C++11：直接取结果，不使用异常
 
@@ -249,4 +249,4 @@ Windows 程序在 `build-serialization/bin/Release`；单配置 Linux 构建在 
 
 `hx_os_serialization` 还接受 `yaml`、`toml`，先编码再解码检查，stdout 只打印编码结果。嵌套设备包含数组，改用 `ini/env/properties` 会明确失败；用第 3 节的扁平连接结构体即可测试这些格式。
 
-混合嵌套、字段映射、错误与第三方互操作由维护者本机回归覆盖。客户可直接运行上述 C/C++ 示例；历史结果见[验证记录](VALIDATION.zh-CN.md)。
+上述 C/C++ 示例可独立运行。 平台边界见[平台支持](PLATFORMS.zh-CN.md)。

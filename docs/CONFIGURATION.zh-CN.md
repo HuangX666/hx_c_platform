@@ -2,6 +2,10 @@
 
 [English](CONFIGURATION.md) · [README](../README.zh-CN.md)
 
+如果程序要从 `config.json` 读出端口或设备名称，先看[读取 JSON 的完整程序](USAGE.zh-CN.md#configuration)。一次加载会得到一份只读文档；你按字段路径取值，用完释放文档。修改原文件不会自动改变已经加载的值，需要再次加载。
+
+本文说明各格式可以表示什么、如何选择解析器，以及数据能用多久。需要修改内存中的值并保存，用[设置教程](USAGE.zh-CN.md#settings)；需要把自己的结构体转换成 JSON 等文本，用[序列化教程](SERIALIZATION.zh-CN.md)。
+
 这是可裁剪的同步 C99 模块，通过 C ABI 返回只读文档。应用设置管理、自动重载、环境变量修改、变量展开、默认值合并、模式校验、文件包含及保存时机属于消费者策略。七种格式均有输出接口；嵌套文档构造、显式替换和结构体映射见[序列化教程](SERIALIZATION.zh-CN.md)。模块不创建后台线程或队列。
 
 默认后端始终是 BUILTIN，安装依赖不会自动切换解析规则。通过 options.backend 选择，并用 hx_os_config_backend_available 查询。后端关闭或格式不匹配时返回 NOT_SUPPORTED，不发布文档。

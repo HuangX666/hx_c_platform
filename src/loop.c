@@ -633,7 +633,7 @@ static size_t hx_os_loop_pump(hx_os_loop *loop, hx_os_deadline *next)
 	return completed;
 }
 
-/* Caller retains request and owns the reentry flag through this call. */
+// Caller retains request and owns the reentry flag through this call.
 hx_os_status hx_os_i_loop_cancel_until(hx_os_loop *loop, hx_os_request *request,
 	hx_os_deadline deadline, int *close_running, hx_os_error *error)
 {

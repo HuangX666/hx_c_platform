@@ -12,9 +12,12 @@ typedef struct tcp_stream {
 	hx_os_deadline deadline;
 } tcp_stream;
 
-/* One sender and one receiver may use this stream. Native calls are short
- * nonblocking operations serialized by access. No lock covers a sleep.
- * A partial frame followed by failure is fatal to this demo connection.
+/**
+ * \brief One sender and one receiver may use this stream.
+ *
+ * \details Native calls are short nonblocking operations serialized by access.
+ * No lock covers a sleep. A partial frame followed by failure is fatal to this
+ * demo connection.
  */
 static inline int tcp_transfer(
 	tcp_stream *stream, void *data, size_t bytes, int sending)
@@ -61,8 +64,12 @@ static inline int tcp_transfer(
 	return 1;
 }
 
-/* Wire format: two-byte big-endian length, then that many UTF-8 JSON bytes.
- * TCP has no message boundaries. Keep this framing local to this example.
+/**
+ * \brief Wire format: two-byte big-endian length, then that many UTF-8 JSON
+ * bytes.
+ *
+ * \details TCP has no message boundaries. Keep this framing local to this
+ * example.
  */
 static inline int tcp_send_text(tcp_stream *stream, const char *text)
 {

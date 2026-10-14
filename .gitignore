@@ -2,6 +2,7 @@
 /cmake-build*/
 /out/
 /tests/
+/docs/local/
 /tools/verify_*.py
 /tools/check_exports.py
 /.github/workflows/build.yml

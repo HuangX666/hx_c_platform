@@ -9,21 +9,28 @@ TLS here means Transport Layer Security. Thread-local storage still uses `hx_os_
 Prepare the [dependency SDK](DEPENDENCIES.md#4-build-the-native-dependency-stack). `HX_OS_ENABLE_TLS` defaults to ON and requires CRYPTO, NETWORK, LOOP and FILE_UTILS. Disabling a prerequisite makes `hx_os_tls_available()` return 0 and the TLS operations return `HX_OS_NOT_SUPPORTED`. It does not start a thread at program load.
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/path/to/build-deps/prefix -DHX_OS_BUILD_EXAMPLES=ON
-cmake --build build --config Release --target hx_os_tls_json_server hx_os_tls_json_client --parallel 4
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+  -DHX_OS_DEPENDENCY_PREFIX=/absolute/path/to/build-deps/prefix \
+  -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build build --config Release --target hx_os_tls_json_server \
+  hx_os_tls_json_client --parallel 4
 ```
 
 With existing certificates, replace the three paths below; the certificate SAN must contain `localhost`. The runner chooses an available port, launches both programs and checks the JSON replies. It needs no private regression executable and leaves your certificate files unchanged.
 
 ```sh
-python examples/run_tls_business.py --bin-dir build/bin --certificate server-cert.pem --private-key server-key.pem --ca ca.pem
+python examples/run_tls_business.py --bin-dir build/bin --certificate \
+  server-cert.pem --private-key server-key.pem --ca ca.pem
 ```
 
 For Visual Studio, use `--bin-dir build/bin/Release`. To try the local demo without existing certificates, use an installed OpenSSL command-line tool to create a one-day self-signed demo certificate:
 
 ```sh
-openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=localhost -addext subjectAltName=DNS:localhost,IP:127.0.0.1 -keyout demo-key.pem -out demo-cert.pem
-python examples/run_tls_business.py --bin-dir build/bin --certificate demo-cert.pem --private-key demo-key.pem --ca demo-cert.pem
+openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=localhost \
+  -addext subjectAltName=DNS:localhost,IP:127.0.0.1 -keyout demo-key.pem \
+  -out demo-cert.pem
+python examples/run_tls_business.py --bin-dir build/bin --certificate \
+  demo-cert.pem --private-key demo-key.pem --ca demo-cert.pem
 ```
 
 Generate these files in an empty demo directory to avoid overwriting existing credentials, then pass their paths. Remove them after the demo. Use your own certificate/key management in production; certificate and hostname checks stay enabled.
@@ -57,8 +64,12 @@ options.ca_file = "ca.pem";
 hx_os_status status = hx_os_tls_connect(
 	"localhost", 4433, &options, &connection, &error);
 
-/* Use connection only after checking status. On timeout/failure, an already
- * accepted startup still leaves an owner that must be closed or aborted. */
+/**
+ * \brief Use connection only after checking status.
+ *
+ * \details On timeout/failure, an already accepted startup still leaves an
+ * owner that must be closed or aborted.
+ */
 ```
 
 Use `hx_os_tls_start_connect` or `start_listen` to return after the worker has been created. `wait_ready_until` waits separately. The `connect_until` and `listen_until` combinations accept one monotonic deadline; the simple shortcuts wait up to five seconds. Startup errors before worker creation leave `*out=NULL`; later startup failures retain the owner. Native DNS, certificate processing and file access are not forcibly interruptible.
@@ -75,12 +86,16 @@ auto opened = connection.connect("localhost", 4433, &options);
 if (opened) {
 	const char data[] = "hello";
 	auto sent = connection.send(data, sizeof(data) - 1);
-	/* sent.value() is the accepted byte count, including on failure. */
+	// sent.value() is the accepted byte count, including on failure.
 }
 
 auto closed = connection.closeUntil(hx_os_deadline_after_ms(2000));
-/* If owner is still non-NULL, keep it alive and retry, or explicitly abort.
- * The facade destructor does not close, kill or detach its worker. */
+/**
+ * \brief If owner is still non-NULL, keep it alive and retry, or explicitly
+ * abort.
+ *
+ * \details The facade destructor does not close, kill or detach its worker.
+ */
 ```
 
 These are focused API fragments. Complete checked programs are the business examples. Do not return from a host scope that still owns an endpoint. A failed call does not automatically destroy that endpoint.
@@ -144,4 +159,4 @@ OpenSSL remains dynamically linked by default. The build and install now include
 
 Stop new application calls before endpoint destruction. In-flight calls wake and retire; one close caller is allowed. `peer_close_until`/`peer_abort_until` apply the same rules to one server peer. Keep the allocator, its user data and loaded code alive while the endpoint remains owned.
 
-Tests cover simultaneous two-direction traffic, mutual authentication, wrong hostname, expired certificate, explicit/system trust rejection, read cancellation and reuse, abrupt EOF, partial input, allocation failure, C++ error/progress results and native Python TLS 1.2/1.3 interoperability. Backpressure and a stalled graceful close retain their owners. The JSON test runs two processes with actual send/receive application threads. See [validation records](VALIDATION.md) for concrete host, sanitizer, installation and target results; host success is not macOS, Win7, Android or embedded-board certification.
+See [platform support](PLATFORMS.md) for target build/deployment requirements and limits. Public examples are independent of private maintainer regressions.

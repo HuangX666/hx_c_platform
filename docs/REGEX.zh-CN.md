@@ -4,6 +4,8 @@
 
 ## 1. 检查整个字符串
 
+把下面的完整程序保存为 `main.c`，按[最小项目](USAGE.zh-CN.md#c-project)构建。它检查设备编号 `AB1234`：`[A-Z]{2}` 要求两个大写英文字母，`[0-9]{4}` 要求四个数字。正常输出 `Valid`；改为 `A1234` 会输出 `Invalid`。
+
 ```c
 #include <hx_os.h>
 #include <stdio.h>
@@ -34,12 +36,12 @@ C++11 对应 `hx::Regex::matches(pattern, text)`，检查 Result 即可。自有
 完整的 [C 示例](../examples/regex.c) 从 `device=Door_01 request=42` 提取设备和请求编号，再替换成 `Door_01: #42`。[C++ 示例](../examples/regex_cpp.cpp) 使用命名捕获和反向引用查找重复单词。
 
 ```sh
-cmake --build build-shared-linux --target hx_os_regex hx_os_regex_cpp
-build-shared-linux/bin/hx_os_regex
-build-shared-linux/bin/hx_os_regex_cpp
+cmake --build build --target hx_os_regex hx_os_regex_cpp
+build/bin/hx_os_regex
+build/bin/hx_os_regex_cpp
 ```
 
-复用已有构建目录。Windows 添加 `--config Debug`，程序在 `bin/Debug/`。C 示例输出：
+在库源码目录执行，并把 `build` 换成自己的已有构建目录。该目录需已按[依赖指南](DEPENDENCIES.zh-CN.md)配置 SDK，并开启 `HX_OS_BUILD_EXAMPLES=ON`。Windows 添加 `--config Release`，程序在 `bin/Release/`。C 示例输出：
 
 ```text
 Device: Door_01
@@ -130,7 +132,7 @@ hx_os_error_message 提供英文原因和字节位置。find／full_match／repl
 
 全局空匹配后前进一个 Unicode 码点。这是本库明确定义的便利行为，尚未实现 PCRE2 全部全局替换重试规则。split 保留空片段，不把分隔符的捕获组加入片段；失败时仍报告已成功交付数量。回调不能销毁表达式、修改输入或通过异常／longjmp 离开。
 
-REGEX 可单独裁剪。基本 UTF-8 精确匹配不需要外部正则库，Unicode 增强模式需要 UNICODE。Windows／Linux 的实际结果见[验证记录](VALIDATION.zh-CN.md)，不能据此写成 Android、ARM 实机、macOS 和旧 Windows 都已通过。
+REGEX 可单独裁剪。基本 UTF-8 精确匹配不需要外部正则库，Unicode 增强模式需要 UNICODE。 平台边界见[平台支持](PLATFORMS.zh-CN.md)。
 
 
 递归条件包含 `R`、`R0/Rn`、`R&name`，与 PCRE2 一样在对应位置优先解析已存在的捕获名。`(*ACCEPT)` 会结束当前活动捕获，并接受所在的子程序／断言或完整匹配，普通原子组不是局部接受边界。控制标签最多 255 个 UTF-8 字节、64 个不同标签；全局前缀指令必须在模式主体之前。断言内的 `\K` 与 PCRE2 默认规则一样拒绝。忽略大小写的 POSIX 类保留 ASCII 模式与 UCP 模式的差异。

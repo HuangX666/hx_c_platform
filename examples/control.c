@@ -22,7 +22,7 @@ int main(void)
 	if (status != HX_OS_OK)
 		goto failed;
 
-	/* Calculate delays; business attempts and sleeping stay explicit. */
+	// Calculate delays; business attempts and sleeping stay explicit.
 	while ((status = hx_os_backoff_next(&backoff, &delay, NULL)) ==
 		HX_OS_OK)
 		printf("Next retry delay: %" PRIu64 " ms\n", delay);

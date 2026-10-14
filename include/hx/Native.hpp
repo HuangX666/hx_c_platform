@@ -16,7 +16,9 @@ typedef void *NativeThread;
 typedef pthread_t NativeThread;
 #endif
 
-/* Non-owning platform values; inspect hx_os_native.h before using them. */
+/**
+ * \brief Non-owning platform values; inspect hx_os_native.h before using them.
+ */
 class Native {
 public:
 	static Result<uintptr_t> file(const hx_os_file *file) noexcept

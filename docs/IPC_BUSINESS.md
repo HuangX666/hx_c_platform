@@ -113,7 +113,7 @@ if (json_encode(fields, 2, &request)) {
 	hx_os_status status = hx_ipc_request_text_until(client, 0, 101,
 		hx_string_c_str(&request), hx_os_deadline_after_ms(5000),
 		&reply, &error);
-	/* Check status, then parse reply->data and reply->bytes. */
+	// Check status, then parse reply->data and reply->bytes.
 	(void)status;
 }
 

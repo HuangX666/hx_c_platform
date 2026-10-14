@@ -3,20 +3,24 @@
 
 #include "hx_codec.h"
 
-/* Define a value struct and its existing codec metadata in one declaration:
- * HX_CODEC_STRUCT(connection, HX_CODEC_STRING(host), HX_CODEC_I32(port));
- * Generates connection, connection_fields and connection_schema. Use at file
- * or C++ namespace scope, in the same order as ordinary member declarations.
- * Supports 1..32 fields; no trailing comma. No registration, generated source,
- * packing, new allocator, or runtime initialization. All layouts are computed
- * by the target compiler. Existing public structs should keep their existing
- * declarations and use hx_codec.h's explicit mapping macros instead.
+/**
+ * \brief Define a value struct and its existing codec metadata in one
+ * declaration: HX_CODEC_STRUCT(connection, HX_CODEC_STRING(host),
+ * HX_CODEC_I32(port)); Generates connection, connection_fields and
+ * connection_schema.
+ *
+ * \details Use at file or C++ namespace scope, in the same order as ordinary
+ * member declarations. Supports 1..32 fields; no trailing comma. No
+ * registration, generated source, packing, new allocator, or runtime
+ * initialization. All layouts are computed by the target compiler. Existing
+ * public structs should keep their existing declarations and use hx_codec.h's
+ * explicit mapping macros instead.
  *
  * ARRAY/FIXED element types are identifiers: one of the integer-width types,
  * float, double, hx_string_view, hx_codec_bool, hx_codec_node, or a struct
- * previously defined by HX_CODEC_STRUCT in this scope. Use the explicit API
- * for other type aliases, qualified C++ names, or larger mappings.
- * Containers and strings retain the ordinary codec borrowing/ownership rules.
+ * previously defined by HX_CODEC_STRUCT in this scope. Use the explicit API for
+ * other type aliases, qualified C++ names, or larger mappings. Containers and
+ * strings retain the ordinary codec borrowing/ownership rules.
  */
 typedef int hx_codec_bool;
 typedef const hx_os_config_node *hx_codec_node;
@@ -25,8 +29,11 @@ typedef const hx_os_config_node *hx_codec_node;
 #define HX_CODEC_I_CAT(a, b) HX_CODEC_I_CAT_RAW(a, b)
 #define HX_CODEC_I_EXPAND(...) __VA_ARGS__
 
-/* Per-type array descriptors may be unused when only the schema is needed.
- * Annotate only the generated readonly metadata.
+/**
+ * \brief Per-type array descriptors may be unused when only the schema is
+ * needed.
+ *
+ * \details Annotate only the generated readonly metadata.
  */
 #if defined(__GNUC__) || defined(__clang__)
 #define HX_CODEC_I_UNUSED __attribute__((unused))
@@ -51,8 +58,12 @@ HX_CODEC_I_PRIMITIVE(hx_codec_bool, HX_OS_CODEC_BOOL);
 HX_CODEC_I_PRIMITIVE(hx_codec_node, HX_OS_CODEC_NODE);
 #undef HX_CODEC_I_PRIMITIVE
 
-/* Field descriptions are parenthesized tuples until the struct expands them.
- * Separate expansion steps also support MSVC's traditional preprocessor.
+/**
+ * \brief Field descriptions are parenthesized tuples until the struct expands
+ * them.
+ *
+ * \details Separate expansion steps also support MSVC's traditional
+ * preprocessor.
  */
 #define HX_CODEC_I_SCALAR(type, member, kind)                                  \
 	(type, member, , NULL, NULL, 0, kind, #member, 0)

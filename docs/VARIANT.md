@@ -11,7 +11,7 @@
 - [7. Memory, allocators and module selection](#allocation)
 - [8. Errors, threads and plugin lifetimes](#contracts)
 - [9. Differences from C++ variant](#comparison)
-- [10. Verification and target status](#verification)
+- [10. Usage examples and platform limits](#verification)
 
 <a id="purpose"></a>
 
@@ -517,10 +517,10 @@ Standard std::variant is available from C++17, declares alternatives in its temp
 
 <a id="verification"></a>
 
-## 10. Verification and target status
+## 10. Usage examples and platform limits
 
 variant/cpp_variant exercise type transitions, exact types, UTF-8/NUL, aliasing inputs, cross-translation-unit identities, deep copies, move/swap, over-alignment, construction-only types, native error propagation, allocation-failure preservation, destructor counts and context cleanup. Container cases cover stable object addresses on growth, ownership extraction and failed-copy cleanup. Disabled-module tests check NOT_SUPPORTED and unchanged outputs. C++ tests reject exception-enabled compilation.
 
-Public C99/C++11 headers compile in isolation, examples run through CTest and installed consumers build/run with find_package. Android's selected suites include variant/cpp_variant; minimum build API and actual runtime target are separate evidence. Sanitizer/leak and 32/64-bit records are in [validation](VALIDATION.md), not presented as board acceptance.
+See [platform support](PLATFORMS.md) for target build/deployment requirements and limits. Public examples are independent of private maintainer regressions.
 
 portable_baseline adds integer set/get and ordinary structure set/get timing observations without pass thresholds or claims of a speed ratio against std::variant. Commands are in the [Android baseline](ANDROID.md) and [build reference](REFERENCE.md#section-30). macOS, Win7, Android 5.0, physical ARM boards and other libc targets still need their corresponding environments.

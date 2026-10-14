@@ -34,7 +34,11 @@ public:
 	}
 };
 
-/* Host owns the network and socket. Failed close preserves pending I/O. */
+/**
+ * \brief Host owns the network and socket.
+ *
+ * \details Failed close preserves pending I/O.
+ */
 class LocalSocket {
 public:
 	explicit LocalSocket(hx_os_socket *&owner) noexcept

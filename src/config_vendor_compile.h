@@ -1,14 +1,14 @@
 #ifndef HX_C_PLATFORM_VENDOR_COMPILE_H
 #define HX_C_PLATFORM_VENDOR_COMPILE_H
 
-/* Include native declarations before redirecting calls in private objects. */
+// Include native declarations before redirecting calls in private objects.
 #include <stdlib.h>
 #include <string.h>
 #include <locale.h>
 #include <ctype.h>
 #include <assert.h>
 
-/* Some C99 headers, including Bionic, omit this vendor-required macro. */
+// Some C99 headers, including Bionic, omit this vendor-required macro.
 #if !defined(static_assert) && !defined(__cplusplus)
 #define HX_CFG_ASSERT_NAME_(line) hx_cfg_static_assert_##line
 #define HX_CFG_ASSERT_NAME(line) HX_CFG_ASSERT_NAME_(line)

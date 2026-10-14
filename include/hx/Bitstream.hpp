@@ -5,7 +5,9 @@
 #include <hx/Status.hpp>
 
 namespace hx {
-/* Cursors borrow their buffers; copies do not extend buffer lifetime. */
+/**
+ * \brief Cursors borrow their buffers; copies do not extend buffer lifetime.
+ */
 class BitReader {
 public:
 	BitReader() noexcept

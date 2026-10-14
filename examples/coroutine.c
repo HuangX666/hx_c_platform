@@ -6,7 +6,7 @@ typedef struct counter_state {
 	int value;
 } counter_state;
 
-/* C99 keeps values across suspension in an explicit user-owned state. */
+// C99 keeps values across suspension in an explicit user-owned state.
 static hx_os_status count(hx_os_coro *self, void *user, hx_os_error *error)
 {
 	counter_state *state = user;
@@ -51,9 +51,9 @@ int main(void)
 			task, hx_os_deadline_after_ms(2000), &result, NULL);
 
 	hx_os_coro_release(task);
-	/* The host chooses its shutdown budget. Android API 21 lacks timed
-	 * join; this finite demo explicitly chooses to join its cooperative
-	 * workers. */
+	// The host chooses its shutdown budget. Android API 21 lacks timed
+	// join; this finite demo explicitly chooses to join its cooperative
+	// workers.
 	deadline = hx_os_capabilities() & HX_OS_CAP_TIMED_JOIN
 		? hx_os_deadline_after_ms(2000)
 		: HX_OS_DEADLINE_INFINITE;

@@ -194,7 +194,7 @@ static hx_os_deadline hx_os_token_bucket_retry(
 		HX_OS_CONTROL_SECOND;
 	uint64_t nanoseconds, available = UINT64_MAX - 1 - now;
 
-	/* Borrow a second when fractional credit exceeds the remainder. */
+	// Borrow a second when fractional credit exceeds the remainder.
 	if (part < bucket->fraction) {
 		--seconds;
 		part += (uint64_t)bucket->rate_per_second *

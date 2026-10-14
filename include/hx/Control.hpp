@@ -114,7 +114,9 @@ public:
 		return result;
 	}
 
-	/* WOULD_BLOCK retains the suggested deadline as a Result value. */
+	/**
+	 * \brief WOULD_BLOCK retains the suggested deadline as a Result value.
+	 */
 	Result<hx_os_deadline> tryTake(uint64_t amount = 1) noexcept
 	{
 		hx_os_deadline retry = HX_OS_DEADLINE_NOW;

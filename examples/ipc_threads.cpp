@@ -38,9 +38,10 @@ static void *send_messages(void *user)
 	return NULL;
 }
 
-/* Start: hx_os_ipc_server local://demo 20
- * Then:  hx_os_ipc_threads local://demo
- * Four business threads share one connection and its single I/O thread.
+/**
+ * \brief Start: hx_os_ipc_server local://demo 20 Then: hx_os_ipc_threads
+ * local://demo Four business threads share one connection and its single I/O
+ * thread.
  */
 int main(int argc, char **argv)
 {
@@ -81,9 +82,8 @@ int main(int argc, char **argv)
 	for (int index = 0; index < started; ++index) {
 		hx::Thread thread(workers[index]);
 		if (!thread.closeUntil(deadline)) {
-			/* Fatal demo failure: keep borrowed storage alive until
-			 * process exit, never detach a worker using stack data.
-			 */
+			// Fatal demo failure: keep borrowed storage alive until
+			// process exit, never detach a worker using stack data.
 			std::fputs("Worker did not stop in time.\n", stderr);
 			std::exit(EXIT_FAILURE);
 		}

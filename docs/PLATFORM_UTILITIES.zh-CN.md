@@ -14,7 +14,7 @@ hx_os_error error;
 
 hx_os_status status = hx_os_sys_version_string(&version, &error);
 
-/* Check status, then use hx_string_c_str(&version). */
+// Check status, then use hx_string_c_str(&version).
 hx_string_destroy(&version);
 ```
 
@@ -254,7 +254,7 @@ int inside;
 hx_os_status status = hx_os_thread_pool_inside(pool, &inside);
 if (status == HX_OS_OK && !inside)
 	status = hx_os_task_wait_until(task, deadline, &work_status, &error);
-/* Inside a worker, continue asynchronously instead of waiting for new work. */
+// Inside a worker, continue asynchronously instead of waiting for new work.
 ```
 
 ## 原生错误文本
@@ -316,8 +316,8 @@ hx_os_loop_watch *watch = NULL;
 
 hx_os_status status = hx_os_loop_attach_fd(loop, fd, HX_OS_WAIT_READ,
 	ready_callback, user, &watch, &error);
-/* The callback can use hx_os_loop_watch_descriptor(watch), then request stop. */
-/* Drive loop; finally check hx_os_loop_detach_fd(&watch, &error). */
+// The callback can use hx_os_loop_watch_descriptor(watch), then request stop.
+// Drive loop; finally check hx_os_loop_detach_fd(&watch, &error).
 ```
 
 ## 进程、输出捕获与系统工具（第 18 批）
@@ -360,14 +360,14 @@ DELAYED_TASKS 默认开启，依赖 THREAD_POOL，独立于 LOOP／TIMER／NETWO
 
 未来任务的元数据与任务共用一次分配，额外创建一个私有互斥锁。取消方先持有此锁再访问池；工作线程在池锁外清除元数据中的池指针，然后才执行任务／cleanup。所有工作线程 join 后，保留的任务和取消源可安全晚于池销毁。内部关闭路径在池锁下直接标记取消，不取得任务私有锁，避免锁顺序反转。分配器和 prepare 回调继续在池锁外执行，关闭与准备并发时也遵守原契约。
 
-开启模块后，普通任务增加一个可空私有指针和分支；没有未来任务时，不增加分配次数、锁次数、间接调用、时钟读取或系统调用。关闭模块会裁掉这些私有字段和延迟逻辑。实测大小／对齐：Windows／Linux x64 的 task 88/8、 pool 104/8、延迟元数据 32/8；Windows x86 分别 56/8、64/8、24/8。既有公共结构不变。未来任务另承担互斥锁分配、挂起期间的时钟／定时等待开销。前后对照见 VALIDATION；这些数据不能替代 hx_c_log 接入及其性能验收。
+开启延迟任务模块后，线程池保留对应的私有状态。没有未来任务时，普通任务不会为延迟调度增加分配、锁或时钟读取；未来任务需要额外的同步对象及定时等待。关闭模块会裁掉这些状态和逻辑，实际资源成本应按目标负载测量。
 
 ```c
 hx_os_task *task = NULL;
 
 hx_os_status status = hx_os_thread_pool_submit_delayed(pool,
 	hx_os_deadline_after_ms(100), work, user, cleanup, &task, &error);
-/* On acceptance, use the ordinary task wait/cancel/release API. */
+// On acceptance, use the ordinary task wait/cancel/release API.
 ```
 
 ```cpp

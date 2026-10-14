@@ -2,7 +2,7 @@
 #include "hx_os_net.h"
 #include "hx_os_loop.h"
 
-/* Disabled modules keep ABI entry points and reject resource creation. */
+// Disabled modules keep ABI entry points and reject resource creation.
 
 #if !HX_OS_ENABLE_MEMORY_POOLS
 

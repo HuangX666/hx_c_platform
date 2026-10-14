@@ -25,8 +25,11 @@ class Archive {
 	};
 
 public:
-	/* A failed result still holds partial counters. value().published is
-	 * the number of files already published, not a transaction guarantee.
+	/**
+	 * \brief A failed result still holds partial counters.
+	 *
+	 * \details value().published is the number of files already published,
+	 * not a transaction guarantee.
 	 */
 	static Result<hx_os_archive_result> pack(const char *source,
 		const char *archivePath,
@@ -74,8 +77,8 @@ public:
 			result, status, error);
 	}
 
-	/* The callback borrows each entry only during this synchronous call.
-	 * Return void, hx_os_status, or Result<void>; no exceptions. */
+	// The callback borrows each entry only during this synchronous call.
+	// Return void, hx_os_status, or Result<void>; no exceptions.
 	template <class F>
 	static Result<hx_os_archive_result> forEach(const char *archivePath,
 		F &&function, const hx_os_archive_options *options = NULL,

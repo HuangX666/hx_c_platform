@@ -11,10 +11,14 @@ typedef struct hx_os_codec_schema hx_os_codec_schema;
 typedef struct hx_os_codec_type hx_os_codec_type;
 typedef struct hx_os_codec_result hx_os_codec_result;
 
-/* ARRAY is a borrowed contiguous span on encode and owner-borrowed on decode.
- * STRING uses hx_string_view; BUFFER uses an inline, NUL-terminated char array.
- * NODE uses const hx_os_config_node * and preserves heterogeneous subtrees.
- * BOOL uses int or a one-byte bool. All other scalar widths are exact.
+/**
+ * \brief ARRAY is a borrowed contiguous span on encode and owner-borrowed on
+ * decode.
+ *
+ * \details STRING uses hx_string_view; BUFFER uses an inline, NUL-terminated
+ * char array. NODE uses const hx_os_config_node * and preserves heterogeneous
+ * subtrees. BOOL uses int or a one-byte bool. All other scalar widths are
+ * exact.
  */
 enum {
 	HX_OS_CODEC_BOOL,
@@ -58,11 +62,14 @@ typedef struct hx_os_codec_field {
 	unsigned flags;
 } hx_os_codec_field;
 
-/* Borrowed for the call; no registration or global registry. C-compatible,
- * acyclic value layouts only. Do not describe owning/nontrivial C++ members,
- * pointers to arbitrary objects, unions, packed or over-aligned structures.
- * Unknown input members are ignored. Missing required fields fail; OPTIONAL
- * fields remain zero/empty. Null is a real NODE value, never scalar zero.
+/**
+ * \brief Borrowed for the call; no registration or global registry.
+ *
+ * \details C-compatible, acyclic value layouts only. Do not describe
+ * owning/nontrivial C++ members, pointers to arbitrary objects, unions, packed
+ * or over-aligned structures. Unknown input members are ignored. Missing
+ * required fields fail; OPTIONAL fields remain zero/empty. Null is a real NODE
+ * value, never scalar zero.
  */
 struct hx_os_codec_schema {
 	const hx_os_codec_field *fields;
@@ -109,18 +116,21 @@ struct hx_os_codec_schema {
 			sizeof(fields) / sizeof((fields)[0])                   \
 	}
 
-/* Bounded by config options. Parse allocations and decoded storage share
- * max_memory_bytes; encoding tree and output each use that bound separately.
- * Success copies/owns all data. No partially decoded object is published.
- * Strings/arrays/NODE pointers from data() borrow result until release().
- * Returned data is read-only and may be read concurrently while kept alive.
- * Encode borrows input for the call; failure preserves the output string.
- * XML maps objects to elements, arrays to repeated <item> children, scalar
- * fields to text (or attributes when explicitly flagged). Mixed XML content
- * is available via NODE, not converted implicitly to scalar fields.
- * INI allows one section level; ENV/properties are flat. These text formats
- * and XML convert scalars according to the declared schema. JSON/YAML/TOML
- * check native node types. Unrepresentable shapes fail, never flatten.
+/**
+ * \brief Bounded by config options.
+ *
+ * \details Parse allocations and decoded storage share max_memory_bytes;
+ * encoding tree and output each use that bound separately. Success copies/owns
+ * all data. No partially decoded object is published. Strings/arrays/NODE
+ * pointers from data() borrow result until release(). Returned data is
+ * read-only and may be read concurrently while kept alive. Encode borrows input
+ * for the call; failure preserves the output string. XML maps objects to
+ * elements, arrays to repeated <item> children, scalar fields to text (or
+ * attributes when explicitly flagged). Mixed XML content is available via NODE,
+ * not converted implicitly to scalar fields. INI allows one section level;
+ * ENV/properties are flat. These text formats and XML convert scalars according
+ * to the declared schema. JSON/YAML/TOML check native node types.
+ * Unrepresentable shapes fail, never flatten.
  */
 HX_OS_API int HX_OS_CALL hx_os_codec_available(void);
 

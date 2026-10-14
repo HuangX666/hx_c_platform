@@ -13,7 +13,7 @@ hx_os_status status = hx_os_sleep_inhibit_create(
 if (status != HX_OS_OK)
 	return status;
 
-/* Perform the application's work while request remains alive. */
+// Perform the application's work while request remains alive.
 return hx_os_sleep_inhibit_destroy(&request, NULL);
 ```
 
@@ -69,6 +69,6 @@ return request.value().close().status();
 
 The existing move-only facade releases synchronously and uses Result, without exceptions. Closing after deactivation is valid; it does not release another object's inhibitor.
 
-The maintainer uses private isolated D-Bus checks for discovery, Unicode, permissions, deadlines and cleanup. Customers can build [sleep_inhibit.c](../examples/sleep_inhibit.c) and run it with a supported desktop service; the example requests a real temporary desktop lease. See [validation records](VALIDATION.md) for dated results.
+Run the public [sleep_inhibit.c](../examples/sleep_inhibit.c) to request temporary sleep inhibition from the current desktop service. Check service availability and the returned status.
 
-These are implemented-protocol and runtime/lifecycle tests. Actual GNOME/KDE desktop power-policy and suspend behavior, libelogind, older distributions, musl and embedded targets still require their own target validation. See the exact [verification record](VALIDATION.md); WSL protocol tests do not certify physical sleep prevention.
+Whether a request prevents physical sleep depends on GNOME/KDE, logind/elogind, session permissions and machine policy. Verify the effect in the actual desktop environment; WSL protocol traffic cannot establish physical sleep prevention. See [platform support](PLATFORMS.md) for other boundaries.

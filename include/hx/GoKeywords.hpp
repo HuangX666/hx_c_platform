@@ -1,9 +1,12 @@
 #ifndef HX_C_PLATFORM_CPP_GO_KEYWORDS_HPP
 #define HX_C_PLATFORM_CPP_GO_KEYWORDS_HPP
 
-/* Optional keyword compatibility. Include last: the global go macro can
- * collide with unrelated member names. Use runtime.submit() for Task<T>.
- * A native caller first enters Scope; coroutine callers inherit the runtime.
+/**
+ * \brief Optional keyword compatibility.
+ *
+ * \details Include last: the global go macro can collide with unrelated member
+ * names. Use runtime.submit() for Task<T>. A native caller first enters Scope;
+ * coroutine callers inherit the runtime.
  */
 #include <hx/Go.hpp>
 

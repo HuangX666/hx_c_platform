@@ -282,8 +282,8 @@ static DWORD hx_os_remove_open(hx_os_remove_frame *frame)
 	size_t length;
 	DWORD code;
 
-	/* Deny rename/deletion while walking this directory. Never open its
-	 * target if this entry is a reparse point. */
+	// Deny rename/deletion while walking this directory. Never open its
+	// target if this entry is a reparse point.
 	frame->directory = CreateFileW(frame->path, FILE_READ_ATTRIBUTES,
 		FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING,
 		FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,

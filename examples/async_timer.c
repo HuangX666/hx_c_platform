@@ -46,8 +46,7 @@ int main(void)
 			fprintf(stderr, "Close incomplete: %s\n",
 				hx_os_status_name(closed));
 
-			/* A long-lived host retains these handles and retries.
-			 */
+			// A long-lived host retains these handles and retries.
 			return 2;
 		}
 

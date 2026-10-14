@@ -100,7 +100,7 @@ hx_string wire = HX_STRING_INIT;
 
 if (json_encode(fields, 5, &wire)) {
 	int sent = tcp_send_text(stream, hx_string_c_str(&wire));
-	/* Check sent before continuing the business operation. */
+	// Check sent before continuing the business operation.
 	(void)sent;
 }
 
@@ -116,7 +116,8 @@ A short mutex serializes nonblocking socket calls; retries sleep 1 ms outside it
 ```sh
 python examples/run_tcp_business.py --bin-dir build-net/bin/Release
 python examples/run_tcp_business.py --bin-dir build-net/bin/Release --fragmented
-python examples/run_tcp_business.py --bin-dir build-net/bin/Release --json-errors
+python examples/run_tcp_business.py --bin-dir build-net/bin/Release \
+  --json-errors
 ```
 
 The first command runs normal orders; --fragmented demonstrates split/coalesced frames; --json-errors demonstrates invalid fields and rejection replies. All use public example programs only. Use build-net/bin on Linux.

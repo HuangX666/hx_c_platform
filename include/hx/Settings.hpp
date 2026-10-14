@@ -7,8 +7,11 @@
 
 namespace hx {
 
-/* Owns a reference to immutable bytes, including after settings close.
- * view() borrows this lease; copying the lease itself does not allocate.
+/**
+ * \brief Owns a reference to immutable bytes, including after settings close.
+ *
+ * \details view() borrows this lease; copying the lease itself does not
+ * allocate.
  */
 class SettingStringView {
 public:
@@ -426,8 +429,11 @@ private:
 	hx_settings_value *m_value_;
 };
 
-/* Immediate setters; finish reports the first error and applied count.
- * The host retains settings through all setters, excluding final close.
+/**
+ * \brief Immediate setters; finish reports the first error and applied count.
+ *
+ * \details The host retains settings through all setters, excluding final
+ * close.
  */
 class SettingsUpdate {
 public:
@@ -495,8 +501,12 @@ private:
 	hx_settings_update m_update_;
 };
 
-/* Mutable owner stays with the host through setters, observers and close.
- * Snapshots own C references. Observers return normally through the C ABI.
+/**
+ * \brief Mutable owner stays with the host through setters, observers and
+ * close.
+ *
+ * \details Snapshots own C references. Observers return normally through the C
+ * ABI.
  */
 class Settings {
 public:

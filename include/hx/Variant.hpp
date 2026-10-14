@@ -341,8 +341,11 @@ struct VariantUnique<First, Rest...>
 		      VariantUnique<Rest...>::value> {};
 } // namespace detail
 
-/* Move-only owner; clone is explicit/fallible. Custom getters borrow stable
- * separately constructed objects. Scalar getters copy; strings return views.
+/**
+ * \brief Move-only owner; clone is explicit/fallible.
+ *
+ * \details Custom getters borrow stable separately constructed objects. Scalar
+ * getters copy; strings return views.
  */
 class Variant {
 public:
@@ -559,8 +562,11 @@ private:
 	hx_variant m_value_;
 };
 
-/* A closed set of alternatives over the same C implementation. StringView
- * is the canonical string alternative: bytes are owned, getters borrow them.
+/**
+ * \brief A closed set of alternatives over the same C implementation.
+ *
+ * \details StringView is the canonical string alternative: bytes are owned,
+ * getters borrow them.
  */
 template <typename... Types> class TypedVariant {
 	static_assert(sizeof...(Types) > 0 && sizeof...(Types) <= 64,

@@ -60,9 +60,13 @@ const char *hx_os_i_transfer_message(uint32_t domain, int64_t code);
 const char *hx_os_i_compression_message(uint32_t domain, int64_t code);
 
 struct hx_os_library;
-/* Order finalizers of concurrently used native modules. Only the unload
- * itself is serialized; allocation and diagnostic callbacks stay outside.
- * Used for pinned native backends whose finalizers do not reenter hx. */
+/**
+ * \brief Order finalizers of concurrently used native modules.
+ *
+ * \details Only the unload itself is serialized; allocation and diagnostic
+ * callbacks stay outside. Used for pinned native backends whose finalizers do
+ * not reenter hx.
+ */
 hx_os_status hx_os_i_library_close_ordered(struct hx_os_library **library,
 	hx_string *diagnostic, hx_os_error *error);
 
@@ -72,7 +76,7 @@ void hx_os_i_context_retain(hx_os_context *context);
 
 void hx_os_i_context_release(hx_os_context *context);
 #if HX_OS_ENABLE_COROUTINES
-/* Bounded execution-local storage, owned by one coroutine. */
+// Bounded execution-local storage, owned by one coroutine.
 void *hx_os_i_coro_local_get(void *key);
 
 hx_os_status hx_os_i_coro_local_set(void *key, void *value,
@@ -82,7 +86,7 @@ void hx_os_i_coro_local_clear(void *key);
 #endif
 uint32_t hx_os_i_wait_ms(hx_os_deadline deadline);
 
-/* Core clock conversion is available even with public WIDE_MATH disabled. */
+// Core clock conversion is available even with public WIDE_MATH disabled.
 hx_os_status hx_os_i_muldiv_u64(uint64_t a, uint64_t b, uint64_t divisor,
 	int rounding, uint64_t *out, hx_os_error *error);
 

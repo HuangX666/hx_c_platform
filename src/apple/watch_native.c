@@ -136,8 +136,8 @@ hx_os_status hx_os_i_watch_native_start(hx_os_watch *watch, hx_os_error *error)
 	CFRunLoopRef loop = CFRunLoopGetCurrent();
 	CFRetain(loop);
 	(void)hx_os_atomic_ptr_exchange(&native->run_loop, loop, HX_OS_RELEASE);
-	/* Keep callbacks on our joinable worker, including the 10.13 baseline.
-	 * Dispatch-queue delivery would change that ownership contract. */
+	// Keep callbacks on our joinable worker, including the 10.13 baseline.
+	// Dispatch-queue delivery would change that ownership contract.
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"

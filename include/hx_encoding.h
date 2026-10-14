@@ -15,17 +15,19 @@ enum {
 
 HX_OS_API int HX_OS_CALL hx_os_encoding_available(void);
 
-/* Strict byte/text encoding, independent of OpenSSL and locale.
- * Encode required includes the trailing NUL; decode required is binary bytes.
- * Query with output=NULL/capacity=0; nonempty required returns OUTPUT_FULL.
- * After valid input, required is written on OK/OUTPUT_FULL. Other failures
- * preserve required. Every failure preserves output. Input/output/required
- * storage must not overlap.
- * Base64 defaults to standard alphabet with required padding where needed.
- * URL selects -_ instead of +/. NO_PADDING omits/rejects '='; never accepts
- * whitespace, mixed alphabets or nonzero unused tail bits. No line wrapping.
- * Hex defaults to lowercase output; decode accepts either case, no spaces,
- * separators or 0x prefix. Odd digit count is INVALID_ENCODING.
+/**
+ * \brief Strict byte/text encoding, independent of OpenSSL and locale.
+ *
+ * \details Encode required includes the trailing NUL; decode required is binary
+ * bytes. Query with output=NULL/capacity=0; nonempty required returns
+ * OUTPUT_FULL. After valid input, required is written on OK/OUTPUT_FULL. Other
+ * failures preserve required. Every failure preserves output.
+ * Input/output/required storage must not overlap. Base64 defaults to standard
+ * alphabet with required padding where needed. URL selects -_ instead of +/.
+ * NO_PADDING omits/rejects '='; never accepts whitespace, mixed alphabets or
+ * nonzero unused tail bits. No line wrapping. Hex defaults to lowercase output;
+ * decode accepts either case, no spaces, separators or 0x prefix. Odd digit
+ * count is INVALID_ENCODING.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_base64_encode(const void *input,
 	size_t bytes, uint32_t flags, char *output, size_t capacity,
@@ -43,8 +45,12 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_hex_decode(const char *input,
 	size_t bytes, void *output, size_t capacity, size_t *required,
 	hx_os_error *error);
 
-/* Transactional owning text using out's context; encoded payload <=16 MiB.
- * Input may borrow from out. Buffer APIs above have no implicit size limit.
+/**
+ * \brief Transactional owning text using out's context; encoded payload <=16
+ * MiB.
+ *
+ * \details Input may borrow from out. Buffer APIs above have no implicit size
+ * limit.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_base64_encode_string(const void *input,
 	size_t bytes, uint32_t flags, hx_string *out, hx_os_error *error);

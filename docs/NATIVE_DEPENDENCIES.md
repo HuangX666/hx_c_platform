@@ -39,8 +39,8 @@ int main(void)
 	int status = sqlite3_open(":memory:", &database);
 
 	if (status == SQLITE_OK)
-		status = sqlite3_exec(database, "CREATE TABLE sample(id INTEGER)",
-			NULL, NULL, NULL);
+		status = sqlite3_exec(database,
+			"CREATE TABLE sample(id INTEGER)", NULL, NULL, NULL);
 
 	if (database)
 		sqlite3_close(database);
@@ -72,8 +72,7 @@ Use the shipped headers, import libraries and runtime as one set. Do not mix a d
 
 The installation includes the selected SDK headers, CMake imports and required artifacts. Shared runtimes use `bin/` on Windows and `lib/` on Linux. Deploy Windows DLLs alongside the executable or put that installation's `bin/` on PATH. Linux library symlink chains and local runtime search paths are retained.
 
-Windows and WSL Linux installed consumers have compiled and run this direct-API example. This does not constitute Android, ARM-board, macOS or old-Windows runtime validation. Preserve the [third-party notices](../THIRD_PARTY_NOTICES.md) when redistributing the native SDK.
-
+Use the installed consumer example to check header discovery, linking and runtime deployment on your target; desktop results do not establish Android, board or older-system support. Preserve the [third-party notices](../THIRD_PARTY_NOTICES.md) when redistributing the native SDK.
 
 The prepared SDK can be selected with HX_OS_DEPENDENCY_PREFIX or ordinary CMAKE_PREFIX_PATH. Installation uses the include directories and package locations of the imported targets actually selected by find_package, including their Unix library symlink chains. No vendor SDK files are rewritten.
 

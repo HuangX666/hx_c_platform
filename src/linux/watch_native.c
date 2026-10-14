@@ -70,8 +70,8 @@ static hx_os_status hx_os_watch_tree_add(hx_os_watch *watch,
 		return hx_os_i_errno(error, code);
 	}
 
-	/* 9p can accept inotify marks without delivering modifications.
-	 * Reject it conservatively instead of advertising silent coverage. */
+	// 9p can accept inotify marks without delivering modifications.
+	// Reject it conservatively instead of advertising silent coverage.
 	if (filesystem.f_type == 0x01021997L) {
 		(void)close(descriptor);
 
@@ -92,8 +92,7 @@ static hx_os_status hx_os_watch_tree_add(hx_os_watch *watch,
 		return hx_os_i_error(error, HX_OS_INVALID_ENCODING, 0, 0);
 	}
 
-	/* Watch the directory opened with openat/O_NOFOLLOW, not a racy name.
-	 */
+	// Watch the directory opened with openat/O_NOFOLLOW, not a racy name.
 	(void)snprintf(
 		proc_path, sizeof(proc_path), "/proc/self/fd/%d", descriptor);
 	identifier = inotify_add_watch(tree->descriptor, proc_path,
@@ -263,7 +262,7 @@ hx_os_status hx_os_i_watch_native_init(hx_os_watch *watch, hx_os_error *error)
 
 hx_os_status hx_os_i_watch_native_start(hx_os_watch *watch, hx_os_error *error)
 {
-	/* inotify coverage was established during initialization. */
+	// inotify coverage was established during initialization.
 	(void)watch;
 
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
@@ -336,8 +335,8 @@ static hx_os_status hx_os_watch_linux_records(
 		(void)snprintf(path, total, "%s%s%s", relative,
 			parent_length && name_length ? "/" : "", name);
 		flags = event.mask & IN_ISDIR ? HX_OS_WATCH_DIRECTORY : 0;
-		/* inotify can split rename pairs across reads: report observed
-		 * rename paths without manufacturing an atomic old/new pair. */
+		// inotify can split rename pairs across reads: report observed
+		// rename paths without manufacturing an atomic old/new pair.
 		kind = event.mask & (IN_MOVED_FROM | IN_MOVED_TO)
 			? HX_OS_WATCH_RENAMED
 			: event.mask & IN_CREATE ? HX_OS_WATCH_ADDED
@@ -414,8 +413,8 @@ hx_os_status hx_os_i_watch_native_run(hx_os_watch *watch, hx_os_error *error)
 
 			hx_os_watch_tree_clear(watch, &native->tree);
 			native->tree = replacement;
-			/* Topology changed while rescanning; callers reconcile
-			 * a snapshot after new subscriptions are armed. */
+			// Topology changed while rescanning; callers reconcile
+			// a snapshot after new subscriptions are armed.
 			hx_os_i_watch_emit(watch, HX_OS_WATCH_OVERFLOW, NULL,
 				NULL, 0, NULL);
 		}

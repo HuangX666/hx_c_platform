@@ -14,7 +14,7 @@ hx_os_error error;
 
 hx_os_status status = hx_os_sys_version_string(&version, &error);
 
-/* Check status, then use hx_string_c_str(&version). */
+// Check status, then use hx_string_c_str(&version).
 hx_string_destroy(&version);
 ```
 
@@ -254,7 +254,7 @@ int inside;
 hx_os_status status = hx_os_thread_pool_inside(pool, &inside);
 if (status == HX_OS_OK && !inside)
 	status = hx_os_task_wait_until(task, deadline, &work_status, &error);
-/* Inside a worker, continue asynchronously instead of waiting for new work. */
+// Inside a worker, continue asynchronously instead of waiting for new work.
 ```
 
 ## Native error text
@@ -316,8 +316,8 @@ hx_os_loop_watch *watch = NULL;
 
 hx_os_status status = hx_os_loop_attach_fd(loop, fd, HX_OS_WAIT_READ,
 	ready_callback, user, &watch, &error);
-/* The callback can use hx_os_loop_watch_descriptor(watch), then request stop. */
-/* Drive loop; finally check hx_os_loop_detach_fd(&watch, &error). */
+// The callback can use hx_os_loop_watch_descriptor(watch), then request stop.
+// Drive loop; finally check hx_os_loop_detach_fd(&watch, &error).
 ```
 
 ## Process control, capture and system helpers (batch 18)
@@ -358,11 +358,14 @@ if (status == HX_OS_OK) {
 	status = hx_os_process_capture_text(capture, HX_OS_PROCESS_STDOUT,
 		&output, &error);
 
-	/* Use output, then destroy it. */
+	// Use output, then destroy it.
 	hx_string_destroy(&output);
 }
-/* Non-NULL capture remains owned on timeout/limit/error. Continue waiting,
- * raise limits or explicitly discard as needed, then check close_until.
+/**
+ * \brief Non-NULL capture remains owned on timeout/limit/error.
+ *
+ * \details Continue waiting, raise limits or explicitly discard as needed, then
+ * check close_until.
  */
 ```
 
@@ -382,14 +385,14 @@ Queued cancellation moves a future task to the ready list, without waiting for i
 
 A future task's metadata shares its task allocation and adds one private mutex. Cancellation takes that mutex before consulting the pool; the worker clears that pool pointer outside the pool lock before executing/cleaning the task. Joining all workers therefore removes every delayed task's access to the pool. Retained tasks and cancellation sources remain safe after pool destruction. The internal close path marks cancellation under the pool mutex without taking the per-task lock, avoiding lock-order inversion. Allocation and prepare callbacks remain outside the pool mutex, including close/preparation races.
 
-With this module enabled, ordinary tasks add one nullable private pointer and branches; they add no allocation count, lock acquisition, indirect dispatch, or clock/system call when there are no future tasks. Disabled builds remove the extra task/pool fields and delayed logic. Measured size/alignment with it enabled: task 88/8, pool 104/8 and delay metadata 32/8 on Windows/Linux x64; 56/8, 64/8 and 24/8 on Windows x86. Existing public structures are unchanged. A future task additionally pays for its mutex allocation and, while pending, native timed waits/clock reads. See VALIDATION for before/after measurements; these do not stand in for hx_c_log integration or its performance acceptance.
+Enabling delayed tasks retains the associated private pool state. With no future tasks, ordinary tasks add no allocation, lock or clock read for delay scheduling. A future task requires additional synchronization and timed waits. Disabling the module removes that state and logic; measure actual costs on the target workload.
 
 ```c
 hx_os_task *task = NULL;
 
 hx_os_status status = hx_os_thread_pool_submit_delayed(pool,
 	hx_os_deadline_after_ms(100), work, user, cleanup, &task, &error);
-/* On acceptance, wait/cancel/release through the ordinary task API. */
+// On acceptance, wait/cancel/release through the ordinary task API.
 ```
 
 ```cpp
@@ -428,7 +431,7 @@ Socket setup/error/readiness code is shared by network and standalone duplex ada
 hx_os_file *first = NULL, *second = NULL;
 
 hx_os_status status = hx_os_pipe_pair_socket(NULL, &first, &second, &error);
-/* Use file read/write; shutdown preserves the opposite direction. */
+// Use file read/write; shutdown preserves the opposite direction.
 ```
 
 ```cpp

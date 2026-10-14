@@ -68,7 +68,7 @@ if (status == HX_OS_OK)
 	printf("Reply: %.*s\n", (int)reply->bytes, (const char *)reply->data);
 
 hx_ipc_message_release(reply);
-/* Close client even when connect or request failed; see section 6. */
+// Close client even when connect or request failed; see section 6.
 ```
 
 This is the communication fragment; the complete source also reports errors and closes the endpoint. Create a connection once and reuse it. `request_text` assigns a request ID, sends a complete UTF-8 message and waits for the matching reply. Simple calls wait up to five seconds; `_until` calls allow a different deadline.
@@ -177,9 +177,9 @@ Messages handed to the user no longer count toward endpoint queue limits. Releas
 
 Ordinary UDP bodies must fit `65507 - 64` bytes or sending returns `HX_OS_LIMIT`. Large datagrams are still subject to IP fragmentation; the theoretical maximum is not a recommended size. KCP bodies are also limited to 127 fragments at MTU 1200, minus 24 KCP header bytes per fragment and the 64-byte inner HXIP header. The 64 KiB default fits.
 
-**WSL2 mirrored networking:** In the measured WSL 3.0.1 / Windows 26200.8894 environment, IPv4 `127.0.0.1` is routed through `loopback0` with MTU 1500. A 1472-byte UDP payload arrives; at 1473 bytes, later IP fragments do not return, so the receiver cannot obtain a complete datagram. This is a fragmentation-path issue in that environment. More receive buffering or a longer application deadline cannot supply missing fragments; successful `send` still means only local transmission.
+**WSL2 mirrored networking:** IPv4 loopback traffic can traverse the Windows host path, where larger UDP messages may encounter IP-fragmentation limits. Missing fragments cannot be recovered by increasing receive buffers or application timeouts; successful send means local transmission completed.
 
-When both peers share the same WSL network namespace, explicitly use the existing `udp://[::1]:39002` endpoint to use Linux IPv6 loopback; complete 40,000-byte bodies were verified locally. This address is not a substitute for Windows-to-WSL mirrored communication. For larger messages over that IPv4 path, use `kcp://127.0.0.1:39003` or TCP. Size ordinary UDP packets for the actual path MTU. The measured 1472 includes the 64-byte HXIP header, leaving 1408 body bytes at this MTU; it is not a universal network limit. See [validation records](VALIDATION.md) for observations.
+Within one WSL network namespace, `udp://[::1]:39002` uses Linux IPv6 loopback; Windows-to-WSL communication still needs an address suitable for that path. Use `kcp://127.0.0.1:39003` or TCP for larger reliable messages. Size ordinary UDP for the path MTU: with MTU 1500, a 20-byte IPv4 header, 8-byte UDP header and 64-byte protocol header, keep the body at or below 1408 bytes to avoid fragmentation. Recalculate for other paths.
 
 Control frames also share an endpoint-wide `max_peers * 64 KiB` limit. Frames retained from previous sessions remain charged during reconnect, so changing sessions cannot bypass the bound.
 
@@ -203,7 +203,7 @@ The host must stop new calls before closing. Existing waits may overlap close: t
 hx_os_status status = hx_ipc_close_until(
 	&client, hx_os_deadline_after_ms(200), &error);
 if (status == HX_OS_TIMEOUT) {
-	/* Keep client in durable host state; retry from the shutdown owner. */
+	// Keep client in durable host state; retry from the shutdown owner.
 	status = hx_ipc_close_until(
 		&client, hx_os_deadline_after_ms(1000), &error);
 }

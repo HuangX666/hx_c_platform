@@ -59,7 +59,7 @@ struct hx_os_coro_io_state {
 	int stopped;
 };
 
-/* The scheduler mutex also excludes native loop destruction. */
+// The scheduler mutex also excludes native loop destruction.
 static void hx_os_coro_io_wake(hx_os_coro_io_state *state)
 {
 	if (state->loop)
@@ -130,7 +130,7 @@ static hx_os_coro_stream *hx_os_coro_stream_new(
 
 	stream->runtime = runtime;
 	hx_os_i_coro_runtime_retain(runtime);
-	/* One dispatcher lease remains until native close. */
+	// One dispatcher lease remains until native close.
 	hx_os_atomic_store(&stream->references, 2, HX_OS_RELAXED);
 	stream->next = state->streams;
 	state->streams = stream;
@@ -186,7 +186,7 @@ static void hx_os_coro_io_ready(hx_os_coro_io_job *job)
 
 	hx_os_i_coro_finish_wait(coroutine, &job->completion.error);
 	(void)hx_os_mutex_unlock(runtime->mutex, NULL);
-	/* Publication transfers job back to its worker. */
+	// Publication transfers job back to its worker.
 }
 
 static void hx_os_coro_io_completed(
@@ -213,7 +213,7 @@ static void hx_os_coro_io_completed(
 			job->addresses = hx_os_request_take_addresses(request);
 	}
 
-	/* Defer publication until the native callback has returned. */
+	// Defer publication until the native callback has returned.
 	job->next = state->done;
 	state->done = job;
 }
@@ -465,8 +465,8 @@ static void *hx_os_coro_io_main(void *user)
 		}
 
 		if (status != HX_OS_OK && status != HX_OS_TIMEOUT) {
-			/* OS failure does not permit releasing pending native
-			 * buffers. */
+			// OS failure does not permit releasing pending native
+			// buffers.
 			(void)hx_os_mutex_lock(runtime->mutex, NULL);
 
 			for (job = state->active; job; job = job->next) {

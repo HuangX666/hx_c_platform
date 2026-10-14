@@ -38,7 +38,7 @@ if (status == HX_OS_OK)
 	status = hx_string_split(&text, hx_string_view_from_cstr(","),
 		&parts, NULL);
 
-/* Check status before inspecting borrowed parts_at views. */
+// Check status before inspecting borrowed parts_at views.
 hx_string_parts_destroy(&parts);
 hx_string_destroy(&text);
 ~~~
@@ -116,7 +116,7 @@ uint64_t interval_ns;
 
 hx_os_status status = hx_os_muldiv_u64(1001, 1000000000, 30000,
 	HX_OS_ROUND_NEAREST, &interval_ns, NULL);
-/* On success: 33366667 ns. */
+// On success: 33366667 ns.
 ~~~
 
 内部保留完整 128 位乘积，支持向下、向上、最近值舍入，恰好一半向上。除零报 INVALID，结果超出 uint64_t 报 RANGE，失败保持输出。可直接操作 hx_os_uint128 的 low/high。支持编译器原生 128 位整数时使用内建类型，其他目标使用共同的 32 位分块算法。没有堆分配、锁、浮点精度损失或新增汇编。

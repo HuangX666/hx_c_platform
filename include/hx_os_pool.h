@@ -35,67 +35,86 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_create(
 	hx_os_context *context, const hx_os_thread_pool_options *options,
 	hx_os_thread_pool **out, hx_os_error *error);
 
-/*
- * Success borrows user until cleanup completes. cleanup, if supplied, runs
- * exactly once on a worker, even for queued cancellation. Rejection does
- * not transfer user or call cleanup. Callbacks must not throw or longjmp.
+/**
+ * \brief Success borrows user until cleanup completes.
+ *
+ * \details cleanup, if supplied, runs exactly once on a worker, even for queued
+ * cancellation. Rejection does not transfer user or call cleanup. Callbacks
+ * must not throw or longjmp.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_submit(
 	hx_os_thread_pool *pool, hx_os_task_fn function, void *user,
 	hx_os_task_cleanup cleanup, hx_os_task **out, hx_os_error *error);
 
-/*
- * Admission precedes prepare. prepare/cleanup run outside the pool mutex.
- * On prepare failure it must release partial resources and set *user=NULL.
- * After successful preparation, cleanup runs exactly once: on a worker for
- * accepted work, or on the submitting thread if close races preparation.
- * Rejection before prepare calls neither callback. factory is call-borrowed.
+/**
+ * \brief Admission precedes prepare.
+ *
+ * \details prepare/cleanup run outside the pool mutex. On prepare failure it
+ * must release partial resources and set *user=NULL. After successful
+ * preparation, cleanup runs exactly once: on a worker for accepted work, or on
+ * the submitting thread if close races preparation. Rejection before prepare
+ * calls neither callback. factory is call-borrowed.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_submit_prepared(
 	hx_os_thread_pool *pool, hx_os_task_prepare_fn prepare, void *factory,
 	hx_os_task_fn function, hx_os_task_cleanup cleanup, hx_os_task **out,
 	hx_os_error *error);
 
-/* Absolute monotonic eligibility time, not a completion deadline. NOW is
- * ordinary immediate submission; INFINITE is INVALID. Future tasks share
- * queue capacity with ready tasks and use the existing workers/condition.
- * Equal due times retain insertion order. Ready FIFO work already queued
- * runs first; no start-time guarantee. Queued cancellation wakes workers
- * and cleanup runs once without waiting for due. DRAIN honors due times;
- * CANCEL_PENDING retires queued future tasks immediately. Timeout retains
- * pool/tasks. Scheduler clock/wait failures become task work_status.
+/**
+ * \brief Absolute monotonic eligibility time, not a completion deadline.
+ *
+ * \details NOW is ordinary immediate submission; INFINITE is INVALID. Future
+ * tasks share queue capacity with ready tasks and use the existing
+ * workers/condition. Equal due times retain insertion order. Ready FIFO work
+ * already queued runs first; no start-time guarantee. Queued cancellation wakes
+ * workers and cleanup runs once without waiting for due. DRAIN honors due
+ * times; CANCEL_PENDING retires queued future tasks immediately. Timeout
+ * retains pool/tasks. Scheduler clock/wait failures become task work_status.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_submit_delayed(
 	hx_os_thread_pool *pool, hx_os_deadline due, hx_os_task_fn function,
 	void *user, hx_os_task_cleanup cleanup, hx_os_task **out,
 	hx_os_error *error);
 
-/* Same admission-before-prepare and rejection ownership as prepared submit. */
+/**
+ * \brief Same admission-before-prepare and rejection ownership as prepared
+ * submit.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_submit_delayed_prepared(
 	hx_os_thread_pool *pool, hx_os_deadline due,
 	hx_os_task_prepare_fn prepare, void *factory, hx_os_task_fn function,
 	hx_os_task_cleanup cleanup, hx_os_task **out, hx_os_error *error);
 
-/* Borrowed context. NULL is the immutable default allocator. */
+/**
+ * \brief Borrowed context.
+ *
+ * \details NULL is the immutable default allocator.
+ */
 HX_OS_API hx_os_context *HX_OS_CALL hx_os_thread_pool_context(
 	const hx_os_thread_pool *pool);
 
-/*
- * Current thread is a worker of this live pool (also during task cleanup).
- * No allocation, lock or wait. Caller excludes pool destruction; invalid or
- * disabled calls leave *inside unchanged. A worker cannot close its own pool
- * or wait for an unfinished task from it (DEADLOCK). Finished task waits are
- * allowed. This query does not detect dependency cycles across other pools.
+/**
+ * \brief Current thread is a worker of this live pool (also during task
+ * cleanup).
+ *
+ * \details No allocation, lock or wait. Caller excludes pool destruction;
+ * invalid or disabled calls leave *inside unchanged. A worker cannot close its
+ * own pool or wait for an unfinished task from it (DEADLOCK). Finished task
+ * waits are allowed. This query does not detect dependency cycles across other
+ * pools.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_inside(
 	const hx_os_thread_pool *pool, int *inside);
 
-/* Wait without closing or cancelling. wait_until captures accepted work at
- * its mutex-protected entry; later submissions do not extend that snapshot.
- * wait_idle_until waits for no accepted work to remain, including tasks
- * submitted during the wait. Both include delayed tasks and user cleanup.
- * Preparation not yet accepted is excluded. Work failures are retrieved
- * from individual tasks, not from the pool wait result.
+/**
+ * \brief Wait without closing or cancelling.
+ *
+ * \details wait_until captures accepted work at its mutex-protected entry;
+ * later submissions do not extend that snapshot. wait_idle_until waits for no
+ * accepted work to remain, including tasks submitted during the wait. Both
+ * include delayed tasks and user cleanup. Preparation not yet accepted is
+ * excluded. Work failures are retrieved from individual tasks, not from the
+ * pool wait result.
  *
  * NOW polls; INFINITE is allowed. TIMEOUT preserves the pool; a new snapshot
  * wait captures a new boundary. Both reject the pool's workers (DEADLOCK).
@@ -115,8 +134,11 @@ HX_OS_API void HX_OS_CALL hx_os_task_cancel(hx_os_task *task);
 
 HX_OS_API int HX_OS_CALL hx_os_task_state(hx_os_task *task);
 
-/* Wait success includes cleanup. Work status is separate from wait status.
- * An unfinished task's own pool worker receives DEADLOCK, even with NOW.
+/**
+ * \brief Wait success includes cleanup.
+ *
+ * \details Work status is separate from wait status. An unfinished task's own
+ * pool worker receives DEADLOCK, even with NOW.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_task_wait_until(hx_os_task *task,
 	hx_os_deadline deadline, hx_os_status *work_status, hx_os_error *error);
@@ -125,7 +147,11 @@ HX_OS_API void HX_OS_CALL hx_os_task_retain(hx_os_task *task);
 
 HX_OS_API void HX_OS_CALL hx_os_task_release(hx_os_task *task);
 
-/* Timeout keeps pool and user data alive. No thread is killed or detached. */
+/**
+ * \brief Timeout keeps pool and user data alive.
+ *
+ * \details No thread is killed or detached.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_close_until(
 	hx_os_thread_pool *pool, int mode, hx_os_deadline deadline,
 	hx_os_error *error);
@@ -133,9 +159,12 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_close_until(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_destroy(
 	hx_os_thread_pool **pool, hx_os_error *error);
 
-/* Close and destroy in one operation. Default drains; ex selects the
- * existing close mode. Failure retains *pool for retry; success sets NULL.
- * Same external exclusion and monotonic shared budget as the original close.
+/**
+ * \brief Close and destroy in one operation.
+ *
+ * \details Default drains; ex selects the existing close mode. Failure retains
+ * *pool for retry; success sets NULL. Same external exclusion and monotonic
+ * shared budget as the original close.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_shutdown(
 	hx_os_thread_pool **pool, hx_os_deadline deadline, hx_os_error *error);

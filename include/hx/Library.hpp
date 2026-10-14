@@ -13,8 +13,10 @@ public:
 	{
 	}
 
-	/* Optional diagnostics use their own context and remain owned by the
-	 * caller. */
+	/**
+	 * \brief Optional diagnostics use their own context and remain owned by
+	 * the caller.
+	 */
 	static Result<Library> open(const char *path,
 		unsigned flags = HX_OS_LIBRARY_LOCAL,
 		hx_os_context *context = NULL,

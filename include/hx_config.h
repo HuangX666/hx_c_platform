@@ -68,21 +68,25 @@ typedef struct hx_os_config_options {
 	const char *source_name;
 } hx_os_config_options;
 
-/*
- * Initialize size/version and nonzero limits with options_init. Depth counts
- * the root as one and is capped at 128. Memory bounds parsing allocations,
- * including native parser allocations, but not caller/file-read buffers or
- * C-library locale objects. Work units are not a native instruction budget.
- * source_name is a borrowed UTF-8 label for this call; error copies it.
+/**
+ * \brief Initialize size/version and nonzero limits with options_init.
+ *
+ * \details Depth counts the root as one and is capped at 128. Memory bounds
+ * parsing allocations, including native parser allocations, but not
+ * caller/file-read buffers or C-library locale objects. Work units are not a
+ * native instruction budget. source_name is a borrowed UTF-8 label for this
+ * call; error copies it.
  */
 
-/*
- * Input is UTF-8. A leading UTF-8 BOM is accepted. No encoding guessing,
- * environment mutation, variable expansion, file inclusion or external
- * entity loading occurs. Decode other encodings explicitly before parsing.
- * Positions are relative to UTF-8 input; lines/columns are one-based Unicode
- * codepoint positions (a tab counts as one). Unknown positions use SIZE_MAX
- * for byte_offset and zero for line/column. The copied source label may be
+/**
+ * \brief Input is UTF-8.
+ *
+ * \details A leading UTF-8 BOM is accepted. No encoding guessing, environment
+ * mutation, variable expansion, file inclusion or external entity loading
+ * occurs. Decode other encodings explicitly before parsing. Positions are
+ * relative to UTF-8 input; lines/columns are one-based Unicode codepoint
+ * positions (a tab counts as one). Unknown positions use SIZE_MAX for
+ * byte_offset and zero for line/column. The copied source label may be
  * truncated at a UTF-8 boundary. Messages never contain configuration values.
  */
 typedef struct hx_os_config_error {
@@ -112,35 +116,43 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_config_load(hx_os_context *context,
 	int format, const char *utf8_path, const hx_os_config_options *options,
 	hx_os_config_document **out, hx_os_config_error *error);
 
-/*
- * Serialize any declared format into the output string's context. XML takes
- * an XML element tree; it does not guess a mapping from JSON objects. YAML
- * emits block collections, TOML emits assignments with inline containers.
- * INI/ENV/properties retain their string-only, representable tree profiles.
- * Failure preserves its old value. Options default to finite parser limits:
- * max_input_bytes bounds output, max_memory_bytes bounds new output storage
- * including allocator overhead, max_work bounds both passes, depth/nodes bound
- * each traversal. Recursion is bounded to 128 frames. Existing output/document
- * memory is outside this new-storage budget. backend must be BUILTIN.
- * Unrepresentable values fail; no numeric-to-string coercion/flattening.
- * INI global keys precede sections; order within groups is preserved.
+/**
+ * \brief Serialize any declared format into the output string's context.
+ *
+ * \details XML takes an XML element tree; it does not guess a mapping from JSON
+ * objects. YAML emits block collections, TOML emits assignments with inline
+ * containers. INI/ENV/properties retain their string-only, representable tree
+ * profiles. Failure preserves its old value. Options default to finite parser
+ * limits: max_input_bytes bounds output, max_memory_bytes bounds new output
+ * storage including allocator overhead, max_work bounds both passes,
+ * depth/nodes bound each traversal. Recursion is bounded to 128 frames.
+ * Existing output/document memory is outside this new-storage budget. backend
+ * must be BUILTIN. Unrepresentable values fail; no numeric-to-string
+ * coercion/flattening. INI global keys precede sections; order within groups is
+ * preserved.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_config_serialize(
 	const hx_os_config_document *document, int format, hx_string *out,
 	const hx_os_config_options *options, hx_os_error *error);
 
-/* Serialize then atomically publish using file_save_atomic. Needs FILE_UTILS.
- * Same publication/durability boundaries; no automatic backup or rollback.
+/**
+ * \brief Serialize then atomically publish using file_save_atomic.
+ *
+ * \details Needs FILE_UTILS. Same publication/durability boundaries; no
+ * automatic backup or rollback.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_config_save(
 	const hx_os_config_document *document, int format, const char *path,
 	const hx_os_config_options *options, hx_os_error *error);
 
-/* Borrowed construction description. Names/values are UTF-8 slices; numeric
- * values use their textual spelling. Containers use children; XML elements
- * may additionally have ATTRIBUTE entries. Input is copied during create.
- * DATETIME construction is reserved for parsed TOML values. Documents stay
- * immutable; replace returns an independent document and never edits source.
+/**
+ * \brief Borrowed construction description.
+ *
+ * \details Names/values are UTF-8 slices; numeric values use their textual
+ * spelling. Containers use children; XML elements may additionally have
+ * ATTRIBUTE entries. Input is copied during create. DATETIME construction is
+ * reserved for parsed TOML values. Documents stay immutable; replace returns an
+ * independent document and never edits source.
  */
 typedef struct hx_os_config_value {
 	hx_os_config_slice name;
@@ -156,27 +168,32 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_config_create(hx_os_context *context,
 	const hx_os_config_value *root, const hx_os_config_options *options,
 	hx_os_config_document **out, hx_os_config_error *error);
 
-/* target must be borrowed from source; its name is retained on replacement.
- * Counts/depth/memory/work are bounded, and malformed/cyclic descriptions
- * fail within those limits. root/target must be non-NULL. Failure sets *out
- * to NULL; source and all of its borrowed nodes remain unchanged.
+/**
+ * \brief target must be borrowed from source; its name is retained on
+ * replacement.
+ *
+ * \details Counts/depth/memory/work are bounded, and malformed/cyclic
+ * descriptions fail within those limits. root/target must be non-NULL. Failure
+ * sets *out to NULL; source and all of its borrowed nodes remain unchanged.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_config_replace(
 	const hx_os_config_document *source, const hx_os_config_node *target,
 	const hx_os_config_value *value, const hx_os_config_options *options,
 	hx_os_config_document **out, hx_os_config_error *error);
 
-/* Section/key convenience for INI's string-only tree. section=NULL or ""
- * selects global keys; other names are literal case-sensitive UTF-8, not
- * JSON pointers. get preserves the output string on failure.
- * Edits build a new immutable document in the owner's context and replace
- * *owner only on success. Retained old documents/nodes remain valid; other
- * borrowed nodes expire when their last document reference is released.
+/**
+ * \brief Section/key convenience for INI's string-only tree.
+ *
+ * \details section=NULL or "" selects global keys; other names are literal
+ * case-sensitive UTF-8, not JSON pointers. get preserves the output string on
+ * failure. Edits build a new immutable document in the owner's context and
+ * replace *owner only on success. Retained old documents/nodes remain valid;
+ * other borrowed nodes expire when their last document reference is released.
  * Limits come from the original document. No whitespace/comment preservation.
  * Edits require CONFIG+CONFIG_SERIALIZE, reject unrepresentable text and
  * scalar/section name collisions. Missing removal returns NOT_FOUND; removing
- * the last key retains its empty section. Exclude concurrent owner mutation
- * and same-owner editing from allocator callbacks.
+ * the last key retains its empty section. Exclude concurrent owner mutation and
+ * same-owner editing from allocator callbacks.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_ini_create(hx_os_context *context,
 	hx_os_config_document **out, hx_os_config_error *error);
@@ -204,8 +221,11 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_ini_remove_section(
 	hx_os_config_document **owner, const char *section,
 	hx_os_config_error *error);
 
-/* Explicitly parse a STRING/TEXT/ATTRIBUTE as another document. Never
- * automatically reinterpret strings that happen to resemble JSON or XML.
+/**
+ * \brief Explicitly parse a STRING/TEXT/ATTRIBUTE as another document.
+ *
+ * \details Never automatically reinterpret strings that happen to resemble JSON
+ * or XML.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_config_parse_node(
 	hx_os_context *context, int format, const hx_os_config_node *node,
@@ -217,11 +237,13 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_config_convert(hx_os_context *context,
 	hx_string *out, const hx_os_config_options *options,
 	hx_os_config_error *error);
 
-/*
- * Documents are immutable after successful parse and may be read concurrently.
- * Nodes/slices borrow the document. Retain it before sharing, and exclude
- * release of the last reference while any query or borrowed access is active.
- * Failed parse publishes no document; release(NULL) is allowed.
+/**
+ * \brief Documents are immutable after successful parse and may be read
+ * concurrently.
+ *
+ * \details Nodes/slices borrow the document. Retain it before sharing, and
+ * exclude release of the last reference while any query or borrowed access is
+ * active. Failed parse publishes no document; release(NULL) is allowed.
  */
 HX_OS_API void HX_OS_CALL hx_os_config_retain(hx_os_config_document *document);
 
@@ -246,12 +268,16 @@ HX_OS_API const hx_os_config_node *HX_OS_CALL hx_os_config_next(
 HX_OS_API const hx_os_config_node *HX_OS_CALL hx_os_config_at(
 	const hx_os_config_node *node, size_t index);
 
-/* Exact, case-sensitive byte keys; NUL inside a key is representable. */
+/**
+ * \brief Exact, case-sensitive byte keys; NUL inside a key is representable.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_config_member(
 	const hx_os_config_node *object, const char *key, size_t bytes,
 	const hx_os_config_node **out);
 
-/* XML children remain ordered; repeated elements and text stay distinct. */
+/**
+ * \brief XML children remain ordered; repeated elements and text stay distinct.
+ */
 HX_OS_API const hx_os_config_node *HX_OS_CALL hx_os_config_attributes(
 	const hx_os_config_node *element);
 
@@ -259,7 +285,11 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_config_attribute(
 	const hx_os_config_node *element, const char *name,
 	const hx_os_config_node **out);
 
-/* RFC 6901 lookup on objects/arrays. Empty path selects the supplied root. */
+/**
+ * \brief RFC 6901 lookup on objects/arrays.
+ *
+ * \details Empty path selects the supplied root.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_config_pointer(
 	const hx_os_config_node *root, const char *utf8_pointer,
 	const hx_os_config_node **out);
@@ -267,15 +297,18 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_config_pointer(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_config_get_string(
 	const hx_os_config_node *node, hx_os_config_slice *out);
 
-/* Numbers retain their lexical spelling, without double rounding. */
+/**
+ * \brief Numbers retain their lexical spelling, without double rounding.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_config_scalar_text(
 	const hx_os_config_node *node, hx_os_config_slice *out);
 
-/*
- * Numeric getters accept numeric nodes or complete numeric strings.
- * Integer conversion never truncates a fraction. Bool accepts true/false
- * only. A missing node reports NOT_FOUND; an incompatible type reports
- * TYPE_MISMATCH. No process locale is modified.
+/**
+ * \brief Numeric getters accept numeric nodes or complete numeric strings.
+ *
+ * \details Integer conversion never truncates a fraction. Bool accepts
+ * true/false only. A missing node reports NOT_FOUND; an incompatible type
+ * reports TYPE_MISMATCH. No process locale is modified.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_config_get_i64(
 	const hx_os_config_node *node, int64_t *out);

@@ -125,9 +125,8 @@ static void hx_ipc_ready(hx_ipc_connection *peer)
 	if (peer->state == 3 || peer->state >= 4)
 		return;
 
-	/* A fresh HELLO alone cannot evict a live UDP session: an old HELLO may
-	 * have been delayed. Confirm possession of the new server nonce first.
-	 */
+	// A fresh HELLO alone cannot evict a live UDP session: an old HELLO may
+	// have been delayed. Confirm possession of the new server nonce first.
 	if (endpoint->server &&
 		(endpoint->transport == HX_IPC_I_UDP ||
 			endpoint->transport == HX_IPC_I_KCP))

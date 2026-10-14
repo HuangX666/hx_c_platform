@@ -7,9 +7,12 @@
 extern "C" {
 #endif
 
-/* Arguments borrow their name, text and custom object through the call.
- * Custom callbacks construct UTF-8 in out, honor limit, and return errors;
- * they never throw or retain the output. No global formatter registry exists.
+/**
+ * \brief Arguments borrow their name, text and custom object through the call.
+ *
+ * \details Custom callbacks construct UTF-8 in out, honor limit, and return
+ * errors; they never throw or retain the output. No global formatter registry
+ * exists.
  */
 typedef hx_os_status(HX_OS_CALL *hx_format_custom_fn)(const void *object,
 	hx_string_view specification, hx_string *out, size_t limit,
@@ -59,14 +62,17 @@ typedef struct hx_format_options {
 HX_OS_API hx_os_status HX_OS_CALL hx_format_options_init(
 	hx_format_options *options, size_t capacity);
 
-/* {} / {0} / {name}, escapes {{ }}, alignment/fill/sign/width/precision,
- * integer bases, real e/f/g/a/% and !s/!r. Width and text precision count
- * Unicode scalar values, not terminal cells or grapheme clusters.
- * Named and positional references may coexist; auto/manual indices may not.
- * Dynamic width/precision use nested argument references. Locale is invariant.
- * Strings are transactional: any failure leaves out unchanged. Output bytes
- * exclude the trailing NUL. Arguments and format may borrow the old out.
- * error.cause_code is the byte offset of an invalid format field when known.
+/**
+ * \brief {} / {0} / {name}, escapes {{ }}, alignment/fill/sign/width/precision,
+ * integer bases, real e/f/g/a/% and !s/!r.
+ *
+ * \details Width and text precision count Unicode scalar values, not terminal
+ * cells or grapheme clusters. Named and positional references may coexist;
+ * auto/manual indices may not. Dynamic width/precision use nested argument
+ * references. Locale is invariant. Strings are transactional: any failure
+ * leaves out unchanged. Output bytes exclude the trailing NUL. Arguments and
+ * format may borrow the old out. error.cause_code is the byte offset of an
+ * invalid format field when known.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_format(hx_string *out,
 	hx_string_view format, const hx_format_arg *arguments, size_t count,
@@ -76,17 +82,23 @@ HX_OS_API hx_os_status HX_OS_CALL hx_format_with_options(hx_string *out,
 	hx_string_view format, const hx_format_arg *arguments, size_t count,
 	const hx_format_options *options, hx_os_error *error);
 
-/* required includes NUL. OUTPUT_FULL preserves buffer; NULL/0 can query size.
+/**
+ * \brief required includes NUL.
+ *
+ * \details OUTPUT_FULL preserves buffer; NULL/0 can query size.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_format_buffer(char *buffer,
 	size_t capacity, size_t *required, hx_string_view format,
 	const hx_format_arg *arguments, size_t count, hx_os_error *error);
 enum { HX_PRINT_STDOUT, HX_PRINT_STDERR };
 
-/* Format fully before output. Console UTF-16 is private to Windows; redirected
- * output is UTF-8 without BOM. Calls through the same C stream are serialized,
- * flush preceding stdio bytes, and write synchronously. I/O can block and fail
- * after partial output; no rollback, persistence or hard deadline is implied.
+/**
+ * \brief Format fully before output.
+ *
+ * \details Console UTF-16 is private to Windows; redirected output is UTF-8
+ * without BOM. Calls through the same C stream are serialized, flush preceding
+ * stdio bytes, and write synchronously. I/O can block and fail after partial
+ * output; no rollback, persistence or hard deadline is implied.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_print_args(int stream, int newline,
 	hx_string_view format, const hx_format_arg *arguments, size_t count,

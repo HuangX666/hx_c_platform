@@ -48,8 +48,10 @@ public:
 		return hx_string_parts_count(m_parts_);
 	}
 
-	/* Returned view borrows this parts object, not the original input
-	 * string. */
+	/**
+	 * \brief Returned view borrows this parts object, not the original
+	 * input string.
+	 */
 	Result<StringView> at(size_t index) const noexcept
 	{
 		hx_string_view value = {};

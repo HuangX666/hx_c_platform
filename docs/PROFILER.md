@@ -125,7 +125,7 @@ Each enabled histogram adds exactly 2,016 bytes per distinct recorded path, plus
 
 The existing options layout is preserved. `max_output_bytes` also limits each new owned snapshot, including its allocation header/alignment allowance. Old TSV output retains its original formatted-output limit. Default options allow 4 MiB; creating both histograms with null options selects 8 MiB. Explicit options keep exactly the budget supplied. A capture that exceeds the budget fails with `HX_OS_LIMIT`; it does not silently omit paths or histograms. Applications must also bound the number of simultaneously retained snapshots.
 
-Warm paths allocate no new context memory. A completed interval updates min/max/last, means, variance and selected bins inside the existing recording mutex section. No new mutex, thread or per-sample allocation is introduced. This still costs time; see [measured local results](VALIDATION.md). The measurements are not a cross-platform latency guarantee.
+After warmup, samples require no new context allocation. Updating statistics still acquires the recording lock and performs calculations; measure that cost with the actual application workload when needed.
 
 A capture allocates outside the profiler lock, then copies statistics and bins consistently under the lock. Copying names and calculating deviations happen after unlocking. Capture work grows with the number of paths and bins, so capture periodically rather than on every timed operation. Concurrent path growth retries at most eight times, then returns `HX_OS_BUSY`. The snapshot records a monotonic observation timestamp. Caller output becomes null on capture failure.
 

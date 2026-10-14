@@ -10,9 +10,12 @@ struct FrameSend {
 	bool accepted;
 };
 
-/* Borrowed facade: the durable owner retains incomplete framing. Explicit
- * flush/receive/abort/close controls that state; destruction never discards
- * a message or blocks. Owner and backend outlive this facade and its calls.
+/**
+ * \brief Borrowed facade: the durable owner retains incomplete framing.
+ *
+ * \details Explicit flush/receive/abort/close controls that state; destruction
+ * never discards a message or blocks. Owner and backend outlive this facade and
+ * its calls.
  */
 class Frame {
 public:
@@ -65,7 +68,9 @@ public:
 		return detail::Status(status, error);
 	}
 
-	/* Result always carries accepted, including timeout/errors. */
+	/**
+	 * \brief Result always carries accepted, including timeout/errors.
+	 */
 	Result<FrameSend> send(hx_os_bytes_view input,
 		hx_os_deadline deadline =
 			HX_OS_DEADLINE_INFINITE) const noexcept

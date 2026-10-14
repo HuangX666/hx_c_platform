@@ -31,7 +31,7 @@ int main(void)
 	if (status == HX_OS_OK)
 		status = read_title(lexer, &title);
 
-	/* Skip an extension block without interpreting its contents. */
+	// Skip an extension block without interpreting its contents.
 	if (status == HX_OS_OK)
 		status = hx_os_lexer_expect(lexer, "extensions", NULL, NULL);
 	if (status == HX_OS_OK)

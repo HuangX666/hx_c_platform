@@ -57,8 +57,11 @@ static inline void json_limits(hx_os_config_options *options)
 	options->max_work = 32768;
 }
 
-/* Only JSON encoding is shared. Each transport owns its schema and logic.
- * The existing serializer escapes strings, including quotes and backslashes.
+/**
+ * \brief Only JSON encoding is shared.
+ *
+ * \details Each transport owns its schema and logic. The existing serializer
+ * escapes strings, including quotes and backslashes.
  */
 static inline int json_encode(
 	const json_field *fields, size_t count, hx_string *out)
@@ -114,8 +117,11 @@ static inline int json_encode(
 	return status == HX_OS_OK;
 }
 
-/* Own the document until all borrowed nodes and slices are no longer used.
- * Reject non-object roots and duplicate keys; never parse with sscanf.
+/**
+ * \brief Own the document until all borrowed nodes and slices are no longer
+ * used.
+ *
+ * \details Reject non-object roots and duplicate keys; never parse with sscanf.
  */
 static inline hx_os_config_document *json_decode(const void *data, size_t bytes)
 {
@@ -149,7 +155,7 @@ static inline const hx_os_config_node *json_member(
 	return node;
 }
 
-/* Config's numeric getters also accept strings; business schemas do not. */
+// Config's numeric getters also accept strings; business schemas do not.
 static inline int json_get_int(
 	const hx_os_config_node *object, const char *key, int64_t *number)
 {

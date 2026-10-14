@@ -6,7 +6,11 @@
 
 namespace hx {
 
-/* Borrows File until unlock/destruction. Range ownership cannot overlap. */
+/**
+ * \brief Borrows File until unlock/destruction.
+ *
+ * \details Range ownership cannot overlap.
+ */
 class FileRangeLock {
 public:
 	FileRangeLock() noexcept

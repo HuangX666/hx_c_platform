@@ -78,15 +78,14 @@ static void hx_os_cfg_write_string(
 
 		if (!json && value.bytes - i >= 3 &&
 			!memcmp(value.data + i, "\xef\xbb\xbf", 3)) {
-			/* A leading properties key must not turn into a BOM. */
+			// A leading properties key must not turn into a BOM.
 			hx_os_cfg_write(writer, "\\ufeff", 6);
 			i += 2;
 			continue;
 		}
 
-		/* YAML treats NEL and Unicode separators as line breaks even in
-		 * quoted scalars. Escape them and the C1 controls explicitly.
-		 */
+		// YAML treats NEL and Unicode separators as line breaks even in
+		// quoted scalars. Escape them and the C1 controls explicitly.
 		if (json == 2 && c >= 0x80) {
 			uint32_t point;
 			size_t used;
@@ -137,8 +136,7 @@ static void hx_os_cfg_write_string(
 			size_t start = i++;
 			size_t span = value.bytes - start;
 
-			/* Do not scan beyond the remaining work/output budgets.
-			 */
+			// Do not scan beyond the remaining work/output budgets.
 			if (span > writer->options.max_work - writer->work)
 				span = writer->options.max_work - writer->work;
 			if (span > writer->options.max_input_bytes -
@@ -233,7 +231,7 @@ static void hx_os_cfg_write_number(
 			hx_os_cfg_write(writer, value.data + i, 1);
 }
 
-/* Input documents are immutable trees; recursion is limited to 128 frames. */
+// Input documents are immutable trees; recursion is limited to 128 frames.
 static void hx_os_cfg_write_json(
 	hx_os_cfg_writer *writer, const hx_os_config_node *node, size_t depth)
 {
@@ -379,8 +377,7 @@ static void hx_os_cfg_write_lines(
 		return;
 	}
 
-	/* Global INI keys precede sections; preserve order inside each group.
-	 */
+	// Global INI keys precede sections; preserve order inside each group.
 	for (node = root->first; node && writer->status == HX_OS_OK;
 		node = node->next) {
 		if (!hx_os_cfg_write_work(writer, 1))

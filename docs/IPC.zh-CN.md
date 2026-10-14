@@ -68,7 +68,7 @@ if (status == HX_OS_OK)
 	printf("Reply: %.*s\n", (int)reply->bytes, (const char *)reply->data);
 
 hx_ipc_message_release(reply);
-/* Close client even when connect or request failed; see section 6. */
+// Close client even when connect or request failed; see section 6.
 ```
 
 这是完整程序中的通信片段；错误显示和显式关闭见链接中的源码。连接只创建一次，可以重复请求。`request_text` 负责生成请求编号、发送完整 UTF-8 消息、等待对应回复。普通入口默认最多等待 5 秒；需要其他时长时使用 `_until` 入口。
@@ -177,9 +177,9 @@ KCP 内存只在会话创建时预留，协议引擎成功创建后不再向 con
 
 普通 UDP 的正文不得超过 `65507 - 64` 字节，超出直接返回 `HX_OS_LIMIT`；较大数据仍受 IP 分片影响，不应把理论上限当作建议大小。KCP 正文还受 127 个分片限制，当前 MTU 为 1200 字节，每片协议头 24 字节，再扣去 64 字节 HXIP 内层头。默认 64 KiB 在范围内。
 
-**WSL2 镜像网络注意事项：**在已验证的 WSL 3.0.1／Windows 26200.8894 环境，IPv4 `127.0.0.1` 经 MTU 1500 的 `loopback0` 回送。UDP 载荷 1472 字节可达，1473 字节开始分片后缺少后续分片，完整报文无法交给接收程序。这是该环境的分片路径问题，增加接收缓冲区或等待时间不能补齐没有到达的分片；`send` 成功仍只表示本地发送完成。
+**WSL2 镜像网络：**IPv4 回环流量可能经过 Windows 宿主路径，较大的 UDP 报文会遇到 IP 分片限制。若分片没有完整到达，增加接收缓冲区或等待时间也无法拼出原报文；发送成功只表示本地发送完成。
 
-双方都在同一 WSL 网络命名空间时，可显式使用现有入口 `udp://[::1]:39002`，走 Linux IPv6 回环；本机已验证 40,000 字节正文完整收发。这个地址不用于替代 Windows 与 WSL 之间的镜像通信。需要通过该 IPv4 路径传输较大消息时，使用 `kcp://127.0.0.1:39003` 或 TCP；普通 UDP 应按实际路径 MTU 控制单包大小。上述 1472 包含 64 字节 HXIP 头，在这一 MTU 下相应正文为 1408 字节，不是所有网络通用的上限。详细观测见[验证记录](VALIDATION.zh-CN.md)。
+同一 WSL 网络命名空间内，可使用 `udp://[::1]:39002` 走 Linux IPv6 回环；Windows 与 WSL 之间仍需按实际网络路径选择地址。较大的可靠消息使用 `kcp://127.0.0.1:39003` 或 TCP。普通 UDP 要按路径 MTU 控制大小：例如 MTU 1500、普通 IPv4 头 20 字节、UDP 头 8 字节，再扣除本协议 64 字节头，正文应不超过 1408 字节以避免分片；其他路径需要重新计算。
 
 协议控制帧还共享整个端点的 `max_peers * 64 KiB` 总预算。快速重连时，旧会话尚未释放的帧继续计入总量，不能通过切换会话绕开限制。
 
@@ -203,7 +203,7 @@ KCP 内存只在会话创建时预留，协议引擎成功创建后不再向 con
 hx_os_status status = hx_ipc_close_until(
 	&client, hx_os_deadline_after_ms(200), &error);
 if (status == HX_OS_TIMEOUT) {
-	/* Keep client in durable host state; retry from the shutdown owner. */
+	// Keep client in durable host state; retry from the shutdown owner.
 	status = hx_ipc_close_until(
 		&client, hx_os_deadline_after_ms(1000), &error);
 }
@@ -291,4 +291,4 @@ KCP 模式的 HELLO/WELCOME 是普通外层 HXIP UDP 帧。双方确定会话值
 python examples/run_ipc_business.py --bin-dir build-ipc/bin/Release
 ```
 
-该入口启动独立服务端和客户端，使用 JSON 完成设备命令与通知。跨语言协议与双终端手动运行方式见前文；自动回归仅由维护者本机保留。目标环境结果见验证记录。
+该入口启动独立服务端和客户端，使用 JSON 完成设备命令与通知。跨语言协议与双终端手动运行方式见前文；自动回归仅由维护者本机保留。平台要求与限制见[平台支持](PLATFORMS.zh-CN.md)。

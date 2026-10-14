@@ -24,8 +24,8 @@ int main(void)
 	status = hx_os_thread_join_until(
 		thread, hx_os_deadline_after_ms(2000), NULL, NULL);
 	if (status == HX_OS_TIMEOUT) {
-		/* The local worker is finite; keep ownership and explicitly
-		 * retry. */
+		// The local worker is finite; keep ownership and explicitly
+		// retry.
 		status = hx_os_thread_join_until(
 			thread, HX_OS_DEADLINE_INFINITE, NULL, NULL);
 	}

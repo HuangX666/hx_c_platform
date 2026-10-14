@@ -6,7 +6,9 @@
 
 namespace hx {
 
-/* Same host ownership and retirement rules as SignalHandler. */
+/**
+ * \brief Same host ownership and retirement rules as SignalHandler.
+ */
 class ProcedureHandler {
 public:
 	explicit ProcedureHandler(hx_os_proc_handler *&owner,

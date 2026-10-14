@@ -13,7 +13,7 @@ static size_t hx_os_format_points(const char *text, size_t bytes)
 	return count;
 }
 
-/* fill is one validated UTF-8 codepoint; append keeps out->size <= limit. */
+// fill is one validated UTF-8 codepoint; append keeps out->size <= limit.
 static hx_os_status hx_os_format_pad(hx_string *out, hx_string_view fill,
 	size_t count, size_t limit, hx_os_error *error)
 {
@@ -71,8 +71,8 @@ static hx_os_status hx_os_format_quote(
 		else {
 			size_t start = i++;
 
-			/* The caller validated UTF-8; ASCII escapes cannot
-			 * split it. */
+			// The caller validated UTF-8; ASCII escapes cannot
+			// split it.
 			while (i < text.size) {
 				c = (unsigned char)text.data[i];
 				if (c < 0x20 || c == 0x7f || c == '"' ||
@@ -233,11 +233,10 @@ static hx_os_status hx_os_format_real(hx_string *out, const hx_format_arg *arg,
 	format[p++] = type;
 	format[p] = 0;
 	if (!spec->type && !spec->has_precision) {
-		/* Find the first significant-digit count that round-trips to
-		 * the original source type. This bounded libc path favors
-		 * portability; it is not advertised as a Dragonbox-class fast
-		 * converter.
-		 */
+		// Find the first significant-digit count that round-trips to
+		// the original source type. This bounded libc path favors
+		// portability; it is not advertised as a Dragonbox-class fast
+		// converter.
 		int max_precision = arg->kind == HX_FORMAT_F32 ? 9
 			: arg->kind == HX_FORMAT_F64	       ? 17
 							       : DECIMAL_DIG;

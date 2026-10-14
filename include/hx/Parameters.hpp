@@ -82,7 +82,10 @@ private:
 	hx_os_params_edit m_edit_;
 };
 
-/* Borrowed view: the pack outlives this object and any returned byte views. */
+/**
+ * \brief Borrowed view: the pack outlives this object and any returned byte
+ * views.
+ */
 class ParametersView {
 public:
 	explicit ParametersView(const hx_os_params *data = NULL) noexcept
@@ -198,7 +201,9 @@ protected:
 	const hx_os_params *m_data_;
 };
 
-/* Mutable borrowed reference, including synchronous callback parameters. */
+/**
+ * \brief Mutable borrowed reference, including synchronous callback parameters.
+ */
 class ParametersRef : public ParametersView {
 public:
 	explicit ParametersRef(hx_os_params *data) noexcept
@@ -299,8 +304,11 @@ public:
 	using ParametersView::native;
 };
 
-/* Synchronous move-only owner. Exclude allocator reentry into this facade,
- * and finish using borrowed views before mutation, moving or destruction.
+/**
+ * \brief Synchronous move-only owner.
+ *
+ * \details Exclude allocator reentry into this facade, and finish using
+ * borrowed views before mutation, moving or destruction.
  */
 class Parameters : public ParametersRef {
 public:

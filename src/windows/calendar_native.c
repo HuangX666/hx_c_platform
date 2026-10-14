@@ -10,7 +10,7 @@ hx_os_status hx_os_i_local_calendar(int64_t seconds, unsigned fields[8],
 	errno_t code;
 	int days, difference;
 
-	/* Guard CRT range failures before entering its parameter validation. */
+	// Guard CRT range failures before entering its parameter validation.
 	if (seconds < 0 || seconds > INT64_C(32535215999))
 		return hx_os_i_error(error, HX_OS_RANGE, 0, 0);
 	code = _localtime64_s(&local, &instant);

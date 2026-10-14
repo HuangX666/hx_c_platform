@@ -11,7 +11,10 @@ struct SignalArgument {
 	hx_os_param_value value;
 };
 
-/* Borrowed only through the current callback; copy() creates an owned pack. */
+/**
+ * \brief Borrowed only through the current callback; copy() creates an owned
+ * pack.
+ */
 class SignalArguments {
 public:
 	explicit SignalArguments(

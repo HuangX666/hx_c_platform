@@ -8,12 +8,15 @@ extern "C" {
 #endif
 
 typedef struct hx_os_bloom hx_os_bloom;
-/* expected_items>0, false_positive_rate in [1e-9,0.5]. The bit array is a
- * power of two, at most max_bytes (default 16 MiB). No allocation on insert
- * or query. Not cryptographic, no per-item deletion, externally serialized.
- * Query false means definitely absent; true means maybe present. Inserting
- * more than expected_items increases false positives. Clearing resets all.
- * Inputs are arbitrary borrowed bytes (NULL only for size=0).
+/**
+ * \brief expected_items>0, false_positive_rate in [1e-9,0.5].
+ *
+ * \details The bit array is a power of two, at most max_bytes (default 16 MiB).
+ * No allocation on insert or query. Not cryptographic, no per-item deletion,
+ * externally serialized. Query false means definitely absent; true means maybe
+ * present. Inserting more than expected_items increases false positives.
+ * Clearing resets all. Inputs are arbitrary borrowed bytes (NULL only for
+ * size=0).
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_bloom_create(hx_os_context *context,
 	size_t expected_items, double false_positive_rate, size_t max_bytes,

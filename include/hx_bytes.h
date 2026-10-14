@@ -7,10 +7,13 @@
 extern "C" {
 #endif
 
-/* Owned arbitrary bytes, no encoding/terminator. Same ownership rules as
- * hx_string: initialize once, use copy/move, exclude concurrent mutation.
- * Members are internal storage. Each capacity is at most 64 MiB; growth
- * temporarily retains old+new allocations. Failure preserves the value.
+/**
+ * \brief Owned arbitrary bytes, no encoding/terminator.
+ *
+ * \details Same ownership rules as hx_string: initialize once, use copy/move,
+ * exclude concurrent mutation. Members are internal storage. Each capacity is
+ * at most 64 MiB; growth temporarily retains old+new allocations. Failure
+ * preserves the value.
  */
 typedef struct hx_bytes {
 	unsigned char *data;

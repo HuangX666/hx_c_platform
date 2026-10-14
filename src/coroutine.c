@@ -78,7 +78,7 @@ hx_os_status hx_os_i_coro_local_set(void *key, void *value,
 	if (!local)
 		return hx_os_i_error(error, HX_OS_NO_MEMORY, 0, 0);
 
-	/* An allocator callback can reenter through a different profiler. */
+	// An allocator callback can reenter through a different profiler.
 	status = hx_os_coro_local_room(coroutine, key);
 	if (status != HX_OS_OK) {
 		hx_os_memory_free(local);
@@ -1168,8 +1168,8 @@ hx_os_status hx_os_coro_runtime_create(hx_os_context *context,
 		}
 
 	if (status != HX_OS_OK) {
-		/* The startup gate admits no user code; rollback only joins
-		 * idle workers. */
+		// The startup gate admits no user code; rollback only joins
+		// idle workers.
 		if (runtime->mutex) {
 			(void)hx_os_mutex_lock(runtime->mutex, NULL);
 			runtime->closing = 2;

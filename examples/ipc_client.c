@@ -1,7 +1,7 @@
 #include <hx_os.h>
 #include <stdio.h>
 
-/* Start ipc_server first, then run hx_os_ipc_client local://demo. */
+// Start ipc_server first, then run hx_os_ipc_client local://demo.
 int main(int argc, char **argv)
 {
 	const char *address = argc > 1 ? argv[1] : "local://demo";

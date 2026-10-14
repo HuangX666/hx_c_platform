@@ -28,9 +28,12 @@ struct Failure {
 	}
 };
 
-/* Move-only, allocation-free result. value() requires hasValue(); get()
- * returns NULL otherwise. I/O may carry progress together with an error.
- * Moving consumes the source. Resource values use nonthrowing moves.
+/**
+ * \brief Move-only, allocation-free result.
+ *
+ * \details value() requires hasValue(); get() returns NULL otherwise. I/O may
+ * carry progress together with an error. Moving consumes the source. Resource
+ * values use nonthrowing moves.
  */
 template <typename T> class Result {
 	static_assert(std::is_nothrow_move_constructible<T>::value,

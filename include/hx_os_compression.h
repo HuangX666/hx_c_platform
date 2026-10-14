@@ -26,13 +26,16 @@ typedef struct hx_os_compression_options {
 			64 * 1024 * 1024, 3                                    \
 	}
 
-/* One complete frame only; trailing bytes and concatenated frames are
- * rejected. Arbitrary binary input, up to 64 MiB. Empty input compresses to
- * a valid frame. Output is transactional and uses its own context; aliasing
- * input with output is allowed. Default output limit is 16 MiB (max 64 MiB),
- * native codec working-memory limit 64 MiB, level 3. Zlib/Gzip/XZ levels are
- * 0..9, Zstd 1..19. Native codec allocations do not use the hx allocator;
- * output growth temporarily retains old+new storage. No background work.
+/**
+ * \brief One complete frame only; trailing bytes and concatenated frames are
+ * rejected.
+ *
+ * \details Arbitrary binary input, up to 64 MiB. Empty input compresses to a
+ * valid frame. Output is transactional and uses its own context; aliasing input
+ * with output is allowed. Default output limit is 16 MiB (max 64 MiB), native
+ * codec working-memory limit 64 MiB, level 3. Zlib/Gzip/XZ levels are 0..9,
+ * Zstd 1..19. Native codec allocations do not use the hx allocator; output
+ * growth temporarily retains old+new storage. No background work.
  */
 HX_OS_API int HX_OS_CALL hx_os_compression_available(unsigned format);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_compression_options_init(

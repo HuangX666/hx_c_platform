@@ -53,8 +53,12 @@ private:
 	hx_os_coro_binding *m_binding_;
 };
 
-/* A small expression builder; no static scheduler or implicit worker exists.
- * The runtime records failures even when the returned Result is discarded.
+/**
+ * \brief A small expression builder; no static scheduler or implicit worker
+ * exists.
+ *
+ * \details The runtime records failures even when the returned Result is
+ * discarded.
  */
 template <typename Owner> class Go {
 public:
@@ -89,8 +93,12 @@ public:
 	}
 };
 
-/* Convenience channel bound to the explicit native Scope/current coroutine.
- * Construction errors remain inspectable; send/receive return the same error.
+/**
+ * \brief Convenience channel bound to the explicit native Scope/current
+ * coroutine.
+ *
+ * \details Construction errors remain inspectable; send/receive return the same
+ * error.
  */
 template <typename T> class Chan {
 public:
@@ -192,8 +200,10 @@ private:
 } // namespace coro
 } // namespace hx
 
-/* Opt-in header: hx_go(runtime) [capture]() noexcept { ... };
- * Named functions work too: hx_go(runtime) function;
+/**
+ * \brief Opt-in header: hx_go(runtime) [capture]() noexcept { ...
+ *
+ * \details }; Named functions work too: hx_go(runtime) function;
  */
 #define hx_go(runtime) ::hx::coro::makeGo(runtime) -
 #define hx_go_here ::hx::coro::CurrentGo() -

@@ -22,7 +22,7 @@ typedef struct hx_os_map_node {
 	const void *key;
 	void *value;
 	size_t key_bytes;
-	int height; /* AVL height, or red-black color: zero black, one red. */
+	int height; // AVL height, or red-black color: zero black, one red.
 	int failed;
 } hx_os_map_node;
 
@@ -926,7 +926,7 @@ hx_os_status hx_os_map_erase_all(hx_os_map *map, const void *key, size_t bytes,
 		return hx_os_i_error(error, status, 0, 0);
 
 	node = hx_os_map_lookup(map, key, bytes, NULL, NULL, NULL, 0);
-	/* Keep one matching node until last so borrowed keys need no copy. */
+	// Keep one matching node until last so borrowed keys need no copy.
 	if (node && hx_os_map_kind(map) == HX_OS_MAP_HASH) {
 		unsigned bucket;
 		UT_hash_handle *handle, *next;

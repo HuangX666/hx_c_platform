@@ -153,8 +153,7 @@ hx_os_status hx_os_i_emulated(int *out, hx_os_error *error)
 		if (errno != ENOENT)
 			return hx_os_i_errno(error, errno);
 
-		/* Apple's documented ENOENT case means Rosetta is unavailable.
-		 */
+		// Apple's documented ENOENT case means Rosetta is unavailable.
 		translated = 0;
 	}
 

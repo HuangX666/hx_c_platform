@@ -30,9 +30,13 @@ struct hx_ar_sink {
 static hx_os_atomic hx_ar_serial;
 
 #if HX_OS_HAVE_LOCAL_PRINTF
-/* Concurrent operations share one immutable locale and retire its lazy
- * conversion state only after the last operation leaves. No lock spans I/O,
- * a codec call, or a caller callback; no locale survives an idle interval. */
+/**
+ * \brief Concurrent operations share one immutable locale and retire its lazy
+ * conversion state only after the last operation leaves.
+ *
+ * \details No lock spans I/O, a codec call, or a caller callback; no locale
+ * survives an idle interval.
+ */
 static pthread_mutex_t hx_ar_locale_mutex = PTHREAD_MUTEX_INITIALIZER;
 static locale_t hx_ar_locale;
 static size_t hx_ar_locale_users;
@@ -197,7 +201,7 @@ const char *hx_ar_i_root_path(const hx_ar_root *root)
 hx_os_status hx_ar_i_contains(hx_ar_root *root, const char *path, int *inside)
 {
 #if defined(O_PATH)
-	/* Ancestor identity needs search permission, not directory listing. */
+	// Ancestor identity needs search permission, not directory listing.
 	const int flags = O_PATH | O_DIRECTORY;
 #else
 	const int flags = O_RDONLY | O_DIRECTORY;
@@ -250,8 +254,10 @@ hx_os_status hx_ar_i_contains(hx_ar_root *root, const char *path, int *inside)
 	return HX_OS_OK;
 }
 
-/* path was validated by the common layer; every parent is nevertheless
- * opened relative to its pinned predecessor with O_NOFOLLOW. */
+/**
+ * \brief path was validated by the common layer; every parent is nevertheless
+ * opened relative to its pinned predecessor with O_NOFOLLOW.
+ */
 static hx_os_status hx_ar_parent(
 	hx_ar_root *root, const char *path, int create, int *out, char **leaf)
 {
@@ -397,7 +403,7 @@ hx_os_status hx_ar_i_sink(hx_ar_root *root, const char *path, int encrypted,
 	if (descriptor < 0) {
 		status = hx_ar_errno(
 			root->job, errno, "Create extraction temporary");
-		/* Never remove a colliding file owned by someone else. */
+		// Never remove a colliding file owned by someone else.
 		sink->temporary[0] = 0;
 		goto failed;
 	}

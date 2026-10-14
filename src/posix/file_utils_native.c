@@ -194,8 +194,8 @@ hx_os_status hx_os_i_file_replace(const char *target, const char *source,
 			return hx_os_i_errno(error, errno);
 
 		if (exists) {
-			/* The caller excludes competing mutations of all three
-			 * paths. */
+			// The caller excludes competing mutations of all three
+			// paths.
 			status = hx_os_file_move(target, backup, 1, error);
 			if (status != HX_OS_OK)
 				return status;

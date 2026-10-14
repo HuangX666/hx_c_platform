@@ -2,6 +2,25 @@
 
 [简体中文](UTILITY_EXTENSIONS.zh-CN.md)
 
+Choose the action you need first. The table links to complete programs; the shorter blocks later on this page show the essential calls to place inside your own function. Start with the [project setup](USAGE.md#project) if you have not linked the library yet.
+
+| Task | Complete program | What it shows |
+| --- | --- | --- |
+| Compress JSON bytes and restore them | [compress_memory.c](../examples/compress_memory.c) | Before/after sizes and the restored JSON |
+| Add a device-name query parameter | [url_query.c](../examples/url_query.c) | The encoded URL and decoded name; no network request |
+| Read a port and name from command-line arguments | [command_line.c](../examples/command_line.c) | Parsed options; `--help` prints usage |
+| Send JSON to your own service | [http_json.c](../examples/http_json.c) | HTTP status and response; supply your endpoint |
+| Write and remove a temporary file | [temporary_file.c](../examples/temporary_file.c) | Its temporary path and a removal confirmation |
+
+Compression, URL and HTTP examples need the corresponding [dependency SDKs](DEPENDENCIES.md). From the library checkout, use an existing build directory configured with `HX_OS_BUILD_EXAMPLES=ON`. For example, build and run compression:
+
+```sh
+cmake --build build --config Release --target hx_os_compress_memory
+./build/bin/hx_os_compress_memory
+```
+
+Replace `build` with your directory. A Windows Visual Studio build runs `.\build\bin\Release\hx_os_compress_memory.exe`. Other example target names are `hx_os_` followed by the source filename without its extension.
+
 ## 1. Compress bytes in memory
 
 `hx_os_compress` / `hx_os_decompress` take a format, bytes, optional limits and an initialized `hx_bytes` output. This handles one Zlib, Gzip, XZ or Zstd frame; it is different from a ZIP archive containing files. Errors leave the previous output unchanged, including when input aliases output.

@@ -22,7 +22,7 @@ The complete [format_syntax.c](../examples/format_syntax.c) prints `张三: 18, 
 ```c
 #include <hx_format_syntax.h>
 
-/* user.name is "张三", user.age is 18; price is 1.25, count is 3. */
+// user.name is "张三", user.age is 18; price is 1.25, count is 3.
 hx_os_status status = HX_FPRINTLN(
 	"{user.name}: {user.age}, total={price * count:.2f}");
 ```
@@ -40,7 +40,7 @@ hx_string text = HX_STRING_INIT;
 
 hx_os_status status = HX_FFORMAT(&text, "Total: {price * count:.2f}");
 
-/* Use text only after checking status; release it even on failure. */
+// Use text only after checking status; release it even on failure.
 hx_string_destroy(&text);
 ```
 

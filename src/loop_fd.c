@@ -51,7 +51,7 @@ static void hx_os_loop_fd_retired(
 	void *data = watch->user;
 
 	(void)completion;
-	/* A failed unregister keeps the fd/source alive for close retry. */
+	// A failed unregister keeps the fd/source alive for close retry.
 	if (hx_os_loop_fd_unregister(watch, &error) != HX_OS_OK)
 		request->completion.error = error;
 
@@ -149,7 +149,7 @@ hx_os_status hx_os_loop_attach_fd_with_cleanup(hx_os_loop *loop, int descriptor,
 	status = hx_os_i_loop_submit(loop, &operation, NULL, watch,
 		hx_os_loop_fd_retired, watch, &watch->request, &native);
 	if (status != HX_OS_OK) {
-		/* kqueue registration can have installed only one filter. */
+		// kqueue registration can have installed only one filter.
 		(void)hx_os_i_loop_watch(
 			loop, watch->descriptor, &watch->source, 0, NULL);
 
@@ -255,7 +255,7 @@ hx_os_status hx_os_loop_watch_close_until(
 	if (status != HX_OS_OK)
 		return status;
 
-	/* Retry an earlier unregister failure before freeing source storage. */
+	// Retry an earlier unregister failure before freeing source storage.
 	if (value->descriptor >= 0) {
 		status = hx_os_loop_fd_unregister(value, error);
 		if (value->descriptor >= 0)

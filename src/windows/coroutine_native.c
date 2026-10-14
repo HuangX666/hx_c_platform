@@ -48,8 +48,7 @@ static void WINAPI hx_os_coro_fiber_start(void *argument)
 	context->function(context->user);
 	context->finished = 1;
 
-	/* A completed fiber must switch back; returning would exit its thread.
-	 */
+	// A completed fiber must switch back; returning would exit its thread.
 	for (;;)
 		SwitchToFiber(context->caller->fiber);
 }

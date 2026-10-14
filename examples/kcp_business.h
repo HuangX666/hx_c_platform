@@ -18,8 +18,11 @@ typedef struct kcp_session {
 	unsigned int dropped;
 } kcp_session;
 
-/* Called inline by update/flush with access held. No blocking or reentry.
- * A dropped datagram is reported as locally sent; KCP must retransmit it.
+/**
+ * \brief Called inline by update/flush with access held.
+ *
+ * \details No blocking or reentry. A dropped datagram is reported as locally
+ * sent; KCP must retransmit it.
  */
 static hx_os_status HX_OS_CALL kcp_output(
 	const void *data, size_t bytes, void *user, hx_os_error *error)
@@ -40,7 +43,7 @@ static hx_os_status HX_OS_CALL kcp_output(
 
 	status = hx_os_socket_send_to(session->socket, &session->peer, data,
 		bytes, &completed, error);
-	/* Backpressure drops this transmission, retained segments retry. */
+	// Backpressure drops this transmission, retained segments retry.
 	if (status == HX_OS_WOULD_BLOCK)
 		return HX_OS_OK;
 
@@ -70,9 +73,12 @@ static inline int kcp_start(kcp_session *session)
 	return net_demo_check(status, &error, "KCP create");
 }
 
-/* Exactly one I/O thread drives this function. Producers only enqueue via
- * kcp_send_text. The short mutex protects every operation on the engine.
- * This demo serves one peer/conversation per process lifetime.
+/**
+ * \brief Exactly one I/O thread drives this function.
+ *
+ * \details Producers only enqueue via kcp_send_text. The short mutex protects
+ * every operation on the engine. This demo serves one peer/conversation per
+ * process lifetime.
  */
 static inline int kcp_pump(kcp_session *session)
 {

@@ -54,7 +54,7 @@ hx_os_ring_write_span parts[2];
 hx_os_status status = hx_os_ring_write_spans(&ring, parts, NULL);
 
 if (status == HX_OS_OK) {
-	/* Example: initialize one byte directly in available ring storage. */
+	// Example: initialize one byte directly in available ring storage.
 	parts[0].data[0] = 'A';
 	status = hx_os_ring_commit(&ring, 1, NULL);
 }

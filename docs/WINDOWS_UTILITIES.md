@@ -96,4 +96,4 @@ Build `hx_os_windows_info` and run `build/bin/Release/hx_os_windows_info.exe bui
 
 `HX_OS_ENABLE_WINDOWS_VERSION` and `HX_OS_ENABLE_WINDOWS_DESKTOP` both default to ON and can be disabled independently. Version queries link the system Version library; desktop queries link User32/DXGI/DXGUID. CMake exports and pkg-config static dependencies carry these links. Other operating systems keep the declarations and return `NOT_SUPPORTED`. Availability queries indicate a compiled adapter, not the presence of a particular window, display, resource or GPU.
 
-Tests use owned resources, a hidden window, UTF-8 paths and injected allocator failures. They cover capacity preservation, resource translations, long and empty titles, cross-thread rejection, monitor/GPU observations, feature switches and context reclamation. See [validation](VALIDATION.md) for exact native, Win32, sanitizer and installed-consumer results. No Win7/8.1 target run is implied by the use of baseline-compatible APIs.
+See [platform support](PLATFORMS.md) for target build/deployment requirements and limits. Public examples are independent of private maintainer regressions.

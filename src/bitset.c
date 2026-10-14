@@ -42,7 +42,7 @@ static unsigned hx_os_bitset_popcount(uint32_t word)
 #endif
 }
 
-/* Called only for a nonzero word. */
+// Called only for a nonzero word.
 static unsigned hx_os_bitset_first(uint32_t word)
 {
 #if defined(__GNUC__) || defined(__clang__)

@@ -7,12 +7,14 @@
 extern "C" {
 #endif
 
-/* Unsigned base-128 little-endian varints, at most ten bytes. Decoding
- * requires the shortest representation. Failure preserves value and sets
- * consumed=0; trailing bytes after a valid integer are left unread.
- * Encode reports required size through written on OUTPUT_FULL, preserving
- * output. No terminator, allocation or alignment requirement. Output fields
- * must not overlap the input/output byte spans.
+/**
+ * \brief Unsigned base-128 little-endian varints, at most ten bytes.
+ *
+ * \details Decoding requires the shortest representation. Failure preserves
+ * value and sets consumed=0; trailing bytes after a valid integer are left
+ * unread. Encode reports required size through written on OUTPUT_FULL,
+ * preserving output. No terminator, allocation or alignment requirement. Output
+ * fields must not overlap the input/output byte spans.
  */
 HX_OS_API size_t HX_OS_CALL hx_os_varint_size(uint64_t value);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_varint_encode(uint64_t value,
@@ -20,14 +22,19 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_varint_encode(uint64_t value,
 HX_OS_API hx_os_status HX_OS_CALL hx_os_varint_decode(const void *input,
 	size_t bytes, uint64_t *value, size_t *consumed, hx_os_error *error);
 
-/* Defined for the entire int64 range without signed shifts/overflow. */
+/**
+ * \brief Defined for the entire int64 range without signed shifts/overflow.
+ */
 HX_OS_API uint64_t HX_OS_CALL hx_os_zigzag_encode(int64_t value);
 HX_OS_API int64_t HX_OS_CALL hx_os_zigzag_decode(uint64_t value);
 
-/* STREAM is required only by these entries. Reads preserve numeric output,
- * but may consume a prefix. EOF before any byte stays EOF; EOF inside a
- * field is TRUNCATED_INPUT. Writes report actual byte progress. Retrying a
- * whole field after partial I/O is unsafe. No deadline or hidden buffering.
+/**
+ * \brief STREAM is required only by these entries.
+ *
+ * \details Reads preserve numeric output, but may consume a prefix. EOF before
+ * any byte stays EOF; EOF inside a field is TRUNCATED_INPUT. Writes report
+ * actual byte progress. Retrying a whole field after partial I/O is unsafe. No
+ * deadline or hidden buffering.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_stream_read_varuint(
 	hx_os_stream *stream, uint64_t *value, hx_os_error *error);

@@ -39,9 +39,8 @@ int main()
 		std::fprintf(stderr, "Close pending: %s\n",
 			hx_os_status_name(closed.status()));
 
-		/* A service keeps owner in its shutdown state and retries.
-		 * This command-line example reports the pending close.
-		 */
+		// A service keeps owner in its shutdown state and retries.
+		// This command-line example reports the pending close.
 		return 1;
 	}
 

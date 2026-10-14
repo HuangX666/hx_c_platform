@@ -4,8 +4,10 @@
 #include "hx_os_archive.h"
 #include <wchar.h>
 
-/* Private, versioned C boundary: the optional C++ adapter links no core
- * implementation and never owns filesystem paths or allocator state. */
+/**
+ * \brief Private, versioned C boundary: the optional C++ adapter links no core
+ * implementation and never owns filesystem paths or allocator state.
+ */
 typedef struct hx_ar_bridge {
 	uint32_t size, version;
 	void *user, *create_object, *module_property, *stream;

@@ -257,10 +257,8 @@ hx_os_status hx_os_thread_join_until(hx_os_thread *thread,
 	if (!hx_os_atomic_compare_exchange(&thread->joining, &expected, 1,
 		    HX_OS_ACQUIRE, HX_OS_RELAXED))
 		return hx_os_i_error(error, HX_OS_BUSY, 0, 0);
-	/*
-	 * Recheck after claiming: another joiner may have finished between
-	 * our first check and this claim. Native join must happen only once.
-	 */
+	// Recheck after claiming: another joiner may have finished between
+	// our first check and this claim. Native join must happen only once.
 	if (hx_os_atomic_load(&thread->joined, HX_OS_ACQUIRE))
 		status = HX_OS_OK;
 	else

@@ -252,10 +252,8 @@ hx_os_status hx_os_file_write_some(hx_os_file *file, const void *data,
 	memset(&position, 0, sizeof(position));
 	position.Offset = UINT32_MAX;
 	position.OffsetHigh = UINT32_MAX;
-	/*
-	 * Synchronous handles keep OVERLAPPED alive until WriteFile returns.
-	 * End-of-file offsets preserve append while GENERIC_WRITE permits sync.
-	 */
+	// Synchronous handles keep OVERLAPPED alive until WriteFile returns.
+	// End-of-file offsets preserve append while GENERIC_WRITE permits sync.
 	if (!WriteFile(file->handle, data, requested, &count,
 		    (file->flags & HX_OS_FILE_APPEND) ? &position : NULL)) {
 		DWORD code = GetLastError();

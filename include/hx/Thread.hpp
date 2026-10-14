@@ -76,8 +76,11 @@ private:
 	hx_os_semaphore *m_handle_;
 };
 
-/* Host-owned pointer and borrowed data outlive unfinished work. Destruction
- * of the facade never waits, detaches or discards a timed-out owner.
+/**
+ * \brief Host-owned pointer and borrowed data outlive unfinished work.
+ *
+ * \details Destruction of the facade never waits, detaches or discards a
+ * timed-out owner.
  */
 class Thread {
 public:

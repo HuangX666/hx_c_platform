@@ -40,8 +40,11 @@ inline Result<Buffer> ProcessArguments(
 }
 } // namespace detail
 
-/* Host-owned handles survive timeout/limit/error. Facades never kill, detach
- * or close them implicitly. Arguments are copied/consumed during the call.
+/**
+ * \brief Host-owned handles survive timeout/limit/error.
+ *
+ * \details Facades never kill, detach or close them implicitly. Arguments are
+ * copied/consumed during the call.
  */
 class Process {
 public:

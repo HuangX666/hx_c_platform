@@ -7,8 +7,8 @@ int main(void)
 	hx_string_view message = {"Hello, UTF-8!", 13};
 	hx_os_error error;
 
-	/* Demonstration only: obtain a real password from your application's
-	 * secret input/storage, rather than embedding it in source. */
+	// Demonstration only: obtain a real password from your application's
+	// secret input/storage, rather than embedding it in source.
 	hx_os_status status = hx_os_crypto_encrypt_text(
 		"example password", message, &encrypted, &error);
 	if (status == HX_OS_OK)

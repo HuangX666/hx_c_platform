@@ -97,7 +97,7 @@ template <typename F, typename... A>
 auto CallImpl(std::true_type, F &function, A &&...arguments) noexcept
 	-> decltype(std::mem_fn(function)(std::forward<A>(arguments)...))
 {
-	/* C++11 member-pointer types cannot encode their noexcept contract. */
+	// C++11 member-pointer types cannot encode their noexcept contract.
 	return std::mem_fn(function)(std::forward<A>(arguments)...);
 }
 
@@ -436,10 +436,13 @@ public:
 		return waitUntil(HX_OS_DEADLINE_INFINITE);
 	}
 
-	/* Failed waits retain the task. Completed work consumes it even on
-	 * error. A callable returning Result<T> is flattened into Task<T>,
-	 * preserving native error details and partial values. Reference results
-	 * borrow external data.
+	/**
+	 * \brief Failed waits retain the task.
+	 *
+	 * \details Completed work consumes it even on error. A callable
+	 * returning Result<T> is flattened into Task<T>, preserving native
+	 * error details and partial values. Reference results borrow external
+	 * data.
 	 */
 	Result<T> getUntil(hx_os_deadline deadline) noexcept
 	{
@@ -489,8 +492,11 @@ private:
 	}
 };
 
-/* The host owns the C pointer. Explicit bounded shutdown preserves it on
- * failure. Destruction of this facade never waits, detaches or kills.
+/**
+ * \brief The host owns the C pointer.
+ *
+ * \details Explicit bounded shutdown preserves it on failure. Destruction of
+ * this facade never waits, detaches or kills.
  */
 class ThreadPool {
 public:

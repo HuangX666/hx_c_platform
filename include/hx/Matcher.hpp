@@ -45,7 +45,9 @@ public:
 		return result;
 	}
 
-	/* Use the C count output when progress on callback failure is needed.
+	/**
+	 * \brief Use the C count output when progress on callback failure is
+	 * needed.
 	 */
 	Result<size_t> scan(hx_os_bytes_view input, hx_os_match_fn callback,
 		void *user = NULL, size_t maxMatches = 0) const noexcept

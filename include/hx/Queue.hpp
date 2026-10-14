@@ -6,9 +6,12 @@
 
 namespace hx {
 
-/* Owners must remain at a stable address while used by other threads. Close
- * the message queue, join its callers, then let the owner leave scope. Pointer
- * fields are borrowed; live owning C++ objects cannot be copied as messages.
+/**
+ * \brief Owners must remain at a stable address while used by other threads.
+ *
+ * \details Close the message queue, join its callers, then let the owner leave
+ * scope. Pointer fields are borrowed; live owning C++ objects cannot be copied
+ * as messages.
  */
 template <typename T> class MessageQueue {
 	static_assert(std::is_trivially_copyable<T>::value,
@@ -99,7 +102,10 @@ public:
 		return receive(message, HX_OS_DEADLINE_NOW);
 	}
 
-	/* Batch results always contain the completed count, also on failure. */
+	/**
+	 * \brief Batch results always contain the completed count, also on
+	 * failure.
+	 */
 	Result<size_t> sendMany(const T *messages, size_t count,
 		hx_os_deadline deadline = HX_OS_DEADLINE_INFINITE,
 		hx_os_cancel_token *token = NULL) noexcept

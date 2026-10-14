@@ -6,7 +6,7 @@ static __declspec(thread) hx_os_thread_pool *hx_os_current_pool;
 static __thread hx_os_thread_pool *hx_os_current_pool;
 #endif
 
-/* All queue helpers run under the existing pool mutex. */
+// All queue helpers run under the existing pool mutex.
 static void hx_os_pool_ready(hx_os_thread_pool *pool, hx_os_task *task)
 {
 	task->next = NULL;
@@ -106,10 +106,9 @@ static void *hx_os_pool_worker(void *user)
 		(void)hx_os_mutex_unlock(pool->mutex, NULL);
 #if HX_OS_ENABLE_DELAYED_TASKS
 		if (task->delayed) {
-			/* Never take this lock under the pool mutex:
-			 * cancellation takes delay->mutex first to pin pool
-			 * lifetime.
-			 */
+			// Never take this lock under the pool mutex:
+			// cancellation takes delay->mutex first to pin pool
+			// lifetime.
 			(void)hx_os_mutex_lock(task->delayed->mutex, NULL);
 			task->delayed->pool = NULL;
 			(void)hx_os_mutex_unlock(task->delayed->mutex, NULL);
@@ -213,10 +212,8 @@ hx_os_status hx_os_thread_pool_create(hx_os_context *context,
 	}
 
 	if (status != HX_OS_OK) {
-		/*
-		 * No user task is admitted before create returns. These workers
-		 * can only be in our condition wait, so rollback can join them.
-		 */
+		// No user task is admitted before create returns. These workers
+		// can only be in our condition wait, so rollback can join them.
 		if (pool->thread_count) {
 			(void)hx_os_mutex_lock(pool->mutex, NULL);
 			pool->closing = 1;
@@ -349,8 +346,7 @@ static hx_os_status hx_os_pool_submit(hx_os_thread_pool *pool,
 		hx_os_condition_notify_one(pool->condition);
 	}
 	else {
-		/* Keep the pool alive across allocator callbacks on rejection.
-		 */
+		// Keep the pool alive across allocator callbacks on rejection.
 		++pool->submitting;
 	}
 
@@ -371,7 +367,7 @@ static hx_os_status hx_os_pool_submit(hx_os_thread_pool *pool,
 		(void)hx_os_mutex_unlock(pool->mutex, NULL);
 	}
 
-	/* Keep the native event error captured before rejection cleanup. */
+	// Keep the native event error captured before rejection cleanup.
 	if (event_failed)
 		return status;
 

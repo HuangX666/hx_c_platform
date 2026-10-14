@@ -6,7 +6,9 @@
 
 namespace hx {
 
-/* Borrowed socket; this facade never closes it. */
+/**
+ * \brief Borrowed socket; this facade never closes it.
+ */
 class SocketOptions {
 public:
 	explicit SocketOptions(hx_os_socket *socket) noexcept

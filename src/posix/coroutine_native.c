@@ -53,7 +53,7 @@ hx_os_status hx_os_i_coro_context_root(
 #if defined(__linux__) && defined(__x86_64__) && defined(SYS_arch_prctl)
 	unsigned long features = 0;
 
-	/* ARCH_SHSTK_STATUS is absent from older distribution headers. */
+	// ARCH_SHSTK_STATUS is absent from older distribution headers.
 	if (syscall(SYS_arch_prctl, 0x5005, &features) == 0) {
 		if (features & 1)
 			return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
@@ -176,7 +176,7 @@ void hx_os_i_coro_context_switch(
 		to->stack_bytes);
 #endif
 #if defined(HX_OS_CORO_TSAN)
-	/* Pinned fibers share one native thread's sequencing, including TLS. */
+	// Pinned fibers share one native thread's sequencing, including TLS.
 	__tsan_switch_to_fiber(to->tsan_fiber, 0);
 #endif
 	hx_os_i_coro_cpu_switch(from, to);

@@ -27,7 +27,7 @@ int main(void)
 	if (status != HX_OS_OK)
 		return 1;
 
-	/* For a long wait use an event/condition, not a busy loop. */
+	// For a long wait use an event/condition, not a busy loop.
 	while (!hx_os_atomic32_load(&result.ready, HX_OS_ACQUIRE))
 		hx_os_cpu_relax();
 

@@ -99,6 +99,6 @@ Check `opened`, then call `opened.value().write(...)`, `flushUntil(...)` and `cl
 
 ## 6. Validation and performance boundary
 
-Contract tests cover fixed byte sequences, short/failed reads and writes, unchanged numeric outputs, allocation failures, ring wraparound, multiple producers, native failure details, suffix-only retry, timed-out close, explicit abandonment and context resource release. `buffered_file` runs under ASan/UBSan and TSan on WSL. See [validation records](VALIDATION.md) for configurations.
+See [platform support](PLATFORMS.md) for target build/deployment requirements and limits. Public examples are independent of private maintainer regressions.
 
 The worker amortizes native calls by writing queued chunks. It adds mutex/condition coordination and one worker per writer; acceptance may involve multiple copies when a call is larger than available space. No measured throughput or latency improvement is claimed. Streams use direct native calls for file/memory backends and indirect calls only for user-provided backends. The background writer is intended for workloads that benefit from decoupling producers from synchronous output; benchmark the actual file/device and producer load.

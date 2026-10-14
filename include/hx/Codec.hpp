@@ -6,8 +6,12 @@
 
 namespace hx {
 
-/* An actual C++ value plus the owner of its borrowed strings, arrays and nodes.
- * Members follow hx_os_codec_schema's C-compatible value-layout contract.
+/**
+ * \brief An actual C++ value plus the owner of its borrowed strings, arrays and
+ * nodes.
+ *
+ * \details Members follow hx_os_codec_schema's C-compatible value-layout
+ * contract.
  */
 template <typename T> class Decoded {
 	static_assert(std::is_standard_layout<T>::value &&
@@ -69,8 +73,8 @@ public:
 		return &m_value_;
 	}
 
-	/* U must match the field's declared element type. Copies one element
-	 * into a live C++ object; its views still borrow this owner. */
+	// U must match the field's declared element type. Copies one element
+	// into a live C++ object; its views still borrow this owner.
 	template <typename U>
 	Result<U> arrayItem(
 		hx_os_codec_array array, size_t index) const noexcept

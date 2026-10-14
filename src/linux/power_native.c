@@ -3,9 +3,12 @@
 #include <dlfcn.h>
 #include <unistd.h>
 
-/* Runtime binding to the public sd-bus C ABI. Native objects stay opaque;
- * no implementation or SDK header is redistributed. Calls pass NULL for the
- * optional native error object and retain sd-bus's errno-style results.
+/**
+ * \brief Runtime binding to the public sd-bus C ABI.
+ *
+ * \details Native objects stay opaque; no implementation or SDK header is
+ * redistributed. Calls pass NULL for the optional native error object and
+ * retain sd-bus's errno-style results.
  */
 typedef struct sd_bus hx_os_sd_bus;
 typedef struct sd_bus_message hx_os_sd_message;

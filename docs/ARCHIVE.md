@@ -40,7 +40,9 @@ ARCHIVE is enabled by default and requires FILE_UTILS, CONTAINERS and the prepar
 Build the SDK as described in [DEPENDENCIES](DEPENDENCIES.md), then configure the library with its absolute prefix:
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHX_OS_DEPENDENCY_PREFIX=/absolute/project/build-deps/prefix -DHX_OS_BUILD_EXAMPLES=ON
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+  -DHX_OS_DEPENDENCY_PREFIX=/absolute/project/build-deps/prefix \
+  -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build --config Release --parallel 4
 ```
 
@@ -214,4 +216,4 @@ build/bin/hx_os_archive_files list records.zip
 build/bin/hx_os_archive_files unpack records.zip restored-folder
 ```
 
-Prepare input-folder first; the output archive and restored-folder should not already exist. Windows executables are under build/bin/Release with .exe suffix. See the earlier sections for options. The example needs no private interoperability/failure-injection tests; historical platform results are in the validation records.
+Prepare input-folder first; the output archive and restored-folder should not already exist. Windows executables are under build/bin/Release with .exe suffix. See the earlier sections for options. The example runs independently; see [platform support](PLATFORMS.md) for deployment requirements.

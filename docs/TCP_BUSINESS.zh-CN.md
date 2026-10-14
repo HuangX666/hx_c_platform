@@ -100,7 +100,7 @@ hx_string wire = HX_STRING_INIT;
 
 if (json_encode(fields, 5, &wire)) {
 	int sent = tcp_send_text(stream, hx_string_c_str(&wire));
-	/* Check sent before continuing the business operation. */
+	// Check sent before continuing the business operation.
 	(void)sent;
 }
 
@@ -116,7 +116,8 @@ hx_string_destroy(&wire);
 ```sh
 python examples/run_tcp_business.py --bin-dir build-net/bin/Release
 python examples/run_tcp_business.py --bin-dir build-net/bin/Release --fragmented
-python examples/run_tcp_business.py --bin-dir build-net/bin/Release --json-errors
+python examples/run_tcp_business.py --bin-dir build-net/bin/Release \
+  --json-errors
 ```
 
 第一条运行正常订单流程；--fragmented 演示分段和合并收包；--json-errors 演示非法字段与错误回复。三种方式均只使用公开示例，Linux 的程序目录改为 build-net/bin。

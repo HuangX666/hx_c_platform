@@ -6,9 +6,12 @@
 
 namespace hx {
 
-/* Borrowed facade over a durable owner. Explicit close/abort keeps ownership
- * on timeout; destruction of this facade never joins or abandons a worker.
- * send/receive results retain the byte count even when ok() is false.
+/**
+ * \brief Borrowed facade over a durable owner.
+ *
+ * \details Explicit close/abort keeps ownership on timeout; destruction of this
+ * facade never joins or abandons a worker. send/receive results retain the byte
+ * count even when ok() is false.
  */
 class Tls {
 public:

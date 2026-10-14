@@ -74,7 +74,7 @@ static hx_os_status hx_os_random_legacy(
 	if (descriptor < 0)
 		return hx_os_i_errno(error, errno);
 
-	/* Old kernels lack getrandom's boot-time readiness guarantee. */
+	// Old kernels lack getrandom's boot-time readiness guarantee.
 	status = hx_os_random_read(descriptor, seed, sizeof(seed), error);
 
 	(void)close(descriptor);

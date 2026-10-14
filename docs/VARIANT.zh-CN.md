@@ -11,7 +11,7 @@
 - [7. 内存、分配器和模块裁剪](#allocation)
 - [8. 错误、线程和插件生命周期](#contracts)
 - [9. 与 C++ variant 的具体差异](#comparison)
-- [10. 验证方法与目标状态](#verification)
+- [10. 使用示例与平台限制](#verification)
 
 <a id="purpose"></a>
 
@@ -517,10 +517,10 @@ Windows 多配置构建的程序在对应 `bin/Release/` 目录，带 `.exe` 后
 
 <a id="verification"></a>
 
-## 10. 验证方法与目标状态
+## 10. 使用示例与平台限制
 
 variant 与 cpp_variant 测试覆盖类型切换、精确类型、UTF-8/NUL、别名输入、跨翻译单元描述符、深复制、移动/交换、过度对齐、只构造类型、原生错误传播、分配失败保持旧值、结构体析构次数及 context 回收。容器测试覆盖增长后的结构体地址、pop 接管及失败复制清理；禁用模块的测试检查不支持和输出保持。C++ 测试编译时拒绝开启异常的配置。
 
-公共头 C99/C++11 独立编译，示例作为 CTest 运行，安装后 C/C++ 消费者通过 find_package 构建运行。Android 测试集合包含 variant/cpp_variant，最低 API 与实际运行环境分别记录。ASan、UBSan、泄漏检测和 32/64 位布局结果见[验证记录](VALIDATION.zh-CN.md)，不把交叉编译当作板卡运行。
+目标平台的编译、部署要求及限制见[平台支持](PLATFORMS.zh-CN.md)。公开示例独立于维护者的本地回归。
 
 portable_baseline 增加整数 set/get 和普通结构体 set/get 的时间观察值，不设性能通过阈值、不与 std::variant 推导速度比。性能测试命令见[Android 基准](ANDROID.zh-CN.md)和[构建参考](REFERENCE.zh-CN.md#section-30)。macOS、Win7、Android 5.0、真实 ARM 板卡和其他 libc 仍需对应环境验证。

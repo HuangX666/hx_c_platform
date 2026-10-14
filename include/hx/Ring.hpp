@@ -5,8 +5,11 @@
 #include <hx/Status.hpp>
 
 namespace hx {
-/* Borrows caller storage. Moving transfers pending borrows; use the new
- * object to finish them. Destruction neither frees storage nor commits bytes.
+/**
+ * \brief Borrows caller storage.
+ *
+ * \details Moving transfers pending borrows; use the new object to finish them.
+ * Destruction neither frees storage nor commits bytes.
  */
 class Ring {
 public:

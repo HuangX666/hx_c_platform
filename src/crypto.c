@@ -102,8 +102,8 @@ hx_os_status hx_os_i_crypto_enter(hx_os_crypto *crypto, hx_os_context *context,
 
 void hx_os_i_crypto_leave(hx_os_crypto_scope *scope)
 {
-	/* Native per-context TLS must retire on each participating thread
-	 * before the last reference can free this context on another thread. */
+	// Native per-context TLS must retire on each participating thread
+	// before the last reference can free this context on another thread.
 	OPENSSL_thread_stop_ex(scope->crypto->native);
 	hx_os_crypto_release(scope->crypto);
 	hx_os_crypto_restore_errors(scope->saved_errors);

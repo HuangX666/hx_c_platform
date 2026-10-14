@@ -5,9 +5,12 @@
 #include <hx/Status.hpp>
 
 namespace hx {
-/* These facades borrow host-owned pointer variables, like hx::Thread.
- * They never destroy the resource on scope exit. Keep owners and callback
- * data alive after timeout/BUSY, and retry explicit cleanup when quiescent.
+/**
+ * \brief These facades borrow host-owned pointer variables, like hx::Thread.
+ *
+ * \details They never destroy the resource on scope exit. Keep owners and
+ * callback data alive after timeout/BUSY, and retry explicit cleanup when
+ * quiescent.
  */
 class CancelToken {
 public:
@@ -219,8 +222,11 @@ private:
 	hx_os_wait_group **m_owner_;
 };
 
-/* Move within the acquiring thread only. The lock owner must outlive guards.
- * Destruction unlocks; explicit unlock lets callers inspect native errors.
+/**
+ * \brief Move within the acquiring thread only.
+ *
+ * \details The lock owner must outlive guards. Destruction unlocks; explicit
+ * unlock lets callers inspect native errors.
  */
 class ReadWriteGuard {
 	friend class ReadWriteLock;

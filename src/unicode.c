@@ -42,8 +42,8 @@ static hx_os_status hx_os_utf8_length(
 		if ((input[i] & 0xc0) != 0x80)
 			return HX_OS_INVALID_ENCODING;
 
-	/* Lead/second-byte bounds also exclude overlongs, surrogates and
-	 * >10FFFF. */
+	// Lead/second-byte bounds also exclude overlongs, surrogates and
+	// >10FFFF.
 	if (bytes > 1 &&
 		((lead == 0xe0 && input[1] < 0xa0) ||
 			(lead == 0xed && input[1] >= 0xa0) ||
@@ -233,8 +233,8 @@ hx_os_status hx_os_text_validate_utf8(
 		hx_os_status status;
 
 		if (data[offset] < 0x80) {
-			/* memcpy permits unaligned input without reading past
-			 * bytes. */
+			// memcpy permits unaligned input without reading past
+			// bytes.
 			while (bytes - offset >= sizeof(size_t)) {
 				size_t word;
 

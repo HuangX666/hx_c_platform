@@ -2,6 +2,8 @@
 
 [English](CONTAINERS.md) · [README](../README.zh-CN.md)
 
+第一次使用时，从[保存两个整数和依次取出任务](USAGE.zh-CN.md#containers)开始。vector 像能增长的数组，queue 按先放先取的顺序保存数据。这两个入门例子都有完整程序和预期输出；下文再说明字符串、结构体、map 及资源所有权。
+
 包含 `hx_container.h` 或 C 总头 `hx_os.h` 即可使用。实现按 C99 编译，公共接口使用 C 类型和不透明句柄，无需 C++ 运行库。 `HX_OS_ENABLE_CONTAINERS` 默认 ON；关闭后排除序列、树和 uthash 实现，创建接口返回 `HX_OS_NOT_SUPPORTED`，能力位 `HX_OS_CAP_CONTAINERS` 清除。不需要进程级初始化。
 
 其它常用工具：[LRU 缓存](CACHE.zh-CN.md)复用哈希表与最近使用链表；[动态位集合](BITSET.zh-CN.md)提供按字计数、搜索和集合运算；[固定环形缓冲](RING.zh-CN.md)借用调用者的内存。三者与容器一起裁剪。需要跨线程交接完整消息时，使用独立的[线程／环形队列](QUEUES.zh-CN.md)，通过 `HX_OS_ENABLE_QUEUES` 裁剪，不需要协程运行时。
@@ -86,7 +88,7 @@ if (status == HX_OS_OK)
 if (status == HX_OS_OK)
 	status = hx_os_sequence_push_back(names, &source, NULL);
 
-/* On OK the vector owns an independent copy. Inspect status in the host. */
+// On OK the vector owns an independent copy. Inspect status in the host.
 hx_string_destroy(&source);
 (void)hx_os_sequence_destroy(&names, NULL);
 ~~~
@@ -162,4 +164,4 @@ map 有对应的 `HX_OS_MAP_FOR_EACH`，两类容器都有反向遍历宏。需�
 
 除非另有说明，改变顺序的算法会拒绝 heap，避免破坏堆不变量。谓词不能修改同一个容器。成功调整顺序后迭代器失效；排序前分配失败则不改变容器或迭代器。临时空间计入容器字节预算。transform/copy 回调构造元素失败时，需要自行释放该元素的部分构造资源。新 vector 继承源 context/容量限制；有序 merge 要求元素、回调和 user 策略一致。splice 要求 context 和值策略兼容，检查目标容量，并转移节点的内存计数；把同一个链表的区间移到自身区间内部时不做操作。
 
-在提供的工作负载中，AVL 和红黑树节点分配占用相同，不能认为红黑树总是更快。[验证及微基准记录](VALIDATION.zh-CN.md) 分别列出分配字节数、操作耗时和运行结论，不把元数据变小直接当成运行性能提升。
+AVL 与红黑树提供相同的有序键语义，各自适合的负载需要结合真实数据、分配开销和访问方式测量。节点大小本身不能证明哪一种更快。

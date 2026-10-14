@@ -6,7 +6,9 @@
 #include <cstring>
 
 namespace hx {
-/* Call-borrowed bytes; no implicit allocating conversion at API entry. */
+/**
+ * \brief Call-borrowed bytes; no implicit allocating conversion at API entry.
+ */
 class StringView {
 public:
 	StringView(const char *text = NULL) noexcept

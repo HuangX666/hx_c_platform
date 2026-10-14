@@ -24,15 +24,17 @@ enum {
 	HX_OS_REGISTRY_EXCLUSIVE = 32
 };
 
-/* Windows extension; other systems/module-off return NOT_SUPPORTED.
- * Paths use '\' separators relative to the chosen hive, never filesystem
- * paths. Inputs are strict UTF-8, borrowed for the call. NULL/empty value
- * names select the default value. Flags require READ and/or WRITE; CREATE
- * additionally requires WRITE, EXCLUSIVE requires CREATE. EXCLUSIVE fails
- * with EXISTS for an existing key. VIEW32/VIEW64 are mutually exclusive.
- * No elevation, implicit creation, flush, expansion or process-global view
- * change. Native creation can create parent keys; it is not a transaction.
- * Serialize operations on a key; exclude close. Native ACLs still apply.
+/**
+ * \brief Windows extension; other systems/module-off return NOT_SUPPORTED.
+ *
+ * \details Paths use '\' separators relative to the chosen hive, never
+ * filesystem paths. Inputs are strict UTF-8, borrowed for the call. NULL/empty
+ * value names select the default value. Flags require READ and/or WRITE; CREATE
+ * additionally requires WRITE, EXCLUSIVE requires CREATE. EXCLUSIVE fails with
+ * EXISTS for an existing key. VIEW32/VIEW64 are mutually exclusive. No
+ * elevation, implicit creation, flush, expansion or process-global view change.
+ * Native creation can create parent keys; it is not a transaction. Serialize
+ * operations on a key; exclude close. Native ACLs still apply.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_registry_open(hx_os_context *context,
 	int root, const char *path, unsigned flags, hx_os_registry **out,
@@ -42,11 +44,14 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_registry_open_user(
 	hx_os_context *context, const char *path, unsigned flags,
 	hx_os_registry **out, hx_os_error *error);
 
-/* REG_SZ/REG_EXPAND_SZ are returned literally, with optional native
- * terminator removed. Embedded NUL, odd UTF-16 length and invalid encoding
- * fail. Native string values are bounded to 1 MiB, including a terminator
- * when writing. Reads allow 8 capacity-race retries. Output
- * uses its own context and is unchanged on failure.
+/**
+ * \brief REG_SZ/REG_EXPAND_SZ are returned literally, with optional native
+ * terminator removed.
+ *
+ * \details Embedded NUL, odd UTF-16 length and invalid encoding fail. Native
+ * string values are bounded to 1 MiB, including a terminator when writing.
+ * Reads allow 8 capacity-race retries. Output uses its own context and is
+ * unchanged on failure.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_registry_read_string(
 	hx_os_registry *key, const char *name, hx_string *out,
@@ -55,9 +60,12 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_registry_read_string(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_registry_read_u32(hx_os_registry *key,
 	const char *name, uint32_t *out, hx_os_error *error);
 
-/* Two-pass convenience over the same strict decoder. required includes NUL;
- * insufficient capacity leaves buffer unchanged. A value may change between
- * calls; retry OUTPUT_FULL using the new required size.
+/**
+ * \brief Two-pass convenience over the same strict decoder.
+ *
+ * \details required includes NUL; insufficient capacity leaves buffer
+ * unchanged. A value may change between calls; retry OUTPUT_FULL using the new
+ * required size.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_registry_read_string_buffer(
 	hx_os_registry *key, const char *name, char *buffer, size_t capacity,
@@ -70,7 +78,9 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_registry_write_string(
 	hx_os_registry *key, const char *name, const char *value,
 	hx_os_error *error);
 
-/* Consumes *key even on native close error, as file_close does. */
+/**
+ * \brief Consumes *key even on native close error, as file_close does.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_registry_close(
 	hx_os_registry **key, hx_os_error *error);
 #ifdef __cplusplus

@@ -7,7 +7,10 @@
 
 namespace hx {
 
-/* Facades retain callback diagnostics; native owners remain with the host. */
+/**
+ * \brief Facades retain callback diagnostics; native owners remain with the
+ * host.
+ */
 class DirectoryWatch {
 public:
 	template <typename F>

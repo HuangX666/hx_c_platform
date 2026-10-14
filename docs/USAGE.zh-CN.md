@@ -17,38 +17,47 @@
 
 ## 1. 怎样使用这份教程
 
-这份教程面向会写基本 C/C++ 程序、第一次使用本库的开发者。每节先说要完成什么，再给输入、完整程序、运行结果和关键调用说明。C 程序保存为 `main.c`，C++ 程序保存为 `main.cpp`；每次选一个程序，不要把多个 `main` 拼到同一个文件。
+每一节解决一个具体问题，例如“读取端口配置”或“把一个计算交给后台”。先完成第 2 节接入，再挑一节运行。每个 C／C++ 代码块都是独立程序：一次只把其中一个保存为 `main.c` 或 `main.cpp`，不要把多个 main 拼在一起。
 
-先按第 2 节准备工程，再选择一个任务。所有示例使用默认模块配置，没有开启外部解析器或编码依赖。页面中的常量、函数和类型都对应当前接口。更细的平台差异、容量和生命周期规则见[详细参考](REFERENCE.zh-CN.md)。
+阅读顺序是：准备输入 → 编译运行 → 对照输出 → 替换成业务数据。暂时不需要自定义分配器或深入平台原理；这些细节在[接口参考](REFERENCE.zh-CN.md)按功能查询。
 
 <a id="project"></a>
 
 ## 2. 准备一个最小项目
 
-### 2.1 目录和输入文件
+### 2.1 目录和源码
 
-需要 CMake 3.16+ 和适当的编译器。Windows 使用 MSVC 开发者终端，Linux 使用 GCC/Clang。把本库源码复制到 `external/hx_c_platform`，建立：
+从源码开始时，在 MSVC 开发者终端或 Linux 终端执行：
+
+```sh
+mkdir hx_demo
+cd hx_demo
+mkdir deps
+cd deps
+git clone --branch dev https://github.com/HuangX666/hx_c_platform.git
+git -C hx_c_platform submodule update --init --recursive
+cd ..
+```
+
+现在位于 `hx_demo`，在这里创建 `CMakeLists.txt` 和本节要运行的程序。仅文件／配置例子需要额外输入文件，其余例子可以直接运行。
 
 ```text
 hx_demo/
 ├── CMakeLists.txt
-├── main.c          # Select a C program below.
-├── main.cpp        # Select a C++ program below.
-├── hello.txt
-├── config.json
-└── external/
+├── main.c
+├── hello.txt       # 文本读取例子需要
+├── config.json     # 配置读取例子需要
+└── deps/
     └── hx_c_platform/
 ```
 
-两个程序文件只编译当前选择的一个，CMake 配置会决定使用哪个。先准备以下两个输入文件，即使暂时选择字符串或容器示例，也保留它们，供构建配置复制。
-
-`hello.txt` 保存为 UTF-8；本例内容是 ASCII 文本，避免把终端显示配置混入文件读取教学：
+文件读取例子使用 UTF-8 的 `hello.txt`：
 
 ```text
 Hello, hx_c_platform!
 ```
 
-`config.json` 保存为 UTF-8：
+配置读取例子使用 UTF-8 的 `config.json`：
 
 ```json
 {"port": 8080}
@@ -58,16 +67,17 @@ Hello, hx_c_platform!
 
 ### 2.2 编译 C 程序
 
-将选中的 C 程序保存为 `main.c`，`CMakeLists.txt` 内容为：
+把选中的 C 程序保存为 `main.c`，`CMakeLists.txt` 使用下面的完整内容：
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
 project(hx_demo LANGUAGES C)
 
-set(HX_OS_ENABLE_CRYPTO OFF CACHE BOOL "" FORCE)
-set(HX_OS_ENABLE_ARCHIVE OFF CACHE BOOL "" FORCE)
+foreach(module CRYPTO ARCHIVE COMPRESSION HTTP URL UNICODE PERSISTENT_QUEUE)
+	set(HX_OS_ENABLE_${module} OFF CACHE BOOL "")
+endforeach()
 
-add_subdirectory(external/hx_c_platform)
+add_subdirectory(deps/hx_c_platform)
 
 add_executable(hx_demo main.c)
 target_link_libraries(hx_demo PRIVATE hx_c_platform::hx_c_platform)
@@ -75,49 +85,46 @@ set_target_properties(hx_demo PROPERTIES
 	C_STANDARD 99
 	C_STANDARD_REQUIRED YES
 	C_EXTENSIONS NO)
-
-configure_file(hello.txt hello.txt COPYONLY)
-configure_file(config.json config.json COPYONLY)
 ```
 
-`add_subdirectory` 编译本库，`target_link_libraries` 把库接入你的程序。库自身的测试和示例默认关闭，首次接入只编译库。默认静态库配置不需要另外寻找 DLL。
+`add_subdirectory` 构建本库；`target_link_libraries` 让自己的程序能调用本库。上面的七个开关关闭需要额外原生 SDK 的模块，文件、字符串、内置 JSON、设置、容器和线程池仍可用于本教程。需要那些可选模块时，再按[依赖指南](DEPENDENCIES.zh-CN.md)准备 SDK，并通过对应的 `-DHX_OS_ENABLE_模块名=ON` 配置参数开启。
 
-在 `hx_demo` 下执行：
+在 `hx_demo` 中执行：
 
 ```sh
-cmake -S . -B build-c
-cmake --build build-c --config Release
-cd build-c
+cmake -S . -B build
+cmake --build build --config Release
 ```
 
-Windows 的 Visual Studio 构建运行：
+Windows 的 Visual Studio Release 构建：
 
 ```powershell
-.\Release\hx_demo.exe
+.\build\Release\hx_demo.exe
 ```
 
-Linux 的 Makefile/Ninja 构建运行：
+Linux 的 Ninja／Makefile 构建：
 
 ```sh
-./hx_demo
+./build/hx_demo
 ```
 
-更换任务时，替换 `main.c`，重新执行构建和运行命令。配置命令仍在 `hx_demo` 下执行；运行命令在 `build-c` 下执行。
+运行时继续留在 `hx_demo`，程序就能按相对路径找到这里的输入文件。换例子时替换 `main.c` 并重新构建；同一工具链复用同一个构建目录。Windows 使用 Ninja 时，执行文件通常是 `build/hx_demo.exe`。
 
 <a id="cpp-project"></a>
 
 ### 2.3 编译 C++ 程序
 
-将选中的 C++ 程序保存为 `main.cpp`，使用下面这份完整 `CMakeLists.txt`。它选择 C++11，链接同一份 C 库，并为你的程序关闭 C++ 异常。
+把选中的 C++ 程序保存为 `main.cpp`，用下面的完整 CMake 配置。编译和运行命令仍与第 2.2 节相同。
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
-project(hx_demo LANGUAGES CXX)
+project(hx_demo LANGUAGES C CXX)
 
-set(HX_OS_ENABLE_CRYPTO OFF CACHE BOOL "" FORCE)
-set(HX_OS_ENABLE_ARCHIVE OFF CACHE BOOL "" FORCE)
+foreach(module CRYPTO ARCHIVE COMPRESSION HTTP URL UNICODE PERSISTENT_QUEUE)
+	set(HX_OS_ENABLE_${module} OFF CACHE BOOL "")
+endforeach()
 
-add_subdirectory(external/hx_c_platform)
+add_subdirectory(deps/hx_c_platform)
 
 add_executable(hx_demo main.cpp)
 target_link_libraries(hx_demo PRIVATE hx_c_platform::cpp)
@@ -132,20 +139,65 @@ if(MSVC)
 else()
 	target_compile_options(hx_demo PRIVATE -fno-exceptions)
 endif()
-
-configure_file(hello.txt hello.txt COPYONLY)
-configure_file(config.json config.json COPYONLY)
 ```
 
-使用单独的构建目录，在 `hx_demo` 下执行：
+`hx_c_platform::cpp` 提供 C++ 头文件包装并连接同一个 C 核心。这里选择 C++11、关闭异常。C++ 调用先检查 Result 是否成功，再通过 `.value()` 使用里面的结果。
 
-```sh
-cmake -S . -B build-cpp
-cmake --build build-cpp --config Release
-cd build-cpp
+<a id="installed-project"></a>
+
+### 2.4 已经有 include／lib／bin 安装包
+
+如果你拿到的是编译好的 SDK，把整个包放到 `deps/hx_c_platform`，保持下面的目录关系；无需再克隆源码。
+
+```text
+deps/hx_c_platform/
+├── include/
+├── lib/
+│   └── cmake/hx_c_platform/
+└── bin/
 ```
 
-在 `build-cpp` 下，Windows 的 Visual Studio 构建同样运行 `.\Release\hx_demo.exe`，Linux 的 Makefile/Ninja 构建运行 `./hx_demo`。Windows 如果选了 Ninja，程序也位于构建目录根部，运行 `.\hx_demo.exe`。
+C 程序使用以下 `CMakeLists.txt`，继续按第 2.2 节运行命令构建：
+
+```cmake
+cmake_minimum_required(VERSION 3.16)
+project(hx_demo LANGUAGES C)
+
+list(PREPEND CMAKE_PREFIX_PATH
+	"${CMAKE_CURRENT_SOURCE_DIR}/deps/hx_c_platform")
+find_package(hx_c_platform CONFIG REQUIRED)
+
+add_executable(hx_demo main.c)
+target_link_libraries(hx_demo PRIVATE hx_c_platform::hx_c_platform)
+set_target_properties(hx_demo PROPERTIES
+	C_STANDARD 99
+	C_STANDARD_REQUIRED YES
+	C_EXTENSIONS NO)
+```
+
+库和程序的架构／配置要匹配，例如都使用 x64 Release。CMake GUI 打开 `hx_demo` 作为源码目录，选择对应 Visual Studio 生成器和 x64，Configure／Generate 后可打开生成的 `.sln`。
+
+Windows 共享 SDK 的 DLL 放在 `bin`。在 PowerShell 中运行时，可以先把这一目录加入当前终端的 PATH：
+
+```powershell
+$env:PATH = "$PWD\deps\hx_c_platform\bin;$env:PATH"
+.\build\Release\hx_demo.exe
+```
+
+Linux 共享包可按[部署说明](NATIVE_DEPENDENCIES.zh-CN.md#4-安装与发布)设置库搜索路径。C++ 安装包接入同样使用 find_package；把项目语言、源文件、目标和异常选项换成第 2.3 节的 C++ 设置。
+
+### 2.5 看懂示例中的几种写法
+
+| 写法 | 你需要知道的意思 |
+| --- | --- |
+| `hx_os_status status` | 保存这次操作的结果；与 `HX_OS_OK` 比较判断成功 |
+| `hx_string text = HX_STRING_INIT` | 准备一个空字符串，之后用它接收或保存文字 |
+| `&text` | 允许函数把结果写进这个字符串 |
+| 最后的 `NULL` 错误参数 | 暂时不需要详细系统诊断，仍要检查返回状态 |
+| C++ 的 `if (!result)` | 检查调用失败 |
+| C++ 的 `result.value()` | 成功后取得真正的字符串、数字或对象 |
+
+`NULL` 的含义取决于参数位置，不是所有指针都能传 NULL。下面每节会解释实际用到的参数。
 
 <a id="files"></a>
 
@@ -457,15 +509,13 @@ Port: 8080
 
 ### 6.3 一次填写多个值
 
-已经创建好 `settings` 后，可以使用首页的连续设置方式：
+在第 6.2 节程序中，将 `auto changed = settings.setInt("port", 8080);` 这一句替换成下面的赋值，就能连续写入两个值。保留原程序后面的结果检查、读取和关闭步骤：
 
 ```cpp
 auto changed = settings.update()
 		       .setInt("port", 8080)
 		       .setBool("enabled", true)
 		       .finish();
-if (!changed)
-	std::fprintf(stderr, "%s\n", hx_os_status_name(changed.status()));
 ```
 
 成功后可分别用 `settings.integer("port")` 和 `settings.boolean("enabled")` 读取。每次读取也要检查结果。`finish()` 不执行延迟提交，它只返回此前写入的最终状态；每个 setter 调用时就已生效。
@@ -814,7 +864,7 @@ C 没有自动析构，所以字符串、文档、容器用完需调用对应释
 
 ### 10.5 关闭了可选模块，为什么示例失败？
 
-本教程使用默认模块配置。JSON 需要 CONFIG，容器需要 CONTAINERS，variant 需要 VARIANT，设置需要 SETTINGS，线程池需要 THREAD_POOL。关闭模块或遇到目标不支持的能力时，接口明确返回不支持，不会用成功伪装。开关、可选解析器、编码依赖和最小嵌入式配置见[构建参考](REFERENCE.zh-CN.md#section-27)。
+第 2 节的入门配置保留了这些示例所需的模块。JSON 需要 CONFIG，容器需要 CONTAINERS，variant 需要 VARIANT，设置需要 SETTINGS，线程池需要 THREAD_POOL。关闭模块或遇到目标不支持的能力时，接口明确返回不支持，不会用成功伪装。开关、可选解析器、编码依赖和最小嵌入式配置见[构建参考](REFERENCE.zh-CN.md#section-27)。
 
 ### 10.6 我想使用其他功能
 
@@ -825,4 +875,4 @@ C 没有自动析构，所以字符串、文档、容器用完需调用对应释
 | 网络、进程、管道、映射、系统指标 | [平台工具](PLATFORM_UTILITIES.zh-CN.md) |
 | 锁、事件、线程局部存储和资源生命周期 | [基础契约](CONTRACTS.zh-CN.md) |
 | 静态/共享安装后 find_package 接入 | [安装参考](REFERENCE.zh-CN.md#section-5) |
-| 目标平台已验证到什么程度 | [验证记录](VALIDATION.zh-CN.md) |
+| 目标平台的要求与限制 | [平台支持](PLATFORMS.zh-CN.md) |

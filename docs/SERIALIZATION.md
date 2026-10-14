@@ -162,7 +162,7 @@ Existing public structures keep their declarations and use HX_OS_CODEC_FIELD, HX
 
 Build normally with the actual SDK. Macro expansion emits standard C99/C++11 declarations; the ARM or other target compiler evaluates sizeof/offsetof rather than importing host-calculated offsets. Building an ARM program on a Windows/x86 host requires no Python, Clang analyzer or generation tool on the board. There is no extra runtime registration/initialization; encoding and decoding reuse the existing codec.
 
-Use the correct sysroot, libc, floating-point ABI, headers and alignment settings, as in an ordinary C/C++ build. A glibc cross-build does not establish support for every musl toolchain, older SDK or physical board. [Validation records](VALIDATION.md) distinguish ARMv7/AArch64 cross-builds and QEMU execution from real board testing.
+Use the correct sysroot, libc, floating-point ABI, headers and alignment settings, as in an ordinary C/C++ build. A glibc cross-build does not establish support for every musl toolchain, older SDK or physical board. See [platform support](PLATFORMS.md) for target boundaries.
 
 ## 5. C++11 without exceptions
 
@@ -249,4 +249,4 @@ Windows executables are in `build-serialization/bin/Release`; a single-configura
 
 `hx_os_serialization` also accepts `yaml` and `toml`. It encodes and decodes before printing only the encoded document to stdout. The device contains an array, so selecting ini/env/properties fails explicitly; use the flat connection structure from section 3 for those formats.
 
-Mixed nesting, field mappings, failures and third-party interoperability are covered by private maintainer regressions. Customers can run the C/C++ examples above directly; see [validation records](VALIDATION.md) for dated evidence.
+The C/C++ examples above run independently. See [platform support](PLATFORMS.md) for target boundaries.

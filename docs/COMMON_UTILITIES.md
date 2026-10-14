@@ -38,7 +38,7 @@ if (status == HX_OS_OK)
 	status = hx_string_split(&text, hx_string_view_from_cstr(","),
 		&parts, NULL);
 
-/* Check status before inspecting borrowed parts_at views. */
+// Check status before inspecting borrowed parts_at views.
 hx_string_parts_destroy(&parts);
 hx_string_destroy(&text);
 ~~~
@@ -116,7 +116,7 @@ uint64_t interval_ns;
 
 hx_os_status status = hx_os_muldiv_u64(1001, 1000000000, 30000,
 	HX_OS_ROUND_NEAREST, &interval_ns, NULL);
-/* On success: 33366667 ns. */
+// On success: 33366667 ns.
 ~~~
 
 The full 128-bit product is retained. Rounding supports down/up/nearest (ties upward). Division by zero is INVALID; uint64 overflow is RANGE. Failures preserve outputs. Direct low/high multiplication and division are available. Compiler 128-bit integers are used where supported; other targets use shared 32-bit partial products and long division. No heap, locks, floating-point approximation or new assembly.

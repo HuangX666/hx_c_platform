@@ -1,5 +1,8 @@
-/* Upstream files remain byte-for-byte intact. Only private symbol names and
- * allocation routing are supplied by this translation unit's integration.
+/**
+ * \brief Upstream files remain byte-for-byte intact.
+ *
+ * \details Only private symbol names and allocation routing are supplied by
+ * this translation unit's integration.
  */
 #include <stdlib.h>
 #include "kcp_symbols.h"

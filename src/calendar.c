@@ -229,7 +229,7 @@ static hx_os_status hx_os_calendar_piece(const char *spec,
 	}
 
 numeric:
-	/* Keep fixed-width calendar fields off the CRT formatting path. */
+	// Keep fixed-width calendar fields off the CRT formatting path.
 	if (render) {
 		unsigned position = width;
 

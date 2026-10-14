@@ -92,8 +92,8 @@ return HX_OS_OK;
 
 构建 `hx_os_windows_info` 后，在 Visual Studio 生成器下运行 `build/bin/Release/hx_os_windows_info.exe build/bin/Release/hx_os_test_windows_util.exe`。[windows_info.c](../examples/windows_info.c) 是完整程序；测试文件的版本号为 `1.2.345.678`，描述为 `Window helper fixture`，GPU 输出以机器实际情况为准。命令行示例通过 SYSTEM_UTILS 取得 UTF-8 参数，中文路径不依赖 Windows ANSI 代码页；查询模块本身不依赖 SYSTEM_UTILS。
 
-## 5. 开关与验证
+## 5. 开关与平台限制
 
 `HX_OS_ENABLE_WINDOWS_VERSION` 和 `HX_OS_ENABLE_WINDOWS_DESKTOP` 默认开启，可分别关闭。版本查询链接系统 Version；桌面查询链接 User32／DXGI／DXGUID。CMake 导出与 pkg-config 的静态依赖包含这些系统库。其他系统保留声明并返回 `NOT_SUPPORTED`。available 查询表示已编译适配，不代表某个窗口、显示器、资源或 GPU 一定存在。
 
-测试使用自有版本资源、隐藏窗口、UTF-8 路径和分配失败注入，检查容量／输出保留、资源翻译、长标题／空标题、跨线程拒绝、显示器／GPU 观察、模块开关和 context 回收。具体原生、Win32、检查器与安装消费结果见[验证记录](VALIDATION.zh-CN.md)。采用兼容基线的 API 不等于已经完成 Win7/8.1 目标实测。
+目标平台的编译、部署要求及限制见[平台支持](PLATFORMS.zh-CN.md)。公开示例独立于维护者的本地回归。

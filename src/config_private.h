@@ -52,7 +52,7 @@ hx_os_config_node *hx_os_cfg_build_value(hx_os_cfg_parser *parser,
 
 hx_os_status hx_os_cfg_ini_validate(const hx_os_config_document *document);
 
-/* Requires validated options and an empty parser. Publishes no public tree. */
+// Requires validated options and an empty parser. Publishes no public tree.
 int hx_os_cfg_document_create(hx_os_cfg_parser *parser, hx_os_context *context,
 	const hx_os_config_options *options);
 

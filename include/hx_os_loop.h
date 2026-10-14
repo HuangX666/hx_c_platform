@@ -61,37 +61,48 @@ HX_OS_API void HX_OS_CALL hx_os_loop_options_init(hx_os_loop_options *options);
 HX_OS_API void HX_OS_CALL hx_os_operation_init(
 	hx_os_operation *operation, int kind);
 
-/*
- * Creator thread owns polling, I/O submission, socket close and destruction.
- * That thread must remain alive until loop destruction.
- * POST submission and request cancel/retain/release/wait are thread-safe.
- * One read-side and one write-side operation may coexist per socket.
- * CONNECT occupies both directions. Socket ownership lasts until close.
+/**
+ * \brief Creator thread owns polling, I/O submission, socket close and
+ * destruction.
+ *
+ * \details That thread must remain alive until loop destruction. POST
+ * submission and request cancel/retain/release/wait are thread-safe. One
+ * read-side and one write-side operation may coexist per socket. CONNECT
+ * occupies both directions. Socket ownership lasts until close.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_loop_create(hx_os_network *network,
 	const hx_os_loop_options *options, hx_os_loop **out,
 	hx_os_error *error);
 
-/* Context-only loop for posts, timers and local I/O. No network/DNS startup.
- * Network operations require the original network-backed factory.
+/**
+ * \brief Context-only loop for posts, timers and local I/O.
+ *
+ * \details No network/DNS startup. Network operations require the original
+ * network-backed factory.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_loop_create_local(
 	hx_os_context *context, const hx_os_loop_options *options,
 	hx_os_loop **out, hx_os_error *error);
 
-/*
- * Accepted operations call completion once on the polling thread, never
- * inline in submit. Rejection transfers nothing and calls no callback.
- * Writes copy bytes by default; BORROW and read buffers live until callback.
- * Addresses and DNS names are copied. user is borrowed until callback ends.
- * The deadline requests cancellation; native retirement can finish later.
- * A DNS job uses bounded workers and cannot forcibly interrupt getaddrinfo.
+/**
+ * \brief Accepted operations call completion once on the polling thread, never
+ * inline in submit.
+ *
+ * \details Rejection transfers nothing and calls no callback. Writes copy bytes
+ * by default; BORROW and read buffers live until callback. Addresses and DNS
+ * names are copied. user is borrowed until callback ends. The deadline requests
+ * cancellation; native retirement can finish later. A DNS job uses bounded
+ * workers and cannot forcibly interrupt getaddrinfo.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_loop_submit(hx_os_loop *loop,
 	const hx_os_operation *operation, hx_os_completion_fn completion,
 	void *user, hx_os_request **out, hx_os_error *error);
 
-/* Poll performs one batch. run drains until idle. Neither starts a thread. */
+/**
+ * \brief Poll performs one batch.
+ *
+ * \details run drains until idle. Neither starts a thread.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_loop_poll_until(
 	hx_os_loop *loop, hx_os_deadline deadline, hx_os_error *error);
 
@@ -108,14 +119,17 @@ HX_OS_API void HX_OS_CALL hx_os_request_retain(hx_os_request *request);
 
 HX_OS_API void HX_OS_CALL hx_os_request_release(hx_os_request *request);
 
-/* Success includes callback return; waiting does not drive the loop. */
+/**
+ * \brief Success includes callback return; waiting does not drive the loop.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_request_wait_until(
 	hx_os_request *request, hx_os_deadline deadline,
 	hx_os_completion *completion, hx_os_error *error);
 
-/*
- * Take functions transfer ownership once, in the callback or after wait.
- * Untaken results are released with the request. Returned sockets have
+/**
+ * \brief Take functions transfer ownership once, in the callback or after wait.
+ *
+ * \details Untaken results are released with the request. Returned sockets have
  * not yet been attached to a loop. Cross-thread use needs external exclusion.
  */
 HX_OS_API hx_os_socket *HX_OS_CALL hx_os_request_take_socket(
@@ -124,10 +138,12 @@ HX_OS_API hx_os_socket *HX_OS_CALL hx_os_request_take_socket(
 HX_OS_API hx_os_address_list *HX_OS_CALL hx_os_request_take_addresses(
 	hx_os_request *request);
 
-/*
- * Close rejects new submissions and cancels outstanding operations. Timeout
- * retains all live objects and can be retried. Close may invoke callbacks.
- * Close all attached sockets after their requests retire, then destroy loop.
+/**
+ * \brief Close rejects new submissions and cancels outstanding operations.
+ *
+ * \details Timeout retains all live objects and can be retried. Close may
+ * invoke callbacks. Close all attached sockets after their requests retire,
+ * then destroy loop.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_loop_close_until(
 	hx_os_loop *loop, hx_os_deadline deadline, hx_os_error *error);

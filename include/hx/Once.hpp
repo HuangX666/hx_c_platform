@@ -43,8 +43,8 @@ public:
 		return result;
 	}
 
-	/* Callable returns void or Result<void>; it is borrowed through this
-	 * call. */
+	// Callable returns void or Result<void>; it is borrowed through this
+	// call.
 	template <typename Function>
 	Result<void> run(Function &&function,
 		hx_os_deadline deadline = HX_OS_DEADLINE_INFINITE,

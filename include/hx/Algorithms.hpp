@@ -14,12 +14,15 @@
 
 namespace hx {
 namespace algo {
-/* Standard C++11 semantics and iterator requirements apply. These aliases
- * add no error layer or storage. Element operations, predicates and output
- * iterators must not raise exceptions. Output capacity belongs to the caller.
- * sort/partial_sort/nth_element require random-access iterators. Bounds and
- * binary search require appropriately ordered input. unique/remove_if return
- * a logical new end; they do not erase container elements.
+/**
+ * \brief Standard C++11 semantics and iterator requirements apply.
+ *
+ * \details These aliases add no error layer or storage. Element operations,
+ * predicates and output iterators must not raise exceptions. Output capacity
+ * belongs to the caller. sort/partial_sort/nth_element require random-access
+ * iterators. Bounds and binary search require appropriately ordered input.
+ * unique/remove_if return a logical new end; they do not erase container
+ * elements.
  */
 using std::accumulate;
 using std::adjacent_difference;
@@ -110,10 +113,13 @@ Output sample_range(Input first, Input last, Output out, std::size_t count,
 }
 } // namespace detail
 
-/* C++11 sampling without replacement. Forward input supports ordinary
- * output iterators and preserves order; single-pass input needs random-access
- * output for reservoir replacement. Caller provides count output slots and
- * a valid standard uniform random generator. No library allocation occurs.
+/**
+ * \brief C++11 sampling without replacement.
+ *
+ * \details Forward input supports ordinary output iterators and preserves
+ * order; single-pass input needs random-access output for reservoir
+ * replacement. Caller provides count output slots and a valid standard uniform
+ * random generator. No library allocation occurs.
  */
 template <typename Input, typename Output, typename Generator>
 Output sample(Input first, Input last, Output out, std::size_t count,
@@ -123,9 +129,11 @@ Output sample(Input first, Input last, Output out, std::size_t count,
 		typename std::iterator_traits<Input>::iterator_category());
 }
 
-/* Whole linked containers use their stable node-relinking sorts. Their
- * iterators still cannot be passed to the random-access range sort above.
- * Sorting does not allocate nodes or copy/move the stored elements.
+/**
+ * \brief Whole linked containers use their stable node-relinking sorts.
+ *
+ * \details Their iterators still cannot be passed to the random-access range
+ * sort above. Sorting does not allocate nodes or copy/move the stored elements.
  */
 template <typename T, typename Allocator>
 void sort(std::list<T, Allocator> &values)
@@ -151,9 +159,13 @@ void sort(std::forward_list<T, Allocator> &values, Compare compare)
 	values.sort(std::move(compare));
 }
 
-/* Explicit container overloads erase values and return the removed count.
- * Iterator invalidation follows the container; predicates, element movement
- * and destruction must not raise exceptions. No result array is allocated.
+/**
+ * \brief Explicit container overloads erase values and return the removed
+ * count.
+ *
+ * \details Iterator invalidation follows the container; predicates, element
+ * movement and destruction must not raise exceptions. No result array is
+ * allocated.
  */
 template <typename T, typename Allocator, typename Predicate>
 typename std::vector<T, Allocator>::size_type erase_if(

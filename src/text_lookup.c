@@ -328,8 +328,11 @@ static hx_string_view hx_os_lookup_trim(hx_string_view text)
 	return text;
 }
 
-/* Share quoted-string validation/decoding with the lexer. Unquoted catalog
- * values are plain text, including apostrophes and numeric-looking words.
+/**
+ * \brief Share quoted-string validation/decoding with the lexer.
+ *
+ * \details Unquoted catalog values are plain text, including apostrophes and
+ * numeric-looking words.
  */
 static hx_os_status hx_os_lookup_quoted(
 	hx_string_view *line, hx_string *out, hx_os_error *error)

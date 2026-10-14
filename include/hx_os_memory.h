@@ -26,11 +26,13 @@ typedef struct hx_os_memory_stats {
 	size_t peak_reserved_bytes;
 } hx_os_memory_stats;
 
-/*
- * Thread-safe, nonmoving segregated allocation. maximum_bytes=0 allows
- * growth. Accounting includes pool-controlled blocks and metadata, not
- * opaque upstream allocator overhead or process RSS. Free belongs to the
- * originating pool. Destruction requires quiescence and zero live blocks.
+/**
+ * \brief Thread-safe, nonmoving segregated allocation.
+ *
+ * \details maximum_bytes=0 allows growth. Accounting includes pool-controlled
+ * blocks and metadata, not opaque upstream allocator overhead or process RSS.
+ * Free belongs to the originating pool. Destruction requires quiescence and
+ * zero live blocks.
  */
 HX_OS_API void HX_OS_CALL hx_os_memory_pool_options_init(
 	hx_os_memory_pool_options *options);
@@ -70,7 +72,11 @@ HX_OS_API void HX_OS_CALL hx_os_object_pool_release(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_object_pool_destroy(
 	hx_os_object_pool **pool, hx_os_error *error);
 
-/* Arena operations require caller serialization. Reset invalidates all data. */
+/**
+ * \brief Arena operations require caller serialization.
+ *
+ * \details Reset invalidates all data.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_arena_create(hx_os_context *context,
 	size_t block_bytes, size_t maximum_bytes, hx_os_arena **out,
 	hx_os_error *error);

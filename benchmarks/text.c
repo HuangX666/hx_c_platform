@@ -15,8 +15,7 @@ static int measure(const char *name, hx_string_view input, int operation,
 	char *json = NULL;
 
 	if (operation == 2) {
-		/* These fixtures contain no JSON quotes or control characters.
-		 */
+		// These fixtures contain no JSON quotes or control characters.
 		json = malloc(input.size + 2);
 		if (!json)
 			return 1;
@@ -27,7 +26,7 @@ static int measure(const char *name, hx_string_view input, int operation,
 			input.size + 2, NULL, &document, NULL);
 	}
 
-	/* Setup and the first warm-up are outside the measured interval. */
+	// Setup and the first warm-up are outside the measured interval.
 	for (i = 0; i <= iterations && status == HX_OS_OK; ++i) {
 		if (i == 1)
 			begin = hx_os_monotonic_ns();

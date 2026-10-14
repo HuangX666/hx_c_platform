@@ -25,8 +25,8 @@ int main(int argc, char **argv)
 			NULL);
 		sent += count;
 	}
-	/* This example's device protocol replies with one newline-delimited
-	 * JSON. */
+	// This example's device protocol replies with one newline-delimited
+	// JSON.
 	while (status == HX_OS_OK && received < sizeof(response) - 1) {
 		size_t count = 0;
 

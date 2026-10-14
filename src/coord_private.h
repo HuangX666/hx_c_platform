@@ -11,8 +11,11 @@ typedef struct hx_os_cancel_watch {
 	uint64_t id;
 } hx_os_cancel_watch;
 
-/* Register before acquiring the target mutex; retire after releasing it.
- * This lock order prevents a cancellation wake from being lost or deadlocking.
+/**
+ * \brief Register before acquiring the target mutex; retire after releasing it.
+ *
+ * \details This lock order prevents a cancellation wake from being lost or
+ * deadlocking.
  */
 hx_os_status hx_os_i_cancel_watch(hx_os_cancel_watch *watch,
 	hx_os_cancel_token *token, hx_os_mutex *mutex,

@@ -55,9 +55,12 @@ private:
 	hx_os_persistent_message *m_message_;
 };
 
-/* Owns a synchronous database handle. Exclude concurrent calls before close
- * or destruction; no worker is started and returned messages own their bytes.
- * Native SQLite connections created by the application are separate owners.
+/**
+ * \brief Owns a synchronous database handle.
+ *
+ * \details Exclude concurrent calls before close or destruction; no worker is
+ * started and returned messages own their bytes. Native SQLite connections
+ * created by the application are separate owners.
  */
 class PersistentQueue {
 public:

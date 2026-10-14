@@ -27,8 +27,11 @@ uint64_t hx_os_i_process_id(void);
 
 uint64_t hx_os_i_cpu_native_features(void);
 
-/* malloc-owned NUL-separated entries, bytes excludes any extra sentinel.
- * POSIX inheritance preserves raw bytes; public enumeration validates UTF-8.
+/**
+ * \brief malloc-owned NUL-separated entries, bytes excludes any extra sentinel.
+ *
+ * \details POSIX inheritance preserves raw bytes; public enumeration validates
+ * UTF-8.
  */
 hx_os_status hx_os_i_env_snapshot(
 	char **block, size_t *bytes, hx_os_error *error);

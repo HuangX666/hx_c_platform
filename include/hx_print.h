@@ -7,15 +7,22 @@
 
 #include "hx_format.h"
 
-/* C99 convenience calls take hx_format_arg values, including custom values.
- * Each argument is evaluated once; C does not specify their evaluation order.
- * Names, strings and custom objects remain borrowed through the call.
+/**
+ * \brief C99 convenience calls take hx_format_arg values, including custom
+ * values.
+ *
+ * \details Each argument is evaluated once; C does not specify their evaluation
+ * order. Names, strings and custom objects remain borrowed through the call.
  * Use the array interfaces for more arguments, options or detailed errors.
  */
 #define HX_PRINT_MAX_ARGUMENTS 64
 
-/* The trailing sentinel permits zero values without empty variadic arguments.
- * Array sizes are constant: sizeof never evaluates the argument expressions.
+/**
+ * \brief The trailing sentinel permits zero values without empty variadic
+ * arguments.
+ *
+ * \details Array sizes are constant: sizeof never evaluates the argument
+ * expressions.
  */
 #define HX_PRINT_I_COUNT(...)                                                  \
 	(sizeof((const hx_format_arg[]){__VA_ARGS__}) /                        \

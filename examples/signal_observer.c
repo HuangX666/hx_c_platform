@@ -33,7 +33,7 @@ int main(void)
 	if (status == HX_OS_OK)
 		status = hx_os_signal_emit(signals, "saved", &data, NULL, NULL);
 
-	/* This example has no concurrent emitters or retained callbacks. */
+	// This example has no concurrent emitters or retained callbacks.
 	if (signals) {
 		hx_os_status closed = hx_os_signal_handler_close_until(
 			&signals, HX_OS_DEADLINE_NOW, NULL);

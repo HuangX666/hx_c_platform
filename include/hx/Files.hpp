@@ -70,8 +70,11 @@ public:
 		bool eof;
 	};
 
-	/* A failed result can still own a progress value. EOF is kept as
-	 * status. */
+	/**
+	 * \brief A failed result can still own a progress value.
+	 *
+	 * \details EOF is kept as status.
+	 */
 	Result<ReadResult> readSome(void *data, size_t bytes) noexcept
 	{
 		if (!m_file_)
@@ -88,8 +91,11 @@ public:
 			error);
 	}
 
-	/* EOF is successful completion with eof=true. Other failures retain
-	 * partial bytes just as readSome does. */
+	/**
+	 * \brief EOF is successful completion with eof=true.
+	 *
+	 * \details Other failures retain partial bytes just as readSome does.
+	 */
 	Result<ReadResult> read(void *data, size_t bytes) noexcept
 	{
 		auto result = readSome(data, bytes);
@@ -208,8 +214,8 @@ public:
 			context);
 	}
 
-	/* Recursive basename search. Paths are borrowed during the callback.
-	 * false/EOF stops normally, matching forEach's callback contract. */
+	// Recursive basename search. Paths are borrowed during the callback.
+	// false/EOF stops normally, matching forEach's callback contract.
 	template <typename F>
 	static Result<size_t> findFiles(const char *root, const char *pattern,
 		F &&function, const hx_os_walk_options *options = NULL,
@@ -231,10 +237,10 @@ public:
 		return Result<size_t>::withValue(completed, status, error);
 	}
 
-	/* Callback borrows each name only during its call. A bool callback
-	 * continues on true and stops normally on false;
-	 * void/status/Result<void> callbacks follow the usual explicit-error
-	 * contract. */
+	// Callback borrows each name only during its call. A bool callback
+	// continues on true and stops normally on false;
+	// void/status/Result<void> callbacks follow the usual explicit-error
+	// contract.
 	template <typename F>
 	static Result<size_t> forEach(const char *path, F &&function,
 		size_t maxEntries = 65536,
@@ -255,7 +261,11 @@ public:
 		return Result<size_t>::withValue(completed, status, error);
 	}
 
-	/* Entry bytes include NUL. Moving the entry keeps its name alive. */
+	/**
+	 * \brief Entry bytes include NUL.
+	 *
+	 * \details Moving the entry keeps its name alive.
+	 */
 	struct Entry {
 		Buffer storage;
 		unsigned kind;

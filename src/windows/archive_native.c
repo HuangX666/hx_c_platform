@@ -70,9 +70,8 @@ static hx_os_status hx_ar_open_directory(
 	*out = INVALID_HANDLE_VALUE;
 	if (!wide)
 		return hx_ar_i_fail(job, error.status, &error, NULL);
-	/* Deny ancestor rename/deletion. Sharing write is needed by child
-	 * publication; the caller excludes concurrent reparse-point mutation.
-	 */
+	// Deny ancestor rename/deletion. Sharing write is needed by child
+	// publication; the caller excludes concurrent reparse-point mutation.
 	handle = CreateFileW(wide, FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
 		FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING,
 		FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,

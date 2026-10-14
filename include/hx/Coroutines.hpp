@@ -10,7 +10,7 @@ template <typename T> class Routine;
 
 class Runtime;
 
-/* A task handle never owns the worker thread. Releasing it does not cancel. */
+// A task handle never owns the worker thread. Releasing it does not cancel.
 template <typename T> class Task {
 public:
 	Task() noexcept
@@ -163,8 +163,11 @@ struct Factory : detail::Factory<false, F, A...> {
 };
 } // namespace impl
 
-/* Explicit owner matches ThreadPool: keep it alive and retry shutdown on
- * timeout. Destruction of this borrowed facade never waits or detaches.
+/**
+ * \brief Explicit owner matches ThreadPool: keep it alive and retry shutdown on
+ * timeout.
+ *
+ * \details Destruction of this borrowed facade never waits or detaches.
  */
 class Runtime {
 public:
@@ -252,9 +255,8 @@ public:
 			std::forward<A>(arguments)...);
 	}
 
-	/* Ordinary tasks are owned by the runtime. Call errors()/waitUntil() at
-	 * a business boundary instead of retaining one Task per submission.
-	 */
+	// Ordinary tasks are owned by the runtime. Call errors()/waitUntil() at
+	// a business boundary instead of retaining one Task per submission.
 	template <typename F, typename... A,
 		typename std::enable_if<
 			!impl::IsRoutine<typename std::decay<F>::type>::value,
@@ -359,9 +361,12 @@ private:
 	hx_os_coro_runtime **m_owner_;
 };
 
-/* Optional bounded batch. One caller serializes submissions/waits. Dropping
- * the group releases handles, never cancels/joins worker threads. Captured
- * references still need their application lifetime, as for an ordinary Task.
+/**
+ * \brief Optional bounded batch.
+ *
+ * \details One caller serializes submissions/waits. Dropping the group releases
+ * handles, never cancels/joins worker threads. Captured references still need
+ * their application lifetime, as for an ordinary Task.
  */
 class Group {
 	struct Entry {
@@ -670,7 +675,7 @@ template <typename T> struct ChannelValues<T, false> {
 
 		hx_os_error error = {};
 
-		/* A stackless retry consumes the existing prepared value. */
+		// A stackless retry consumes the existing prepared value.
 		if (hx_os_coro_wait_pending()) {
 			auto status = hx_os_coro_channel_send_until(
 				channel, NULL, deadline, &error);
@@ -710,9 +715,12 @@ template <typename T> struct ChannelValues<T, false> {
 };
 } // namespace impl
 
-/* Nontrivial values use a stable budgeted box and proper C++ construction.
- * Moves may consume the source once box allocation succeeds, including a
- * subsequent timeout/closed send. Lvalue copies must themselves be noexcept.
+/**
+ * \brief Nontrivial values use a stable budgeted box and proper C++
+ * construction.
+ *
+ * \details Moves may consume the source once box allocation succeeds, including
+ * a subsequent timeout/closed send. Lvalue copies must themselves be noexcept.
  */
 template <typename T> class Channel {
 	static_assert(!std::is_trivially_copyable<T>::value ||
@@ -801,7 +809,9 @@ public:
 		return receiveInto(value, deadline);
 	}
 
-	/* Persistent storage is required across stackless WOULD_BLOCK returns.
+	/**
+	 * \brief Persistent storage is required across stackless WOULD_BLOCK
+	 * returns.
 	 */
 	Result<T> receiveInto(ReceiveStorage &value,
 		hx_os_deadline deadline =

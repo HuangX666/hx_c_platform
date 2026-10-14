@@ -66,9 +66,9 @@ hx_os_status hx_os_i_pipe_pair(int read_async, int write_async,
 			else if (code == ERROR_IO_PENDING) {
 				DWORD bytes;
 
-				/* The client is already open; retire any
-				 * unexpected pending connect before releasing
-				 * its stack state. */
+				// The client is already open; retire any
+				// unexpected pending connect before releasing
+				// its stack state.
 				(void)CancelIoEx(reader, &connect);
 				(void)GetOverlappedResult(
 					reader, &connect, &bytes, TRUE);

@@ -22,7 +22,7 @@
 ```c
 #include <hx_format_syntax.h>
 
-/* user.name 为 "张三"，user.age 为 18；price 为 1.25，count 为 3。 */
+// user.name 为 "张三"，user.age 为 18；price 为 1.25，count 为 3。
 hx_os_status status = HX_FPRINTLN(
 	"{user.name}: {user.age}, total={price * count:.2f}");
 ```
@@ -40,7 +40,7 @@ hx_string text = HX_STRING_INIT;
 
 hx_os_status status = HX_FFORMAT(&text, "Total: {price * count:.2f}");
 
-/* 检查 status 后再使用 text；失败时也要销毁字符串。 */
+// 检查 status 后再使用 text；失败时也要销毁字符串。
 hx_string_destroy(&text);
 ```
 

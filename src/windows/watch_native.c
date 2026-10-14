@@ -191,7 +191,7 @@ hx_os_status hx_os_i_watch_native_init(hx_os_watch *watch, hx_os_error *error)
 
 hx_os_status hx_os_i_watch_native_start(hx_os_watch *watch, hx_os_error *error)
 {
-	/* Initial native read is armed before the worker exists. */
+	// Initial native read is armed before the worker exists.
 	(void)watch;
 
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
@@ -246,8 +246,7 @@ hx_os_status hx_os_i_watch_native_run(hx_os_watch *watch, hx_os_error *error)
 		}
 	}
 
-	/* Cancellation must retire before releasing OVERLAPPED/buffer storage.
-	 */
+	// Cancellation must retire before releasing OVERLAPPED/buffer storage.
 	if (native->pending) {
 		(void)CancelIoEx(native->directory, &native->operation);
 		(void)GetOverlappedResult(native->directory, &native->operation,

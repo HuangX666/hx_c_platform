@@ -26,7 +26,7 @@ if (status == HX_OS_OK) {
 		(void)hx_os_wait_group_done(group, 1, NULL);
 }
 
-/* At the end of every worker path: */
+// At the end of every worker path:
 (void)hx_os_wait_group_done(group, 1, NULL);
 ```
 
@@ -72,7 +72,7 @@ auto added = group.add();
 if (!added)
 	return 1;
 
-/* Publish work here; every accepted task must eventually call group.done(). */
+// Publish work here; every accepted task must eventually call group.done().
 ```
 
 把 owner 指针、便利类和工作数据保留在宿主生命周期状态中。便利类析构不等待，也不释放底层对象，需要显式 `close()`；`WaitGroup::closeUntil(deadline)` 会先等待，再在安全时销毁。`BUSY`、`TIMEOUT` 或 `CANCELLED` 后仍保留 owner，便于重试。关闭前必须排除新的调用者和任务提交。
