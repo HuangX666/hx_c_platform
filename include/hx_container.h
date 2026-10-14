@@ -87,6 +87,37 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_byte_queue_peek(
 	const hx_os_byte_queue *queue, size_t offset, void *data, size_t bytes,
 	hx_os_error *error);
 
+/* capacity is allocated payload storage; limit is the configured payload
+ * ceiling; space is limit-size and may require allocation. NULL queries give
+ * zero. reserve retains contents; clear retains allocated storage.
+ * some operations copy min(requested, available) bytes and report OK with
+ * completed, including partial progress. A nonempty request with no progress
+ * returns NEED_INPUT for read or LIMIT for write. Errors set completed to zero.
+ * completed is required and must not alias data or queue-owned storage.
+ */
+HX_OS_API size_t HX_OS_CALL hx_os_byte_queue_capacity(
+	const hx_os_byte_queue *queue);
+
+HX_OS_API size_t HX_OS_CALL hx_os_byte_queue_limit(
+	const hx_os_byte_queue *queue);
+
+HX_OS_API size_t HX_OS_CALL hx_os_byte_queue_space(
+	const hx_os_byte_queue *queue);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_byte_queue_reserve(
+	hx_os_byte_queue *queue, size_t capacity, hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_byte_queue_clear(
+	hx_os_byte_queue *queue, hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_byte_queue_write_some(
+	hx_os_byte_queue *queue, const void *data, size_t bytes,
+	size_t *completed, hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_byte_queue_read_some(
+	hx_os_byte_queue *queue, void *data, size_t bytes, size_t *completed,
+	hx_os_error *error);
+
 #define hx_os_byte_queue_size hx_os_sequence_size
 #define hx_os_byte_queue_destroy hx_os_sequence_destroy
 

@@ -4,9 +4,73 @@ Entries below describe the versions tested at the time. Historical C++ exception
 
 [简体中文](VALIDATION.zh-CN.md) · [README](../README.md)
 
-This records development validation through 2026-10-10. A design, implemented adapter, successful compile and successful target run are different states. Local tests do not certify every operating-system release, filesystem, CPU, libc or network provider.
+This records development validation through 2026-10-13. A design, implemented adapter, successful compile and successful target run are different states. Local tests do not certify every operating-system release, filesystem, CPU, libc or network provider.
 
-The JSON entry below records the current examples. Earlier independent text examples, initial shared workflows, IPC/KCP implementation and other batches describe their historical versions.
+The [data and I/O extension record](#data-io-20261013) describes the current extension acceptance. Earlier independent text examples, initial shared workflows, IPC/KCP implementation and other batches describe their historical versions.
+
+## 2026-10-13: Varints, ZigZag and UUID v7
+
+Added canonical unsigned base-128 varints, full-range ZigZag, stream conveniences, strict UUID text parsing and stateless UUID v7 generation/timestamp extraction. C++11 stream and Random wrappers use Result; UUID v4 behavior is retained. The v7 generator uses the existing OS random source and does not promise ordering within a millisecond or across wall-clock changes.
+
+Reused build-shared-msvc (MSVC x64 Debug), build-shared-linux (WSL Release) and build-sanitize-linux (ASan/UBSan with leak detection). Existing data and cpp_utilities suites passed 2/2 in each environment. The integer_tools example ran on both hosts. GCC C99 and exception-disabled C++11 public headers compile independently. Private regressions cover 64-bit extrema, short output preservation, noncanonical/truncated/overflow varints, stream EOF, invalid UUID preservation and the RFC 9562 v7 timestamp example.
+
+Regression sources remain local and ignored; no test target, build directory, dependency or CI job was added. This earlier checkpoint covers only integer/UUID capabilities and added no target-runtime evidence. Subsequent records cover the completed persistent queue and other extensions.
+
+## 2026-10-13: Array conveniences, text tools and thread coordination
+
+Expanded the ordinary C array API to 36 entry points, including typed integer sort/search, filtering, transforms, folds, scans and merge/set operations; the C++11 facade accepts standard iterators. Added independent Base64/Base64URL/hex conversion, a bounded UTF-8 line reader, borrowed text splitting, strict integer parsing, natural ordering, stopwatch, bounded backoff and token bucket. New cancellation tokens integrate with message queues and can explicitly bind existing tasks, asynchronous requests and coroutines. WaitGroup follows the agreed Go-style round rules; the native-thread read/write lock blocks new readers while writers wait, without recursion, upgrades or a FIFO guarantee.
+
+| Reused environment/check | Result |
+| --- | --- |
+| Windows MSVC x64 Debug, build-shared-msvc | data, lifecycle, containers, stl and cpp_utilities: 5/5 passed |
+| WSL Linux Release, build-shared-linux | Same focused suites: 5/5 passed |
+| WSL ASan/UBSan, build-sanitize-linux; leak detection enabled | Same five suites passed; no sanitizer/leak report |
+| WSL TSan, build-tsan-linux | lifecycle passed; no race report |
+| Windows and Linux public examples | algorithms, algorithms_cpp, encoding, read_lines, text_utilities, control, coordination and message_queue: 8/8 on each host |
+| Independent public headers | Seven C99 headers and seven exception-disabled C++11 headers compile with GCC |
+| Disabled module branches | Eight affected C sources pass syntax checks with ENCODING, LINE_READER, STREAM, TEXT_NUMBER, THREAD_EX, QUEUES and CONTAINERS disabled; this is not a disabled-module runtime result |
+
+The line-reader example reproduced the existing UTF-8 example source line-for-line on both hosts. Existing private suites cover conversion failure/output preservation, line limits and allocation retry, algorithm progress and ownership, cancellation wakeups, unsubscribe timeout/retry, dynamic task counting, writer preference and partial batch cancellation. Cancelling a WaitGroup wait does not decrement its task count. Token callbacks remain bounded cooperative wake/request operations; native lock reacquisition and callback retirement are not hard real-time deadlines.
+
+Both normal directories still register 20 daily suites. Regression sources remain ignored and local; no new test target, build directory, dependency or remote CI run was added. Changed source/script width checks and bilingual documentation/API-link review passed. Existing unrelated compiler warnings remain. This records functional and sanitizer checks, not a performance improvement or a proof of race freedom. Android, ARM, macOS, old Windows and installation consumption were not rerun for this batch.
+
+## 2026-10-13: Batch messages, expiry caches, generic algorithms and remote clock integration
+
+Synchronized dev with remote commit `dbb6237` (high-resolution C clock and internal wide conversion), preserving local changes. Interval measurements use the new high-resolution clock only where explicitly requested; queue deadlines and cache expiry continue using the existing deadline clock domain.
+
+Added batch message send/receive with completed-prefix reporting, batch ring operations, fixed expiry-after-write LRU values, 15 ordinary C array algorithms, and the C++11 standard-iterator facade. Existing vector algorithms share the C array implementation while retaining their ownership and budget rules. Documentation and runnable examples are paired in English and Chinese.
+
+| Reused environment/check | Result after integration |
+| --- | --- |
+| Windows MSVC x64 Debug, build-shared-msvc | containers, stl, lifecycle and cpp_utilities: 4/4 passed |
+| WSL Linux Release, build-shared-linux | Same focused suites: 4/4 passed |
+| WSL ASan/UBSan, build-sanitize-linux; leak detection enabled | Same four suites passed; no sanitizer/leak report |
+| WSL TSan, build-tsan-linux | lifecycle passed; no race report |
+| Windows and Linux public examples | algorithms, algorithms_cpp, message_queue, lru_cache and high_resolution_time: 5/5 on each host |
+| Independent public headers | C99: queue, cache, algorithm; C++11 with exceptions disabled: Queue, Cache, Algorithms; all compile |
+| Disabled modules | QUEUES/CONTAINERS-off queue, cache and algorithm branches pass C99 syntax checks; no separate disabled runtime result claimed |
+
+The private existing suites cover batch wraparound and partial timeout/close progress, six concurrent ring combinations, TTL refresh/expiry/ownership and allocation rollback, all C array operations, stable record order, aligned selection scratch, C++ iterator ranges and linked-node sorting. Regression sources remain ignored and local. Both normal build directories still register 20 daily suites; no new regression target or build directory was added. No remote CI or new dependency was introduced, and third-party source files were unchanged.
+
+This is functional, memory and race validation, not a throughput comparison or a proof of lock-free progress. MPSC/MPMC atomic rings retain their documented progress limitation. Existing unrelated compiler warnings remain. Android, ARM boards, macOS, old Windows, and a fresh installation package were not revalidated in this change.
+
+## 2026-10-13: Bounded queues, fixed rings, LRU and bitsets
+
+Added ByteQueue capacity/reserve/partial-transfer conveniences, caller-owned fixed byte rings with two-span borrow/commit/consume, independently selectable thread message queues, locked/atomic SPSC/MPSC/MPMC rings, LRU caches and dynamic bitsets. C++11 wrappers use Result without exceptions. Existing layouts and old entry points remain unchanged; the new fixed ring is a new caller-owned type.
+
+Message queues use preallocated fixed-size messages and close/drain semantics. The atomic SPSC path requires lock-free 64-bit atomics. MPSC/MPMC atomic paths use slot sequence tags and CAS; they do not use a mutex but deliberately do not claim strict lock-free progress. A paused slot owner can delay other callers. No performance improvement or hard-real-time guarantee is inferred from this design.
+
+| Reused environment/check | Result |
+| --- | --- |
+| Windows MSVC x64 Debug, build-shared-msvc | containers, lifecycle and cpp_utilities: 3/3 passed |
+| WSL Linux Release, build-shared-linux | Same focused suites: 3/3 passed |
+| WSL ASan/UBSan, build-sanitize-linux; leak detection enabled | Same focused suites: 3/3 passed, no sanitizer report |
+| WSL TSan, build-tsan-linux | lifecycle: 1/1 passed, no race report |
+| Public examples on Windows and Linux | byte_queue_ring, bitset, lru_cache and message_queue: 4/4 on each host |
+| Independent public headers | Six C99 headers and five exception-disabled C++11 headers compile |
+| Disabled module branches | QUEUES/CONTAINERS-off C99 syntax checks pass for queue, ring, bitset, cache and container stubs; no separate disabled runtime build claimed |
+
+The existing private suites now cover allocation failure rollback, borrowed-span boundaries, bitset resize/search/set operations, LRU eviction and ownership, message timeout/close wakeups, and all six concurrent ring combinations. Each producer sends 1,000 identified records; consumers check payloads and exactly-once delivery. These are bounded correctness checks, not throughput benchmarks or proofs of arbitrary scheduling progress. The daily registration count remains 20; no new CTest executable or build directory was added. Test sources and local configuration remain ignored, remote CI stays disabled, and vendor files are unchanged. Builds retain existing warnings in unrelated code; this is not a zero-warning claim. Android, ARM boards, macOS and old Windows were not rerun in this change.
 
 ## 2026-10-10: WSL2 UDP fragmentation diagnosis and local loopback configuration
 
@@ -876,7 +940,7 @@ Representative sizes in bytes, before -> after:
 
 The aligned probe results each contain a byte array whose size equals the requested alignment. These are complete job sizes, including result and callable storage, not allocator size classes or process RSS. C atomics keep their original width/alignment. No packing directive, shared bitfield or cache-line padding policy was introduced. Already compact structures and intentional alignment probes were left unchanged.
 
-All 13 public C headers match their pre-change hashes. Windows DLL exports still match the 235 public functions. The C++ facade's internal template layout has changed: rebuild its consumers and plugins together; do not mix objects instantiated from different header versions. Source APIs are intact. See [C++ storage and rebuild rules](CPP_POOL.md#storage-layout-and-rebuilding).
+All 13 public C headers match their pre-change hashes. Windows DLL exports still match the 235 public functions. The C++ facade's internal template layout has changed: rebuild its consumers and plugins together; do not mix objects instantiated from different header versions. Source APIs are intact. See [C++ storage and rebuild rules](CPP_POOL.md#alignment-rebuilding-and-trimming).
 
 Validation after the layout change:
 
@@ -1349,3 +1413,46 @@ Actual execution exposed ARM64 shared-library lookup failure with only LD_LIBRAR
 Reports: build-android-emulator/report.json, build-android/report.json, build-android/report-minimal.json, build-android-static/report.json. Configuration run-*.log files contain raw stdout/stderr. build-android-emulator/armv7-device-check.json records the unsupported ABI before deployment. build-android-emulator/arm64-execution-probe.json preserves the initial loader failure; arm-cross-build-report.json preserves the earlier cross-only report in the same directory.
 
 Android 5.0/API 21 OS, ARMv7, native ARM hardware and APK application sandbox remain unverified. API 21/28 are build minima; all execution above used API 34. No remote CI execution is claimed.
+
+<a id="data-io-20261013"></a>
+
+## 2026-10-13: data and I/O extensions
+
+| Check | Evidence from this working tree |
+| --- | --- |
+| Windows MSVC x64 Debug | `data`, `tls`, `cpp_utilities` passed; Chinese CLI input, compression, URL, temporary cleanup and real parent/child shared-memory examples ran |
+| WSL Linux GCC shared Release | `data`, `tls`, `cpp_utilities` passed; pseudoterminal serial input/output/timeout passed; native and file-backed parent/child mappings ran |
+| Linux ASan/UBSan static Debug | Related `data` / `cpp_utilities` passed with no reported sanitizer fault; prebuilt native SDK code is not fully instrumented |
+| Linux TSan | Related `data` passed, including once initialization contention and owned-resource cleanup; this is bounded test evidence, not proof of all schedules |
+| Public headers | 27 C99/C++11 headers compiled independently with warnings as errors; C++ exceptions disabled; const lambda/free-function once callbacks instantiated |
+| Shared installation | Linux/Windows packages installed; external pure C consumers built against `find_package`, including native SDK targets and new framing/mapping examples |
+| Feature trimming | New modules disabled together: `data` passed. COMPRESSION with CRYPTO/ARCHIVE/HTTP/URL/UNICODE/PERSISTENT_QUEUE/REGEX off built and ran. Original full ASan cache configuration restored |
+| Self-developed regex | 27,750 local comparisons against PCRE2 10.46 passed for the recorded UTF-8 pattern/text matrix, including advanced captures, assertions, recursion conditions, atomic groups and control verbs; current dialect exclusions remain documented |
+
+Regressions remain ignored local sources within the 20-suite daily profile; public runnable examples are separate. Existing build and SDK directories were reused. No remote CI was enabled. New ARM/Android target acceptance is recorded separately after completion and must not inherit older module results. Physical serial devices, ARM boards, Win7 and Apple execution are not established by the checks above.
+
+Target update: Android x86_64 binaries targeting API 21 ran on the API 34 `Qt_Android_34` emulator. `data`, `tls`, `cpp_utilities`, direct native SDK calls and two independent processes exchanging JSON through file-backed shared memory passed. Android child-process spawning remains unsupported by the existing process adapter; the mapping example uses explicit `--write` / `--read` processes. Linux AArch64 GCC cross-build and QEMU `data`, `tls`, `cpp_utilities` passed. Neither result is physical ARM-board validation.
+
+Linux ARMv7 update: the size_t/int64 diagnostic conversion was fixed for 32-bit compilers. GCC cross-build and QEMU `data`, `tls`, `cpp_utilities` passed. ARMv7/AArch64 native dependency examples and real parent/child mappings also ran; QEMU child execution used `QEMU_LD_PREFIX` and the matching sysroot, not a board.
+
+Final Android update: both `arm64-v8a` and `armeabi-v7a` full shared API 21 builds include the new modules and SDKs. On the API 34 emulator, translated ARM64 `data`, `tls`, `cpp_utilities`, direct SDK calls and two independent file-backed mapping processes passed. Native x86_64 `data` passed again after the final URL initialization-lease change. This emulator advertises only x86_64 and arm64-v8a; ARMv7 execution remains pending a compatible device. Tests use application-controlled writable directories and deploy distinct OpenSSL SONAMEs for the native bridge. Temporary adb deployment directories were removed after the runs.
+
+The final URL lifetime and 32-bit diagnostic changes also passed the affected Windows, Linux, ASan and both ARM Linux QEMU suites. Normal host directories still register 20 daily suites. Physical serial devices, Android 5.0 runtime, ARM boards, Apple, old Windows and other libc targets remain separate pending acceptance; no new throughput or latency improvement is claimed.
+
+## 2026-10-14: Seven review fixes
+
+The fixes cover exponential regex compile-time width analysis, expired queue receipts after SQLite writer contention, caseless range handling, default Unicode simple folding, completed-once cancellation precedence, CMAKE_PREFIX_PATH-only SDK installation, and static pkg-config dependencies. Public structure layouts and function signatures are unchanged. A scoped `(?-i:...)` parsing error found by the new caseless regression was also corrected.
+
+| Check | Observed result |
+| --- | --- |
+| Existing Windows MSVC x64 Debug build | `data` and `cpp_utilities` passed (2/2) |
+| Existing WSL Linux GCC Release shared build | Same two suites passed (2/2) |
+| Existing Linux ASan/UBSan Debug static build | `data` passed with leak detection and halt-on-error enabled; prebuilt SDKs are not fully instrumented |
+| Regex comparison | 34,265 pattern/subject comparisons against local PCRE2 10.46, zero differences in this matrix |
+| Compilation bound | The 619-byte, 28-level doubling-reference lookbehind was rejected; ten in-process Linux measurements had a 0.011 ms median (2.313 ms maximum). The earlier controlled reproduction had not finished at three seconds. This is one pathological input, not a general throughput benchmark |
+| Lease contention | A separate connection to the same shipped SQLite runtime held the write lock for 600 ms. Expired 250 ms receipts were rejected by ack and renew, with the record preserved; a still-live receipt renewed from the post-lock timestamp |
+| Package installation | Linux installed with HX_OS_DEPENDENCY_PREFIX empty and only CMAKE_PREFIX_PATH selecting the SDK. Windows and Linux installed C consumers built and ran native SDK calls and the regex example |
+| Static metadata | Installed ASan archive linked with every archive object included and dependencies obtained from `pkg-config --static`; HTTP, Unicode and queue entry calls ran successfully. curl/utf8proc/hx_sqlite3, libm and librt entries are present |
+| Source rules | Nineteen affected first-party/local-test source and script files passed the width check after correction; changed files retain UTF-8 without BOM and LF |
+
+Regressions extend existing ignored files in the daily 20-suite profile; no new CTest targets or top-level build directories were created. Runtime builds were reused, third-party sources were not edited, and no remote CI was enabled. The temporary Linux prefix configuration was restored. Old-glibc librt necessity, Windows static pkg-config, Android/ARM and Apple runs were not revalidated in this fix batch; earlier platform records are historical evidence, not results for these changes. The Unicode/provider and other regex dialect limits remain in [REGEX.md](REGEX.md).

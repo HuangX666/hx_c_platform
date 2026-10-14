@@ -12,8 +12,11 @@ typedef struct hx_os_socket hx_os_socket;
 typedef struct hx_os_address_list hx_os_address_list;
 
 enum { HX_OS_LOCAL = 1, HX_OS_IPV4 = 4, HX_OS_IPV6 = 6 };
+
 enum { HX_OS_TCP = 1, HX_OS_UDP = 2, HX_OS_LOCAL_STREAM = 3 };
+
 enum { HX_OS_WAIT_READ = 1, HX_OS_WAIT_WRITE = 2 };
+
 enum { HX_OS_SHUT_READ = 1, HX_OS_SHUT_WRITE = 2, HX_OS_SHUT_BOTH = 3 };
 
 typedef struct hx_os_address {
@@ -55,7 +58,9 @@ HX_OS_API const hx_os_address *HX_OS_CALL hx_os_address_list_get(
 HX_OS_API void HX_OS_CALL hx_os_address_list_destroy(hx_os_address_list *list);
 
 /*
- * Sockets are nonblocking and noninheritable. Serialize operations per socket.
+ * Sockets are nonblocking and noninheritable. After connecting, one sending
+ * thread and one receiving thread may operate concurrently; serialize each
+ * direction. Exclude bind/connect/options/attachment/shutdown/close from I/O.
  * After attachment, the loop owns I/O scheduling and socket close. Do not
  * mix direct I/O with pending loop operations. Timeout on a connect wait
  * leaves connection establishment in progress; close to abandon it.

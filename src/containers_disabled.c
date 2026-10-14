@@ -38,6 +38,62 @@ hx_os_status hx_os_byte_queue_peek(const hx_os_byte_queue *queue, size_t offset,
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
+size_t hx_os_byte_queue_capacity(const hx_os_byte_queue *queue)
+{
+	(void)queue;
+
+	return 0;
+}
+
+size_t hx_os_byte_queue_limit(const hx_os_byte_queue *queue)
+{
+	(void)queue;
+
+	return 0;
+}
+
+size_t hx_os_byte_queue_space(const hx_os_byte_queue *queue)
+{
+	(void)queue;
+
+	return 0;
+}
+
+hx_os_status hx_os_byte_queue_reserve(
+	hx_os_byte_queue *queue, size_t capacity, hx_os_error *error)
+{
+	(void)queue;
+	(void)capacity;
+
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_byte_queue_clear(
+	hx_os_byte_queue *queue, hx_os_error *error)
+{
+	(void)queue;
+
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_byte_queue_write_some(hx_os_byte_queue *queue,
+	const void *data, size_t bytes, size_t *completed, hx_os_error *error)
+{
+	if (completed)
+		*completed = 0;
+
+	return hx_os_byte_queue_write(queue, data, bytes, error);
+}
+
+hx_os_status hx_os_byte_queue_read_some(hx_os_byte_queue *queue, void *data,
+	size_t bytes, size_t *completed, hx_os_error *error)
+{
+	if (completed)
+		*completed = 0;
+
+	return hx_os_byte_queue_read(queue, data, bytes, error);
+}
+
 hx_os_status hx_os_vector_create(hx_os_context *context,
 	const hx_os_container_options *options, hx_os_vector **out,
 	hx_os_error *error)

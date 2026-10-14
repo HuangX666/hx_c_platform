@@ -13,6 +13,8 @@ deps/
   zlib/             Git 子模块
   xz/               Git 子模块
   zstd/             Git 子模块
+  curl/             libcurl SDK 子模块
+  utf8proc/         Unicode SDK 子模块
   7zip/             独立可选原生后端子模块
   cjson/            可选解析器子模块
   libyaml/          可选解析器子模块
@@ -39,13 +41,15 @@ cd hx_c_platform
 git submodule update --init --recursive
 ```
 
-主工程和可选依赖构建器都会校验固定 Git 提交，缺失或版本不符会明确失败，不会跟随分支最新提交。当前开发分支是 `dev`。13 个 Git 子模块的 URL 见 [.gitmodules](../.gitmodules)，版本、提交及 iconv 归档散列统一见 [HxDependencySources.cmake](../cmake/HxDependencySources.cmake)。
+主工程和可选依赖构建器都会校验固定 Git 提交，缺失或版本不符会明确失败，不会跟随分支最新提交。当前开发分支是 `dev`。15 个 Git 子模块的 URL 见 [.gitmodules](../.gitmodules)，版本、提交及 iconv／SQLite 归档散列统一见 [HxDependencySources.cmake](../cmake/HxDependencySources.cmake)。
 
 默认开启的容器、KCP 需要初始化对应子模块。五种可选解析后端仍默认关闭，开启时不再要求逐个填写源码路径；既有集成仍可传入 `HX_OS_<PARSER>_SOURCE_DIR`，显式提供的源码树由集成方管理。
 
-GNU libiconv 是唯一的来源例外：其官方 Git 仓库缺少发布包中的生成转换表。因此 `HX_OS_ENABLE_ICONV=ON` 默认通过 FetchContent 获取官方 1.18 发布包，校验 SHA256，缓存于 `deps/.fetchcontent/iconv/`。这样 Windows 和交叉构建不必额外准备转换表生成工具。显式设置 `HX_OS_ICONV_USE_SYSTEM=ON` 才选择系统 iconv；仍支持已有 `HX_OS_ICONV_SOURCE_DIR`。模块保持可选，LGPL 条件不变。
+GNU libiconv 是来源例外之一：其官方 Git 仓库缺少发布包中的生成转换表。因此 `HX_OS_ENABLE_ICONV=ON` 默认通过 FetchContent 获取官方 1.18 发布包，校验 SHA256，缓存于 `deps/.fetchcontent/iconv/`。这样 Windows 和交叉构建不必额外准备转换表生成工具。显式设置 `HX_OS_ICONV_USE_SYSTEM=ON` 才选择系统 iconv；仍支持已有 `HX_OS_ICONV_SOURCE_DIR`。模块保持可选，LGPL 条件不变。
 
-普通构建使用已经准备好的 SDK，不会自动编译第三方库。默认开启的 CRYPTO、ARCHIVE 需要下文的 SDK，TLS 复用它。不需要这些依赖时，同时设置 `HX_OS_ENABLE_CRYPTO=OFF` 和 `HX_OS_ENABLE_ARCHIVE=OFF`；基础 Unicode 和内置配置解析仍可使用。对应入口见[加密](CRYPTO.zh-CN.md)、[TLS](TLS.zh-CN.md)和[压缩](ARCHIVE.zh-CN.md)。
+SQLite 是另一个发布包例外：通过 FetchContent 下载官方 3.54.0 amalgamation，校验 SHA256，并缓存于 `deps/.fetchcontent/sqlite/`。这样不需要采用无关的第三方 Git 镜像，也不用每台构建电脑生成合并源码。PERSISTENT_QUEUE 开启时把原样源码编译为本库的 SQLite 目标，安装包包含对应头文件和库。
+
+默认开启的 CRYPTO／TLS、ARCHIVE、COMPRESSION、HTTP／URL、UNICODE 使用准备好的 SDK。SDK 现在包含动态 libcurl、utf8proc、OpenSSL 和静态压缩编解码库。不需要这些依赖时关闭对应开关及 PERSISTENT_QUEUE，或采用 `cmake/minimal.cmake`。核心 UTF-8 验证／转换和内置配置解析仍可使用，完整 Unicode 变换需要 utf8proc。内存压缩可以独立于文件归档启用。见[底层调用](NATIVE_DEPENDENCIES.zh-CN.md)、[常用工具](UTILITY_EXTENSIONS.zh-CN.md)、[加密](CRYPTO.zh-CN.md)、[TLS](TLS.zh-CN.md)和[归档](ARCHIVE.zh-CN.md)。
 
 ## 3. 备选使用 FetchContent
 
@@ -138,3 +142,9 @@ Android ARMv7 改为 `armeabi-v7a`／`android-arm`；x86_64 原生模拟器改�
 自有 `openssl-android.conf` 配置使用 OpenSSL 官方支持的 `shlib_variant`。Android 运行库 SONAME 为 `libssl-hx.so`、`libcrypto-hx.so`，避开系统 BoringSSL 和模拟器转译启动器的同名依赖；SDK 仍保留常规链接别名。部署时读取生成的运行库清单，不猜测桌面平台的文件名；脚本部署实际 SONAME 文件，排除与系统 BoringSSL 冲突的链接别名，不修改 OpenSSL 源码。同一 ABI 下，较低最低 API 构建的 SDK 也可供较高最低 API 的应用使用，反过来则不允许。
 
 独立 `tools/sevenzip` 在 POSIX 宿主接受相同工具链、ABI、sysroot 参数，不需要 `HX_DEPS_OPENSSL_TARGET`。Android 构建在该运行库内静态包含 C++ 运行时，线程符号从 Bionic libc 取得。将对应产物 `runtime/7z.so` 传给 `HX_OS_TEST_7ZIP_LIBRARY` 或 Android 的 `--sevenzip-library`。它仍是可选后端，不混入默认压缩 SDK。
+
+## 7. 新 SDK 的部署细节
+
+Curl 固定到 `curl-8_22_0` 标签，该提交原始头文件报告 `8.22.0-DEV`，保留上游版本文字。构建使用 OpenSSL，关闭命令行工具、线程 DNS、libpsl、SSH、IDN2、GSSAPI 和隐式内容压缩。因此 HTTP 截止时间不能打断原生阻塞 DNS；URL 的 IDNA 能力也服从所选后端，不暗中增加依赖。Utf8proc 固定为 2.12.0，两个组件的头文件和许可证都随 SDK 安装。
+
+启用时提供 `hx_c_platform::sqlite`、`::openssl`、`::curl`、`::utf8proc`、`::archive`、`::zlib`、`::lzma`、`::zstd`；`hx_c_platform::native` 汇总核心及已启用的底层目标。消费者可直接调用原生 SDK，同时使用便利接口。安装包从自己的前缀解析匹配依赖并导出原始头文件；Windows 运行时 DLL 放在 `bin`，Unix 保留共享库名称链和相对库目录的查找路径。同一进程不要混用不兼容的 SDK 版本。

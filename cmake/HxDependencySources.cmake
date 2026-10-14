@@ -1,5 +1,31 @@
 include_guard(GLOBAL)
 
+function(hx_install_native_headers target)
+	get_target_property(roots ${target} INTERFACE_INCLUDE_DIRECTORIES)
+	foreach(header IN LISTS ARGN)
+		set(found FALSE)
+		foreach(root IN LISTS roots)
+			if(IS_DIRECTORY "${root}/${header}")
+				install(DIRECTORY "${root}/${header}"
+					DESTINATION
+						"${CMAKE_INSTALL_INCLUDEDIR}")
+			elseif(EXISTS "${root}/${header}")
+				install(FILES "${root}/${header}"
+					DESTINATION
+						"${CMAKE_INSTALL_INCLUDEDIR}")
+			else()
+				continue()
+			endif()
+			set(found TRUE)
+			break()
+		endforeach()
+		if(NOT found)
+			message(FATAL_ERROR
+				"Selected ${target} SDK is missing ${header}")
+		endif()
+	endforeach()
+endfunction()
+
 set(HX_OS_DEPENDENCY_PROVIDER "SUBMODULE" CACHE STRING
 	"Dependency source provider: SUBMODULE or FETCHCONTENT")
 set_property(CACHE HX_OS_DEPENDENCY_PROVIDER PROPERTY STRINGS
@@ -10,7 +36,21 @@ set(HX_OS_DEPENDENCY_CACHE_DIR "${hx_dependency_root}/deps/.fetchcontent"
 	CACHE PATH "FetchContent source cache, separate from submodules")
 
 function(hx_dependency_metadata name repository revision version)
-	if(name STREQUAL "openssl")
+	if(name STREQUAL "sqlite")
+		string(CONCAT repo "https://www.sqlite.org/2026/"
+			"sqlite-amalgamation-3540000.zip")
+		string(CONCAT pin "68e913b0fe8ec6b4e5f391c594a28872"
+			"884e80d6cd042a1e50c957be46b5aa4d")
+		set(release "3.54.0")
+	elseif(name STREQUAL "curl")
+		set(repo "https://github.com/curl/curl.git")
+		set(pin "01346829096c61b372692f6dc43ffa778c6caccd")
+		set(release "8.22.0")
+	elseif(name STREQUAL "utf8proc")
+		set(repo "https://github.com/JuliaStrings/utf8proc.git")
+		set(pin "79cdd5ab40c79afa559f689ffc13b76812dee1ac")
+		set(release "2.12.0")
+	elseif(name STREQUAL "openssl")
 		set(repo "https://github.com/openssl/openssl.git")
 		set(pin "45e844fa2a14ec92d146bd8f5778ac130b6625fb")
 		set(release "3.5.9")
@@ -89,7 +129,7 @@ function(hx_dependency_source name output)
 
 	# GNU's Git tree omits the generated codec tables in its release.
 	# Keep the official release unchanged instead of requiring host gperf.
-	if(name STREQUAL "iconv")
+	if(name STREQUAL "iconv" OR name STREQUAL "sqlite")
 		set(provider FETCHCONTENT)
 	endif()
 
@@ -125,15 +165,21 @@ function(hx_dependency_source name output)
 		elseif(EXISTS "${cache}.ready")
 			file(READ "${cache}.ready" cached_revision)
 			string(STRIP "${cached_revision}" cached_revision)
+			if(name STREQUAL "sqlite")
+				set(marker "sqlite3.c")
+			else()
+				set(marker "lib/iconv.c")
+			endif()
 			if(NOT cached_revision STREQUAL revision OR
-				NOT EXISTS "${cache}/lib/iconv.c")
-				message(FATAL_ERROR "Incomplete dependency cache: "
-					"${cache}. Select a fresh cache directory.")
+				NOT EXISTS "${cache}/${marker}")
+				message(FATAL_ERROR
+					"Incomplete cache: " "${cache}"
+					". Select a fresh cache directory.")
 			endif()
 			set(source "${cache}")
 			set(ready TRUE)
 		endif()
-		if(name STREQUAL "iconv")
+		if(name STREQUAL "iconv" OR name STREQUAL "sqlite")
 			FetchContent_Declare(hx_dep_${name}
 				URL "${repository}"
 				URL_HASH "SHA256=${revision}"
@@ -158,13 +204,13 @@ function(hx_dependency_source name output)
 		endif()
 		if(NOT ready)
 			set(source "${hx_dep_${name}_SOURCE_DIR}")
-			if(name STREQUAL "iconv")
+			if(name STREQUAL "iconv" OR name STREQUAL "sqlite")
 				file(WRITE "${cache}.ready" "${revision}\n")
 			endif()
 		endif()
 	endif()
 
-	if(name STREQUAL "iconv")
+	if(name STREQUAL "iconv" OR name STREQUAL "sqlite")
 		set(${output} "${source}" PARENT_SCOPE)
 		return()
 	endif()

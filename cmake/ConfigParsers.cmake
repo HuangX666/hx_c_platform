@@ -6,6 +6,16 @@ set(hx_parser_includes)
 set(hx_parser_aliases)
 set(hx_parser_definitions)
 
+function(hx_parser_config path content)
+	if(EXISTS "${path}")
+		file(READ "${path}" previous)
+		if(previous STREQUAL content)
+			return()
+		endif()
+	endif()
+	file(WRITE "${path}" "${content}")
+endfunction()
+
 foreach(hx_name CJSON LIBYAML MINIXML INIH TOMLC)
 	option(HX_OS_ENABLE_${hx_name} "Build optional ${hx_name} parser" OFF)
 
@@ -55,11 +65,12 @@ function(hx_parser_vendor name)
 		set(headers "${root}/include/yaml.h"
 			"${root}/src/yaml_private.h")
 		set(includes "${root}/include" "${generated}")
-		file(WRITE "${generated}/config.h"
+		string(CONCAT configuration
 			"#define YAML_VERSION_MAJOR 0\n"
 			"#define YAML_VERSION_MINOR 2\n"
 			"#define YAML_VERSION_PATCH 5\n"
 			"#define YAML_VERSION_STRING \"0.2.5\"\n")
+		hx_parser_config("${generated}/config.h" "${configuration}")
 		set(definitions YAML_DECLARE_STATIC HAVE_CONFIG_H)
 		set(license "${root}/License")
 	elseif(name STREQUAL "minixml")
@@ -74,7 +85,7 @@ function(hx_parser_vendor name)
 		set(includes "${root}" "${generated}")
 		# No callback setter is exposed or called. The private table
 		# stays read-only, requiring no TLS allocation or destructor.
-		file(WRITE "${generated}/config.h"
+		hx_parser_config("${generated}/config.h"
 			"#define MXML_VERSION \"4.0.6\"\n")
 		set(definitions)
 		set(license "${root}/LICENSE")

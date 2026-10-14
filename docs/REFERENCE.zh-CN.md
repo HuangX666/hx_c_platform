@@ -4,7 +4,7 @@
 
 这份参考集中说明平台差异、接口限制、资源管理、构建开关和验证状态。第一次使用时，先阅读首页和常用任务教程；需要了解某个操作的边界，再查询这里。除另有说明，构建命令在库源码根目录执行。
 
-默认开启的 CRYPTO 模块需要预先构建 OpenSSL SDK。以下非最小配置命令运行前，请把 SDK prefix 加入 `CMAKE_PREFIX_PATH`，或传入 `HX_OS_DEPENDENCY_PREFIX`；不用加密时显式关闭 `HX_OS_ENABLE_CRYPTO`。构建、文本／文件加解密、摘要和签名的完整示例见[加密教程](CRYPTO.zh-CN.md)。
+默认 SDK 模块需要匹配的依赖：CRYPTO／TLS 使用 OpenSSL，HTTP／URL 使用 libcurl，UNICODE 使用 utf8proc，归档／内存压缩使用对应编解码库，PERSISTENT_QUEUE 使用锁定版本的 SQLite 适配。先准备[依赖 SDK](DEPENDENCIES.zh-CN.md)，再通过 `CMAKE_PREFIX_PATH` 或 `HX_OS_DEPENDENCY_PREFIX` 传入 prefix。不用的模块显式关闭，或采用 `cmake/minimal.cmake`。[底层依赖教程](NATIVE_DEPENDENCIES.zh-CN.md)也说明直接调用 SDK 的方法。
 
 
 TLS 连接、有界全双工队列及 JSON 业务程序见 [TLS 教程](TLS.zh-CN.md)。
@@ -40,6 +40,7 @@ TLS 连接、有界全双工队列及 JSON 业务程序见 [TLS 教程](TLS.zh-C
 - [30. 测试、CI 与性能证据](#section-30)
 - [31. 工程规范、平台扩展与许可](#section-31)
 - [32. 详细文档与可运行示例](#section-32)
+- [33. 数据、传输及持久化工作扩展](#section-33)
 
 <a id="section-1"></a>
 
@@ -75,7 +76,7 @@ TLS 连接、有界全双工队列及 JSON 业务程序见 [TLS 教程](TLS.zh-C
 
 C 核心需要编译成库，**不是 header-only**；只有可选 C++ 便利层是仅头文件。已验证 C++11，不宣称 C++14/17/20 矩阵通过。CMake 最低基线为 **3.16**。编译器、CRT 和 SDK 的兼容性需要与操作系统 API 兼容性分别确认，尤其是 Win7 部署，不能因接口保留兼容就宣称当前工具链生成的所有二进制都能直接运行。
 
-徽章记录截至 **2026-10-03** 的本地证据：Windows 91 项、Linux 93 项 CTest，数字表示测试条目，不是断言数量；Linux 多两项原生随机源故障测试。 GitHub Actions 已配置，未宣称远程 CI 已通过。Android 的十四项集合不等于桌面全部测试。具体配置与限制见[验证记录](VALIDATION.zh-CN.md)。
+当前本地日常配置有 20 个维护者套件，回归源码只保留本地、不随项目发布，客户使用示例独立提供。远端 CI 保持关闭。[带日期的验证记录](VALIDATION.zh-CN.md)分别列出每次实际运行的套件和目标环境；旧数量属于历史，API 21 交叉编译与 API 34 模拟器运行也是不同证据。
 
 <a id="section-3"></a>
 
@@ -1827,6 +1828,17 @@ int main(void)
 | `HX_OS_ENABLE_TLS` | ON | 校验证书的全双工 TLS |
 | `HX_OS_ENABLE_ARCHIVE` | ON | 压缩 SDK 提供文件／目录压缩 |
 | `HX_OS_ENABLE_7ZIP` | OFF | 独立原生 7-Zip 动态适配 |
+| `HX_OS_ENABLE_COMPRESSION` | ON | 内存 zlib／gzip／XZ／Zstd，独立于 ARCHIVE |
+| `HX_OS_ENABLE_HTTP` / `HX_OS_ENABLE_URL` | ON | libcurl 传输与 URL 工具 |
+| `HX_OS_ENABLE_UNICODE` | ON | utf8proc 规范化与大小写折叠 |
+| `HX_OS_ENABLE_PERSISTENT_QUEUE` | ON | SQLite 业务确认队列 |
+| `HX_OS_ENABLE_FRAME` | ON | 有界字节流消息帧 |
+| `HX_OS_ENABLE_CLI` | ON | UTF-8 命令行选项 |
+| `HX_OS_ENABLE_TEMP` | ON | 持有临时文件／目录 |
+| `HX_OS_ENABLE_ONCE` | ON | 可重试的一次初始化 |
+| `HX_OS_ENABLE_SERIAL` | ON | 原生串口字节收发 |
+| `HX_OS_ENABLE_SHARED_MEMORY` | ON | 原生命名／文件映射 |
+| `HX_OS_ENABLE_REGEX` | ON | 自研有预算的 UTF-8 正则 |
 | `HX_OS_BUILD_EXAMPLES` | OFF | C 示例；存在 C++ 编译器时增加 C++ 示例 |
 | `HX_OS_BUILD_BENCHMARKS` | OFF | 开发用性能基准 |
 | `HX_OS_ENABLE_NETWORK` | ON | 原生套接字与网络生命周期 |
@@ -1844,13 +1856,15 @@ int main(void)
 | `HX_OS_ENABLE_FILE_UTILS` | ON | 文件/路径便利操作、原子发布和遍历 |
 | `HX_OS_ENABLE_ENV` | ON | UTF-8 环境变量 |
 | `HX_OS_ENABLE_PATHS` | ON | 用户、共享、临时与模块路径 |
-| `HX_OS_ENABLE_THREAD_EX` | ON | 线程栈/名称选项与有界信号量 |
+| `HX_OS_ENABLE_THREAD_EX` | ON | 线程选项、信号量、取消、WaitGroup 和读写锁 |
 | `HX_OS_ENABLE_PIPE` | ON | 同步管道及配合 LOOP 的异步管道 |
 | `HX_OS_ENABLE_NET_OPTIONS` | ON | 套接字选项与对端查询 |
 | `HX_OS_ENABLE_POSITIONED_IO` | ON | 保持文件位置不变的读写 |
 | `HX_OS_ENABLE_FILE_INFO` | ON | 扩展文件与目录信息 |
 | `HX_OS_ENABLE_BOM` | ON | Unicode BOM 检测与生成 |
 | `HX_OS_ENABLE_TEXT_NUMBER` | ON | locale 无关数字文本转换 |
+| `HX_OS_ENABLE_ENCODING` | ON | 独立 Base64／Base64URL 和十六进制，不依赖 OpenSSL |
+| `HX_OS_ENABLE_LINE_READER` | ON | 有界 UTF-8 逐行读取，依赖 STREAM |
 | `HX_OS_ENABLE_CONFIG_SERIALIZE` | ON | JSON、INI、properties 序列化 |
 | `HX_OS_ENABLE_TIMER` | ON | 周期 loop 定时器 |
 | `HX_OS_ENABLE_RANDOM` | ON | 系统安全随机数与 UUID v4 |
@@ -2026,9 +2040,15 @@ flowchart TD
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%2091%2F91%20Linux%2093%2F93-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-local%20records-blue
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android
 
 
 完整调用见[加密](CRYPTO.zh-CN.md)、[TLS](TLS.zh-CN.md)与[压缩](ARCHIVE.zh-CN.md)教程。压缩选项明确区分覆盖、部分发布、路径限制、密码、资源上限以及原生依赖部署。
+
+<a id="section-33"></a>
+
+## 33. 数据、传输及持久化工作扩展
+
+[常用工具](UTILITY_EXTENSIONS.zh-CN.md) 包含有界内存压缩、URL／查询、命令行、HTTP／HTTPS、临时资源、串口及命名映射。[消息帧](FRAMES.zh-CN.md)、[一次初始化](ONCE.zh-CN.md)、[整数工具](INTEGER_TOOLS.zh-CN.md)、[增量摘要](INCREMENTAL_HASH.zh-CN.md)、[Unicode](UNICODE.zh-CN.md)、[二进制与查找工具](FAST_TOOLS.zh-CN.md)、[持久化队列](PERSISTENT_QUEUE.zh-CN.md)、[自研正则](REGEX.zh-CN.md) 分别说明独立所有权和限制。公共 C 头及 C++11 封装随安装包提供，不要求 Qt；[底层依赖目标](NATIVE_DEPENDENCIES.zh-CN.md) 保留原生 SDK 调用能力。

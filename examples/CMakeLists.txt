@@ -1,6 +1,11 @@
 set(CMAKE_FOLDER "examples/demos")
 
 foreach(example IN ITEMS hello async_timer configuration containers system_info
+	byte_queue_ring bitset lru_cache message_queue algorithms
+	text_utilities encoding read_lines control coordination integer_tools
+	persistent_queue unicode_tools incremental_hash fast_algorithms
+	regex once framed_messages compress_memory url_query command_line
+	http_json temporary_file serial_message shared_memory
 	encrypt_text archive_files tls_json_client tls_json_server
 	load_plugin text_file environment special_paths thread_options
 	windows_info
@@ -30,6 +35,22 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 	hx_apply_warnings(hx_os_${example})
 endforeach()
 
+if(TARGET hx_c_platform::sqlite AND TARGET hx_c_platform::openssl
+		AND TARGET hx_c_platform::curl
+		AND TARGET hx_c_platform::utf8proc)
+	add_executable(hx_os_native_dependencies native_dependencies.c)
+	target_link_libraries(hx_os_native_dependencies PRIVATE
+		hx_c_platform::native)
+	if(TARGET hx_c_platform::archive)
+		target_compile_definitions(hx_os_native_dependencies PRIVATE
+			HX_OS_DEMO_ARCHIVE)
+	endif()
+	set_target_properties(hx_os_native_dependencies PROPERTIES
+		C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+	hx_apply_warnings(hx_os_native_dependencies)
+endif()
+
 if(HX_OS_TEST_FORMAT_SYNTAX)
 	add_executable(hx_os_format_syntax format_syntax.c)
 	target_link_libraries(hx_os_format_syntax PRIVATE hx_c_platform)
@@ -43,6 +64,22 @@ if(HX_OS_TEST_FORMAT_SYNTAX)
 endif()
 
 if(CMAKE_CXX_COMPILER_LOADED)
+	add_executable(hx_os_regex_cpp regex_cpp.cpp)
+	target_link_libraries(hx_os_regex_cpp PRIVATE hx_c_platform::cpp)
+	set_target_properties(hx_os_regex_cpp PROPERTIES CXX_STANDARD 11
+		CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+	hx_apply_warnings(hx_os_regex_cpp)
+
+	add_executable(hx_os_algorithms_cpp algorithms_cpp.cpp)
+	target_link_libraries(hx_os_algorithms_cpp PRIVATE hx_c_platform::cpp)
+	set_target_properties(hx_os_algorithms_cpp PROPERTIES
+		CXX_STANDARD 11
+		CXX_STANDARD_REQUIRED YES
+		CXX_EXTENSIONS NO
+		RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+	hx_apply_warnings(hx_os_algorithms_cpp)
+
 	add_executable(hx_os_ipc_threads ipc_threads.cpp)
 	target_link_libraries(hx_os_ipc_threads PRIVATE hx_c_platform::cpp)
 	set_target_properties(hx_os_ipc_threads PROPERTIES

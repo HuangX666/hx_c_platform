@@ -4,7 +4,7 @@
 
 This reference covers platform differences, interface limits, resource management, build options and validation status. Start with the homepage and task tutorials when using the library for the first time, then consult this reference for an operation's boundaries. Build commands run from the library source root unless stated otherwise.
 
-The default CRYPTO module needs a prepared OpenSSL SDK. Before the nonminimal commands below, put its prefix in `CMAKE_PREFIX_PATH` or pass `HX_OS_DEPENDENCY_PREFIX`; disable `HX_OS_ENABLE_CRYPTO` explicitly when unused. See the [crypto guide](CRYPTO.md) for setup, text/file encryption, hashes and signatures.
+The default SDK-backed modules need the matching dependencies: OpenSSL for CRYPTO/TLS, libcurl for HTTP/URL, utf8proc for UNICODE, and archive/compression codecs. PERSISTENT_QUEUE uses the pinned SQLite adapter. Prepare the [dependency SDK](DEPENDENCIES.md), then pass its prefix through `CMAKE_PREFIX_PATH` or `HX_OS_DEPENDENCY_PREFIX`. Disable unused modules explicitly or select `cmake/minimal.cmake`. The [native dependency guide](NATIVE_DEPENDENCIES.md) also shows direct SDK calls.
 
 
 TLS connections, bounded full-duplex queues and JSON business programs: [TLS guide](TLS.md).
@@ -40,6 +40,7 @@ TLS connections, bounded full-duplex queues and JSON business programs: [TLS gui
 - [30. Tests, CI and performance evidence](#section-30)
 - [31. Engineering rules, platform extensions and licensing](#section-31)
 - [32. Detailed documents and runnable examples](#section-32)
+- [33. Data, transfer and persistent-work extensions](#section-33)
 
 <a id="section-1"></a>
 
@@ -75,7 +76,7 @@ The library builds, tests, installs and runs independently of hx_c_log. It does 
 
 The C core is a compiled library, **not header-only**. Only the optional C++ facade is header-only. C++11 is verified; a C++14/17/20 matrix is not claimed. CMake **3.16** is the baseline; compiler/SDK support must be checked separately from operating system API compatibility, especially for a Win7 deployment.
 
-Badges describe local evidence through **2026-10-03**: 91 Windows and 93 Linux CTest entries, not individual assertions. Linux adds two native RNG failure tests. GitHub Actions is configured; no remote CI pass is claimed. Android's fourteen-suite subset is not the entire desktop suite. See [validation](VALIDATION.md).
+The current local daily profile contains 20 maintainer suites; regression sources remain local and are not distributed. Customer examples are separate. Remote CI is disabled. [Dated validation records](VALIDATION.md) identify which suites and targets ran for each change; older counts are historical, and API 21 cross-compilation is separate from API 34 emulator execution.
 
 <a id="section-3"></a>
 
@@ -1835,6 +1836,17 @@ All new native/common modules default to ON; optional third-party encoding and p
 | `HX_OS_ENABLE_TLS` | ON | Verified full-duplex TLS endpoints |
 | `HX_OS_ENABLE_ARCHIVE` | ON | Files/directories through the archive SDK |
 | `HX_OS_ENABLE_7ZIP` | OFF | Separate native 7-Zip dynamic adapter |
+| `HX_OS_ENABLE_COMPRESSION` | ON | Memory zlib/gzip/XZ/Zstd; independent of ARCHIVE |
+| `HX_OS_ENABLE_HTTP` / `HX_OS_ENABLE_URL` | ON | libcurl transfer and URL tools |
+| `HX_OS_ENABLE_UNICODE` | ON | utf8proc normalization and case folding |
+| `HX_OS_ENABLE_PERSISTENT_QUEUE` | ON | SQLite-backed acknowledged queue |
+| `HX_OS_ENABLE_FRAME` | ON | Bounded stream message framing |
+| `HX_OS_ENABLE_CLI` | ON | UTF-8 command-line options |
+| `HX_OS_ENABLE_TEMP` | ON | Owned temporary files/directories |
+| `HX_OS_ENABLE_ONCE` | ON | Retryable one-time initialization |
+| `HX_OS_ENABLE_SERIAL` | ON | Native serial byte I/O |
+| `HX_OS_ENABLE_SHARED_MEMORY` | ON | Named native/file-backed mappings |
+| `HX_OS_ENABLE_REGEX` | ON | Self-developed bounded UTF-8 regex |
 | `HX_OS_BUILD_EXAMPLES` | OFF | Build standalone C examples |
 | `HX_OS_BUILD_BENCHMARKS` | OFF | Build development microbenchmarks |
 | `HX_OS_ENABLE_NETWORK` | ON | Build native networking |
@@ -1852,13 +1864,15 @@ All new native/common modules default to ON; optional third-party encoding and p
 | `HX_OS_ENABLE_FILE_UTILS` | ON | Build file and path conveniences |
 | `HX_OS_ENABLE_ENV` | ON | Build UTF-8 environment access |
 | `HX_OS_ENABLE_PATHS` | ON | Build special path queries |
-| `HX_OS_ENABLE_THREAD_EX` | ON | Build thread options, names and semaphore |
+| `HX_OS_ENABLE_THREAD_EX` | ON | Thread options, semaphore, cancellation, WaitGroup and reader/writer lock |
 | `HX_OS_ENABLE_PIPE` | ON | Build synchronous and asynchronous pipes |
 | `HX_OS_ENABLE_NET_OPTIONS` | ON | Build socket options and peer queries |
 | `HX_OS_ENABLE_POSITIONED_IO` | ON | Build position-independent file I/O |
 | `HX_OS_ENABLE_FILE_INFO` | ON | Build extended file and directory information |
 | `HX_OS_ENABLE_BOM` | ON | Build Unicode BOM helpers |
 | `HX_OS_ENABLE_TEXT_NUMBER` | ON | Build public numeric text conversion |
+| `HX_OS_ENABLE_ENCODING` | ON | Standalone Base64/Base64URL and hex, without OpenSSL |
+| `HX_OS_ENABLE_LINE_READER` | ON | Bounded UTF-8 lines; requires STREAM |
 | `HX_OS_ENABLE_CONFIG_SERIALIZE` | ON | Build configuration serialization |
 | `HX_OS_ENABLE_TIMER` | ON | Build periodic loop timers |
 | `HX_OS_ENABLE_RANDOM` | ON | Build secure system randomness and UUID v4 |
@@ -2034,9 +2048,15 @@ Future work includes native target validation and measured improvements. hx_c_lo
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%2091%2F91%20Linux%2093%2F93-brightgreen
+[tests-badge]: https://img.shields.io/badge/tests-local%20records-blue
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android
 
 
 For complete calls, see [cryptography](CRYPTO.md), [TLS](TLS.md) and [archives](ARCHIVE.md). Archive options define overwrite, partial publication, path restrictions, passwords, resource bounds and native dependency deployment.
+
+<a id="section-33"></a>
+
+## 33. Data, transfer and persistent-work extensions
+
+See [everyday tools](UTILITY_EXTENSIONS.md) for bounded memory compression, URL/query helpers, CLI, HTTP/HTTPS, temporary resources, serial I/O and named mappings; [message frames](FRAMES.md), [one-time initialization](ONCE.md), [integer tools](INTEGER_TOOLS.md), [incremental hashes](INCREMENTAL_HASH.md), [Unicode](UNICODE.md), [binary/search tools](FAST_TOOLS.md), [persistent queue](PERSISTENT_QUEUE.md) and [self-developed regex](REGEX.md) define their independent ownership and limits. Corresponding public C headers and C++11 wrappers are installed without requiring Qt. Direct SDK targets remain available through [native dependencies](NATIVE_DEPENDENCIES.md).

@@ -13,6 +13,8 @@ deps/
   zlib/             Git submodule
   xz/               Git submodule
   zstd/             Git submodule
+  curl/             libcurl SDK submodule
+  utf8proc/         Unicode SDK submodule
   7zip/             Optional native backend submodule
   cjson/            Optional parser submodule
   libyaml/          Optional parser submodule
@@ -39,19 +41,21 @@ cd hx_c_platform
 git submodule update --init --recursive
 ```
 
-The main build and optional builders check exact dependency commits. A missing or different revision fails explicitly; a branch tip is never selected silently. The active development branch is `dev`. Submodule URLs are in [.gitmodules](../.gitmodules); all 13 Git pins and the iconv archive hash are in [HxDependencySources.cmake](../cmake/HxDependencySources.cmake).
+The main build and optional builders check exact dependency commits. A missing or different revision fails explicitly; a branch tip is never selected silently. The active development branch is `dev`. Submodule URLs are in [.gitmodules](../.gitmodules); all 15 Git pins and the iconv/SQLite archive hashes are in [HxDependencySources.cmake](../cmake/HxDependencySources.cmake).
 
 Default containers and KCP require their initialized submodules. The five parser backends remain opt-in; enabling them no longer requires five source paths. Existing `HX_OS_<PARSER>_SOURCE_DIR` overrides are still supported. An explicitly supplied tree remains the integrator's responsibility.
 
-GNU libiconv is the one source-provider exception: its official Git checkout omits generated conversion tables. `HX_OS_ENABLE_ICONV=ON` therefore retrieves the official 1.18 release archive through FetchContent, verifies its SHA256, and reuses `deps/.fetchcontent/iconv/`. This works on Windows and cross builds without requiring host table-generation tools. `HX_OS_ICONV_USE_SYSTEM=ON` explicitly selects system iconv instead; an existing `HX_OS_ICONV_SOURCE_DIR` can still be supplied. The module remains optional and retains its LGPL terms.
+GNU libiconv is one source-provider exception: its official Git checkout omits generated conversion tables. `HX_OS_ENABLE_ICONV=ON` therefore retrieves the official 1.18 release archive through FetchContent, verifies its SHA256, and reuses `deps/.fetchcontent/iconv/`. This works on Windows and cross builds without requiring host table-generation tools. `HX_OS_ICONV_USE_SYSTEM=ON` explicitly selects system iconv instead; an existing `HX_OS_ICONV_SOURCE_DIR` can still be supplied. The module remains optional and retains its LGPL terms.
 
-The ordinary build uses a prepared SDK instead of automatically compiling third parties. Default-enabled CRYPTO and ARCHIVE need the SDK below; TLS reuses it. Set both `HX_OS_ENABLE_CRYPTO=OFF` and `HX_OS_ENABLE_ARCHIVE=OFF` for a build without OpenSSL/compression dependencies. Existing dependency-free Unicode and builtin parsers still work. See [cryptography](CRYPTO.md), [TLS](TLS.md) and [archives](ARCHIVE.md).
+SQLite is the other verified release exception: its official 3.54.0 amalgamation archive is downloaded through FetchContent, SHA256-checked and cached under `deps/.fetchcontent/sqlite/`. This avoids adopting an unrelated third-party Git mirror or generating the amalgamation on every host. The PERSISTENT_QUEUE module compiles this unchanged source into its native SQLite target; the installed package includes its matching header/library.
+
+The main build uses a prepared SDK for default-enabled CRYPTO/TLS, ARCHIVE, COMPRESSION, HTTP/URL and UNICODE. The SDK now includes shared libcurl and utf8proc alongside OpenSSL and the static compression codecs. Disable the corresponding switches plus PERSISTENT_QUEUE when these SDKs are unnecessary, or use `cmake/minimal.cmake`. UTF-8 validation/conversion in the core and builtin configuration parsers remain available; full Unicode transformations require utf8proc. Memory compression can remain enabled independently of file archives. See [native access](NATIVE_DEPENDENCIES.md), [everyday tools](UTILITY_EXTENSIONS.md), [cryptography](CRYPTO.md), [TLS](TLS.md) and [archives](ARCHIVE.md).
 
 ## 3. Alternative: FetchContent
 
 Use `-DHX_OS_DEPENDENCY_PROVIDER=FETCHCONTENT` in the main project, `tools/dependencies` or `tools/sevenzip`. It retrieves the same fixed commits under `deps/.fetchcontent/<name>/<commit>`. Initial acquisition requires network access; subsequent builds reuse the cache. A failed download stops configuration. A per-source lock serializes initial acquisition, and an already prepared source is not repopulated while another configuration compiles it.
 
-`HX_OS_DEPENDENCY_CACHE_DIR` can point to a separate writable cache, useful with a read-only checkout. CMake's `FETCHCONTENT_SOURCE_DIR_HX_DEP_<NAME>` overrides are accepted; Git checkouts must still match their pin. SUBMODULE does not acquire Git sources during configuration. Enabling source-built GNU iconv can download its verified official archive as described above. Prepare sources separately when builds need to be offline:
+`HX_OS_DEPENDENCY_CACHE_DIR` can point to a separate writable cache, useful with a read-only checkout. CMake's `FETCHCONTENT_SOURCE_DIR_HX_DEP_<NAME>` overrides are accepted; Git checkouts must still match their pin. SUBMODULE does not acquire Git sources during configuration. Enabling source-built GNU iconv or SQLite can download their verified official archives as described above. Prepare sources separately when builds need to be offline:
 
 ```sh
 cmake -S tools/sources -B build-sources
@@ -79,7 +83,7 @@ cmake -S tools/dependencies -B build-deps -G "Visual Studio 17 2022" -A x64 -DHX
 cmake --build build-deps --config Release --parallel 2
 ```
 
-The prefix is `build-deps/prefix` unless `CMAKE_INSTALL_PREFIX` is supplied. The builder uses out-of-source builds, with Release as the default: OpenSSL is shared by default, while compression libraries are static and position-independent. For static OpenSSL, use `HX_DEPS_OPENSSL_SHARED=OFF` and select `HX_OS_OPENSSL_STATIC=ON` in the main project; external threads must follow the [cleanup contract](CRYPTO.md#5-threads-memory-and-unloading). OpenSSL command-line test suites, legacy providers/engines, archive command-line tools and unselected compression backends are not part of this build. `HX_DEPS_JOBS` limits parallel jobs inside sub-builds; the outer `--parallel` option limits concurrently building dependencies.
+The prefix is `build-deps/prefix` unless `CMAKE_INSTALL_PREFIX` is supplied. The builder uses out-of-source builds, with Release as the default: OpenSSL, libcurl and utf8proc are shared by default; compression libraries are static and position-independent. For static OpenSSL, use `HX_DEPS_OPENSSL_SHARED=OFF` and select `HX_OS_OPENSSL_STATIC=ON` in the main project; external threads must follow the [cleanup contract](CRYPTO.md#5-threads-memory-and-unloading). OpenSSL command-line test suites, legacy providers/engines, curl command-line tools, archive command-line tools and unselected compression backends are not part of this build. `HX_DEPS_JOBS` limits parallel jobs inside sub-builds; the outer `--parallel` option limits concurrently building dependencies.
 
 For an MSVC Debug consumer, configure its compression SDK with `-DHX_DEPS_CONFIGURATION=Debug`. Keep Debug and Release SDKs in separate prefixes; do not mix `/MDd` and `/MD` static libraries. The OpenSSL shared runtime stays independently built.
 
@@ -137,3 +141,9 @@ Use `armeabi-v7a` / `android-arm` for Android ARMv7, or `x86_64` / `android-x86_
 The first-party `openssl-android.conf` overlay uses OpenSSL's supported `shlib_variant` setting. Android runtime SONAMEs are `libssl-hx.so` and `libcrypto-hx.so`, avoiding the system BoringSSL names and the emulator's native-bridge dependency. The SDK also retains normal linker aliases. Use the generated runtime manifest rather than assuming desktop library names; the runner deploys resolved SONAME files and omits aliases that collide with system BoringSSL. Upstream OpenSSL files remain untouched. An SDK built with a lower minimum API may also serve a higher-minimum-API application of the same ABI; it must never require a newer API than that application.
 
 The separate `tools/sevenzip` helper accepts the same toolchain/ABI/sysroot arguments on POSIX hosts, without `HX_DEPS_OPENSSL_TARGET`. Its Android build statically includes its C++ runtime and links Bionic thread facilities from libc. Point `HX_OS_TEST_7ZIP_LIBRARY` or Android `--sevenzip-library` at that target's `runtime/7z.so`. This is a separate optional native backend, not part of the default compression SDK.
+
+## 7. New SDK deployment details
+
+The fixed curl tag is `curl-8_22_0`; its upstream header reports `8.22.0-DEV`. The original version text is retained. Its build uses OpenSSL, with command-line tools, threaded DNS, libpsl, SSH, IDN2, GSSAPI and implicit content compression disabled. HTTP deadlines therefore cannot interrupt native blocking DNS. URL IDNA availability follows this selected backend; it does not silently add an IDNA dependency. Utf8proc is pinned at 2.12.0. Both licenses and headers are installed with the SDK.
+
+Native CMake aliases include `hx_c_platform::sqlite`, `::openssl`, `::curl`, `::utf8proc`, `::archive`, `::zlib`, `::lzma` and `::zstd` when enabled. `hx_c_platform::native` collects enabled native targets with the core. A consumer can call these SDK APIs directly without replacing the convenience layer. Installed package configuration resolves matching dependencies from its own prefix, and exports the original native headers. Windows deploys runtime DLLs under `bin`; Unix installations retain shared-library name chains and origin-relative runtime lookup. Do not mix incompatible SDK versions in one process.

@@ -66,3 +66,27 @@ hx::Result<hx::Buffer> queued_bytes() noexcept
 ```
 
 `read(pointer, bytes)` 使用调用者的存储；`read(bytes, context)` 返回拥有内存的 `Buffer`。`peek(pointer, bytes, offset)` 只预览，`discard(bytes)` 丢弃指定字节。获取拥有内存的结果时，分配失败不会消费队列。便利类拥有原生队列，析构无需等待；并发访问仍需调用者同步。
+
+## 4. 容量管理与部分读写
+
+`hx_os_byte_queue_reserve(queue, capacity, error)` 可以提前预留有效负载存储，减少后续扩容。`capacity()` 返回已经分配的有效负载容量；`limit()` 返回创建时设置的上限；`space()` 是 `limit()-size()`，因此不一定都已经分配到内存。`clear()` 清除数据但保留容量。原有布局及完整读写契约不变。
+
+`hx_os_byte_queue_read_some(queue, output, requested, &completed, error)` 最多读取请求长度与现有数据量中的较小值。`write_some()` 最多写入剩余有效负载上限允许的字节数。即使只完成一部分，两者仍返回 `HX_OS_OK`，实际数量写入 `completed`。需要完整处理请求时，调用者必须检查这个数量；库不会暗中重试。
+
+非零长度请求遇到空队列时，读取返回 `HX_OS_NEED_INPUT`；遇到满队列时，写入返回 `HX_OS_LIMIT`。失败时 `completed` 为零，原有内容不变。分配失败不会接收部分写入。零字节请求成功并返回零。`completed` 必填，不能与数据或队列存储重叠。读取目标为 NULL 时，丢弃可用前缀。
+
+```c
+char block[1024];
+size_t received = 0;
+hx_os_status status = hx_os_byte_queue_read_some(
+	queue, block, sizeof(block), &received, NULL);
+
+if (status == HX_OS_OK)
+	printf("Read %zu bytes\n", received);
+```
+
+与要求全部长度的 `read` 不同，队列只有五字节时，上例也能立刻取出这五字节，不必凑满 1024 字节。字节数据不会自动补字符串结尾的 NUL。
+
+C++ 同步提供 `capacity()`、`limit()`、`space()`、`empty()`、`reserve()`、`clear()`、`readSome()`、`writeSome()`。带 `Some` 的方法返回 `Result<size_t>`，其中的值就是完成字节数。普通 `read()`、`write()` 仍要求完整范围。
+
+需要使用调用者提供的固定数组，并直接借用两个连续片段时，使用[固定环形缓冲](RING.zh-CN.md)。可增长存储可能移动，因此借用与提交入口独立放在固定 ring 中。可参考完整的 [ByteQueue 与 ring 示例](../examples/byte_queue_ring.c)。

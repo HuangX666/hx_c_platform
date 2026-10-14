@@ -37,3 +37,9 @@
 [submodule "uthash"]
 	path = deps/uthash/upstream
 	url = https://github.com/troydhanson/uthash.git
+[submodule "utf8proc"]
+	path = deps/utf8proc
+	url = https://github.com/JuliaStrings/utf8proc.git
+[submodule "curl"]
+	path = deps/curl
+	url = https://github.com/curl/curl.git

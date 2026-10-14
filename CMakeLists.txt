@@ -39,6 +39,7 @@ option(HX_OS_ICONV_USE_SYSTEM "Use the platform iconv provider" OFF)
 option(HX_OS_ENABLE_CONFIG "Build configuration file parsers" ON)
 
 option(HX_OS_ENABLE_CONTAINERS "Build generic C containers" ON)
+option(HX_OS_ENABLE_QUEUES "Build bounded thread and concurrent ring queues" ON)
 
 option(HX_OS_ENABLE_COROUTINES "Build bounded cooperative coroutines" ON)
 option(HX_OS_ENABLE_STACKFUL_COROUTINES "Build native stack switching" ON)
@@ -54,6 +55,8 @@ option(HX_OS_ENABLE_LIBRARY "Build native dynamic library loading" ON)
 
 option(HX_OS_ENABLE_FILE_UTILS "Build file and path conveniences" ON)
 option(HX_OS_ENABLE_STREAM "Build binary streams and numeric I/O" ON)
+option(HX_OS_ENABLE_ENCODING "Build Base64 and hexadecimal helpers" ON)
+option(HX_OS_ENABLE_LINE_READER "Build bounded UTF-8 line readers" ON)
 option(HX_OS_ENABLE_BUFFERED_FILE "Build bounded background file writers" ON)
 
 option(HX_OS_ENABLE_ENV "Build UTF-8 environment access" ON)
@@ -81,7 +84,19 @@ option(HX_OS_ENABLE_TIMER "Build periodic loop timers" ON)
 
 option(HX_OS_ENABLE_RANDOM "Build secure system randomness and UUID v4" ON)
 option(HX_OS_ENABLE_CRYPTO "Build OpenSSL data cryptography" ON)
+option(HX_OS_ENABLE_PERSISTENT_QUEUE "Build SQLite message storage" ON)
+option(HX_OS_ENABLE_TEMP "Build temporary file and directory owners" ON)
+option(HX_OS_ENABLE_SERIAL "Build native serial byte I/O" ON)
+option(HX_OS_ENABLE_SHARED_MEMORY "Build named shared mappings" ON)
+option(HX_OS_ENABLE_CLI "Build command-line option parsing" ON)
+option(HX_OS_ENABLE_URL "Build URL and query tools" ON)
+option(HX_OS_ENABLE_HTTP "Build libcurl transfer conveniences" ON)
+option(HX_OS_ENABLE_UNICODE "Build utf8proc transformations" ON)
+option(HX_OS_ENABLE_REGEX "Build the bounded C99 regex engine" ON)
+option(HX_OS_ENABLE_ONCE "Build independent one-time initialization" ON)
+option(HX_OS_ENABLE_FRAME "Build bounded length-prefixed messages" ON)
 option(HX_OS_ENABLE_TLS "Build full-duplex TLS endpoints" ON)
+option(HX_OS_ENABLE_COMPRESSION "Build memory compression helpers" ON)
 option(HX_OS_ENABLE_ARCHIVE "Build file and directory archives" ON)
 option(HX_OS_ENABLE_7ZIP "Build the optional 7-Zip DLL adapter" OFF)
 
@@ -330,6 +345,15 @@ if(HX_OS_ENABLE_TLS AND HX_OS_ENABLE_CRYPTO AND HX_OS_ENABLE_NETWORK
 	set(HX_OS_HAVE_TLS 1)
 endif()
 
+set(HX_OS_HAVE_TEMP 0)
+if(HX_OS_ENABLE_TEMP AND HX_OS_ENABLE_RANDOM AND HX_OS_ENABLE_FILE_UTILS)
+	set(HX_OS_HAVE_TEMP 1)
+endif()
+set(HX_OS_HAVE_SHARED_MEMORY 0)
+if(HX_OS_ENABLE_SHARED_MEMORY AND HX_OS_ENABLE_VIRTUAL_MEMORY)
+	set(HX_OS_HAVE_SHARED_MEMORY 1)
+endif()
+set(HX_OS_HAVE_COMPRESSION ${HX_OS_ENABLE_COMPRESSION})
 set(HX_OS_HAVE_ARCHIVE 0)
 set(HX_OS_HAVE_7ZIP 0)
 if(HX_OS_ENABLE_ARCHIVE AND HX_OS_ENABLE_FILE_UTILS
@@ -341,12 +365,15 @@ if(HX_OS_ENABLE_7ZIP AND HX_OS_HAVE_ARCHIVE AND HX_OS_ENABLE_LIBRARY
 	set(HX_OS_HAVE_7ZIP 1)
 endif()
 set(HX_OS_HAVE_OPENSSL 0)
-if(HX_OS_ENABLE_CRYPTO OR HX_OS_HAVE_ARCHIVE)
+if(HX_OS_ENABLE_CRYPTO OR HX_OS_HAVE_ARCHIVE OR HX_OS_ENABLE_HTTP
+		OR HX_OS_ENABLE_URL)
 	set(HX_OS_HAVE_OPENSSL 1)
 endif()
 
 include(cmake/HxCrypto.cmake)
 include(cmake/HxArchive.cmake)
+include(cmake/HxSqlite.cmake)
+include(cmake/HxTransferSdk.cmake)
 
 if(NOT HX_OS_ENABLE_COROUTINES)
 	set(HX_OS_ENABLE_STACKFUL_COROUTINES OFF)
@@ -364,6 +391,10 @@ if(HX_OS_ENABLE_IPC AND HX_OS_ENABLE_NETWORK AND HX_OS_ENABLE_LOOP
 	set(HX_OS_HAVE_IPC 1)
 endif()
 
+if(NOT HX_OS_ENABLE_STREAM)
+	set(HX_OS_ENABLE_LINE_READER OFF)
+endif()
+
 configure_file(cmake/hx_os_config.h.in
 	${CMAKE_CURRENT_BINARY_DIR}/private/hx_os_config.h)
 
@@ -372,17 +403,26 @@ add_library(hx_c_platform
 	src/convenience.c src/lexer.c src/parser.c src/preprocess.c
 	src/wide.c src/wait.c src/string.c
 	src/string_utils.c src/format.c src/file.c src/text.c src/optional.c
-	src/stdio.c src/text_wide.c
-	src/stream.c src/stream_number.c
+	src/bytes.c src/random_tools.c src/algorithm_extra.c src/bloom.c
+	src/search.c src/compression.c src/cli.c src/url.c src/http.c
+	src/temp.c src/serial.c src/shared_memory.c
+	src/regex.c src/regex_parse.c src/regex_compile.c src/regex_match.c
+	src/stdio.c src/text_wide.c src/frame.c
+	src/stream.c src/stream_number.c src/line_reader.c src/varint.c
+	src/encoding.c src/text_utils.c src/unicode_tools.c
+	src/control.c src/cancel.c src/coord.c src/once.c
 	src/buffered_file.c
 	src/config.c src/config_values.c src/config_file.c src/config_ini.c
 	src/containers.c src/variant.c src/file_search.c
+	src/queue.c src/persistent_queue.c
+	src/ring.c src/bitset.c src/cache.c src/algorithm.c
 	src/sysinfo.c src/library.c src/path.c src/env.c src/paths.c
 	src/thread_extra.c src/pipe.c src/file_at.c src/net_options.c
 	src/file_info.c src/bom.c src/number.c src/config_serialize.c
 	src/config_build.c src/codec.c
-	src/timer.c src/util.c src/vm.c src/file_extra.c
-	src/crypto.c src/crypto_digest.c src/crypto_cipher.c src/crypto_text.c
+	src/timer.c src/util.c src/uuid.c src/vm.c src/file_extra.c
+	src/crypto.c src/crypto_digest.c src/crypto_incremental.c
+	src/crypto_cipher.c src/crypto_text.c
 	src/crypto_file.c
 	src/crypto_key.c
 	src/tls_common.c src/tls.c src/tls_wait.c src/tls_io.c
@@ -402,6 +442,14 @@ add_library(hx_c_platform
 	src/profiler.c
 	${hx_parser_sources} ${hx_parser_objects}
 	${hx_platform_sources})
+
+if(WIN32)
+	target_sources(hx_c_platform PRIVATE src/windows/serial_native.c
+		src/windows/shared_memory_native.c)
+else()
+	target_sources(hx_c_platform PRIVATE src/posix/serial_native.c
+		src/posix/shared_memory_native.c)
+endif()
 
 if(HX_OS_ENABLE_FORMAT)
 	target_sources(hx_c_platform PRIVATE src/format_value.c)
@@ -730,6 +778,16 @@ if(HX_OS_ENABLE_KCP)
 endif()
 
 add_library(hx_c_platform_cpp INTERFACE)
+add_library(hx_c_platform_native INTERFACE)
+add_library(hx_c_platform::native ALIAS hx_c_platform_native)
+set_target_properties(hx_c_platform_native PROPERTIES EXPORT_NAME native)
+target_link_libraries(hx_c_platform_native INTERFACE hx_c_platform)
+foreach(dependency sqlite openssl curl utf8proc archive zlib lzma zstd)
+	if(TARGET hx_c_platform::${dependency})
+		target_link_libraries(hx_c_platform_native INTERFACE
+			hx_c_platform::${dependency})
+	endif()
+endforeach()
 add_library(hx_c_platform::cpp ALIAS hx_c_platform_cpp)
 set_target_properties(hx_c_platform_cpp PROPERTIES EXPORT_NAME cpp)
 target_link_libraries(hx_c_platform_cpp INTERFACE hx_c_platform)
@@ -756,8 +814,32 @@ target_compile_definitions(hx_c_platform PRIVATE
 	${hx_parser_aliases} ${hx_parser_definitions})
 target_compile_definitions(hx_c_platform PRIVATE HX_OS_BUILD)
 target_link_libraries(hx_c_platform PRIVATE Threads::Threads)
+if(UNIX)
+	target_link_libraries(hx_c_platform PRIVATE m)
+endif()
 hx_link_crypto(hx_c_platform)
 hx_link_archive(hx_c_platform)
+hx_link_transfer_sdk(hx_c_platform)
+if(HX_OS_HAVE_SHARED_MEMORY AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	find_library(HX_OS_SHM_RT_LIBRARY rt)
+	if(HX_OS_SHM_RT_LIBRARY)
+		target_link_libraries(hx_c_platform PRIVATE
+			${HX_OS_SHM_RT_LIBRARY})
+	endif()
+endif()
+if(WIN32 AND HX_OS_ENABLE_CLI)
+	target_link_libraries(hx_c_platform PRIVATE shell32)
+endif()
+if(HX_OS_HAVE_PERSISTENT_QUEUE)
+	target_link_libraries(hx_c_platform PRIVATE hx_c_platform_sqlite)
+	if(APPLE)
+		set_property(TARGET hx_c_platform APPEND PROPERTY INSTALL_RPATH
+			"@loader_path")
+	elseif(UNIX)
+		set_property(TARGET hx_c_platform APPEND PROPERTY INSTALL_RPATH
+			"$ORIGIN")
+	endif()
+endif()
 
 if(HX_OS_NEED_RT)
 	target_link_libraries(hx_c_platform PRIVATE rt)
@@ -884,6 +966,7 @@ install(TARGETS hx_c_platform EXPORT hx_c_platformTargets
 	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(TARGETS hx_c_platform_cpp EXPORT hx_c_platformTargets)
+install(TARGETS hx_c_platform_native EXPORT hx_c_platformTargets)
 install(TARGETS hx_c_platform_cpp20 EXPORT hx_c_platformTargets)
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(FILES README.md README.zh-CN.md THIRD_PARTY_NOTICES.md
@@ -906,6 +989,16 @@ install(FILES
 	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/hx_c_platform)
 
 set(HX_OS_PC_LIBS_PRIVATE "")
+
+if(HX_OS_HAVE_HTTP OR HX_OS_HAVE_URL)
+	string(APPEND HX_OS_PC_LIBS_PRIVATE " -lcurl")
+endif()
+if(HX_OS_HAVE_UNICODE)
+	string(APPEND HX_OS_PC_LIBS_PRIVATE " -lutf8proc")
+endif()
+if(HX_OS_HAVE_PERSISTENT_QUEUE)
+	string(APPEND HX_OS_PC_LIBS_PRIVATE " -lhx_sqlite3")
+endif()
 
 if(APPLE AND HX_OS_HAVE_TLS)
 	string(APPEND HX_OS_PC_LIBS_PRIVATE
@@ -976,11 +1069,11 @@ if(HX_OS_ATOMIC_LIBRARY)
 	string(APPEND HX_OS_PC_LIBS_PRIVATE " -latomic")
 endif()
 
-if(HX_OS_NEED_RT)
+if(HX_OS_NEED_RT OR (HX_OS_HAVE_SHARED_MEMORY AND HX_OS_SHM_RT_LIBRARY))
 	string(APPEND HX_OS_PC_LIBS_PRIVATE " -lrt")
 endif()
 
-if(HX_OS_ENABLE_PROFILER AND NOT WIN32)
+if(UNIX)
 	string(APPEND HX_OS_PC_LIBS_PRIVATE " -lm")
 endif()
 

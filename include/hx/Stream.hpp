@@ -2,6 +2,7 @@
 #define HX_C_PLATFORM_CPP_STREAM_HPP
 
 #include <hx_os_stream.h>
+#include <hx_os_varint.h>
 #include <hx/Values.hpp>
 
 namespace hx {
@@ -199,6 +200,62 @@ public:
 			m_stream_, order, value, &error);
 
 		return detail::Status(status, error);
+	}
+
+	Result<uint64_t> readVarUInt() noexcept
+	{
+		if (!m_stream_)
+			return Failure(HX_OS_CLOSED);
+
+		uint64_t value = 0;
+		hx_os_error error = {};
+		auto status =
+			hx_os_stream_read_varuint(m_stream_, &value, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+
+		return value;
+	}
+
+	Result<int64_t> readVarInt() noexcept
+	{
+		if (!m_stream_)
+			return Failure(HX_OS_CLOSED);
+
+		int64_t value = 0;
+		hx_os_error error = {};
+		auto status =
+			hx_os_stream_read_varint(m_stream_, &value, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+
+		return value;
+	}
+
+	Result<size_t> writeVarUInt(uint64_t value) noexcept
+	{
+		if (!m_stream_)
+			return Failure(HX_OS_CLOSED);
+
+		size_t completed = 0;
+		hx_os_error error = {};
+		auto status = hx_os_stream_write_varuint(
+			m_stream_, value, &completed, &error);
+
+		return Result<size_t>::withValue(completed, status, error);
+	}
+
+	Result<size_t> writeVarInt(int64_t value) noexcept
+	{
+		if (!m_stream_)
+			return Failure(HX_OS_CLOSED);
+
+		size_t completed = 0;
+		hx_os_error error = {};
+		auto status = hx_os_stream_write_varint(
+			m_stream_, value, &completed, &error);
+
+		return Result<size_t>::withValue(completed, status, error);
 	}
 
 	Result<uint64_t> seek(

@@ -72,7 +72,7 @@ The separate Linux desktop adapter may dynamically use an installed libsystemd/l
 
 ## Optional OpenSSL and archive dependency sources
 
-Native dependencies use fixed Git submodules under `deps/`, with the same pins available through FetchContent. CRYPTO, TLS and ARCHIVE share OpenSSL, dynamically linked by default. Disable both CRYPTO and ARCHIVE to omit it entirely. See [dependency builds](docs/DEPENDENCIES.md) and [archive backend boundaries](docs/ARCHIVE.md).
+Native dependencies use fixed Git submodules under `deps/`, with the same pins available through FetchContent. CRYPTO, TLS, ARCHIVE and the curl SDK share OpenSSL, dynamically linked by default. To omit OpenSSL, also disable HTTP and URL. Standalone COMPRESSION uses only its codecs. See [dependency builds](docs/DEPENDENCIES.md) and [archive backend boundaries](docs/ARCHIVE.md).
 
 | Component | Pin | Retained license | Commit |
 | --- | --- | --- | --- |
@@ -84,3 +84,13 @@ Native dependencies use fixed Git submodules under `deps/`, with the same pins a
 | 7-Zip (optional) | 26.04 | [LGPL/BSD/unRAR](deps/7zip/DOC/License.txt), [LGPL text](deps/7zip/DOC/copying.txt), [unRAR terms](deps/7zip/DOC/unRarLicense.txt) | `9128b80e3a471108678e2b3ec3c985861c8d7b0f` |
 
 Only the library components selected by `tools/dependencies` are built. Upstream notices remain unchanged; distributions must include the applicable notices for their actual component set. The default build selects no LGPL/GPL compression backend. The separate optional 7-Zip dynamic backend has its own LGPL/BSD/unRAR conditions and its own submodule. The default SDK does not build it. Legacy optional GNU libiconv remains subject to the separate LGPL notice above. Fixed versions describe this integration, not a perpetual latest-version claim.
+
+## SQLite, libcurl and Unicode transformations
+
+| Component | Selected source | License / attribution |
+| --- | --- | --- |
+| SQLite | Official 3.54.0 amalgamation, SHA256 `68e913b0fe8ec6b4e5f391c594a28872884e80d6cd042a1e50c957be46b5aa4d` | [Public-domain dedication](https://www.sqlite.org/copyright.html); retain the unchanged source notice |
+| libcurl | Tag `curl-8_22_0`, commit `01346829096c61b372692f6dc43ffa778c6caccd`; upstream version text `8.22.0-DEV` | [curl license](deps/curl/COPYING) |
+| utf8proc | 2.12.0, commit `79cdd5ab40c79afa559f689ffc13b76812dee1ac` | [MIT and retained Unicode data notices](deps/utf8proc/LICENSE.md) |
+
+These optional adapters preserve upstream code and licenses. Native headers remain callable through the installed dependency targets. The self-developed regex engine does not link PCRE2; any local PCRE2 differential checks are maintainer-only and are not distributed as a regex backend.

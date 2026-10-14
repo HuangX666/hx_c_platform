@@ -84,3 +84,13 @@ cmake/HxWarnings.cmake 复制自相邻 hx_c_log 项目，保留其版权声明�
 | 7-Zip (optional) | 26.04 | [LGPL/BSD/unRAR](deps/7zip/DOC/License.txt), [LGPL text](deps/7zip/DOC/copying.txt), [unRAR terms](deps/7zip/DOC/unRarLicense.txt) | `9128b80e3a471108678e2b3ec3c985861c8d7b0f` |
 
 只构建 `tools/dependencies` 明确选择的库组件。上游许可证文本保持原样，分发时按实际组件保留适用说明。默认压缩组合没有选择 LGPL/GPL 压缩后端。独立可选的 7-Zip 动态后端有自己的 LGPL/BSD/unRAR 条件，使用独立子模块；默认 SDK 不构建它；原有可选 GNU libiconv 仍适用前文的 LGPL 说明。固定版本表示本次集成选择，不表示永远是上游最新版。
+
+## SQLite、libcurl 和 Unicode 变换
+
+| 组件 | 固定源码 | 许可证／归属 |
+| --- | --- | --- |
+| SQLite | 官方 3.54.0 amalgamation，SHA256 `68e913b0fe8ec6b4e5f391c594a28872884e80d6cd042a1e50c957be46b5aa4d` | [公有领域声明](https://www.sqlite.org/copyright.html)，保留原始源码声明 |
+| libcurl | `curl-8_22_0` 标签，提交 `01346829096c61b372692f6dc43ffa778c6caccd`；上游版本文字为 `8.22.0-DEV` | [curl 许可证](deps/curl/COPYING) |
+| utf8proc | 2.12.0，提交 `79cdd5ab40c79afa559f689ffc13b76812dee1ac` | [MIT 及保留的 Unicode 数据声明](deps/utf8proc/LICENSE.md) |
+
+这些可选适配保留上游源码和许可证，安装后仍可通过原生依赖目标调用对应头文件。自研正则不链接 PCRE2，本地 PCRE2 对照只供维护者验证，不作为发布后端。CRYPTO、TLS、ARCHIVE、curl SDK 共用默认动态 OpenSSL；完全移除 OpenSSL 还需关闭 HTTP／URL。独立 COMPRESSION 只依赖压缩编解码库。

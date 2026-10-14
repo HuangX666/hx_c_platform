@@ -2,6 +2,9 @@
 
 #include <inttypes.h>
 #include <stdio.h>
+#if HX_OS_HAVE_PERSISTENT_QUEUE
+#include <sqlite3.h>
+#endif
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -311,6 +314,27 @@ hx_os_status hx_os_error_message(const hx_os_error *error, char *buffer,
 	if (error->domain == HX_OS_ERROR_OPENSSL && error->native_code >= 0)
 		hx_os_i_crypto_error_text(
 			(uint64_t)error->native_code, native, sizeof(native));
+#if HX_OS_HAVE_PERSISTENT_QUEUE
+	if (error->domain == HX_OS_ERROR_SQLITE && error->native_code >= 0 &&
+		error->native_code <= INT_MAX)
+		(void)snprintf(native, sizeof(native), "%s",
+			sqlite3_errstr((int)error->native_code));
+#endif
+	if (error->domain == HX_OS_ERROR_REGEX && error->native_code >= 0 &&
+		error->native_code <= INT_MAX)
+		(void)snprintf(native, sizeof(native), "%s at byte %" PRId64,
+			hx_os_i_regex_message((int)error->native_code),
+			error->cause_code);
+	if (error->domain >= HX_OS_ERROR_ZLIB &&
+		error->domain <= HX_OS_ERROR_ZSTD)
+		(void)snprintf(native, sizeof(native), "%s",
+			hx_os_i_compression_message(
+				error->domain, error->native_code));
+	if (error->domain == HX_OS_ERROR_CURL ||
+		error->domain == HX_OS_ERROR_CURL_URL)
+		(void)snprintf(native, sizeof(native), "%s",
+			hx_os_i_transfer_message(
+				error->domain, error->native_code));
 	length = snprintf(buffer, capacity,
 		"%s [domain=%u code=%" PRId64 "]%s%s",
 		hx_os_status_name(error->status), error->domain,

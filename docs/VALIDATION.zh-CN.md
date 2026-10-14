@@ -4,9 +4,73 @@
 
 [English](VALIDATION.md) · [README](../README.zh-CN.md)
 
-本文记录截至 2026-10-10 的开发验证。设计覆盖、已有适配源码、编译成功、目标运行成功是不同状态。本机测试不能证明所有系统版本、文件系统、 CPU、libc 或网络提供方均已通过。
+本文记录截至 2026-10-13 的开发验证。设计覆盖、已有适配源码、编译成功、目标运行成功是不同状态。本机测试不能证明所有系统版本、文件系统、 CPU、libc 或网络提供方均已通过。
 
-当前业务示例见下方 JSON 记录；此前独立文本示例、初版共用示例、IPC／KCP 实现及其他各批记录对应各自当时的版本。
+当前扩展验收见[数据与 I/O 扩展记录](#data-io-20261013)；此前独立文本示例、初版共用示例、IPC／KCP 实现及其他各批记录对应各自当时的版本。
+
+## 2026-10-13：Varint、ZigZag 与 UUID v7
+
+新增最短表示的无符号 base-128 Varint、覆盖完整整数范围的 ZigZag、读写流便利入口、严格 UUID 文本解析及无全局状态的 UUID v7 生成／时间提取。C++11 的 Stream 和 Random 包装使用 Result；UUID v4 保留原行为。v7 复用已有的操作系统安全随机源，不保证同一毫秒内的生成顺序或时钟变化时的顺序。
+
+复用 build-shared-msvc（MSVC x64 Debug）、build-shared-linux（WSL Release）和 build-sanitize-linux（ASan／UBSan，开启泄漏检测）。现有 data、cpp_utilities 在每个环境均 2/2 通过；integer_tools 示例在两端运行通过。GCC C99 和关闭异常的 C++11 公共头独立编译通过。私有回归覆盖 64 位边界值、容量不足保留输出、非最短／截断／溢出 Varint、读写流 EOF、非法 UUID 保留输出及 RFC 9562 的 v7 时间示例。
+
+回归源码继续只保留本地并忽略，没有新增测试目标、构建目录、依赖或 CI 作业。这条较早的检查点仅记录整数及 UUID 能力，没有新增目标环境运行证据；已完成的持久化队列及其他扩展见后续记录。
+
+## 2026-10-13：数组便利入口、文本工具与线程协调
+
+普通 C 数组算法扩展到 36 个入口，包括整数排序／查找快捷入口、筛选、转换、归约、前缀计算及归并／集合操作；C++11 层接受标准迭代器。新增独立 Base64／Base64URL／十六进制转换、有界 UTF-8 逐行读取、借用文本拆分、严格整数解析、自然排序比较、秒表、有界退避和令牌桶。取消令牌接入消息队列，也可显式绑定已有任务、异步请求和协程。WaitGroup 按已确认的 Go 风格轮次规则工作；原生线程读写锁在写者排队后阻止新读者进入，不支持递归、升级，也不保证 FIFO。
+
+| 复用环境／检查 | 结果 |
+| --- | --- |
+| Windows MSVC x64 Debug，build-shared-msvc | data、lifecycle、containers、stl、cpp_utilities：5/5 通过 |
+| WSL Linux Release，build-shared-linux | 同一组相关套件：5/5 通过 |
+| WSL ASan／UBSan，build-sanitize-linux，开启泄漏检测 | 同一组 5 项通过，没有 sanitizer／泄漏报告 |
+| WSL TSan，build-tsan-linux | lifecycle 通过，没有竞态报告 |
+| Windows 与 Linux 客户示例 | algorithms、algorithms_cpp、encoding、read_lines、text_utilities、control、coordination、message_queue：每端 8/8 通过 |
+| 公共头独立编译 | GCC 下 7 个 C99 头、7 个关闭异常的 C++11 头通过 |
+| 模块关闭分支 | 关闭 ENCODING、LINE_READER、STREAM、TEXT_NUMBER、THREAD_EX、QUEUES、CONTAINERS 后，8 个相关 C 源文件语法检查通过；不表示单独完成关闭模块的运行验收 |
+
+逐行读取示例在两端都逐行还原了现有 UTF-8 示例源码。原有私有套件覆盖转换失败保留输出、行长限制与分配失败重试、算法进度和所有权、取消唤醒、退订超时重试、动态任务计数、写者优先及批量操作部分完成后取消。取消 WaitGroup 的等待不会减少任务计数。令牌回调继续限定为有界的协作式唤醒／请求操作；原生锁重获取和回调退订清理不承诺硬实时截止。
+
+两个正常构建目录仍登记 20 个日常套件。回归源码继续忽略并只留本地，没有新增测试目标、构建目录、依赖或远端 CI 运行。修改文件的源码宽度检查及双语文档／API 链接复核通过。原有无关编译器警告仍存在。这里记录的是功能与 sanitizer 检查，不代表性能提升或不存在任何竞态的证明。本批没有重跑 Android、ARM、macOS、旧 Windows 和安装后消费验收。
+
+## 2026-10-13：批量消息、过期缓存、通用算法及远端时钟同步
+
+已将 dev 同步到远端提交 `dbb6237`（高精度 C 时钟及内部宽位换算），保留本地开发改动。只有明确要求测量时间间隔的调用使用新高精度时钟；队列截止时间和缓存过期继续使用原有截止时间时钟域。
+
+新增批量消息收发及已完成前缀报告、环形队列批量操作、写入后固定有效期的 LRU、15 个普通 C 数组算法，以及 C++11 标准迭代器入口。既有 vector 算法共用 C 数组实现，保留原有所有权和预算规则。示例与英文、中文文档同步更新。
+
+| 复用环境／检查 | 合入后的结果 |
+| --- | --- |
+| Windows MSVC x64 Debug，build-shared-msvc | containers、stl、lifecycle、cpp_utilities：4/4 通过 |
+| WSL Linux Release，build-shared-linux | 相同的四个相关套件：4/4 通过 |
+| WSL ASan/UBSan，build-sanitize-linux，开启泄漏检测 | 四个相关套件通过，无 sanitizer／泄漏报告 |
+| WSL TSan，build-tsan-linux | lifecycle 通过，无竞态报告 |
+| Windows 与 Linux 公开示例 | algorithms、algorithms_cpp、message_queue、lru_cache、high_resolution_time：每端 5/5 通过 |
+| 公共头独立编译 | C99：queue、cache、algorithm；关闭异常的 C++11：Queue、Cache、Algorithms；全部通过 |
+| 模块关闭 | 关闭 QUEUES／CONTAINERS 后，queue、cache、algorithm 的 C99 语法检查通过；未宣称另做关闭模块的运行验证 |
+
+本地既有套件覆盖批量绕回、超时／关闭后的部分进度、六种并发环形队列组合、TTL 更新与过期、所有权及分配失败回滚、C 数组全部入口、结构体稳定顺序、选择算法临时值对齐，以及 C++ 迭代器和链表节点排序。回归源码继续忽略并只留在本机；两个常用构建目录仍注册 20 项日常套件，没有新增回归目标或构建目录。没有启用远端 CI、引入新依赖或修改第三方源码。
+
+这些结果属于功能、内存与竞态验证，不是吞吐对照或无锁进展证明。MPSC／MPMC 原子环形队列继续遵守已说明的进展限制。既有无关编译警告仍保留。本轮未重新验证 Android、ARM 板卡、macOS、旧版 Windows 和全新安装包消费。
+
+## 2026-10-13：有界队列、固定环形缓冲、LRU 与位图
+
+新增 ByteQueue 容量／预留／部分读写便利入口、调用者持有内存的固定字节环形缓冲与两段借用提交、独立裁剪的线程消息队列、有锁／原子 SPSC/MPSC/MPMC 环形队列、LRU 缓存及动态位集合。C++11 包装使用 Result，不使用异常。既有公开布局和旧入口保持不变；固定 ring 是新的调用者持有类型。
+
+消息队列预分配固定大小消息槽，支持关闭后排空。原子 SPSC 要求平台支持无锁 64 位原子操作。MPSC/MPMC 原子实现使用槽位序号和 CAS，不使用互斥锁，但明确不承诺严格 lock-free 进展；暂停的槽位持有者可能延迟其他调用。不凭算法名称声称性能提升或硬实时保证。
+
+| 复用环境／检查 | 结果 |
+| --- | --- |
+| Windows MSVC x64 Debug，build-shared-msvc | containers、lifecycle、cpp_utilities：3/3 通过 |
+| WSL Linux Release，build-shared-linux | 相同三个相关套件：3/3 通过 |
+| WSL ASan/UBSan，build-sanitize-linux，开启泄漏检测 | 相同三个套件：3/3 通过，没有 sanitizer 报告 |
+| WSL TSan，build-tsan-linux | lifecycle：1/1 通过，没有竞态报告 |
+| Windows 与 Linux 的公共示例 | byte_queue_ring、bitset、lru_cache、message_queue：两端分别 4/4 通过 |
+| 公共头独立编译 | 6 个 C99 头、5 个关闭异常的 C++11 头通过 |
+| 模块关闭分支 | QUEUES/CONTAINERS 关闭时 queue、ring、bitset、cache、容器 stub 的 C99 语法检查通过；不声称另做了关闭模块的运行构建 |
+
+新增检查并入现有私有套件，覆盖分配失败回滚、借用片段边界、位图扩缩容／搜索／集合运算、LRU 淘汰与所有权、消息超时和关闭唤醒，以及六种并发环形队列组合。每个生产者发送 1,000 条带编号记录，消费者核对内容及每条恰好接收一次。这些是有界正确性检查，不是吞吐基准，也不能证明任意调度下的进展。日常注册数量仍为 20，没有增加 CTest 可执行目标或构建目录。回归源码和本机配置继续忽略，远端 CI 未开启，第三方文件未修改。构建仍有旧模块的既有警告，不声称零警告。本轮没有重跑 Android、实体 ARM 板卡、macOS 或旧 Windows。
 
 ## 2026-10-10：WSL2 UDP 分片定位与本地回环配置
 
@@ -876,7 +940,7 @@ C++ 在结果存储可匹配原子引用计数对齐边界时采用空基类／�
 
 探针中的高对齐结果类型含有与对齐值等长的字节数组。表中测量完整任务对象，包括结果、函数对象及管理数据，不代表分配器实际尺寸档位或进程 RSS。C 原子类型宽度和对齐保持不变。没有引入 packing、共享位域或新的缓存行填充策略。已经紧凑的结构、具有功能意义的对齐探针保持原样。
 
-13 个公共 C 头文件与修改前哈希一致，Windows DLL 仍有 235 个导出函数，与公共声明匹配。C++ 封装内部模板布局发生变化，消费者及插件需一起重新编译，不能混用不同头文件版本实例化的对象；源码 API 保持一致。详见 [C++ 存储与重新编译规则](CPP_POOL.zh-CN.md#存储布局与重新编译)。
+13 个公共 C 头文件与修改前哈希一致，Windows DLL 仍有 235 个导出函数，与公共声明匹配。C++ 封装内部模板布局发生变化，消费者及插件需一起重新编译，不能混用不同头文件版本实例化的对象；源码 API 保持一致。详见 [C++ 存储与重新编译规则](CPP_POOL.zh-CN.md#对齐重新编译与裁剪)。
 
 布局修改后的验证：
 
@@ -1349,3 +1413,46 @@ Windows 宽位算法走可移植分支，Linux x64 走编译器 128 位整数；
 报告为 build-android-emulator/report.json、build-android/report.json、 build-android/report-minimal.json、build-android-static/report.json；各配置的 run-*.log 为原始 stdout/stderr。ARMv7 兼容检查结果保存在 build-android-emulator/armv7-device-check.json：目标不提供该 ABI，未部署运行。 build-android-emulator/arm64-execution-probe.json 保存修复前的加载失败。原交叉编译报告另存于 build-android-emulator/arm-cross-build-report.json。
 
 仍未验证 Android 5.0 / API 21 系统、ARMv7、ARM 原生硬件和 APK 应用沙箱。 API 21/28 是编译最低版本，实际执行系统均为 API 34；没有远程 CI 运行声明。
+
+<a id="data-io-20261013"></a>
+
+## 2026-10-13：数据与 I/O 扩展
+
+| 检查 | 当前工作区证据 |
+| --- | --- |
+| Windows MSVC x64 Debug | `data`、`tls`、`cpp_utilities` 通过；中文命令行、压缩、URL、临时清理及真实父子进程共享内存示例运行通过 |
+| WSL Linux GCC 共享 Release | `data`、`tls`、`cpp_utilities` 通过；伪终端串口收发／超时通过；原生及文件映射父子进程示例运行通过 |
+| Linux ASan／UBSan 静态 Debug | 相关 `data`／`cpp_utilities` 通过，未报告 sanitizer 故障；预编译原生 SDK 不属于全量插桩范围 |
+| Linux TSan | 相关 `data` 通过，包含 once 初始化竞争和资源清理；这是有界用例证据，不能证明所有调度 |
+| 公共头 | 27 个 C99／C++11 头独立编译，警告视为错误，C++ 关闭异常；once 的 const lambda／普通函数实例化通过 |
+| 共享安装包 | Windows／Linux 安装成功，外部纯 C 工程通过 `find_package` 构建，包含底层 SDK 及新消息帧／映射示例 |
+| 裁剪 | 新模块整体关闭后 `data` 通过；关闭 CRYPTO／ARCHIVE／HTTP／URL／UNICODE／PERSISTENT_QUEUE／REGEX，仅保留 COMPRESSION 时构建及示例运行通过；已恢复原 ASan 全功能配置 |
+| 自研正则 | 与本机 PCRE2 10.46 的 27,750 组 UTF-8 模式／文本对照通过，包含高级捕获、断言、递归条件、原子组及控制动词；已说明的方言差异仍然存在 |
+
+回归源码继续忽略，仅加入原有默认 20 个套件；公开可运行示例独立提供。复用现有构建及 SDK 目录，没有启用远端 CI。新 ARM／Android 验收完成后单独记录，不能沿用旧模块的运行结果。上述检查不代表实体串口、ARM 板卡、Win7 或 Apple 实测。
+
+目标环境补充：Android x86_64 以 API 21 构建，在 API 34 的 `Qt_Android_34` 模拟器运行，`data`、`tls`、`cpp_utilities`、底层 SDK 调用及两个独立进程通过文件共享映射传递 JSON 通过。现有 Android 进程适配仍不支持子进程启动，因此映射示例使用显式 `--write`／`--read` 两个进程。Linux AArch64 GCC 交叉构建及 QEMU 下的 `data`、`tls`、`cpp_utilities` 通过；这些不代表实体 ARM 板卡验收。
+
+Linux ARMv7 补充：已修复 32 位编译器下 size_t／int64 诊断转换，GCC 交叉构建及 QEMU 的 `data`、`tls`、`cpp_utilities` 通过。ARMv7／AArch64 的底层依赖示例及真实父子进程映射也运行通过，QEMU 子进程通过 `QEMU_LD_PREFIX` 使用匹配 sysroot，不是板卡实测。
+
+Android 最终补充：`arm64-v8a` 和 `armeabi-v7a` 的 API 21 全功能共享构建均包含新模块及依赖 SDK。API 34 模拟器转译运行 ARM64 的 `data`、`tls`、`cpp_utilities`、底层 SDK 调用及两个独立文件映射进程，均通过。URL 初始化引用修正后，原生 x86_64 的 `data` 再次通过。此模拟器只提供 x86_64、arm64-v8a，ARMv7 运行仍待兼容设备。用例使用调用者可控制的工作目录，OpenSSL 使用独立 SONAME，避免影响原生转译桥；临时 adb 部署目录已在运行后删除。
+
+最终的 URL 生命周期及 32 位诊断修正也通过相关 Windows、Linux、ASan 和两种 ARM Linux QEMU 用例。正常宿主目录仍登记 20 个日常套件。实体串口、Android 5.0、ARM 板卡、Apple、旧 Windows 和其他 libc 的验收继续单独标记待完成；本轮不声称新增吞吐或延迟提升。
+
+## 2026-10-14：七项审查问题修复
+
+本轮修复正则编译期长度分析指数增长、SQLite 写锁竞争后错误接受过期领取凭据、忽略大小写的字符区间匹配、Unicode 默认简单折叠、once 完成状态与取消的优先级、仅使用 CMAKE_PREFIX_PATH 的 SDK 安装，以及静态 pkg-config 依赖遗漏。公共结构布局和函数签名不变。新增大小写回归发现的 `(?-i:...)` 作用域标志解析错误也一并修正。
+
+| 检查 | 实际结果 |
+| --- | --- |
+| 现有 Windows MSVC x64 Debug 构建 | `data`、`cpp_utilities` 通过，2/2 |
+| 现有 WSL Linux GCC Release 共享构建 | 同两项通过，2/2 |
+| 现有 Linux ASan／UBSan Debug 静态构建 | 开启泄漏检查和遇错停止后，`data` 通过；预编译 SDK 并非全部插桩 |
+| 正则对照 | 与本机 PCRE2 10.46 对比 34,265 组模式／文本，本次矩阵零差异 |
+| 编译耗时边界 | 619 字节、28 层倍增引用的后向断言能正确拒绝；Linux 同进程测量 10 次，中位 0.011 ms，最大 2.313 ms。修复前的受控复现三秒仍未完成。这只是一个异常输入的证据，不是通用吞吐基准 |
+| 租约竞争 | 使用同一 SQLite 运行库的另一连接持有写锁 600 ms；250 ms 租约过期后 ack、renew 均拒绝，记录保留；仍有效的凭据按拿到锁后的时间续租 |
+| 安装包 | Linux 清空 HX_OS_DEPENDENCY_PREFIX，仅以 CMAKE_PREFIX_PATH 选择 SDK 后安装成功。Windows／Linux 安装后的独立 C 工程成功构建、运行底层 SDK 调用和正则示例 |
+| 静态元数据 | 安装后的 ASan 静态库以全部对象参与链接，依赖由 `pkg-config --static` 提供，实际 HTTP、Unicode 和队列入口调用通过；curl／utf8proc／hx_sqlite3、libm、librt 已列入 |
+| 源码规范 | 本轮涉及的 19 个自有／本地测试源码和脚本修正后通过列宽检查；改动文件保持 UTF-8 无 BOM、LF |
+
+回归补进已有的本地忽略文件，日常仍为 20 个套件；没有新增 CTest 目标或顶层构建目录。复用已有构建，第三方源码未修改，没有启用远端 CI。临时调整的 Linux SDK 前缀配置已恢复。本轮没有重新验证旧 glibc 对 librt 的必要性、Windows 静态 pkg-config、Android／ARM 和 Apple；此前目标平台结果属于历史记录，不代表这些修改已在所有平台重跑。Unicode 依赖及其余正则方言边界仍见 [REGEX.zh-CN.md](REGEX.zh-CN.md)。

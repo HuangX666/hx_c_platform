@@ -80,7 +80,7 @@ Hello, hx_c_platform!
 {"port": 8080}
 ```
 
-`CMakeLists.txt` 使用以下内容。库默认不构建自身的测试和示例。下面的开关关闭这个入门程序用不到的加密和压缩模块。需要加密功能时，保留 `HX_OS_ENABLE_CRYPTO` 开启并先准备 [OpenSSL 依赖包](docs/CRYPTO.zh-CN.md#1-构建与发布)。`configure_file` 把输入文件复制到运行目录，避免找不到文件。
+`CMakeLists.txt` 使用以下内容。库默认不构建自身的测试和示例。下面的开关关闭这个入门程序用不到的可选原生依赖模块。需要加密功能时，保留 `HX_OS_ENABLE_CRYPTO` 开启并先准备 [OpenSSL 依赖包](docs/CRYPTO.zh-CN.md#1-构建与发布)。`configure_file` 把输入文件复制到运行目录，避免找不到文件。
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
@@ -88,6 +88,11 @@ project(hx_demo LANGUAGES C)
 
 set(HX_OS_ENABLE_CRYPTO OFF CACHE BOOL "" FORCE)
 set(HX_OS_ENABLE_ARCHIVE OFF CACHE BOOL "" FORCE)
+set(HX_OS_ENABLE_HTTP OFF CACHE BOOL "" FORCE)
+set(HX_OS_ENABLE_URL OFF CACHE BOOL "" FORCE)
+set(HX_OS_ENABLE_COMPRESSION OFF CACHE BOOL "" FORCE)
+set(HX_OS_ENABLE_UNICODE OFF CACHE BOOL "" FORCE)
+set(HX_OS_ENABLE_PERSISTENT_QUEUE OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(external/hx_c_platform)
 
@@ -462,6 +467,43 @@ HX_CODEC_STRUCT(connection,
 
 生成的 `connection` 可以像普通结构体一样使用；`connection_schema` 可直接传给 `hx_os_codec_encode/decode` 或 `hx::Codec<connection>`。宏由当前编译器处理，嵌入式 Linux 交叉编译时使用目标架构的布局，不需要增加生成工具。完整的初始化、编码、解码和释放程序见 [codec_macros.c](examples/codec_macros.c)；数组、嵌套和可选字段见[序列化教程](docs/SERIALIZATION.zh-CN.md)。
 
+### 4.14 直接排序、查找自己的数据：C / C++
+
+C99 接口可以直接处理普通数组。下面的完整程序输出 `2 2 7 9`；整数快捷入口不需要手写比较函数：
+
+```c
+#include <hx_algorithm.h>
+#include <stdio.h>
+
+int main(void)
+{
+	int32_t values[] = {7, 2, 9, 2};
+	hx_os_status status = hx_os_sort_i32(values, 4, NULL);
+	if (status != HX_OS_OK)
+		return 1;
+
+	for (size_t i = 0; i < 4; ++i)
+		printf("%ld%c", (long)values[i], i == 3 ? '\n' : ' ');
+
+	return 0;
+}
+```
+
+包含 `<hx/Algorithms.hpp>`，普通数组就能直接使用，不需要换成 `hx` 容器，也不需要复制一份数据：
+
+```cpp
+int values[] = {7, 2, 9, 2};
+
+hx::algo::sort(std::begin(values), std::end(values));
+// 排序后为 {2, 2, 7, 9}。
+
+auto found = hx::algo::binary_search(
+	std::begin(values), std::end(values), 7);
+// found 为 true。二分查找前需要按相同规则排序。
+```
+
+自定义结构体可以传入比较函数。算法接受符合各自要求的标准迭代器：`sort(first, last)` 要求随机访问，查找等接口也能使用符合要求的链表迭代器；整个 `std::list` 或 `std::forward_list` 可用 `hx::algo::sort(list)` 排序。C 则提供 `hx_os_array_sort` 等普通数组接口。完整 C/C++ 程序和可用接口见[排序、查找与数组处理](docs/ALGORITHMS.zh-CN.md)。
+
 <a id="section-5"></a>
 
 ## 5. 先记住的几条规则
@@ -495,12 +537,32 @@ HX_CODEC_STRUCT(connection,
 | JSON/YAML/XML/INI/TOML/ENV/properties | [配置格式说明](docs/CONFIGURATION.zh-CN.md) |
 | 结构体与文本互转、深层混合数据、七种格式写出 | [序列化教程](docs/SERIALIZATION.zh-CN.md) |
 | 不同类型的值和自定义结构体 | [variant 说明](docs/VARIANT.zh-CN.md) |
+| Base64／Base64URL、十六进制编解码 | [编码工具](docs/ENCODING.zh-CN.md) |
+| 紧凑整数、UUID 解析与 UUID v7 | [整数工具](docs/INTEGER_TOOLS.zh-CN.md) |
+| 有长度上限的 UTF-8 逐行读取 | [逐行读取](docs/LINE_READER.zh-CN.md) |
+| 借用式切分、严格整数解析、自然顺序比较 | [文本工具](docs/TEXT_UTILITIES.zh-CN.md) |
+| 计时器、有限退避、令牌桶限流 | [计时与流控](docs/CONTROL.zh-CN.md) |
+| 统一取消、WaitGroup、线程读写锁 | [线程协调](docs/COORDINATION.zh-CN.md) |
+| 普通数组、结构体、C++ 迭代器的排序和查找 | [通用算法](docs/ALGORITHMS.zh-CN.md) |
 | 其他容器及元素复制/释放 | [C 容器说明](docs/CONTAINERS.zh-CN.md) |
 | 任务取消、关闭重试和 C++ 结果 | [线程池](docs/CPP_POOL.zh-CN.md) · [Result](docs/CPP_RESULTS.zh-CN.md) |
 | UTF-8 路径打开 FILE、原生 wchar_t 转换 | [文本互操作](docs/TEXT_INTEROP.zh-CN.md) |
 | 有界字节缓存，批量读写与预览 | [字节队列](docs/BYTE_QUEUE.zh-CN.md) |
+| 外部内存环形缓冲、两段直接借用 | [固定环形缓冲](docs/RING.zh-CN.md) |
+| 单条／批量线程消息收发、SPSC/MPSC/MPMC | [并发队列](docs/QUEUES.zh-CN.md) |
+| 有界 LRU 缓存、逐项设置过期时间 | [LRU 缓存](docs/CACHE.zh-CN.md) |
+| 动态位图、位搜索和集合运算 | [位集合](docs/BITSET.zh-CN.md) |
 | 二进制协议与有界后台文件写出 | [读写流与后台写出](docs/STREAMS.zh-CN.md) |
 | INI 修改、配置备份恢复与设置覆盖 | [配置编辑](docs/CONFIG_EDIT.zh-CN.md) |
+| 直接调用 SQLite／OpenSSL／libcurl／压缩 SDK | [底层依赖调用](docs/NATIVE_DEPENDENCIES.zh-CN.md) |
+| 持久化消息、业务确认和处理租约 | [持久化队列](docs/PERSISTENT_QUEUE.zh-CN.md) |
+| Unicode 规范化和大小写折叠 | [Unicode](docs/UNICODE.zh-CN.md) |
+| 分块 SHA-256／SHA-512 和 HMAC | [分块摘要](docs/INCREMENTAL_HASH.zh-CN.md) |
+| UTF-8 正则、捕获、替换和高级语法 | [正则表达式](docs/REGEX.zh-CN.md) |
+| 流、套接字和 TLS 上的完整消息 | [消息帧](docs/FRAMES.zh-CN.md) |
+| 共享状态只初始化一次 | [一次初始化](docs/ONCE.zh-CN.md) |
+| 打乱／抽样、基数排序、字节查找和布隆过滤 | [二进制与查找工具](docs/FAST_TOOLS.zh-CN.md) |
+| HTTP／HTTPS、压缩、URL、命令行、临时资源、串口和共享内存 | [常用 I/O 工具](docs/UTILITY_EXTENSIONS.zh-CN.md) |
 | 第三方源码与原生依赖构建 | [依赖说明](docs/DEPENDENCIES.zh-CN.md) |
 | 区间树、独立快照与有界 P50／P95／P99 | [Profiler 统计](docs/PROFILER.zh-CN.md) |
 | 可增长的命名参数与二进制数据 | [参数包](docs/PARAMETERS.zh-CN.md) |

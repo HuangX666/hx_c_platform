@@ -14,10 +14,10 @@ function(hx_find_openssl)
 	find_package(OpenSSL 3.5 CONFIG QUIET)
 	if(NOT OpenSSL_FOUND OR NOT TARGET OpenSSL::Crypto)
 		message(FATAL_ERROR
-			"CRYPTO/ARCHIVE requires an OpenSSL 3.5+ SDK. "
+			"OpenSSL 3.5+ SDK required by crypto/archive/curl. "
 			"Build tools/dependencies, then set "
 			"HX_OS_DEPENDENCY_PREFIX to its prefix. "
-			"Disable CRYPTO and ARCHIVE to build without OpenSSL.")
+			"Disable CRYPTO/ARCHIVE/HTTP/URL to omit OpenSSL.")
 	endif()
 
 	get_target_property(kind OpenSSL::Crypto TYPE)
@@ -31,8 +31,27 @@ endfunction()
 
 if(HX_OS_HAVE_OPENSSL)
 	hx_find_openssl()
+	add_library(hx_c_platform_openssl INTERFACE)
+	add_library(hx_c_platform::openssl ALIAS hx_c_platform_openssl)
+	set_target_properties(hx_c_platform_openssl PROPERTIES
+		EXPORT_NAME openssl)
+	target_link_libraries(hx_c_platform_openssl INTERFACE
+		OpenSSL::Crypto OpenSSL::SSL)
+	install(TARGETS hx_c_platform_openssl EXPORT hx_c_platformTargets)
+	hx_install_native_headers(OpenSSL::Crypto openssl)
+	install(DIRECTORY "${OpenSSL_DIR}/"
+		DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/OpenSSL")
+	foreach(native OpenSSL::Crypto OpenSSL::SSL)
+		if(WIN32 AND NOT HX_OS_OPENSSL_STATIC)
+			install(FILES "$<TARGET_LINKER_FILE:${native}>"
+				DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+		elseif(HX_OS_OPENSSL_STATIC)
+			install(FILES "$<TARGET_FILE:${native}>"
+				DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+		endif()
+	endforeach()
 	set(HX_OS_PC_REQUIRES_PRIVATE "libcrypto >= 3.5")
-	if(HX_OS_HAVE_TLS)
+	if(HX_OS_HAVE_TLS OR HX_OS_ENABLE_HTTP OR HX_OS_ENABLE_URL)
 		string(APPEND HX_OS_PC_REQUIRES_PRIVATE ", libssl >= 3.5")
 	endif()
 endif()
@@ -43,10 +62,9 @@ function(hx_link_crypto target)
 	endif()
 
 	target_link_libraries(${target} PRIVATE OpenSSL::Crypto)
-	set(hx_ssl_targets OpenSSL::Crypto)
+	set(hx_ssl_targets OpenSSL::Crypto OpenSSL::SSL)
 	if(HX_OS_HAVE_TLS)
 		target_link_libraries(${target} PRIVATE OpenSSL::SSL)
-		list(APPEND hx_ssl_targets OpenSSL::SSL)
 		if(APPLE)
 			target_link_libraries(${target} PRIVATE
 				"-framework Security"
@@ -86,7 +104,7 @@ function(hx_link_crypto target)
 		set_property(TARGET ${target} APPEND PROPERTY INSTALL_RPATH
 			"${rpath}")
 		if(ANDROID)
-			# NDK's CMake platform suppresses ordinary build RPATH flags.
+			# NDK CMake suppresses ordinary build RPATH flags.
 			target_link_options(${target} PRIVATE
 				"-Wl,-rpath,$ORIGIN")
 		endif()
@@ -96,10 +114,12 @@ function(hx_link_crypto target)
 	foreach(hx_ssl IN LISTS hx_ssl_targets)
 		set(runtime_file "$<TARGET_FILE:${hx_ssl}>")
 		if(ANDROID)
-			# Resolve where supported; installation also follows the chain.
-			get_target_property(hx_runtime ${hx_ssl} IMPORTED_LOCATION)
+			# Resolve the runtime; installation follows the chain.
+			get_target_property(hx_runtime ${hx_ssl}
+				IMPORTED_LOCATION)
 			if(hx_runtime AND EXISTS "${hx_runtime}")
-				get_filename_component(runtime_file "${hx_runtime}"
+				get_filename_component(runtime_file
+					"${hx_runtime}"
 					REALPATH)
 			endif()
 		endif()

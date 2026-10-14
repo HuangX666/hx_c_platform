@@ -29,6 +29,30 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_uuid_format(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_uuid_generate_string(
 	hx_string *out, hx_os_error *error);
 
+/* Exact 36-byte 8-4-4-4-12 text, either hexadecimal case. No braces, URI
+ * prefix or whitespace. Any version/variant, including nil UUID, is accepted.
+ * Failure preserves out. Input may overlap out.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_uuid_parse(hx_string_view text,
+	unsigned char out[16], hx_os_error *error);
+
+/* RFC 9562 v7 with a 48-bit Unix millisecond timestamp and random payload.
+ * Stateless: values in one millisecond are not ordered, clocks can go
+ * backwards and uniqueness is probabilistic. No global event-order promise.
+ * generate_at rejects milliseconds >= 2^48. Requires RANDOM; failures keep
+ * outputs unchanged. String output uses its own initialized context.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_uuid_v7_generate_at(
+	uint64_t milliseconds, unsigned char out[16], hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_uuid_v7_generate(
+	unsigned char out[16], hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_uuid_v7_generate_string(
+	hx_string *out, hx_os_error *error);
+/* Rejects non-v7 or non-RFC-variant values with TYPE_MISMATCH. */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_uuid_v7_time(
+	const unsigned char uuid[16], uint64_t *milliseconds,
+	hx_os_error *error);
+
 /*
  * CRC-32/ISO-HDLC, reflected polynomial 0xedb88320; initial/final xor all
  * ones. Start with seed=0; pass a prior result to continue. Not a MAC/hash.

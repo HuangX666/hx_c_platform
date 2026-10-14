@@ -36,10 +36,25 @@ set(hx_common_args
 	"-DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON"
 	"-DBUILD_SHARED_LIBS:BOOL=OFF"
 	"-DBUILD_TESTING:BOOL=OFF")
+if(APPLE)
+	list(APPEND hx_common_args
+		"-DCMAKE_INSTALL_RPATH:STRING=@loader_path")
+elseif(UNIX)
+	list(APPEND hx_common_args "-DCMAKE_INSTALL_RPATH:STRING=$ORIGIN")
+endif()
 set(hx_cmake_build "${CMAKE_COMMAND}" --build <BINARY_DIR>
 	--config "${HX_DEPS_CONFIGURATION}" --parallel "${HX_DEPS_JOBS}")
 set(hx_cmake_install "${CMAKE_COMMAND}" --install <BINARY_DIR>
 	--config "${HX_DEPS_CONFIGURATION}")
+if(CMAKE_MAKE_PROGRAM)
+	list(APPEND hx_common_args
+		"-DCMAKE_MAKE_PROGRAM:FILEPATH=${CMAKE_MAKE_PROGRAM}")
+endif()
+
+if(CMAKE_CROSSCOMPILING)
+	list(APPEND hx_common_args
+		"-DCMAKE_FIND_ROOT_PATH:PATH=${CMAKE_INSTALL_PREFIX}")
+endif()
 
 if(CMAKE_TOOLCHAIN_FILE)
 	list(APPEND hx_common_args
@@ -56,6 +71,10 @@ foreach(variable IN LISTS hx_forward)
 endforeach()
 
 foreach(name openssl zlib xz zstd libarchive)
+	hx_dependency_source("${name}" ${name}_source)
+endforeach()
+
+foreach(name curl utf8proc)
 	hx_dependency_source("${name}" ${name}_source)
 endforeach()
 
@@ -200,6 +219,41 @@ ExternalProject_Add(hx_dep_build_zstd
 	BUILD_COMMAND ${hx_cmake_build}
 	INSTALL_COMMAND ${hx_cmake_install})
 
+ExternalProject_Add(hx_dep_build_utf8proc
+	SOURCE_DIR "${utf8proc_source}"
+	BINARY_DIR "${CMAKE_BINARY_DIR}/utf8proc"
+	DOWNLOAD_COMMAND "" UPDATE_COMMAND ""
+	CMAKE_ARGS ${hx_common_args}
+		-DBUILD_SHARED_LIBS:BOOL=ON
+		-DUTF8PROC_ENABLE_TESTING:BOOL=OFF
+	BUILD_COMMAND ${hx_cmake_build}
+	INSTALL_COMMAND ${hx_cmake_install})
+
+ExternalProject_Add(hx_dep_build_curl
+	SOURCE_DIR "${curl_source}"
+	BINARY_DIR "${CMAKE_BINARY_DIR}/curl"
+	DOWNLOAD_COMMAND "" UPDATE_COMMAND ""
+	DEPENDS hx_dep_build_openssl
+	CMAKE_ARGS ${hx_common_args}
+		-DBUILD_SHARED_LIBS:BOOL=ON
+		-DBUILD_STATIC_LIBS:BOOL=OFF
+		-DBUILD_CURL_EXE:BOOL=OFF
+		-DBUILD_TESTING:BOOL=OFF
+		-DCURL_USE_OPENSSL:BOOL=ON
+		-DOPENSSL_USE_STATIC_LIBS:BOOL=${hx_openssl_static}
+		-DCMAKE_FIND_PACKAGE_PREFER_CONFIG:BOOL=ON
+		-DCURL_USE_LIBPSL:BOOL=OFF
+		-DCURL_USE_LIBSSH2:BOOL=OFF
+		-DUSE_LIBIDN2:BOOL=OFF
+		-DCURL_USE_LIBSSH:BOOL=OFF
+		-DCURL_USE_GSSAPI:BOOL=OFF
+		-DENABLE_THREADED_RESOLVER:BOOL=OFF
+		-DCURL_ZLIB:BOOL=OFF
+		-DCURL_BROTLI:BOOL=OFF
+		-DCURL_ZSTD:BOOL=OFF
+	BUILD_COMMAND ${hx_cmake_build}
+	INSTALL_COMMAND ${hx_cmake_install})
+
 set(hx_archive_args
 	-DWINDOWS_VERSION:STRING=WIN7
 	-DCMAKE_TRY_COMPILE_CONFIGURATION:STRING=${HX_DEPS_CONFIGURATION})
@@ -226,6 +280,7 @@ elseif(NOT WIN32)
 		set(hx_crypto_suffix a)
 	endif()
 	set(hx_dep_lib "${CMAKE_INSTALL_PREFIX}/lib")
+	set(hx_crypto_path "${hx_dep_lib}/libcrypto.${hx_crypto_suffix}")
 	set(hx_dep_include "${CMAKE_INSTALL_PREFIX}/include")
 	# Do not silently substitute NDK/system libraries or drop codecs.
 	list(APPEND hx_archive_args
@@ -238,7 +293,7 @@ elseif(NOT WIN32)
 		"-DZSTD_INCLUDE_DIR:PATH=${hx_dep_include}"
 		"-DZSTD_LIBRARY:FILEPATH=${hx_dep_lib}/libzstd.a"
 		"-DOPENSSL_INCLUDE_DIR:PATH=${hx_dep_include}"
-		"-DOPENSSL_CRYPTO_LIBRARY=${hx_dep_lib}/libcrypto.${hx_crypto_suffix}"
+		"-DOPENSSL_CRYPTO_LIBRARY=${hx_crypto_path}"
 		"-DOPENSSL_SSL_LIBRARY=${hx_dep_lib}/libssl.${hx_crypto_suffix}"
 		-UARCHIVE_CRYPTO_*_OPENSSL -ULIBLZMA_HAS_*
 		-UHAVE_PKCS5_PBKDF2_HMAC_SHA1 -UHAVE_LIBCRYPTO)

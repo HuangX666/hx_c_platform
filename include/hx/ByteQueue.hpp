@@ -51,6 +51,67 @@ public:
 		return hx_os_byte_queue_size(m_queue_);
 	}
 
+	size_t capacity() const noexcept
+	{
+		return hx_os_byte_queue_capacity(m_queue_);
+	}
+
+	size_t limit() const noexcept
+	{
+		return hx_os_byte_queue_limit(m_queue_);
+	}
+
+	size_t space() const noexcept
+	{
+		return hx_os_byte_queue_space(m_queue_);
+	}
+
+	bool empty() const noexcept
+	{
+		return size() == 0;
+	}
+
+	Result<void> reserve(size_t capacity) noexcept
+	{
+		hx_os_error error = {};
+		auto status =
+			hx_os_byte_queue_reserve(m_queue_, capacity, &error);
+
+		return detail::Status(status, error);
+	}
+
+	Result<void> clear() noexcept
+	{
+		hx_os_error error = {};
+		auto status = hx_os_byte_queue_clear(m_queue_, &error);
+
+		return detail::Status(status, error);
+	}
+
+	Result<size_t> writeSome(const void *data, size_t bytes) noexcept
+	{
+		size_t completed = 0;
+		hx_os_error error = {};
+		auto status = hx_os_byte_queue_write_some(
+			m_queue_, data, bytes, &completed, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+
+		return completed;
+	}
+
+	Result<size_t> readSome(void *data, size_t bytes) noexcept
+	{
+		size_t completed = 0;
+		hx_os_error error = {};
+		auto status = hx_os_byte_queue_read_some(
+			m_queue_, data, bytes, &completed, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+
+		return completed;
+	}
+
 	Result<void> write(const void *data, size_t bytes) noexcept
 	{
 		hx_os_error error = {};

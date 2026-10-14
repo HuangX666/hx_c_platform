@@ -80,7 +80,7 @@ The configuration example later uses this `config.json`:
 {"port": 8080}
 ```
 
-Use this `CMakeLists.txt`. The library builds without its own tests or examples by default. The switches below disable unused cryptography and archives in this first demo. To use cryptography, leave `HX_OS_ENABLE_CRYPTO` enabled and prepare the [OpenSSL SDK](docs/CRYPTO.md#1-build-and-deploy). `configure_file` copies the input files to the directory where you will run the program.
+Use this `CMakeLists.txt`. The library builds without its own tests or examples by default. The switches below disable optional native SDK modules unused by this first demo. To use cryptography, leave `HX_OS_ENABLE_CRYPTO` enabled and prepare the [OpenSSL SDK](docs/CRYPTO.md#1-build-and-deploy). `configure_file` copies the input files to the directory where you will run the program.
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
@@ -88,6 +88,11 @@ project(hx_demo LANGUAGES C)
 
 set(HX_OS_ENABLE_CRYPTO OFF CACHE BOOL "" FORCE)
 set(HX_OS_ENABLE_ARCHIVE OFF CACHE BOOL "" FORCE)
+set(HX_OS_ENABLE_HTTP OFF CACHE BOOL "" FORCE)
+set(HX_OS_ENABLE_URL OFF CACHE BOOL "" FORCE)
+set(HX_OS_ENABLE_COMPRESSION OFF CACHE BOOL "" FORCE)
+set(HX_OS_ENABLE_UNICODE OFF CACHE BOOL "" FORCE)
+set(HX_OS_ENABLE_PERSISTENT_QUEUE OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(external/hx_c_platform)
 
@@ -461,6 +466,43 @@ HX_CODEC_STRUCT(connection,
 
 Use connection as an ordinary structure, and pass connection_schema to hx_os_codec_encode/decode or hx::Codec<connection>. The compiler expands the macros using the target layout, including embedded Linux cross-builds, with no extra generation tools. [codec_macros.c](examples/codec_macros.c) is a complete initialize/encode/decode/release program; the [serialization tutorial](docs/SERIALIZATION.md) covers arrays, nesting and optional fields.
 
+### 4.14 Sort and search your own data: C / C++
+
+The C99 interface accepts ordinary arrays. This complete program prints `2 2 7 9`; the integer shortcut needs no custom comparator:
+
+```c
+#include <hx_algorithm.h>
+#include <stdio.h>
+
+int main(void)
+{
+	int32_t values[] = {7, 2, 9, 2};
+	hx_os_status status = hx_os_sort_i32(values, 4, NULL);
+	if (status != HX_OS_OK)
+		return 1;
+
+	for (size_t i = 0; i < 4; ++i)
+		printf("%ld%c", (long)values[i], i == 3 ? '\n' : ' ');
+
+	return 0;
+}
+```
+
+Include `<hx/Algorithms.hpp>`. An ordinary array works directly; no `hx` container or copying is needed:
+
+```cpp
+int values[] = {7, 2, 9, 2};
+
+hx::algo::sort(std::begin(values), std::end(values));
+// values is now {2, 2, 7, 9}.
+
+auto found = hx::algo::binary_search(
+	std::begin(values), std::end(values), 7);
+// found is true. Binary search requires the matching sorted order.
+```
+
+Use a comparator to sort your own structures. Algorithms accept standard iterators with their documented requirements; `sort(first, last)` requires random access, while searches also support suitable linked-container iterators. `hx::algo::sort(list)` sorts a whole `std::list` or `std::forward_list`. C callers have ordinary-array functions such as `hx_os_array_sort`. See [sorting, searching and array transformations](docs/ALGORITHMS.md) for complete C/C++ examples and supported interfaces.
+
 <a id="section-5"></a>
 
 ## 5. A few rules to remember
@@ -495,10 +537,21 @@ For one-call text/file encryption, SHA-256, HMAC and signatures, see [cryptograp
 | JSON/YAML/XML/INI/TOML/ENV/properties | [Configuration formats](docs/CONFIGURATION.md) |
 | Structures, deeply nested mixed values and all-format output | [Serialization tutorial](docs/SERIALIZATION.md) |
 | Different value types and custom structures | [Variant](docs/VARIANT.md) |
+| Base64 / Base64URL and hexadecimal bytes | [Encoding helpers](docs/ENCODING.md) |
+| Compact integers, UUID parsing and UUID v7 | [Integer tools](docs/INTEGER_TOOLS.md) |
+| Bounded UTF-8 line-by-line input | [Line reader](docs/LINE_READER.md) |
+| Borrowed splitting, strict integers and natural string order | [Text utilities](docs/TEXT_UTILITIES.md) |
+| Stopwatch, bounded backoff and token-bucket limits | [Timing and flow control](docs/CONTROL.md) |
+| Shared cancellation, WaitGroup and reader/writer locking | [Thread coordination](docs/COORDINATION.md) |
+| Sort/search ordinary arrays, structures and C++ iterator ranges | [Generic algorithms](docs/ALGORITHMS.md) |
 | Other containers and element copy/release | [C containers](docs/CONTAINERS.md) |
 | Cancellation, close retries and C++ results | [Thread pool](docs/CPP_POOL.md) · [Result](docs/CPP_RESULTS.md) |
 | UTF-8 filenames with FILE, native wchar_t conversion | [Text interoperation](docs/TEXT_INTEROP.md) |
 | Bounded byte buffering with bulk read, write and peek | [Byte queues](docs/BYTE_QUEUE.md) |
+| Caller-owned ring storage and two-span borrowing | [Fixed byte rings](docs/RING.md) |
+| Single/batch thread messages and SPSC/MPSC/MPMC queues | [Concurrent queues](docs/QUEUES.md) |
+| Bounded LRU caching with per-entry expiry | [LRU caches](docs/CACHE.md) |
+| Dynamic bitmaps, bit search and set operations | [Bitsets](docs/BITSET.md) |
 | Binary protocols and bounded background file output | [Streams and file writer](docs/STREAMS.md) |
 | INI editing, configuration backups and settings overlays | [Configuration editing](docs/CONFIG_EDIT.md) |
 | Interval trees, owned snapshots and bounded P50/P95/P99 | [Profiler](docs/PROFILER.md) |
@@ -509,6 +562,15 @@ For one-call text/file encryption, SHA-256, HMAC and signatures, see [cryptograp
 | Windows DLL versions, window titles and monitor/GPU identification | [Windows utilities](docs/WINDOWS_UTILITIES.md) |
 | Borrowing native file, socket, thread and process objects | [Native interoperability](docs/NATIVE_INTEROP.md) |
 | Scoped sleep requests through existing Linux desktop services | [Linux desktop](docs/LINUX_DESKTOP.md) |
+| Direct SQLite/OpenSSL/libcurl/archive SDK calls | [Native dependencies](docs/NATIVE_DEPENDENCIES.md) |
+| Persistent messages, business acknowledgements and leases | [Persistent queue](docs/PERSISTENT_QUEUE.md) |
+| Unicode normalization and case folding | [Unicode](docs/UNICODE.md) |
+| Chunked SHA-256/SHA-512 and HMAC | [Incremental digest](docs/INCREMENTAL_HASH.md) |
+| UTF-8 regex, captures, replacement and advanced syntax | [Regular expressions](docs/REGEX.md) |
+| Complete messages over streams, sockets and TLS | [Message frames](docs/FRAMES.md) |
+| Initialize shared state once | [One-time initialization](docs/ONCE.md) |
+| Shuffle/sample, radix sorting, byte search and Bloom | [Binary/search tools](docs/FAST_TOOLS.md) |
+| HTTP/HTTPS, compression, URL, CLI, temporary resources, serial and shared memory | [Everyday I/O tools](docs/UTILITY_EXTENSIONS.md) |
 | Optional dependency sources and native builds | [Dependencies](docs/DEPENDENCIES.md) |
 | Network, processes, pipes, watches, mappings and system info | [Platform utilities](docs/PLATFORM_UTILITIES.md) |
 | Android and embedded builds | [Android](docs/ANDROID.md) · [Cross-compilation](docs/REFERENCE.md#section-28) |

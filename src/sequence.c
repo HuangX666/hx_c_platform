@@ -1,4 +1,5 @@
 #include "containers_private.h"
+#include "algorithm_private.h"
 
 enum { HX_OS_SEQ_VECTOR, HX_OS_SEQ_DEQUE, HX_OS_SEQ_LIST, HX_OS_SEQ_HEAP };
 
@@ -360,6 +361,92 @@ hx_os_status hx_os_byte_queue_read(
 	++queue->base.generation;
 
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+}
+
+size_t hx_os_byte_queue_capacity(const hx_os_byte_queue *queue)
+{
+	return hx_os_byte_queue_check(queue) == HX_OS_OK ? queue->capacity : 0;
+}
+
+size_t hx_os_byte_queue_limit(const hx_os_byte_queue *queue)
+{
+	return hx_os_byte_queue_check(queue) == HX_OS_OK
+		? queue->base.options.max_items
+		: 0;
+}
+
+size_t hx_os_byte_queue_space(const hx_os_byte_queue *queue)
+{
+	return hx_os_byte_queue_check(queue) == HX_OS_OK
+		? queue->base.options.max_items - queue->count
+		: 0;
+}
+
+hx_os_status hx_os_byte_queue_reserve(
+	hx_os_byte_queue *queue, size_t capacity, hx_os_error *error)
+{
+	hx_os_status status = hx_os_byte_queue_check(queue);
+
+	if (status != HX_OS_OK)
+		return hx_os_i_error(error, status, 0, 0);
+
+	return hx_os_sequence_reserve(queue, capacity, error);
+}
+
+hx_os_status hx_os_byte_queue_clear(hx_os_byte_queue *queue, hx_os_error *error)
+{
+	return hx_os_byte_queue_read(
+		queue, NULL, hx_os_byte_queue_size(queue), error);
+}
+
+hx_os_status hx_os_byte_queue_write_some(hx_os_byte_queue *queue,
+	const void *data, size_t bytes, size_t *completed, hx_os_error *error)
+{
+	hx_os_status status = hx_os_byte_queue_check(queue);
+	size_t amount;
+
+	if (completed)
+		*completed = 0;
+	if (!completed || (!data && bytes))
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (status != HX_OS_OK)
+		return hx_os_i_error(error, status, 0, 0);
+
+	amount = queue->base.options.max_items - queue->count;
+	if (amount > bytes)
+		amount = bytes;
+	if (!amount && bytes)
+		return hx_os_i_error(error, HX_OS_LIMIT, 0, 0);
+
+	status = hx_os_byte_queue_write(queue, data, amount, error);
+	if (status == HX_OS_OK)
+		*completed = amount;
+
+	return status;
+}
+
+hx_os_status hx_os_byte_queue_read_some(hx_os_byte_queue *queue, void *data,
+	size_t bytes, size_t *completed, hx_os_error *error)
+{
+	hx_os_status status = hx_os_byte_queue_check(queue);
+	size_t amount;
+
+	if (completed)
+		*completed = 0;
+	if (!completed)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (status != HX_OS_OK)
+		return hx_os_i_error(error, status, 0, 0);
+
+	amount = bytes < queue->count ? bytes : queue->count;
+	if (!amount && bytes)
+		return hx_os_i_error(error, HX_OS_NEED_INPUT, 0, 0);
+
+	status = hx_os_byte_queue_read(queue, data, amount, error);
+	if (status == HX_OS_OK)
+		*completed = amount;
+
+	return status;
 }
 
 static void hx_os_seq_swap(hx_os_sequence *sequence, size_t a, size_t b)
@@ -784,19 +871,6 @@ hx_os_status hx_os_sequence_destroy(
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
 
-static void hx_os_seq_heap_sort(hx_os_sequence *vector, size_t count)
-{
-	size_t i;
-
-	for (i = count / 2; i; --i)
-		hx_os_seq_sift(vector, i - 1, count);
-
-	for (i = count; i > 1; --i) {
-		hx_os_seq_swap(vector, 0, i - 1);
-		hx_os_seq_sift(vector, 0, i - 1);
-	}
-}
-
 hx_os_status hx_os_vector_sort(hx_os_vector *vector, hx_os_error *error)
 {
 	hx_os_status status;
@@ -808,16 +882,19 @@ hx_os_status hx_os_vector_sort(hx_os_vector *vector, hx_os_error *error)
 	if (status != HX_OS_OK)
 		return hx_os_i_error(error, status, 0, 0);
 
-	hx_os_seq_heap_sort(vector, vector->count);
-	++vector->base.generation;
+	status = hx_os_array_sort(vector->data, vector->count,
+		vector->base.options.element_size, vector->base.options.compare,
+		vector->base.options.user, error);
+	if (status == HX_OS_OK)
+		++vector->base.generation;
 
-	return hx_os_i_container_leave(&vector->base, HX_OS_OK, error);
+	return hx_os_i_container_leave(&vector->base, status, error);
 }
 
 hx_os_status hx_os_vector_lower_bound(
 	const hx_os_vector *vector, const void *key, size_t *index, int *found)
 {
-	size_t low = 0, high;
+	hx_os_status status;
 
 	if (!vector || !key || !index || !found ||
 		vector->kind != HX_OS_SEQ_VECTOR ||
@@ -826,24 +903,16 @@ hx_os_status hx_os_vector_lower_bound(
 	if (vector->base.busy)
 		return HX_OS_BUSY;
 
-	high = vector->count;
+	status = hx_os_array_lower_bound(vector->data, vector->count,
+		vector->base.options.element_size, key,
+		vector->base.options.compare, vector->base.options.user, index,
+		NULL);
+	if (status == HX_OS_OK)
+		*found = *index < vector->count &&
+			hx_os_seq_compare(vector,
+				hx_os_seq_slot(vector, *index), key) == 0;
 
-	while (low < high) {
-		size_t middle = low + (high - low) / 2;
-
-		if (hx_os_seq_compare(
-			    vector, hx_os_seq_slot(vector, middle), key) < 0)
-			low = middle + 1;
-		else
-			high = middle;
-	}
-
-	*index = low;
-	*found = low < vector->count &&
-		hx_os_seq_compare(vector, hx_os_seq_slot(vector, low), key) ==
-			0;
-
-	return HX_OS_OK;
+	return status;
 }
 
 hx_os_status hx_os_sequence_begin(
@@ -1452,29 +1521,16 @@ hx_os_status hx_os_sequence_rotate(
 hx_os_status hx_os_vector_upper_bound(
 	const hx_os_vector *vector, const void *key, size_t *index)
 {
-	size_t low = 0, high;
-
 	if (!vector || !key || !index || vector->kind != HX_OS_SEQ_VECTOR ||
 		!vector->base.options.compare)
 		return HX_OS_INVALID;
 	if (vector->base.busy)
 		return HX_OS_BUSY;
 
-	high = vector->count;
-
-	while (low < high) {
-		size_t middle = low + (high - low) / 2;
-
-		if (hx_os_seq_compare(
-			    vector, hx_os_seq_slot(vector, middle), key) <= 0)
-			low = middle + 1;
-		else
-			high = middle;
-	}
-
-	*index = low;
-
-	return HX_OS_OK;
+	return hx_os_array_upper_bound(vector->data, vector->count,
+		vector->base.options.element_size, key,
+		vector->base.options.compare, vector->base.options.user, index,
+		NULL);
 }
 
 static void hx_os_list_merge_sort(hx_os_sequence *sequence)
@@ -1578,6 +1634,17 @@ hx_os_status hx_os_sequence_stable_sort(
 	if (!scratch)
 		return hx_os_i_container_leave(&sequence->base,
 			sequence->base.allocation_status, error);
+
+	if (sequence->kind == HX_OS_SEQ_VECTOR) {
+		hx_os_i_array_stable_sort(sequence->data, count, bytes,
+			sequence->base.options.compare,
+			sequence->base.options.user, scratch);
+		hx_os_i_container_free(&sequence->base, scratch);
+		++sequence->base.generation;
+
+		return hx_os_i_container_leave(
+			&sequence->base, HX_OS_OK, error);
+	}
 
 	for (width = 1; width < count;) {
 		for (start = 0; start < count;) {
@@ -1703,7 +1770,6 @@ hx_os_status hx_os_vector_partial_sort(
 	hx_os_vector *vector, size_t count, hx_os_error *error)
 {
 	hx_os_status status;
-	size_t i;
 
 	if (!vector || vector->kind != HX_OS_SEQ_VECTOR ||
 		!vector->base.options.compare || count > vector->count)
@@ -1712,33 +1778,20 @@ hx_os_status hx_os_vector_partial_sort(
 	if (status != HX_OS_OK)
 		return hx_os_i_error(error, status, 0, 0);
 
-	if (count) {
-		for (i = count / 2; i; --i)
-			hx_os_seq_sift(vector, i - 1, count);
-
-		for (i = count; i < vector->count; ++i)
-			if (hx_os_seq_compare(vector, hx_os_seq_slot(vector, i),
-				    vector->data) < 0) {
-				hx_os_seq_swap(vector, i, 0);
-				hx_os_seq_sift(vector, 0, count);
-			}
-
-		for (i = count; i > 1; --i) {
-			hx_os_seq_swap(vector, 0, i - 1);
-			hx_os_seq_sift(vector, 0, i - 1);
-		}
-
+	status = hx_os_array_partial_sort(vector->data, vector->count,
+		vector->base.options.element_size, count,
+		vector->base.options.compare, vector->base.options.user, error);
+	if (status == HX_OS_OK && count)
 		++vector->base.generation;
-	}
 
-	return hx_os_i_container_leave(&vector->base, HX_OS_OK, error);
+	return hx_os_i_container_leave(&vector->base, status, error);
 }
 
 hx_os_status hx_os_vector_nth_element(
 	hx_os_vector *vector, size_t index, hx_os_error *error)
 {
 	hx_os_status status;
-	size_t first = 0, last, budget = 0, bytes;
+	size_t bytes;
 	void *pivot;
 
 	if (!vector || vector->kind != HX_OS_SEQ_VECTOR ||
@@ -1755,41 +1808,8 @@ hx_os_status hx_os_vector_nth_element(
 		return hx_os_i_container_leave(
 			&vector->base, vector->base.allocation_status, error);
 
-	for (last = vector->count; last > 1; last /= 2)
-		budget += 2;
-
-	last = vector->count;
-
-	while (last - first > 1) {
-		size_t lower = first, scan = first, upper = last;
-
-		if (!budget--) {
-			hx_os_seq_heap_sort(vector, vector->count);
-			break;
-		}
-
-		memcpy(pivot,
-			hx_os_seq_slot(vector, first + (last - first) / 2),
-			bytes);
-
-		while (scan < upper) {
-			int order = hx_os_seq_compare(
-				vector, hx_os_seq_slot(vector, scan), pivot);
-			if (order < 0)
-				hx_os_seq_swap(vector, lower++, scan++);
-			else if (order > 0)
-				hx_os_seq_swap(vector, scan, --upper);
-			else
-				++scan;
-		}
-
-		if (index < lower)
-			last = lower;
-		else if (index >= upper)
-			first = upper;
-		else
-			break;
-	}
+	hx_os_i_array_nth_element(vector->data, vector->count, bytes, index,
+		vector->base.options.compare, vector->base.options.user, pivot);
 
 	hx_os_i_container_free(&vector->base, pivot);
 	++vector->base.generation;

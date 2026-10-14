@@ -4,6 +4,8 @@
 
 包含 `hx_container.h` 或 C 总头 `hx_os.h` 即可使用。实现按 C99 编译，公共接口使用 C 类型和不透明句柄，无需 C++ 运行库。 `HX_OS_ENABLE_CONTAINERS` 默认 ON；关闭后排除序列、树和 uthash 实现，创建接口返回 `HX_OS_NOT_SUPPORTED`，能力位 `HX_OS_CAP_CONTAINERS` 清除。不需要进程级初始化。
 
+其它常用工具：[LRU 缓存](CACHE.zh-CN.md)复用哈希表与最近使用链表；[动态位集合](BITSET.zh-CN.md)提供按字计数、搜索和集合运算；[固定环形缓冲](RING.zh-CN.md)借用调用者的内存。三者与容器一起裁剪。需要跨线程交接完整消息时，使用独立的[线程／环形队列](QUEUES.zh-CN.md)，通过 `HX_OS_ENABLE_QUEUES` 裁剪，不需要协程运行时。
+
 ## 已提供的容器
 
 需要混合类型时，使用独立的 [variant 模块](VARIANT.zh-CN.md)，可以拥有数字、字符串和自定义结构体。hx_variant_container_options_init 为 vector、queue/deque 和 map 的值提供深复制/清理。owning hx_variant 可以搬移字节；不能把活跃的 hx::Variant C++ 对象交给按字节复制的容器。variant 内部的分配仍不计入 max_bytes。
@@ -24,7 +26,7 @@
 
 序列共用 `hx_os_sequence_*` 接口，queue/stack 是便捷别名，不另建运行时实现或 DLL 导出。堆只接受尾部插入和下标零删除，任意下标修改返回 NOT_SUPPORTED。 `hx_os_vector_sort` 使用原地、不稳定的堆排序； `hx_os_vector_lower_bound` 要求 vector 已按同一严格弱序比较器排序。
 
-这些是 C 容器和算法设施，没有 C++ 模板类型系统、完整的迭代器分类/ranges 框架或无锁并发队列。跨线程共享容器需要外部同步；协程 channel 是独立的有界通信设施。
+这些是 C 容器和算法设施，不复制 C++ 模板类型系统或完整的迭代器分类/ranges 框架。跨线程共享序列和映射需要外部同步；并发队列使用独立接口，见[队列契约](QUEUES.zh-CN.md)。
 
 ## 选项、分配器与容量限制
 
@@ -136,18 +138,27 @@ HX_OS_SEQUENCE_FOR_EACH(iterator, values, status)
 
 map 有对应的 `HX_OS_MAP_FOR_EACH`，两类容器都有反向遍历宏。需要提前停止、详细错误或累积结果时，也可使用回调接口。
 
-| 要做的事 | 入口和行为 |
-| --- | --- |
-| 按条件查询 | `find_if`、`count_if`、`any_of`、`all_of`、`none_of`，后三个找到答案便停止 |
-| 逐项访问、累积 | `visit`、`fold`，首次失败停止，保留此前回调效果并报告进度 |
-| 复制、筛选、转换 | `clone`、`copy_if`、`transform` 返回新 vector，失败不改变源容器 |
-| 删除、替换 | `remove_if`、相邻去重 `unique`、`replace_if`；替换遇到首次复制失败即停止，保留前面已替换项 |
-| 调整顺序 | `reverse`、`rotate`、`partition`，线性处理，不额外分配；链表 partition 保持相对顺序 |
-| 稳定排序 | `stable_sort`，O(n log n)；vector/deque 使用 O(n) 临时空间，链表使用 O(1) 临时空间归并链接 |
-| 部分排序 | vector 的 `partial_sort(k)` 为 O(n log k)；`nth_element` 围绕某个名次分区，并在深度达到限制时回退到堆排序 |
-| 有序查询 | vector 的 `lower_bound`/`upper_bound`，要求已按同一比较器排序 |
-| 合并、集合运算 | `merge` 支持 MERGE、UNION、INTERSECTION、DIFFERENCE、SYMMETRIC_DIFFERENCE，保留 multiset 的重复次数语义 |
-| 移动链表区间 | `list_splice` 直接改链接，不复制、不释放元素，也不分配节点 |
+先根据所需结果选择算法：只找某个名次，或者只需要最小的 `k` 项，不必把全部数据完整排序。下表描述当前真实实现，不代表已经测得性能提升。`n`、`m` 为输入长度，`k` 为前缀长度，`s` 为每个元素的字节数。时间复杂度按元素操作次数计算，比较器、键字节、复制和释放的成本另算。C++ 也可以直接调用这些 C API。
+
+| 实际算法 | API | 适用场景 | 时间和额外存储 |
+| --- | --- | --- | --- |
+| 原地堆排序，不稳定 | `hx_os_vector_sort` | 不额外分配临时内存，对 vector 完整排序 | 最坏 O(n log n)，O(1) 临时空间 |
+| 自底向上的稳定归并排序 | `hx_os_sequence_stable_sort` | 相同键需要保留原来的先后顺序 | O(n log n)；vector/deque 临时空间 O(n × s)，list 改链接只需 O(1) |
+| 有界大顶堆选择，再排序前缀 | `hx_os_vector_partial_sort` | 只取最小的 `k` 项并按序排列 | k > 0 时 O(n log(k + 1))，O(1) 临时空间；k = 0 不做工作 |
+| 三路名次分区，深度到限后回退堆排序 | `hx_os_vector_nth_element` | 找中位数或阈值，不要求整体有序 | 普通输入通常接近线性，最坏 O(n log n)；一个元素的临时空间，仅支持 vector |
+| 二分查找 | `hx_os_vector_lower_bound`、`hx_os_vector_upper_bound` | 查询已排序的数据或确定插入位置 | O(log n)，O(1) 临时空间；必须按同一比较器排序 |
+| 线性谓词扫描 | `hx_os_sequence_find_if`、`count_if`、`any_of`、`all_of`、`none_of` | 找到或统计符合条件的设备、检查整体条件 | 最坏 O(n)，O(1) 临时空间；find/any/all/none 得到答案后提前结束 |
+| 稳定筛选、相邻去重 | `hx_os_sequence_remove_if`、`hx_os_sequence_unique` | 删除不需要的项目、合并相邻重复项 | O(n)，O(1) 临时空间；unique 不会删除被其他值隔开的重复项 |
+| 反转、旋转、按谓词分区 | `hx_os_sequence_reverse`、`rotate`、`partition` | 调整顺序，或把符合条件的项目排到前面 | O(n)，O(1) 临时空间；list 分区稳定，数组分区不保证稳定 |
+| 复制、筛选、转换 | `hx_os_sequence_clone`、`copy_if`、`transform` | 保持原容器不变，生成独立结果 | O(n)；结果最多占 O(n × 输出元素字节数)，回调分配另算 |
+| 按条件替换 | `hx_os_sequence_replace_if` | 替换所有匹配的值 | O(n)，两个元素的临时空间；复制失败保留此前成功的替换 |
+| 逐项访问、累积 | `hx_os_sequence_visit`、`hx_os_sequence_fold` | 处理记录或累加统计量 | O(n)，内部 O(1) 临时空间；首次失败保留已有回调效果并报告进度 |
+| 两路有序合并、集合运算 | `hx_os_sequence_merge` | 合并有序记录，求有序集合的并、交、差 | O(n + m)，结果最多占 O((n + m) × s)，保留 multiset 重复次数语义 |
+| 按下标移动链表区间 | `hx_os_list_splice` | 在兼容链表之间转移已有节点 | 定位端点最坏 O(n + m)，随后 O(1) 改链接；不分配节点、不复制或释放值 |
+
+表中简写的序列入口仅省略统一前缀 `hx_os_sequence_`。合并支持 `HX_OS_MERGE`、`HX_OS_SET_UNION`、`HX_OS_SET_INTERSECTION`、`HX_OS_SET_DIFFERENCE`、`HX_OS_SET_SYMMETRIC_DIFFERENCE`。名次选择和部分排序不保证稳定性，也不保证剩余部分有序。
+
+对于连续编号的标志，[位集合算法](BITSET.zh-CN.md) 提供 `hx_os_bitset_count`、`find_next`、`apply`、`intersects`、`is_subset`，按 32 位字处理，最坏 O(ceil(bit_count / 32))，操作临时空间为 O(1)；搜索和关系查询可提前结束。单位置 set/test 为 O(1)。编号稀疏或键不是整数位置时，可以选择上面的哈希表和有序树查找。
 
 除非另有说明，改变顺序的算法会拒绝 heap，避免破坏堆不变量。谓词不能修改同一个容器。成功调整顺序后迭代器失效；排序前分配失败则不改变容器或迭代器。临时空间计入容器字节预算。transform/copy 回调构造元素失败时，需要自行释放该元素的部分构造资源。新 vector 继承源 context/容量限制；有序 merge 要求元素、回调和 user 策略一致。splice 要求 context 和值策略兼容，检查目标容量，并转移节点的内存计数；把同一个链表的区间移到自身区间内部时不做操作。
 

@@ -11,6 +11,7 @@ extern "C" {
 typedef struct hx_os_crypto hx_os_crypto;
 typedef struct hx_os_crypto_bytes hx_os_crypto_bytes;
 typedef struct hx_os_crypto_key hx_os_crypto_key;
+typedef struct hx_os_crypto_digest_state hx_os_crypto_digest_state;
 
 enum { HX_OS_CRYPTO_SHA256 = 1, HX_OS_CRYPTO_SHA512 };
 
@@ -78,6 +79,32 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_crypto_hash_file(hx_os_crypto *crypto,
 	hx_os_error *error);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_crypto_sha256_file(hx_os_crypto *crypto,
 	const char *path, hx_string *out, hx_os_error *error);
+
+/* Incremental SHA/HMAC, externally serialized; the state retains its engine.
+ * HMAC copies the key into native state (at most 64 KiB). Each update borrows
+ * at most 16 MiB; accumulated bytes are bounded by UINT64_MAX/8. Native
+ * update failure poisons the current computation until reset. finish writes
+ * lowercase hexadecimal and seals only on successful output assignment;
+ * repeated finish returns the same digest, while update then returns CLOSED.
+ * Output-allocation failure permits finish retry. reset retains algorithm/key
+ * and starts an empty computation. Destruction failure retains the owner.
+ * Creation output slots must not already own live objects.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_crypto_digest_create(
+	hx_os_crypto *crypto, unsigned algorithm,
+	hx_os_crypto_digest_state **out, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_crypto_hmac_create(
+	hx_os_crypto *crypto, unsigned algorithm, hx_os_bytes_view key,
+	hx_os_crypto_digest_state **out, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_crypto_digest_update(
+	hx_os_crypto_digest_state *state, hx_os_bytes_view input,
+	hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_crypto_digest_finish(
+	hx_os_crypto_digest_state *state, hx_string *out, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_crypto_digest_reset(
+	hx_os_crypto_digest_state *state, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_crypto_digest_destroy(
+	hx_os_crypto_digest_state **state, hx_os_error *error);
 
 /* 32 cryptographically random bytes. Failure preserves out. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_crypto_random_key(

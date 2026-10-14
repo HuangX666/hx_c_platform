@@ -3,6 +3,7 @@
 
 #define HX_OS_PLATFORM_NAME "@HX_OS_PLATFORM_NAME@"
 #define HX_OS_BUILD_VERSION "@PROJECT_VERSION@"
+#cmakedefine01 HX_OS_ENABLE_QUEUES
 #cmakedefine01 HX_OS_ENABLE_SYSINFO
 #cmakedefine01 HX_OS_ENABLE_LIBRARY
 #cmakedefine01 HX_OS_ENABLE_FILE_UTILS
@@ -20,9 +21,22 @@
 #cmakedefine01 HX_OS_ENABLE_TIMER
 #cmakedefine01 HX_OS_ENABLE_RANDOM
 #cmakedefine01 HX_OS_ENABLE_CRYPTO
+#cmakedefine01 HX_OS_HAVE_PERSISTENT_QUEUE
+#cmakedefine01 HX_OS_ENABLE_TEMP
+#cmakedefine01 HX_OS_HAVE_TEMP
+#cmakedefine01 HX_OS_ENABLE_SERIAL
+#cmakedefine01 HX_OS_HAVE_SHARED_MEMORY
+#cmakedefine01 HX_OS_ENABLE_CLI
+#cmakedefine01 HX_OS_HAVE_URL
+#cmakedefine01 HX_OS_HAVE_HTTP
+#cmakedefine01 HX_OS_HAVE_UNICODE
+#cmakedefine01 HX_OS_ENABLE_REGEX
+#cmakedefine01 HX_OS_ENABLE_ONCE
+#cmakedefine01 HX_OS_ENABLE_FRAME
 #cmakedefine01 HX_OS_ENABLE_TLS
 #cmakedefine01 HX_OS_HAVE_TLS
 #cmakedefine01 HX_OS_ENABLE_ARCHIVE
+#cmakedefine01 HX_OS_HAVE_COMPRESSION
 #cmakedefine01 HX_OS_HAVE_ARCHIVE
 #cmakedefine01 HX_OS_HAVE_7ZIP
 #cmakedefine01 HX_OS_HAVE_OPENSSL
@@ -85,6 +99,8 @@
 #cmakedefine01 HX_OS_ENABLE_VARIANT
 #cmakedefine01 HX_OS_ENABLE_FORMAT
 #cmakedefine01 HX_OS_ENABLE_STREAM
+#cmakedefine01 HX_OS_ENABLE_ENCODING
+#cmakedefine01 HX_OS_ENABLE_LINE_READER
 #cmakedefine01 HX_OS_ENABLE_BUFFERED_FILE
 
 #endif

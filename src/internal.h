@@ -55,6 +55,9 @@ hx_os_status hx_os_i_params_hold(
 void hx_os_i_params_release(struct hx_os_params *params);
 
 void hx_os_i_crypto_error_text(uint64_t code, char *out, size_t capacity);
+const char *hx_os_i_regex_message(int code);
+const char *hx_os_i_transfer_message(uint32_t domain, int64_t code);
+const char *hx_os_i_compression_message(uint32_t domain, int64_t code);
 
 struct hx_os_library;
 /* Order finalizers of concurrently used native modules. Only the unload

@@ -4,6 +4,8 @@
 
 Include `hx_container.h`, or the C umbrella `hx_os.h`. The implementation is C99 and exposes only C types and opaque handles. No C++ runtime is required. `HX_OS_ENABLE_CONTAINERS=ON` is the default. OFF excludes sequence, tree and uthash implementation code; constructors return `HX_OS_NOT_SUPPORTED` and `HX_OS_CAP_CONTAINERS` is cleared. No global initialization is needed.
 
+Related tools: [LRU caches](CACHE.md) reuse hash storage and recency links; [dynamic bitsets](BITSET.md) provide word-based counting, search and set operations; [fixed byte rings](RING.md) borrow caller storage. These share the CONTAINERS switch. For complete messages across threads, use the independent [message/ring queues](QUEUES.md), controlled by `HX_OS_ENABLE_QUEUES` without a coroutine runtime.
+
 ## Available containers
 
 For mixed values, use the independent [variant module](VARIANT.md): it can own numbers, strings and custom structures. hx_variant_container_options_init supplies deep-copy/drop operations for vector, queue/deque and map values. Owning hx_variant values support byte relocation; live hx::Variant C++ objects must not be stored through a raw byte-copy container API. The variant's nested allocations remain outside max_bytes.
@@ -24,7 +26,7 @@ Complexities exclude element/key byte costs and callbacks. A list's indexed acce
 
 The sequence types share `hx_os_sequence_*` operations. Queue/stack aliases are convenience names, not separate runtime implementations or DLL exports. A heap accepts insertion at the end and removal at index zero; arbitrary indexed changes return NOT_SUPPORTED. `hx_os_vector_sort` is an in-place, unstable heapsort. `hx_os_vector_lower_bound` requires an already sorted vector using the same strict weak ordering comparator.
 
-These are C container and algorithm building blocks. There is no C++ template type system, complete iterator-category/ranges framework or lock-free concurrent queue. Use explicit external synchronization for shared containers. Coroutine channels are a separate bounded communication facility.
+These are C container and algorithm building blocks. These containers do not reproduce the C++ template type system or complete iterator-category/ranges framework. Shared sequences/maps require external synchronization. Concurrent queues are separate APIs; see [queue contracts](QUEUES.md).
 
 ## Options, allocation and bounds
 
@@ -136,18 +138,27 @@ HX_OS_SEQUENCE_FOR_EACH(iterator, values, status)
 
 There are matching `HX_OS_MAP_FOR_EACH` and reverse variants for both families. The callback interfaces are useful when the caller needs early stop, failure details or an accumulator.
 
-| Task | Entry or behavior |
-| --- | --- |
-| Find/count/filter predicates | `find_if`, `count_if`, `any_of`, `all_of`, `none_of`; the last three short-circuit |
-| Visit/fold | `visit`, `fold`; first failure preserves prior callback effects and reports progress |
-| Copy/convert | `clone`, `copy_if`, `transform`; return a new owned vector, leave the source intact on failure |
-| Remove/replace | `remove_if`, adjacent `unique`, `replace_if`; replacements stop at first copy failure and keep earlier replacements |
-| Reorder | `reverse`, `rotate`, `partition`; linear, no allocation; list partition is stable |
-| Stable sort | `stable_sort`; O(n log n), O(n) scratch for vector/deque, link merge with O(1) scratch for list |
-| Partial ordering | vector `partial_sort(k)` uses O(n log k); `nth_element` partitions around one rank with a bounded-depth heap fallback |
-| Search ordered values | vector `lower_bound`/`upper_bound`; input must already be sorted under the same comparator |
-| Merge/set operations | `merge` with MERGE, UNION, INTERSECTION, DIFFERENCE or SYMMETRIC_DIFFERENCE; multiset counts preserved |
-| Move a list range | `list_splice`; relink without element copies, drops or node allocation |
+Choose the operation for the result you need: finding one rank or the smallest `k` values does not require sorting the whole vector. The following table describes the current implementations, not measured speedups. `n` and `m` are input lengths, `k` is a prefix length, and `s` is the element size in bytes. Time bounds count element operations; comparator, key-byte, copy and drop costs are additional. These C APIs can also be called directly from C++.
+
+| Actual algorithm | API | Useful when | Time and additional storage |
+| --- | --- | --- | --- |
+| In-place heapsort, unstable | `hx_os_vector_sort` | Sort a vector without allocating scratch memory | Worst O(n log n); O(1) scratch |
+| Bottom-up stable merge sort | `hx_os_sequence_stable_sort` | Equal keys must retain their original order | O(n log n); vector/deque O(n × s) scratch; list O(1) scratch by relinking |
+| Bounded max-heap selection and prefix sort | `hx_os_vector_partial_sort` | Obtain the smallest `k` entries in sorted order | O(n log(k + 1)) for k > 0; O(1) scratch; k = 0 does no work |
+| Three-way rank partition, depth-limited heapsort fallback | `hx_os_vector_nth_element` | Find a median or threshold without requiring full order | Typically linear on ordinary inputs, worst O(n log n); one element of scratch; only vector |
+| Binary search | `hx_os_vector_lower_bound`, `hx_os_vector_upper_bound` | Query sorted values or find an insertion position | O(log n); O(1) scratch; input must use the same comparator |
+| Linear predicate scan | `hx_os_sequence_find_if`, `count_if`, `any_of`, `all_of`, `none_of` | Find/count matching devices or check a condition | O(n) worst; O(1) scratch; find/any/all/none stop when decided |
+| Stable filtering and adjacent duplicate removal | `hx_os_sequence_remove_if`, `hx_os_sequence_unique` | Remove unwanted entries or compact equal neighbors | O(n); O(1) scratch; unique does not remove separated duplicates |
+| Reverse, rotation, predicate partition | `hx_os_sequence_reverse`, `rotate`, `partition` | Rearrange work or group matches before other entries | O(n); O(1) scratch; list partition is stable, array partition is not guaranteed stable |
+| Copy/filter/transform | `hx_os_sequence_clone`, `copy_if`, `transform` | Build an independent result without changing the source | O(n); up to O(n × output element size) result storage, plus callback allocations |
+| Predicate replacement | `hx_os_sequence_replace_if` | Replace every matching value | O(n); two elements of scratch; copy failure keeps earlier successful replacements |
+| Visit and fold | `hx_os_sequence_visit`, `hx_os_sequence_fold` | Process entries or accumulate totals | O(n); O(1) internal scratch; first failure retains callback effects and reports progress |
+| Two-input sorted merge/set operations | `hx_os_sequence_merge` | Merge sorted records; union/intersect/subtract sorted sets | O(n + m); up to O((n + m) × s) result storage; multiset duplicate counts preserved |
+| Indexed list-range splice | `hx_os_list_splice` | Transfer existing nodes between compatible lists | O(n + m) worst to locate endpoints, then O(1) relinking; no node allocation, value copies or drops |
+
+Only the `hx_os_sequence_` prefix is omitted from abbreviated sequence entries in the table. Merge accepts `HX_OS_MERGE`, `HX_OS_SET_UNION`, `HX_OS_SET_INTERSECTION`, `HX_OS_SET_DIFFERENCE`, and `HX_OS_SET_SYMMETRIC_DIFFERENCE`. Rank selection and partial sorting do not promise stability or a sorted suffix.
+
+For dense numbered flags, the [bitset algorithms](BITSET.md) provide `hx_os_bitset_count`, `find_next`, `apply`, `intersects`, and `is_subset`. They inspect 32-bit words: O(ceil(bit_count / 32)) worst and O(1) operation scratch, with early exit for searches and relations. Single-bit set/test is O(1). Use the hash/tree lookup operations above when identifiers are sparse or keys are not integer positions.
 
 Unless documented otherwise, structural algorithms reject heaps to preserve heap invariants. Predicates must not mutate the same container. A successful reorder invalidates iterators; allocation failure before sorting does not. Temporary container scratch is charged to its byte budget. For transform/copy callbacks, a failed element construction must release its own partial resources. Result vectors inherit source context/limits; sorted merge requires matching element/callback/user policies. A list splice requires compatible context and value policy, checks destination limits and transfers accounted node bytes. Self-splice into its own moved range is a no-op.
 
