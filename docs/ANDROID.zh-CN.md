@@ -61,4 +61,4 @@ APK 应用由宿主构建系统打包原生库并设置权限。本库不生成 
 
 公开示例可以独立运行。回归源码、详细日志和历史报告由维护者本地保留，不随仓库及 SDK 发布。其他平台边界见[平台支持](PLATFORMS.zh-CN.md)。
 
-新增网络入口使用相同 socket／epoll 实现。显式 DNS、TCP 拨号和 TLS 启动可选择 c-ares；应用环境不能提供系统解析配置时，需传入 DNS 服务器。本库不绑定 Android Network 句柄，也不绕过 VPN／沙盒规则。网卡监听订阅可能返回原生权限错误。HTTP 协程服务使用自己的有界线程池，系统解析器阻塞仍可能造成关闭超时。用法见[网络 I/O](NETWORK_IO.zh-CN.md)和[HTTP 传输](HTTP_FILES.zh-CN.md)。
+新增网络入口使用相同 socket／epoll 实现。显式 DNS、TCP 拨号和 TLS 启动可选择 c-ares；应用环境不能提供系统解析配置时，需传入 DNS 服务器。本库不绑定 Android Network 句柄，也不绕过 VPN／沙盒规则。网卡监听订阅可能返回原生权限错误。HTTP 协程服务使用自己的有界线程池；默认 SDK 的系统解析器阻塞仍可能造成关闭超时。需要可取消 HTTP DNS 时，选择 `HX_DEPS_CURL_CARES=ON` 的 SDK，并在服务提交前调用 `hx_os_coro_http_use_cancellable_dns`。它与本库 resolver 的模块开关相互独立，应用仍需提供可用的 DNS 配置。用法见[网络 I/O](NETWORK_IO.zh-CN.md)和[HTTP 传输](HTTP_FILES.zh-CN.md)。

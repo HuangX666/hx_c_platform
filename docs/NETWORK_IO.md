@@ -99,3 +99,21 @@ The remote session reuses the documented [HXIP session envelope and KCP message 
 `hx_os_hostname_ascii` converts a UTF-8 DNS name for the raw socket/TLS/DNS entries. It performs no lookup. Non-ASCII conversion requires IDN support in the selected libcurl build; otherwise it returns `NOT_SUPPORTED` and preserves the output. The backend's IDNA rules apply; this is not a confusable-name detector.
 
 Interface indices and routes are snapshots, not stable identities or reachability tests. Requery after an interface-change notification. Android applications own permissions, Network selection and APK lifecycle. Android Network handles are not interface indices. UDP/KCP cannot repair a firewall or virtual network path that persistently drops fragments. Keep datagrams appropriately sized and use business IDs, acknowledgement, deduplication and persistence where your application requires them.
+
+## 8. Handle disconnects, slow consumers and shutdown
+
+After an error, check how much work was completed and whether you still own the object before retrying or closing. A timeout alone is not a reason to resend an entire business message.
+
+| Situation | Library behavior | Application action |
+| --- | --- | --- |
+| Peer stops or the path stops responding | IPC/KCP use configured idle detection and reconnect policies; reconnect creates a new session. Raw sockets and TLS do not reconnect automatically | Handle disconnect events and re-establish device identity. Old requests are not replayed; use business IDs and peer deduplication rules to decide whether to retry |
+| DNS receives no reply | Explicit c-ares queries support cancellation/deadlines; default system DNS may still block | Choose cancellable entries when shutdown latency matters. HTTP also needs the matching SDK; see [DNS](NETWORK_OPTIONS.md#123-use-an-event-loop-or-coroutine) and [HTTP configuration](HTTP_FILES.md#4-cancel-even-when-dns-receives-no-reply) |
+| Consumer processes data slowly | IPC queues are bounded and reliable sends may return `LIMIT`; TLS sends may time out with a nonzero `accepted` count | Keep consuming and releasing messages. On the same live TLS connection, send only the unaccepted suffix; if all bytes were accepted, continue with `flush_until` |
+| Frequent connect/disconnect cycles | Messages, requests and connections have separate owners; old peer IDs cannot address a new session | Release each message/request once and retain a client owner until close completes. Close/abort accepted TLS server peers when finished to release their slots |
+| Shutdown during waiting or reconnect backoff | Close rejects new work and wakes relevant waits; orderly TLS close also attempts to drain accepted data | Use an explicit deadline and inspect both status and owner pointer. Retain a non-NULL owner, allocator and context for retry. Explicitly abort only when discarding is acceptable; never kill a worker thread |
+
+For example, a TLS send of 8 MiB may time out with `accepted` equal to 64 KiB. The library already owns that prefix. Once the receiver resumes reading, continue from the remaining offset. Acceptance still does not prove remote business processing. Whole-message IPC/KCP acknowledgements likewise describe their communication-layer contract; database insertion or device actions need an application reply.
+
+Distinguish a peer explicitly closing from a path silently dropping packets. The former may immediately report EOF; the latter needs idle detection. Detection time is separate from resource-close time. A newly established session does not continue an old request automatically.
+
+Use the existing [TCP business example](TCP_BUSINESS.md), [TLS examples](TLS.md), [KCP example](#6-kcp-json-requestreply-on-a-trusted-network) and [HTTP file example](HTTP_FILES.md) against your deployment, checking slow consumers, peer restart and retryable close. Emulator shell, ARM user-mode QEMU, physical devices and real APKs are separate environments. Explicitly record paths unavailable because of QEMU socket-option translation, Android Unix-socket permissions or WSL mirrored IPv4 fragmentation; another successful transport does not validate them. Host sanitizers do not replace target-device acceptance.
