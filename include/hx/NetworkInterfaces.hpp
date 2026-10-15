@@ -2,6 +2,7 @@
 #define HX_C_PLATFORM_CPP_NETWORK_INTERFACES_HPP
 
 #include <hx_os_net_interfaces.h>
+#include <hx_os_net_extra.h>
 #include <hx/Values.hpp>
 
 namespace hx {
@@ -20,6 +21,19 @@ public:
 		hx_os_error error = {};
 		auto status = hx_os_interfaces_query(
 			context, &result.m_list_, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+
+		return result;
+	}
+
+	static Result<hx_os_route_info> routeTo(hx_os_network *network,
+		const hx_os_address &destination) noexcept
+	{
+		hx_os_route_info result = {};
+		hx_os_error error = {};
+		auto status = hx_os_route_query(
+			network, &destination, &result, &error);
 		if (status != HX_OS_OK)
 			return Failure(status, error);
 

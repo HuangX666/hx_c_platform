@@ -9,6 +9,7 @@
 #if defined(_WIN32)
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <mswsock.h>
 #include <windows.h>
 
 typedef SOCKET hx_os_i_socket;
@@ -33,6 +34,11 @@ struct hx_os_network {
 	hx_os_atomic objects;
 };
 
+struct hx_os_address_list {
+	size_t count;
+	hx_os_address addresses[256];
+};
+
 typedef struct hx_os_i_local_state {
 	hx_os_local_address address;
 	int connecting;
@@ -40,9 +46,14 @@ typedef struct hx_os_i_local_state {
 
 struct hx_os_socket {
 	hx_os_network *network;
+#if defined(_WIN32)
+	LPFN_WSARECVMSG receive_message;
+	LPFN_WSASENDMSG send_message;
+#endif
 	hx_os_i_socket native;
 	int family;
 	int protocol;
+	int shutdown_stage;
 	hx_os_atomic pending;
 	void *loop;
 	struct hx_os_socket *loop_next;
@@ -58,8 +69,7 @@ int hx_os_i_socket_last_error(void);
 
 int hx_os_i_socket_accept_retry(int code);
 
-hx_os_status hx_os_i_socket_close(
-	hx_os_i_socket *socket, hx_os_error *error);
+hx_os_status hx_os_i_socket_close(hx_os_i_socket *socket, hx_os_error *error);
 
 // Only for unpublished sockets without pending I/O or a loop attachment.
 void hx_os_i_socket_discard_native(hx_os_i_socket socket);

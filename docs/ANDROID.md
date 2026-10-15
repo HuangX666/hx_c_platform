@@ -62,3 +62,5 @@ Module bits describe compiled families, not every platform extension. API 21 bin
 Check the device ABI, application UID, SELinux rules, and directory/device permissions. API 21 is a build minimum, not evidence of execution on Android 5.0. Emulator ARM translation is separate from physical ARM execution. Android 5.0, ARMv7 execution and APK sandbox behavior each need target acceptance.
 
 Public examples run independently. Regression sources, detailed logs and historical reports remain local and are not distributed with the repository or SDK. See [platform support](PLATFORMS.md) for other target boundaries.
+
+New network helpers use the same socket/epoll implementation. c-ares can be enabled for explicit DNS, TCP dial and TLS startup; pass DNS servers if the app environment cannot expose its system configuration. The library does not bind an Android Network handle or bypass VPN/sandbox policy. Interface-watch subscription may fail with a native permission error. The HTTP coroutine service uses its own bounded pool; a blocked system resolver can still make close time out. See [network I/O](NETWORK_IO.md) and [HTTP transfers](HTTP_FILES.md).

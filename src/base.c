@@ -2,6 +2,9 @@
 
 #include <inttypes.h>
 #include <stdio.h>
+#if HX_OS_HAVE_CARES
+#include <ares.h>
+#endif
 #if HX_OS_HAVE_PERSISTENT_QUEUE
 #include <sqlite3.h>
 #endif
@@ -335,6 +338,12 @@ hx_os_status hx_os_error_message(const hx_os_error *error, char *buffer,
 		(void)snprintf(native, sizeof(native), "%s",
 			hx_os_i_transfer_message(
 				error->domain, error->native_code));
+#if HX_OS_HAVE_CARES
+	if (error->domain == HX_OS_ERROR_CARES && error->native_code >= 0 &&
+		error->native_code <= INT_MAX)
+		(void)snprintf(native, sizeof(native), "%s",
+			ares_strerror((int)error->native_code));
+#endif
 	length = snprintf(buffer, capacity,
 		"%s [domain=%u code=%" PRId64 "]%s%s",
 		hx_os_status_name(error->status), error->domain,

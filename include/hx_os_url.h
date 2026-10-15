@@ -48,6 +48,16 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_percent_decode(hx_string_view input,
  * operations and destruction.
  */
 HX_OS_API int HX_OS_CALL hx_os_url_available(void);
+
+/**
+ * \brief Convert a UTF-8 DNS hostname to ASCII using the selected IDNA backend.
+ * \details No DNS query. Requires URL and a libcurl build with IDN support for
+ * non-ASCII names. ASCII names need no IDN backend. Backend IDNA rules apply;
+ * no spoofing/confusable-name guarantee. No URL, port, credentials or percent
+ * escapes are accepted. Failure preserves out. Output is at most 253 bytes.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_hostname_ascii(
+	const char *hostname, hx_string *out, hx_os_error *error);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_url_parse(hx_os_context *context,
 	const char *text, hx_os_url **out, hx_os_error *error);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_url_part(const hx_os_url *url,

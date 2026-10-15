@@ -21,6 +21,7 @@ target_link_libraries(app PRIVATE hx_c_platform::native)
 | --- | --- | --- |
 | hx_c_platform::sqlite | sqlite3.h, sqlite3ext.h | PERSISTENT_QUEUE with RANDOM and THREAD_EX |
 | hx_c_platform::openssl | openssl/evp.h, openssl/ssl.h | CRYPTO, ARCHIVE, HTTP or URL |
+| hx_c_platform::cares | ares.h | NETWORK and CARES |
 | hx_c_platform::curl | curl/curl.h | HTTP / URL |
 | hx_c_platform::utf8proc | utf8proc.h | UNICODE |
 | hx_c_platform::archive | archive.h, archive_entry.h | ARCHIVE and its prerequisites |

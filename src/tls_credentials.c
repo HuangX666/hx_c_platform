@@ -162,11 +162,89 @@ static hx_os_status hx_tls_identity(hx_os_tls *tls, hx_os_error *error)
 	return status;
 }
 
+static hx_os_status hx_tls_crls(hx_os_tls *tls, hx_os_error *error)
+{
+	void *data = NULL;
+	size_t bytes = 0;
+	BIO *bio = NULL;
+	STACK_OF(X509_INFO) *items = NULL;
+	X509_STORE *store = SSL_CTX_get_cert_store(tls->ssl_context);
+	hx_os_status status;
+	int i, added = 0;
+	unsigned long flags = X509_V_FLAG_CRL_CHECK;
+
+	if (!tls->crl_mode)
+		return HX_OS_OK;
+	status = hx_os_file_load(tls->context, tls->crl_file, 4 * 1024 * 1024,
+		&data, &bytes, error);
+	if (status == HX_OS_OK) {
+		bio = BIO_new_mem_buf(data, (int)bytes);
+		if (bio)
+			items = PEM_X509_INFO_read_bio_ex(bio, NULL,
+				hx_tls_password, NULL, tls->crypto->native,
+				NULL);
+		if (!items)
+			status = hx_os_i_crypto_fail(error, HX_OS_INVALID);
+	}
+	if (items && sk_X509_INFO_num(items) > 4096)
+		status = hx_os_i_error(error, HX_OS_LIMIT, 0, 0);
+	for (i = 0; status == HX_OS_OK && i < sk_X509_INFO_num(items); ++i) {
+		X509_CRL *crl = sk_X509_INFO_value(items, i)->crl;
+
+		if (crl) {
+			if (!X509_STORE_add_crl(store, crl))
+				status = hx_os_i_crypto_fail(
+					error, HX_OS_INVALID);
+			++added;
+		}
+	}
+	if (status == HX_OS_OK && !added)
+		status = hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (tls->crl_mode == HX_OS_TLS_CRL_CHAIN)
+		flags |= X509_V_FLAG_CRL_CHECK_ALL;
+	if (status == HX_OS_OK && !X509_STORE_set_flags(store, flags))
+		status = hx_os_i_crypto_fail(error, HX_OS_INVALID);
+	sk_X509_INFO_pop_free(items, X509_INFO_free);
+	BIO_free(bio);
+	hx_os_memory_free(data);
+
+	return status;
+}
+
+static int hx_tls_alpn(SSL *ssl, const unsigned char **out,
+	unsigned char *out_bytes, const unsigned char *input,
+	unsigned int input_bytes, void *user)
+{
+	hx_os_tls *tls = user;
+	unsigned char *selected = NULL;
+	int result;
+
+	(void)ssl;
+	result = SSL_select_next_proto(&selected, out_bytes, tls->alpn,
+		(unsigned int)tls->alpn_bytes, input, input_bytes);
+	if (result == OPENSSL_NPN_NEGOTIATED) {
+		*out = selected;
+		return SSL_TLSEXT_ERR_OK;
+	}
+
+	return tls->require_alpn ? SSL_TLSEXT_ERR_ALERT_FATAL
+				 : SSL_TLSEXT_ERR_NOACK;
+}
+
 hx_os_status hx_tls_i_credentials(hx_os_tls *tls, hx_os_error *error)
 {
 	hx_os_status status = HX_OS_OK;
 	int verify = !tls->server ||
 		(tls->options.flags & HX_OS_TLS_REQUIRE_CLIENT_CERTIFICATE);
+
+	if (tls->profile) {
+		tls->ssl_context = tls->profile->configuration->ssl_context;
+		if (!SSL_CTX_up_ref(tls->ssl_context)) {
+			tls->ssl_context = NULL;
+			return hx_os_i_crypto_fail(error, HX_OS_NO_MEMORY);
+		}
+		return HX_OS_OK;
+	}
 
 	tls->ssl_context =
 		SSL_CTX_new_ex(tls->crypto->native, NULL, TLS_method());
@@ -181,9 +259,10 @@ hx_os_status hx_tls_i_credentials(hx_os_tls *tls, hx_os_error *error)
 	SSL_CTX_set_security_level(tls->ssl_context, 2);
 	SSL_CTX_set_options(tls->ssl_context,
 		SSL_OP_NO_COMPRESSION | SSL_OP_NO_RENEGOTIATION |
-			SSL_OP_NO_TICKET);
+			(tls->session_tickets ? 0 : SSL_OP_NO_TICKET));
 	SSL_CTX_set_session_cache_mode(tls->ssl_context, SSL_SESS_CACHE_OFF);
-	(void)SSL_CTX_set_num_tickets(tls->ssl_context, 0);
+	(void)SSL_CTX_set_num_tickets(
+		tls->ssl_context, tls->session_tickets ? 1 : 0);
 	SSL_CTX_set_max_cert_list(tls->ssl_context, 1024 * 1024);
 	SSL_CTX_set_verify_depth(tls->ssl_context, 16);
 	SSL_CTX_set_verify(tls->ssl_context,
@@ -198,6 +277,10 @@ hx_os_status hx_tls_i_credentials(hx_os_tls *tls, hx_os_error *error)
 			: hx_tls_i_roots(tls, error);
 	if (status == HX_OS_OK && tls->options.certificate_file)
 		status = hx_tls_identity(tls, error);
+	if (status == HX_OS_OK)
+		status = hx_tls_crls(tls, error);
+	if (status == HX_OS_OK && tls->server && tls->alpn_bytes)
+		SSL_CTX_set_alpn_select_cb(tls->ssl_context, hx_tls_alpn, tls);
 
 	return status;
 }
@@ -240,8 +323,12 @@ hx_os_status hx_tls_i_ssl(hx_tls_peer *peer, hx_os_error *error)
 				SSL_set_tlsext_host_name(peer->ssl, name);
 		if (!ok || !*name)
 			return hx_os_i_crypto_fail(error, HX_OS_INVALID);
+		if (tls->alpn_bytes &&
+			SSL_set_alpn_protos(peer->ssl, tls->alpn,
+				(unsigned int)tls->alpn_bytes))
+			return hx_os_i_crypto_fail(error, HX_OS_INVALID);
 	}
 
-	return HX_OS_OK;
+	return hx_tls_i_profile_ssl(peer, error);
 }
 #endif

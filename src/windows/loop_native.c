@@ -99,8 +99,12 @@ static int hx_os_loop_accept(hx_os_request *request)
 		return WSAGetLastError();
 	status = hx_os_socket_create(socket->network, socket->family, HX_OS_TCP,
 		&request->accepted, &request->completion.error);
-	if (status != HX_OS_OK)
-		return WSA_NOT_ENOUGH_MEMORY;
+	if (status != HX_OS_OK) {
+		// Preserve allocation, Winsock and Win32 error domains.
+		request->ready = 1;
+
+		return 0;
+	}
 
 	result = accept_ex(socket->native, request->accepted->native,
 		request->accept_addresses, 0,
@@ -176,6 +180,9 @@ static void hx_os_loop_start_native(hx_os_request *request)
 
 		code = result ? WSAGetLastError() : 0;
 	}
+
+	if (request->ready)
+		return;
 
 	if (!code || code == WSA_IO_PENDING)
 		request->native_pending = 1;

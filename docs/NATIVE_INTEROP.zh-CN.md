@@ -92,3 +92,7 @@ return HX_OS_OK;
 Native::socket、Native::process、Native::thread 使用相同的 Result 方式。线程结果类型是 `hx::NativeThread`：Windows 对应 void 指针／HANDLE，POSIX 对应 pthread_t；便利头只在 POSIX 包含 pthread.h。不通过析构关闭借来的值，也不使用异常。
 
 可运行的 [native_file.c](../examples/native_file.c) 演示先借用原生文件句柄，再通过库读取文件。构建 `hx_os_native_file` 后传入一个 UTF-8 文件路径运行。 平台边界见[平台支持](PLATFORMS.zh-CN.md)。
+
+## 4. 导入自己持有的 socket
+
+上面的借用方式仍由本库持有资源。需要把已有的原生非阻塞 TCP／UDP socket 交给本库时，使用 `<hx_os_net_interop.h>` 中的 `hx_os_socket_import`。`HX_OS_SOCKET_TAKE` 仅在成功时接管输入句柄；`HX_OS_SOCKET_DUP` 保留调用方句柄，并为同一个端点创建第二个句柄。两种方式都要求先排除在途 I/O、关闭和事件循环注册。Windows 还要求调用方保证句柄支持 OVERLAPPED；导入不能搬迁已经存在的 IOCP 关联。共享状态和超时规则见[原生 socket 与关闭](NETWORK_IO.zh-CN.md)。

@@ -94,3 +94,7 @@ cmake/HxWarnings.cmake 复制自相邻 hx_c_log 项目，保留其版权声明�
 | utf8proc | 2.12.0，提交 `79cdd5ab40c79afa559f689ffc13b76812dee1ac` | [MIT 及保留的 Unicode 数据声明](deps/utf8proc/LICENSE.md) |
 
 这些可选适配保留上游源码和许可证，安装后仍可通过原生依赖目标调用对应头文件。自研正则不链接 PCRE2，本地 PCRE2 对照只供维护者验证，不作为发布后端。CRYPTO、TLS、ARCHIVE、curl SDK 共用默认动态 OpenSSL；完全移除 OpenSSL 还需关闭 HTTP／URL。独立 COMPRESSION 只依赖压缩编解码库。
+
+## 可选 c-ares DNS 解析器
+
+c-ares 1.34.8 固定使用[上游](https://github.com/c-ares/c-ares)提交 `c7a3138dcfe3bb0eaaf10c0c24c36dc66dc790ab`。源码保持原样放在 `deps/c-ares`，或通过 FetchContent 使用相同提交。[MIT 许可证及保留声明](deps/c-ares/LICENSE.md) 安装为 `share/hx_c_platform/licenses/c-ares-LICENSE.md`。开启时链接静态解析器并安装原生 SDK，关闭后不依赖它。该固定版本说明本次集成，不代表永久使用最新上游版本。

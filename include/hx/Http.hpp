@@ -144,6 +144,46 @@ public:
 		return result;
 	}
 
+	Result<HttpResponse> downloadFile(const char *url, const char *path,
+		bool replace = false,
+		const hx_os_http_stream_options *options = NULL) noexcept
+	{
+		HttpResponse result;
+		hx_os_error error = {};
+		auto status = hx_os_http_download_file(m_http_, url, path,
+			replace ? 1 : 0, options, result.native(), &error);
+
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return result;
+	}
+
+	Result<HttpResponse> uploadFile(const char *url, const char *path,
+		const hx_os_http_stream_options *options = NULL) noexcept
+	{
+		HttpResponse result;
+		hx_os_error error = {};
+		auto status = hx_os_http_upload_file(m_http_, "PUT", url, path,
+			NULL, 0, options, result.native(), &error);
+
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return result;
+	}
+
+	const char *pendingFile() const noexcept
+	{
+		return hx_os_http_pending_file(m_http_);
+	}
+
+	Result<void> close() noexcept
+	{
+		hx_os_error error = {};
+		auto status = hx_os_http_close(&m_http_, &error);
+
+		return detail::Status(status, error);
+	}
+
 private:
 	hx_os_http *m_http_;
 };

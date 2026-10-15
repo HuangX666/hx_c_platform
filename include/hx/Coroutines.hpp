@@ -123,7 +123,9 @@ private:
 
 namespace impl {
 template <typename T> struct IsRoutine : std::false_type {};
+
 template <typename T> struct IsRoutine<Routine<T>> : std::true_type {};
+
 template <typename F, typename... A>
 struct Factory : detail::Factory<false, F, A...> {
 	typedef detail::Factory<false, F, A...> Base;
@@ -246,6 +248,7 @@ public:
 
 	template <typename T>
 	Result<Task<T>> go(Routine<T> &&routine) const noexcept;
+
 	template <typename F, typename... A>
 	auto submit(F &&function, A &&...arguments) const noexcept
 		-> decltype(go(std::forward<F>(function),
@@ -381,6 +384,7 @@ class Group {
 
 public:
 	Result<void> spawn(Routine<void> &&routine) noexcept;
+
 	explicit Group(const Runtime &runtime, size_t capacity = 1024) noexcept
 	    : m_runtime_(runtime)
 	    , m_first_(NULL)
@@ -731,6 +735,7 @@ template <typename T> class Channel {
 
 public:
 	typedef typename Values::Slot ReceiveStorage;
+
 	Channel() noexcept
 	    : m_channel_(NULL)
 	{
@@ -990,6 +995,20 @@ public:
 		return value;
 	}
 
+	static Result<Stream> bindUdp(const hx_os_address &address,
+		hx_os_address *bound = NULL, bool reuse = false) noexcept
+	{
+		Stream value;
+		hx_os_error error = {};
+
+		auto status = hx_os_coro_udp_bind(&address, reuse ? 1 : 0,
+			&value.m_stream_, bound, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+
+		return value;
+	}
+
 	Result<Stream>
 	accept(hx_os_deadline deadline = HX_OS_DEADLINE_INFINITE) const noexcept
 	{
@@ -1026,6 +1045,33 @@ public:
 
 		auto status = hx_os_coro_write(
 			m_stream_, data, bytes, deadline, &count, &error);
+
+		return Result<size_t>::withValue(count, status, error);
+	}
+
+	Result<size_t> sendTo(const hx_os_address &peer, const void *data,
+		size_t bytes, hx_os_deadline deadline = HX_OS_DEADLINE_INFINITE)
+		const noexcept
+	{
+		size_t count = 0;
+		hx_os_error error = {};
+
+		auto status = hx_os_coro_send_to(m_stream_, &peer, data, bytes,
+			deadline, &count, &error);
+
+		return Result<size_t>::withValue(count, status, error);
+	}
+
+	Result<size_t> receiveFrom(void *data, size_t capacity,
+		hx_os_address *peer = NULL,
+		hx_os_deadline deadline =
+			HX_OS_DEADLINE_INFINITE) const noexcept
+	{
+		size_t count = 0;
+		hx_os_error error = {};
+
+		auto status = hx_os_coro_receive_from(m_stream_, peer, data,
+			capacity, deadline, &count, &error);
 
 		return Result<size_t>::withValue(count, status, error);
 	}

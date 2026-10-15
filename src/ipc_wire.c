@@ -143,6 +143,8 @@ static void hx_ipc_ready(hx_ipc_connection *peer)
 	peer->state = 3;
 	hx_os_error_clear(&peer->error);
 	endpoint->attempts = 0;
+	if (endpoint->use_backoff)
+		(void)hx_os_backoff_reset(&endpoint->backoff, NULL);
 	hx_os_condition_notify_all(endpoint->condition);
 	hx_ipc_i_unlock(endpoint);
 	hx_ipc_i_event(peer, HX_IPC_CONNECTED);

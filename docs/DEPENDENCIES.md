@@ -14,6 +14,7 @@ deps/
   xz/               Git submodule
   zstd/             Git submodule
   curl/             libcurl SDK submodule
+  c-ares/           Cancellable DNS submodule (1.34.8)
   utf8proc/         Unicode SDK submodule
   7zip/             Optional native backend submodule
   cjson/            Optional parser submodule
@@ -42,7 +43,7 @@ cd hx_c_platform
 git submodule update --init --recursive
 ```
 
-The main build and optional builders check exact dependency commits. A missing or different revision fails explicitly; a branch tip is never selected silently. The active development branch is `dev`. Submodule URLs are in [.gitmodules](../.gitmodules); all 15 Git pins and the iconv/SQLite archive hashes are in [HxDependencySources.cmake](../cmake/HxDependencySources.cmake).
+The main build and optional builders check exact dependency commits. A missing or different revision fails explicitly; a branch tip is never selected silently. The active development branch is `dev`. Submodule URLs are in [.gitmodules](../.gitmodules); all 16 Git pins and the iconv/SQLite archive hashes are in [HxDependencySources.cmake](../cmake/HxDependencySources.cmake).
 
 Default containers and KCP require their initialized submodules. The five parser backends remain opt-in; enabling them no longer requires five source paths. Existing `HX_OS_<PARSER>_SOURCE_DIR` overrides are still supported. An explicitly supplied tree remains the integrator's responsibility.
 
@@ -152,3 +153,9 @@ The separate `tools/sevenzip` helper accepts the same toolchain/ABI/sysroot argu
 The fixed curl tag is `curl-8_22_0`; its upstream header reports `8.22.0-DEV`. The original version text is retained. Its build uses OpenSSL, with command-line tools, threaded DNS, libpsl, SSH, IDN2, GSSAPI and implicit content compression disabled. HTTP deadlines therefore cannot interrupt native blocking DNS. URL IDNA availability follows this selected backend; it does not silently add an IDNA dependency. Utf8proc is pinned at 2.12.0. Both licenses and headers are installed with the SDK.
 
 Native CMake aliases include `hx_c_platform::sqlite`, `::openssl`, `::curl`, `::utf8proc`, `::archive`, `::zlib`, `::lzma` and `::zstd` when enabled. `hx_c_platform::native` collects enabled native targets with the core. A consumer can call these SDK APIs directly without replacing the convenience layer. Installed package configuration resolves matching dependencies from its own prefix, and exports the original native headers. Windows deploys runtime DLLs under `bin`; Unix installations retain shared-library name chains and origin-relative runtime lookup. Do not mix incompatible SDK versions in one process.
+
+## 8. Optional cancellable DNS
+
+`HX_OS_ENABLE_CARES` defaults ON when networking is enabled. Its unmodified c-ares 1.34.8 sources build directly with this project as a PIC static library; no separate DNS DLL is required. Initialize `deps/c-ares`, or select FetchContent as above. The fixed commit is `c7a3138dcfe3bb0eaaf10c0c24c36dc66dc790ab`. Set `-DHX_OS_ENABLE_CARES=OFF` to retain system DNS without this backend; explicit resolver entry points then return `NOT_SUPPORTED`.
+
+Installation includes the c-ares headers, static library, CMake package and MIT license. Link `hx_c_platform::cares` for direct native calls. The wrapper leases c-ares global initialization; applications using native APIs must coordinate global cleanup and must not tear down c-ares while a wrapper resolver is alive. This backend serves explicit resolver/TCP-dial/TLS calls; it does not change the separately built libcurl DNS backend. Coroutine HTTP therefore retains its documented native-DNS close limitation.

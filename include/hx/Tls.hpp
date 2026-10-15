@@ -3,6 +3,7 @@
 
 #include <hx_os_tls.h>
 #include <hx/Status.hpp>
+#include <hx/Values.hpp>
 
 namespace hx {
 
@@ -48,6 +49,49 @@ public:
 			&options, deadline, m_owner_, &error);
 
 		return detail::Status(status, error);
+	}
+
+	Result<void> connectEx(const char *host, uint16_t port,
+		const hx_os_tls_options_ex &options,
+		hx_os_deadline deadline = hx_os_deadline_after_ms(5000),
+		hx_os_context *context = NULL) noexcept
+	{
+		if (*m_owner_)
+			return Failure(HX_OS_BUSY);
+
+		hx_os_error error = {};
+		auto status = hx_os_tls_connect_ex_until(context, host, port,
+			&options, deadline, m_owner_, &error);
+
+		return detail::Status(status, error);
+	}
+
+	Result<void> listenEx(const char *host, uint16_t port,
+		const hx_os_tls_options_ex &options,
+		hx_os_deadline deadline = hx_os_deadline_after_ms(5000),
+		hx_os_context *context = NULL) noexcept
+	{
+		if (*m_owner_)
+			return Failure(HX_OS_BUSY);
+
+		hx_os_error error = {};
+		auto status = hx_os_tls_listen_ex_until(context, host, port,
+			&options, deadline, m_owner_, &error);
+
+		return detail::Status(status, error);
+	}
+
+	Result<String> alpn(
+		uint64_t peer = 0, hx_os_context *context = NULL) const noexcept
+	{
+		String result(context);
+		hx_os_error error = {};
+		auto status = hx_os_tls_get_alpn(
+			*m_owner_, peer, result.native(), &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+
+		return result;
 	}
 
 	Result<uint64_t> acceptUntil(hx_os_deadline deadline) const noexcept

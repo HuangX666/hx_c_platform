@@ -34,8 +34,9 @@ typedef struct hx_os_frame_callbacks {
  * are copied; user/backend is borrowed until destruction and must not retain
  * I/O buffers or reenter this frame. Native errors are retained. Directions
  * serialize independently; backend must allow full duplex for concurrent
- * read/write. Stream adapters require external serialization. Mutex admission,
- * native I/O and flush are not hard deadline guarantees.
+ * read/write. Stream adapters require external serialization. Waiting behind
+ * another caller uses the same deadline as I/O; NOW returns TIMEOUT if busy.
+ * Native I/O, callbacks and thread scheduling are not hard deadline guarantees.
  */
 HX_OS_API int HX_OS_CALL hx_os_frame_available(void);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_frame_create(hx_os_context *context,

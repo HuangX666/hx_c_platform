@@ -484,3 +484,64 @@ const char *hx_os_i_transfer_message(uint32_t domain, int64_t code)
 #endif
 	return "transfer failure";
 }
+
+hx_os_status hx_os_hostname_ascii(
+	const char *hostname, hx_string *out, hx_os_error *error)
+{
+#if HX_OS_HAVE_URL
+	CURLU *url;
+	CURLUcode code;
+	CURLcode initialized;
+	char *ascii = NULL;
+	hx_os_status status;
+	size_t bytes, offset;
+
+	if (!hostname || !*hostname || !out)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	bytes = strlen(hostname);
+	if (bytes > 1024)
+		return hx_os_i_error(error, HX_OS_LIMIT, 0, 0);
+	if (strpbrk(hostname, ":/\\@%?#[] \t\r\n"))
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (hx_os_text_validate_utf8(hostname, bytes, &offset) != HX_OS_OK)
+		return hx_os_i_error(error, HX_OS_INVALID_ENCODING, 0, 0);
+	initialized = curl_global_init(CURL_GLOBAL_DEFAULT);
+	if (initialized != CURLE_OK)
+		return hx_os_i_error(
+			error, HX_OS_IO_ERROR, HX_OS_ERROR_CURL, initialized);
+	if (!(curl_version_info(CURLVERSION_NOW)->features &
+		    CURL_VERSION_THREADSAFE)) {
+		curl_global_cleanup();
+		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+	}
+	url = curl_url();
+	if (!url) {
+		curl_global_cleanup();
+		return hx_os_i_error(error, HX_OS_NO_MEMORY, 0, 0);
+	}
+	code = curl_url_set(url, CURLUPART_HOST, hostname, 0);
+	if (code == CURLUE_OK)
+		code = curl_url_get(
+			url, CURLUPART_HOST, &ascii, CURLU_PUNYCODE);
+	status = code == CURLUE_LACKS_IDN      ? HX_OS_NOT_SUPPORTED
+		: code == CURLUE_OUT_OF_MEMORY ? HX_OS_NO_MEMORY
+		: code == CURLUE_OK	       ? HX_OS_OK
+					       : HX_OS_INVALID;
+	if (status == HX_OS_OK)
+		status = strlen(ascii) > 253
+			? HX_OS_LIMIT
+			: hx_string_assign_cstr(out, ascii, error);
+	else
+		(void)hx_os_i_error(error, status, HX_OS_ERROR_CURL_URL, code);
+	curl_free(ascii);
+	curl_url_cleanup(url);
+	curl_global_cleanup();
+	if (status == HX_OS_LIMIT)
+		(void)hx_os_i_error(error, status, 0, 0);
+	return status;
+#else
+	(void)hostname;
+	(void)out;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
+}

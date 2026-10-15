@@ -60,3 +60,5 @@ APK 应用由宿主构建系统打包原生库并设置权限。本库不生成 
 确认设备支持目标 ABI，检查应用 UID、SELinux、目录及设备访问权限。API 21 是编译最低版本，不等于已在 Android 5.0 系统运行；模拟器的 ARM 转译也不等同于 ARM 实机。Android 5.0、ARMv7 运行及 APK 沙箱需要各自的目标验收。
 
 公开示例可以独立运行。回归源码、详细日志和历史报告由维护者本地保留，不随仓库及 SDK 发布。其他平台边界见[平台支持](PLATFORMS.zh-CN.md)。
+
+新增网络入口使用相同 socket／epoll 实现。显式 DNS、TCP 拨号和 TLS 启动可选择 c-ares；应用环境不能提供系统解析配置时，需传入 DNS 服务器。本库不绑定 Android Network 句柄，也不绕过 VPN／沙盒规则。网卡监听订阅可能返回原生权限错误。HTTP 协程服务使用自己的有界线程池，系统解析器阻塞仍可能造成关闭超时。用法见[网络 I/O](NETWORK_IO.zh-CN.md)和[HTTP 传输](HTTP_FILES.zh-CN.md)。

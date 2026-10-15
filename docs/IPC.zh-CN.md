@@ -315,3 +315,9 @@ python3 examples/run_ipc_business.py --bin-dir build/bin
 ```
 
 命令都从库源码根目录执行，Debug 构建请同时替换配置和程序路径。运行器启动两个进程，完成两个设备的命令与通知，成功输出 `PASS ipc_business_local`；Python 仅用于启动和核对，不是 C 库运行依赖。完整业务、手动双终端运行以及文件复制清单见 [IPC 业务教程](IPC_BUSINESS.zh-CN.md)。平台限制见[平台支持](PLATFORMS.zh-CN.md)。
+
+## 10. 错开客户端的重连时间
+
+很多本地客户端同时重启时，可以把固定间隔的连接入口换成 `hx_ipc_connect_backoff_until`。它在 `connect_until` 参数之外增加可选退避配置。传 NULL 时，初始间隔 100 毫秒、上限 30 秒、最多重试八次，加入 20% 抖动并使用每个端点自己的种子。握手成功后重置预算。已有入口继续保持固定间隔。
+
+它只改变连接重试，不会自动重新发送业务请求。超时后保留非空 owner，继续等待或按原有截止时间规则关闭。可信机器之间使用独立的 [KCP 会话示例](NETWORK_IO.zh-CN.md)，IPC 工厂本身仍只允许本机通信。

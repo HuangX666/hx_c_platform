@@ -8,6 +8,7 @@ extern "C" {
 #endif
 
 typedef struct hx_os_interface_list hx_os_interface_list;
+typedef struct hx_os_interface_watch hx_os_interface_watch;
 
 enum {
 	HX_OS_INTERFACE_UP = 1,
@@ -72,6 +73,42 @@ HX_OS_API const hx_os_interface_info *HX_OS_CALL hx_os_interface_list_get(
 
 HX_OS_API void HX_OS_CALL hx_os_interface_list_destroy(
 	hx_os_interface_list *list);
+
+/**
+ * \brief Subscribe to native interface/address changes without a worker.
+ *
+ * \details Create before querying the first snapshot to avoid a blind gap.
+ * Notifications coalesce: wait success means query again, not one ordered
+ * event. Native overflow also requests a rescan. A change may concern routes
+ * or non-IP interfaces, and the next snapshot may be unchanged. No unbounded
+ * event queue is allocated. Android application policy may deny subscription;
+ * the permission error is preserved, with no polling or settings fallback.
+ * Context must outlive the watch. Ordinarily failure sets *out NULL; if native
+ * registration rollback itself fails, a non-NULL owner is retained for close
+ * retry. Always close a non-NULL result, including on creation failure.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_interface_watch_create(
+	hx_os_context *context, hx_os_interface_watch **out,
+	hx_os_error *error);
+
+/**
+ * \brief Wait for a rescan hint using a monotonic deadline.
+ * \details One waiter; timeout keeps the object usable. NOW polls and
+ * INFINITE waits without a deadline. Exclude close from an active wait.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_interface_watch_wait_until(
+	hx_os_interface_watch *watch, hx_os_deadline deadline,
+	hx_os_error *error);
+
+/**
+ * \brief Unsubscribe native notifications and consume the owner on success.
+ * \details Windows waits for its short internal notification callbacks to
+ * retire. No application callback executes here. Windows failure preserves
+ * the owner for retry; partially unsubscribed watches should only be closed
+ * again. POSIX close consumes the descriptor even if it reports an error.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_interface_watch_close(
+	hx_os_interface_watch **watch, hx_os_error *error);
 
 #ifdef __cplusplus
 }

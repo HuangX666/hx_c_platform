@@ -11,6 +11,13 @@ extern "C" {
 
 typedef struct hx_os_http hx_os_http;
 
+typedef hx_os_status(HX_OS_CALL *hx_os_http_read_fn)(void *user, void *data,
+	size_t capacity, size_t *completed, hx_os_error *error);
+typedef hx_os_status(HX_OS_CALL *hx_os_http_write_fn)(
+	void *user, const void *data, size_t bytes, hx_os_error *error);
+typedef hx_os_status(HX_OS_CALL *hx_os_http_progress_fn)(
+	void *user, uint64_t downloaded, uint64_t uploaded, hx_os_error *error);
+
 typedef struct hx_os_http_options {
 	uint32_t size, version;
 	size_t max_body_bytes, max_header_bytes;
@@ -36,6 +43,78 @@ typedef struct hx_os_http_response {
 	{                                                                      \
 		HX_BYTES_INIT, HX_BYTES_INIT, HX_STRING_INIT, 0                \
 	}
+
+/**
+ * \brief Streaming callbacks execute synchronously on the requesting thread.
+ *
+ * \details read supplies exactly upload_bytes over successive calls; premature
+ * EOF fails. write accepts a whole borrowed chunk or fails; earlier chunks
+ * cannot be rolled back. Neither callback may retain buffers or reenter the
+ * client. NULL write collects the response using request.max_body_bytes.
+ * Streaming downloads use max_download_bytes, independent of that memory
+ * limit. No automatic upload replay/rewind; redirects with read are rejected.
+ * Progress may cancel by returning an error. Native DNS/callbacks can block.
+ */
+typedef struct hx_os_http_stream_options {
+	uint32_t size, version;
+	hx_os_http_options request;
+	hx_os_http_read_fn read;
+	hx_os_http_write_fn write;
+	hx_os_http_progress_fn progress;
+	void *user;
+	uint64_t upload_bytes, max_download_bytes;
+	uint32_t low_speed_bytes_per_second, low_speed_seconds;
+} hx_os_http_stream_options;
+
+#define HX_OS_HTTP_STREAM_OPTIONS_INIT                                         \
+	{                                                                      \
+		sizeof(hx_os_http_stream_options), 1, HX_OS_HTTP_OPTIONS_INIT, \
+			NULL, NULL, NULL, NULL, 0, UINT64_C(1073741824), 0, 0  \
+	}
+
+typedef struct hx_os_http_metrics {
+	uint64_t downloaded_bytes, uploaded_bytes;
+	double dns_ms, connect_ms, tls_ms, first_byte_ms, total_ms;
+} hx_os_http_metrics;
+
+/**
+ * \brief Same response/error contract as request; metrics describe this call.
+ * \details Timing values are cumulative from transfer start, in milliseconds.
+ * A streaming response has an empty body. Transfer failure preserves out,
+ * but callback side effects and diagnostic metrics are not rolled back.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_http_request_stream(hx_os_http *http,
+	const char *method, const char *url, const char *const *headers,
+	size_t header_count, const hx_os_http_stream_options *options,
+	hx_os_http_response *out, hx_os_http_metrics *metrics,
+	hx_os_error *error);
+
+/**
+ * \brief Download to a same-directory temporary file; publish only HTTP 2xx.
+ * \details replace=0 preserves an existing destination. Failure removes the
+ * temporary file; if cleanup fails the client retains it, and close retries.
+ * No implicit disk sync or resume. The destination parent must be trusted.
+ * Further requests return BUSY while file cleanup is pending. options may
+ * configure limits/progress, but read/write callbacks must be NULL.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_http_download_file(hx_os_http *http,
+	const char *url, const char *destination, int replace,
+	const hx_os_http_stream_options *options, hx_os_http_response *out,
+	hx_os_error *error);
+
+/**
+ * \brief Upload a regular file without collecting it in memory.
+ * \details The file must remain unchanged. read must be NULL. The known file
+ * length is used; redirects are rejected. Other streaming options apply.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_http_upload_file(hx_os_http *http,
+	const char *method, const char *url, const char *path,
+	const char *const *headers, size_t header_count,
+	const hx_os_http_stream_options *options, hx_os_http_response *out,
+	hx_os_error *error);
+
+HX_OS_API const char *HX_OS_CALL hx_os_http_pending_file(
+	const hx_os_http *http);
 
 /**
  * \brief Bounded synchronous HTTP/HTTPS with certificate + hostname

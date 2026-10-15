@@ -1,5 +1,7 @@
 #include "internal.h"
 #include "hx_os_http.h"
+#include "hx_os_temp.h"
+#include "file_utils_private.h"
 
 #if HX_OS_HAVE_HTTP
 #include <curl/curl.h>
@@ -7,6 +9,7 @@
 struct hx_os_http {
 	CURL *native;
 	hx_os_atomic owner;
+	hx_os_temp *pending_file;
 };
 
 typedef struct hx_os_http_transfer {
@@ -15,7 +18,26 @@ typedef struct hx_os_http_transfer {
 	hx_os_deadline deadline;
 	hx_os_status status;
 	hx_os_error *error;
+	const hx_os_http_stream_options *stream;
+	uint64_t downloaded, uploaded;
 } hx_os_http_transfer;
+
+static hx_os_status hx_os_http_enter(hx_os_http *http, hx_os_error *error)
+{
+	int64_t expected = 0, thread = (int64_t)hx_os_thread_id();
+
+	if (!http || !thread)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (!hx_os_atomic_compare_exchange(&http->owner, &expected, thread,
+		    HX_OS_ACQ_REL, HX_OS_ACQUIRE))
+		return hx_os_i_error(error,
+			expected == thread ? HX_OS_DEADLOCK : HX_OS_BUSY, 0, 0);
+	if (http->pending_file) {
+		hx_os_atomic_store(&http->owner, 0, HX_OS_RELEASE);
+		return hx_os_i_error(error, HX_OS_BUSY, 0, 0);
+	}
+	return HX_OS_OK;
+}
 
 static size_t hx_os_http_collect(hx_os_http_transfer *transfer, hx_bytes *out,
 	size_t maximum, const void *data, size_t size, size_t count)
@@ -42,9 +64,64 @@ static size_t hx_os_http_collect(hx_os_http_transfer *transfer, hx_bytes *out,
 static size_t hx_os_http_body(char *data, size_t size, size_t count, void *user)
 {
 	hx_os_http_transfer *transfer = user;
+	size_t bytes;
+
+	if (transfer->stream && transfer->stream->write) {
+		if ((size && count > SIZE_MAX / size) ||
+			(uint64_t)(size * count) >
+				transfer->stream->max_download_bytes -
+					transfer->downloaded) {
+			transfer->status = hx_os_i_error(
+				transfer->error, HX_OS_LIMIT, 0, 0);
+			return 0;
+		}
+		bytes = size * count;
+		if (transfer->status == HX_OS_OK)
+			transfer->status =
+				transfer->stream->write(transfer->stream->user,
+					data, bytes, transfer->error);
+		if (transfer->status != HX_OS_OK)
+			return 0;
+		transfer->downloaded += bytes;
+		return bytes;
+	}
 
 	return hx_os_http_collect(transfer, &transfer->result.body,
 		transfer->options->max_body_bytes, data, size, count);
+}
+
+static size_t hx_os_http_read(char *data, size_t size, size_t count, void *user)
+{
+	hx_os_http_transfer *transfer = user;
+	uint64_t remaining =
+		transfer->stream->upload_bytes - transfer->uploaded;
+	size_t capacity, completed = 0;
+
+	if (transfer->status != HX_OS_OK)
+		return CURL_READFUNC_ABORT;
+	if (size && count > SIZE_MAX / size) {
+		transfer->status =
+			hx_os_i_error(transfer->error, HX_OS_LIMIT, 0, 0);
+		return CURL_READFUNC_ABORT;
+	}
+	capacity = size * count;
+	if (remaining < capacity)
+		capacity = (size_t)remaining;
+	if (!capacity)
+		return 0;
+	transfer->status = transfer->stream->read(transfer->stream->user, data,
+		capacity, &completed, transfer->error);
+	if (completed > capacity)
+		transfer->status =
+			hx_os_i_error(transfer->error, HX_OS_INVALID, 0, 0);
+	else if (transfer->status == HX_OS_EOF ||
+		(transfer->status == HX_OS_OK && !completed))
+		transfer->status = hx_os_i_error(
+			transfer->error, HX_OS_TRUNCATED_INPUT, 0, 0);
+	if (transfer->status != HX_OS_OK)
+		return CURL_READFUNC_ABORT;
+	transfer->uploaded += completed;
+	return completed;
 }
 
 static size_t hx_os_http_headers(
@@ -71,6 +148,11 @@ static int hx_os_http_progress(void *user, curl_off_t download,
 	else if (hx_os_deadline_expired(transfer->deadline))
 		transfer->status =
 			hx_os_i_error(transfer->error, HX_OS_TIMEOUT, 0, 0);
+	else if (transfer->status == HX_OS_OK && transfer->stream &&
+		transfer->stream->progress)
+		transfer->status = transfer->stream->progress(
+			transfer->stream->user, (uint64_t)downloaded,
+			(uint64_t)uploaded, transfer->error);
 	return transfer->status != HX_OS_OK;
 }
 
@@ -118,6 +200,7 @@ hx_os_status hx_os_http_create(
 		return hx_os_i_error(error, HX_OS_NO_MEMORY, 0, 0);
 	}
 	http->native = curl_easy_init();
+	http->pending_file = NULL;
 	hx_os_atomic_store(&http->owner, 0, HX_OS_RELAXED);
 	if (!http->native) {
 		hx_os_memory_free(http);
@@ -166,10 +249,12 @@ void hx_os_http_response_destroy(hx_os_http_response *response)
 	response->status_code = 0;
 }
 
-hx_os_status hx_os_http_request(hx_os_http *http, const char *method,
-	const char *url, hx_os_bytes_view body, const char *const *headers,
-	size_t header_count, const hx_os_http_options *options,
-	hx_os_http_response *out, hx_os_error *error)
+static hx_os_status hx_os_http_request_impl(hx_os_http *http,
+	const char *method, const char *url, hx_os_bytes_view body,
+	const char *const *headers, size_t header_count,
+	const hx_os_http_options *options,
+	const hx_os_http_stream_options *stream, hx_os_http_metrics *metrics,
+	int owned, hx_os_http_response *out, hx_os_error *error)
 {
 #if HX_OS_HAVE_HTTP
 	const hx_os_http_options defaults = HX_OS_HTTP_OPTIONS_INIT;
@@ -177,7 +262,6 @@ hx_os_status hx_os_http_request(hx_os_http *http, const char *method,
 	struct curl_slist *list = NULL;
 	CURLcode code = CURLE_OK;
 	hx_os_status status;
-	int64_t expected = 0, thread = (int64_t)hx_os_thread_id();
 	long response_code = 0, timeout;
 	int secure = 1;
 	char *effective = NULL;
@@ -185,7 +269,7 @@ hx_os_status hx_os_http_request(hx_os_http *http, const char *method,
 
 	if (!options)
 		options = &defaults;
-	if (!thread || !http || !method || !*method || !url || !out ||
+	if (!http || !method || !*method || !url || !out ||
 		(!body.data && body.size) || (!headers && header_count) ||
 		options->size < sizeof(*options) || options->version != 1)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
@@ -206,16 +290,32 @@ hx_os_status hx_os_http_request(hx_os_http *http, const char *method,
 			strchr(headers[i], '\r') || strchr(headers[i], '\n') ||
 			!strchr(headers[i], ':'))
 			return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
-	if (!hx_os_atomic_compare_exchange(&http->owner, &expected, thread,
-		    HX_OS_ACQ_REL, HX_OS_ACQUIRE))
-		return hx_os_i_error(error,
-			expected == thread ? HX_OS_DEADLOCK : HX_OS_BUSY, 0, 0);
+	if (stream &&
+		(stream->size < sizeof(*stream) || stream->version != 1 ||
+			stream->upload_bytes > INT64_MAX ||
+			(!stream->read && stream->upload_bytes) ||
+			(stream->read && (options->redirects || body.size)) ||
+			(stream->write && !stream->max_download_bytes) ||
+			stream->low_speed_bytes_per_second > INT_MAX ||
+			stream->low_speed_seconds > 86400 ||
+			(!stream->low_speed_seconds !=
+				!stream->low_speed_bytes_per_second)))
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (!owned) {
+		status = hx_os_http_enter(http, error);
+		if (status != HX_OS_OK)
+			return status;
+	}
+	if (metrics)
+		memset(metrics, 0, sizeof(*metrics));
+	hx_os_error_clear(error);
 	memset(&transfer, 0, sizeof(transfer));
 	hx_bytes_init(&transfer.result.body, out->body.context);
 	hx_bytes_init(&transfer.result.headers, out->headers.context);
 	hx_string_init(
 		&transfer.result.effective_url, out->effective_url.context);
 	transfer.options = options;
+	transfer.stream = stream;
 	transfer.error = error;
 	transfer.deadline = hx_os_deadline_after_ms(options->timeout_ms);
 	if (options->deadline < transfer.deadline)
@@ -271,7 +371,14 @@ hx_os_status hx_os_http_request(hx_os_http *http, const char *method,
 	HX_OS_HTTP_SET(
 		CURLOPT_CONNECTTIMEOUT_MS, timeout < 2000 ? timeout : 2000L);
 	HX_OS_HTTP_SET(CURLOPT_HTTPHEADER, list);
-	if (body.size || !strcmp(method, "POST")) {
+	if (stream && stream->read) {
+		HX_OS_HTTP_SET(CURLOPT_UPLOAD, 1L);
+		HX_OS_HTTP_SET(CURLOPT_INFILESIZE_LARGE,
+			(curl_off_t)stream->upload_bytes);
+		HX_OS_HTTP_SET(CURLOPT_READFUNCTION, hx_os_http_read);
+		HX_OS_HTTP_SET(CURLOPT_READDATA, &transfer);
+	}
+	else if (body.size || !strcmp(method, "POST")) {
 		HX_OS_HTTP_SET(CURLOPT_POSTFIELDS, body.data ? body.data : "");
 		HX_OS_HTTP_SET(
 			CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t)body.size);
@@ -285,9 +392,40 @@ hx_os_status hx_os_http_request(hx_os_http *http, const char *method,
 	HX_OS_HTTP_SET(CURLOPT_NOPROGRESS, 0L);
 	HX_OS_HTTP_SET(CURLOPT_XFERINFOFUNCTION, hx_os_http_progress);
 	HX_OS_HTTP_SET(CURLOPT_XFERINFODATA, &transfer);
+	if (stream && stream->low_speed_seconds) {
+		HX_OS_HTTP_SET(CURLOPT_LOW_SPEED_LIMIT,
+			(long)stream->low_speed_bytes_per_second);
+		HX_OS_HTTP_SET(CURLOPT_LOW_SPEED_TIME,
+			(long)stream->low_speed_seconds);
+	}
 #undef HX_OS_HTTP_SET
 	if (code == CURLE_OK)
 		code = curl_easy_perform(http->native);
+	if (metrics) {
+		curl_off_t downloaded = 0, uploaded = 0;
+
+		(void)curl_easy_getinfo(
+			http->native, CURLINFO_SIZE_DOWNLOAD_T, &downloaded);
+		(void)curl_easy_getinfo(
+			http->native, CURLINFO_SIZE_UPLOAD_T, &uploaded);
+		metrics->downloaded_bytes = (uint64_t)downloaded;
+		metrics->uploaded_bytes = (uint64_t)uploaded;
+		(void)curl_easy_getinfo(http->native, CURLINFO_NAMELOOKUP_TIME,
+			&metrics->dns_ms);
+		(void)curl_easy_getinfo(http->native, CURLINFO_CONNECT_TIME,
+			&metrics->connect_ms);
+		(void)curl_easy_getinfo(http->native, CURLINFO_APPCONNECT_TIME,
+			&metrics->tls_ms);
+		(void)curl_easy_getinfo(http->native,
+			CURLINFO_STARTTRANSFER_TIME, &metrics->first_byte_ms);
+		(void)curl_easy_getinfo(
+			http->native, CURLINFO_TOTAL_TIME, &metrics->total_ms);
+		metrics->dns_ms *= 1000;
+		metrics->connect_ms *= 1000;
+		metrics->tls_ms *= 1000;
+		metrics->first_byte_ms *= 1000;
+		metrics->total_ms *= 1000;
+	}
 	if (transfer.status != HX_OS_OK)
 		status = transfer.status;
 	else if (code != CURLE_OK)
@@ -315,7 +453,10 @@ finish:
 	curl_easy_reset(http->native);
 	curl_slist_free_all(list);
 	hx_os_http_response_destroy(&transfer.result);
-	hx_os_atomic_store(&http->owner, 0, HX_OS_RELEASE);
+	if (!owned)
+		hx_os_atomic_store(&http->owner, 0, HX_OS_RELEASE);
+	if (error)
+		error->status = status;
 	return status == HX_OS_OK ? hx_os_i_error(error, status, 0, 0) : status;
 #else
 	(void)http;
@@ -325,8 +466,234 @@ finish:
 	(void)headers;
 	(void)header_count;
 	(void)options;
+	(void)stream;
+	(void)metrics;
+	(void)owned;
 	(void)out;
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
+}
+
+hx_os_status hx_os_http_request(hx_os_http *http, const char *method,
+	const char *url, hx_os_bytes_view body, const char *const *headers,
+	size_t header_count, const hx_os_http_options *options,
+	hx_os_http_response *out, hx_os_error *error)
+{
+	return hx_os_http_request_impl(http, method, url, body, headers,
+		header_count, options, NULL, NULL, 0, out, error);
+}
+
+hx_os_status hx_os_http_request_stream(hx_os_http *http, const char *method,
+	const char *url, const char *const *headers, size_t header_count,
+	const hx_os_http_stream_options *options, hx_os_http_response *out,
+	hx_os_http_metrics *metrics, hx_os_error *error)
+{
+	const hx_os_http_stream_options defaults =
+		HX_OS_HTTP_STREAM_OPTIONS_INIT;
+
+	if (!options)
+		options = &defaults;
+	if (options->size < sizeof(*options) || options->version != 1)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	return hx_os_http_request_impl(http, method, url,
+		(hx_os_bytes_view){NULL, 0}, headers, header_count,
+		&options->request, options, metrics, 0, out, error);
+}
+
+#if HX_OS_HAVE_HTTP
+typedef struct hx_os_http_file_transfer {
+	hx_os_file *file;
+	const hx_os_http_stream_options *options;
+} hx_os_http_file_transfer;
+
+#if HX_OS_HAVE_TEMP
+static hx_os_status HX_OS_CALL hx_os_http_file_write(
+	void *user, const void *data, size_t bytes, hx_os_error *error)
+{
+	hx_os_http_file_transfer *transfer = user;
+	size_t completed;
+
+	return hx_os_file_write_all(
+		transfer->file, data, bytes, &completed, error);
+}
+#endif
+
+static hx_os_status HX_OS_CALL hx_os_http_file_read(void *user, void *data,
+	size_t capacity, size_t *completed, hx_os_error *error)
+{
+	hx_os_http_file_transfer *transfer = user;
+
+	return hx_os_file_read_some(
+		transfer->file, data, capacity, completed, error);
+}
+
+static hx_os_status HX_OS_CALL hx_os_http_file_response(
+	void *user, const void *data, size_t bytes, hx_os_error *error)
+{
+	hx_os_http_file_transfer *transfer = user;
+
+	return transfer->options->write(
+		transfer->options->user, data, bytes, error);
+}
+
+static hx_os_status HX_OS_CALL hx_os_http_file_progress(
+	void *user, uint64_t downloaded, uint64_t uploaded, hx_os_error *error)
+{
+	hx_os_http_file_transfer *transfer = user;
+
+	return transfer->options->progress(
+		transfer->options->user, downloaded, uploaded, error);
+}
+#endif
+
+hx_os_status hx_os_http_download_file(hx_os_http *http, const char *url,
+	const char *destination, int replace,
+	const hx_os_http_stream_options *options, hx_os_http_response *out,
+	hx_os_error *error)
+{
+#if HX_OS_HAVE_HTTP && HX_OS_HAVE_TEMP
+	hx_os_http_stream_options stream = HX_OS_HTTP_STREAM_OPTIONS_INIT;
+	hx_os_http_file_transfer transfer;
+	hx_string parent = HX_STRING_INIT;
+	hx_string full_path = HX_STRING_INIT;
+	hx_os_status status, cleanup;
+	size_t length;
+
+	if (!destination || !*destination || !out ||
+		(replace != 0 && replace != 1) ||
+		(options &&
+			(options->size < sizeof(*options) ||
+				options->version != 1 || options->read ||
+				options->write)))
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	status = hx_os_http_enter(http, error);
+	if (status != HX_OS_OK)
+		return status;
+	hx_string_init(&parent, out->body.context);
+	hx_string_init(&full_path, out->body.context);
+	if (options)
+		stream = *options;
+	status = hx_os_i_path_full(destination, &full_path, error);
+	if (status != HX_OS_OK) {
+		hx_os_atomic_store(&http->owner, 0, HX_OS_RELEASE);
+		hx_string_destroy(&full_path);
+		return status;
+	}
+	destination = hx_string_c_str(&full_path);
+	length = strlen(destination);
+	while (length && destination[length - 1] != '/'
+#if defined(_WIN32)
+		&& destination[length - 1] != '\\'
+#endif
+	)
+		--length;
+	status = length ? hx_string_assign(&parent,
+				  (hx_string_view){destination, length}, error)
+			: hx_string_assign_cstr(&parent, ".", error);
+	if (status == HX_OS_OK)
+		status = hx_os_temp_create_file(out->body.context,
+			hx_string_c_str(&parent), "hx-download",
+			&http->pending_file, error);
+	hx_string_destroy(&parent);
+	if (status == HX_OS_OK) {
+		transfer.file = hx_os_temp_file(http->pending_file);
+		transfer.options = options;
+		stream.write = hx_os_http_file_write;
+		stream.user = &transfer;
+		if (stream.progress)
+			stream.progress = hx_os_http_file_progress;
+		status = hx_os_http_request_impl(http, "GET", url,
+			(hx_os_bytes_view){NULL, 0}, NULL, 0, &stream.request,
+			&stream, NULL, 1, out, error);
+		if (status == HX_OS_OK &&
+			(out->status_code < 200 || out->status_code >= 300))
+			status = hx_os_i_error(error, HX_OS_IO_ERROR, 0, 0);
+		if (status == HX_OS_OK)
+			status = hx_os_temp_publish(http->pending_file,
+				destination, replace, error);
+	}
+	cleanup = hx_os_temp_close(
+		&http->pending_file, status == HX_OS_OK ? error : NULL);
+	if (status == HX_OS_OK)
+		status = cleanup;
+	hx_string_destroy(&full_path);
+	hx_os_atomic_store(&http->owner, 0, HX_OS_RELEASE);
+	return status;
+#else
+	(void)http;
+	(void)url;
+	(void)destination;
+	(void)replace;
+	(void)options;
+	(void)out;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
+}
+
+hx_os_status hx_os_http_upload_file(hx_os_http *http, const char *method,
+	const char *url, const char *path, const char *const *headers,
+	size_t header_count, const hx_os_http_stream_options *options,
+	hx_os_http_response *out, hx_os_error *error)
+{
+#if HX_OS_HAVE_HTTP
+	hx_os_http_stream_options stream = HX_OS_HTTP_STREAM_OPTIONS_INIT;
+	hx_os_http_file_transfer transfer = {0};
+	hx_os_status status, closed;
+
+	if (!out || !path ||
+		(options &&
+			(options->size < sizeof(*options) ||
+				options->version != 1 || options->read ||
+				options->request.redirects)))
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	status = hx_os_http_enter(http, error);
+	if (status != HX_OS_OK)
+		return status;
+	if (options)
+		stream = *options;
+	transfer.options = options;
+	status = hx_os_file_open(out->body.context, path, HX_OS_FILE_READ,
+		&transfer.file, error);
+	if (status == HX_OS_OK)
+		status = hx_os_file_size(
+			transfer.file, &stream.upload_bytes, error);
+	if (status == HX_OS_OK) {
+		stream.read = hx_os_http_file_read;
+		stream.user = &transfer;
+		if (stream.write)
+			stream.write = hx_os_http_file_response;
+		if (stream.progress)
+			stream.progress = hx_os_http_file_progress;
+		status = hx_os_http_request_impl(http, method, url,
+			(hx_os_bytes_view){NULL, 0}, headers, header_count,
+			&stream.request, &stream, NULL, 1, out, error);
+	}
+	closed = hx_os_file_close(
+		&transfer.file, status == HX_OS_OK ? error : NULL);
+	if (status == HX_OS_OK)
+		status = closed;
+	hx_os_atomic_store(&http->owner, 0, HX_OS_RELEASE);
+	return status;
+#else
+	(void)http;
+	(void)method;
+	(void)url;
+	(void)path;
+	(void)headers;
+	(void)header_count;
+	(void)options;
+	(void)out;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
+}
+
+const char *hx_os_http_pending_file(const hx_os_http *http)
+{
+#if HX_OS_HAVE_HTTP
+	return http ? hx_os_temp_path(http->pending_file) : NULL;
+#else
+	(void)http;
+	return NULL;
 #endif
 }
 
@@ -386,6 +753,13 @@ hx_os_status hx_os_http_close(hx_os_http **http, hx_os_error *error)
 		return hx_os_i_error(error, HX_OS_OK, 0, 0);
 	if (hx_os_atomic_load(&value->owner, HX_OS_ACQUIRE))
 		return hx_os_i_error(error, HX_OS_BUSY, 0, 0);
+	if (value->pending_file) {
+		hx_os_status status =
+			hx_os_temp_close(&value->pending_file, error);
+
+		if (status != HX_OS_OK)
+			return status;
+	}
 	*http = NULL;
 	curl_easy_cleanup(value->native);
 	hx_os_memory_free(value);

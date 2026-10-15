@@ -232,3 +232,18 @@ Output is `Compatible plugin: Example plugin 1.0`. Public [demo_plugin.c](demo_p
 Replace inputs and values first, then the code that processes results. Preserve creation, error checks and release order. Stop new work and wait for workers before releasing active data; a timeout does not make that data safe to destroy. Times, UUIDs, ciphertext and CPU/GPU details vary by environment, so compare their meaning rather than fixed values.
 
 Outputs here describe expected usage, while actual target support follows the [platform boundaries](../docs/PLATFORMS.md). Detailed capacity, concurrency, cancellation and unloading contracts remain in the later sections of each topic guide.
+
+## Network I/O additions
+
+Build the chosen target in the same configured directory; use `bin/Release` for Visual Studio or `bin` for single-configuration builds.
+
+| Task | Source / target | Inputs and expected result |
+| --- | --- | --- |
+| Receive UDP destination/interface metadata | [udp_packet.c](udp_packet.c) / `hx_os_udp_packet` | No arguments; prints a loopback JSON message, address and interface |
+| Look up a hostname using cancellable DNS | [dns_lookup.c](dns_lookup.c) / `hx_os_dns_lookup` | `HOST [DNS_IP:PORT]`; prints numeric addresses |
+| Request/reply over trusted-LAN KCP | [kcp_session.c](kcp_session.c) / `hx_os_kcp_session` | Run `server IP:PORT` then `client IP:PORT`; prints JSON request and reply |
+| Stream a file over HTTP | [http_file.c](http_file.c) / `hx_os_http_file` | `download URL FILE [CA]` or `upload URL FILE [CA]`; prints HTTP status |
+| Suspend a C99 coroutine on UDP | [coroutine_udp.c](coroutine_udp.c) / `hx_os_coroutine_udp` | No arguments; prints a JSON message sent to itself |
+| Suspend a C99 coroutine on HTTP | [coroutine_http.c](coroutine_http.c) / `hx_os_coroutine_http` | `URL`; prints HTTP status and response body |
+
+See [network I/O](../docs/NETWORK_IO.md), [HTTP files](../docs/HTTP_FILES.md) and [coroutine waiting](../docs/COROUTINES.md) for complete commands and ownership. DNS needs a reachable configured server; HTTP needs your service URL. The examples do not modify firewall settings or deploy external services.

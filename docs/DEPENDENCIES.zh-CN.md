@@ -14,6 +14,7 @@ deps/
   xz/               Git 子模块
   zstd/             Git 子模块
   curl/             libcurl SDK 子模块
+  c-ares/           可取消 DNS 子模块（1.34.8）
   utf8proc/         Unicode SDK 子模块
   7zip/             独立可选原生后端子模块
   cjson/            可选解析器子模块
@@ -42,7 +43,7 @@ cd hx_c_platform
 git submodule update --init --recursive
 ```
 
-主工程和可选依赖构建器都会校验固定 Git 提交，缺失或版本不符会明确失败，不会跟随分支最新提交。当前开发分支是 `dev`。15 个 Git 子模块的 URL 见 [.gitmodules](../.gitmodules)，版本、提交及 iconv／SQLite 归档散列统一见 [HxDependencySources.cmake](../cmake/HxDependencySources.cmake)。
+主工程和可选依赖构建器都会校验固定 Git 提交，缺失或版本不符会明确失败，不会跟随分支最新提交。当前开发分支是 `dev`。16 个 Git 子模块的 URL 见 [.gitmodules](../.gitmodules)，版本、提交及 iconv／SQLite 归档散列统一见 [HxDependencySources.cmake](../cmake/HxDependencySources.cmake)。
 
 默认开启的容器、KCP 需要初始化对应子模块。五种可选解析后端仍默认关闭，开启时不再要求逐个填写源码路径；既有集成仍可传入 `HX_OS_<PARSER>_SOURCE_DIR`，显式提供的源码树由集成方管理。
 
@@ -153,3 +154,9 @@ Android ARMv7 改为 `armeabi-v7a`／`android-arm`；x86_64 原生模拟器改�
 Curl 固定到 `curl-8_22_0` 标签，该提交原始头文件报告 `8.22.0-DEV`，保留上游版本文字。构建使用 OpenSSL，关闭命令行工具、线程 DNS、libpsl、SSH、IDN2、GSSAPI 和隐式内容压缩。因此 HTTP 截止时间不能打断原生阻塞 DNS；URL 的 IDNA 能力也服从所选后端，不暗中增加依赖。Utf8proc 固定为 2.12.0，两个组件的头文件和许可证都随 SDK 安装。
 
 启用时提供 `hx_c_platform::sqlite`、`::openssl`、`::curl`、`::utf8proc`、`::archive`、`::zlib`、`::lzma`、`::zstd`；`hx_c_platform::native` 汇总核心及已启用的底层目标。消费者可直接调用原生 SDK，同时使用便利接口。安装包从自己的前缀解析匹配依赖并导出原始头文件；Windows 运行时 DLL 放在 `bin`，Unix 保留共享库名称链和相对库目录的查找路径。同一进程不要混用不兼容的 SDK 版本。
+
+## 8. 可选的可取消 DNS
+
+启用网络时，`HX_OS_ENABLE_CARES` 默认开启。未修改的 c-ares 1.34.8 源码随工程直接构建为 PIC 静态库，不需要额外 DNS DLL。初始化 `deps/c-ares`，或按上文选择 FetchContent。固定提交为 `c7a3138dcfe3bb0eaaf10c0c24c36dc66dc790ab`。设置 `-DHX_OS_ENABLE_CARES=OFF` 可保留系统 DNS 并移除这个后端；显式 resolver 入口此时返回 `NOT_SUPPORTED`。
+
+安装包含 c-ares 头文件、静态库、CMake 包及 MIT 许可证。直接调用原生 API 时链接 `hx_c_platform::cares`。适配层持有 c-ares 全局初始化的使用权；同时使用原生 API 的应用需要协调全局清理，不能在适配层 resolver 存活时清理 c-ares。该后端用于显式 resolver／TCP 拨号／TLS，不会改变单独构建的 libcurl DNS 后端，因此 HTTP 协程仍有已说明的原生 DNS 关闭限制。

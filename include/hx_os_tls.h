@@ -2,6 +2,7 @@
 #define HX_C_PLATFORM_TLS_H
 
 #include "hx_os_net.h"
+#include "hx_os_dial.h"
 #include "hx_string.h"
 
 #ifdef __cplusplus
@@ -14,6 +15,7 @@ extern "C" {
  * \details Thread-local storage remains hx_os_tls_key.
  */
 typedef struct hx_os_tls hx_os_tls;
+typedef struct hx_os_tls_profile hx_os_tls_profile;
 
 enum {
 	HX_OS_TLS_REUSEADDR = 1,
@@ -39,6 +41,105 @@ typedef struct hx_os_tls_options {
 		sizeof(hx_os_tls_options), 1, NULL, NULL, NULL, NULL, NULL,    \
 			65536, 16, 5000, 0                                     \
 	}
+
+enum {
+	HX_OS_TLS_CRL_NONE = 0,
+	HX_OS_TLS_CRL_LEAF = 1,
+	HX_OS_TLS_CRL_CHAIN = 2
+};
+
+typedef struct hx_os_tls_options_ex {
+	uint32_t size, version;
+	hx_os_tls_options base;
+	hx_os_tcp_options socket;
+	const char *const *alpn;
+	size_t alpn_count;
+	const hx_os_resolver_options *resolver;
+	const unsigned char *certificate_sha256;
+	const char *crl_file;
+	uint32_t attempt_delay_ms;
+	uint32_t crl_mode;
+	int require_alpn;
+	int enable_session_tickets;
+} hx_os_tls_options_ex;
+
+#define HX_OS_TLS_OPTIONS_EX_INIT                                              \
+	{                                                                      \
+		sizeof(hx_os_tls_options_ex), 1, HX_OS_TLS_OPTIONS_INIT,       \
+			HX_OS_TCP_OPTIONS_INIT, NULL, 0, NULL, NULL, NULL,     \
+			250, 0, 0, 0                                           \
+	}
+
+/**
+ * \brief Extended options leave the original structure and ABI unchanged.
+ *
+ * \details All strings, protocol names and the optional 32-byte certificate
+ * SHA-256 pin are copied before start returns. TCP settings override matching
+ * base flags; listener dual-stack is configured before bind. Client connection
+ * attempts alternate families with at most two pending sockets, using one
+ * connection/handshake budget. resolver=NULL preserves system DNS; a supplied
+ * configuration creates a private c-ares resolver on the client I/O worker,
+ * sharing its deadline and close cancellation. Configuration/hosts file reads
+ * are not hard real-time. Server resolver settings are invalid, not ignored.
+ *
+ * ALPN accepts up to 16 nonempty printable ASCII names, each at most 255 bytes.
+ * Servers choose their first supported name; require_alpn rejects missing or
+ * unmatched negotiation. Selected protocol is available through get_alpn.
+ *
+ * A pin is an ADDITIONAL leaf-certificate check, never a replacement for chain
+ * or hostname validation. A server pin requires client-certificate validation.
+ * crl_file is a stable UTF-8 path to a local PEM CRL bundle (at most 4 MiB).
+ * LEAF checks the peer; CHAIN also checks its chain. Required missing, expired
+ * or invalid CRLs fail verification. No network OCSP/AIA/CRL fetch occurs.
+ * Server CRL checks likewise require client-certificate validation. NONE must
+ * have no CRL file. Pin rotation and refreshing CRLs require a new endpoint.
+ * enable_session_tickets is server-only, explicitly enabling stateless
+ * tickets on that endpoint. No early data or internal session cache is enabled.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_tls_options_ex_init(
+	hx_os_tls_options_ex *options, size_t capacity);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_tls_start_connect_ex(
+	hx_os_context *context, const char *host, uint16_t port,
+	const hx_os_tls_options_ex *options, hx_os_tls **out,
+	hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_tls_start_listen_ex(
+	hx_os_context *context, const char *numeric_host, uint16_t port,
+	const hx_os_tls_options_ex *options, hx_os_tls **out,
+	hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_tls_connect_ex_until(
+	hx_os_context *context, const char *host, uint16_t port,
+	const hx_os_tls_options_ex *options, hx_os_deadline deadline,
+	hx_os_tls **out, hx_os_error *error);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_tls_listen_ex_until(
+	hx_os_context *context, const char *numeric_host, uint16_t port,
+	const hx_os_tls_options_ex *options, hx_os_deadline deadline,
+	hx_os_tls **out, hx_os_error *error);
+
+/**
+ * \brief Immutable client trust/configuration snapshot for one host and port.
+ * \details Explicit creation loads credentials; it starts no network thread.
+ * Each profile caches at most one resumable session, consumed on reuse. Server
+ * tickets may arrive only after application I/O; resumption is not guaranteed.
+ * No early data is sent. Connections retain their profile. Changing trust,
+ * pins, ALPN or CRLs requires a new profile; old files are not reread.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_tls_profile_create(
+	hx_os_context *context, const char *host, uint16_t port,
+	const hx_os_tls_options_ex *options, hx_os_tls_profile **out,
+	hx_os_error *error);
+HX_OS_API void HX_OS_CALL hx_os_tls_profile_retain(hx_os_tls_profile *profile);
+HX_OS_API void HX_OS_CALL hx_os_tls_profile_release(hx_os_tls_profile *profile);
+HX_OS_API hx_os_status HX_OS_CALL hx_os_tls_profile_connect_until(
+	hx_os_tls_profile *profile, hx_os_deadline deadline, hx_os_tls **out,
+	hx_os_error *error);
+
+/**
+ * \brief Copy the negotiated protocol; NOT_FOUND means none was negotiated.
+ *
+ * \details No borrowed OpenSSL data escapes. Output is unchanged on failure.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_tls_get_alpn(
+	hx_os_tls *tls, uint64_t peer, hx_string *out, hx_os_error *error);
 
 HX_OS_API int HX_OS_CALL hx_os_tls_available(void);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_tls_options_init(
@@ -183,7 +284,11 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_tls_close_until(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_tls_abort_until(
 	hx_os_tls **tls, hx_os_deadline deadline, hx_os_error *error);
 
-enum { HX_OS_TLS_PEER_CERTIFICATE = 1, HX_OS_TLS_PEER_VERIFIED = 2 };
+enum {
+	HX_OS_TLS_PEER_CERTIFICATE = 1,
+	HX_OS_TLS_PEER_VERIFIED = 2,
+	HX_OS_TLS_PEER_RESUMED = 4
+};
 
 typedef struct hx_os_tls_peer_info {
 	uint32_t size, version;

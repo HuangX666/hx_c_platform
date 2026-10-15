@@ -209,6 +209,34 @@ flowchart LR
 
 所有原生 socket/pipe 操作由 I/O 调度线程负责。stream 可以在同一运行时的工作线程间使用；一个 socket 可以同时存在一个读和一个写，冲突操作返回 `BUSY`；管道端点只接受一个操作。取消只是请求原生操作退出，不会提前释放仍被使用的缓冲区。原生完成回调返回之后，才通知协程恢复。释放 stream 不等待 I/O 退役，由调度线程完成原生关闭。运行时关闭成功后所有原生 stream 已退役，调用者保留的包装句柄仍可安全释放；不向外暴露需要调用者自行协调的原生句柄。
 
+### 6.1 用协程等待 UDP，不占住工作线程
+
+先调用 `hx_os_coro_udp_bind` 绑定 UDP 地址，拿到同一种需要释放的 `hx_os_coro_stream` 句柄。端口填零表示让系统选一个可用端口，通过 `bound` 获取实际地址。之后用 `hx_os_coro_send_to` 发送一条数据报，用 `hx_os_coro_receive_from` 接收一条。它们复用运行时现有的 I/O 调度线程和原生 loop，等待时挂起任务，不循环轮询，也不为每次收发新建线程。C++11 有栈任务对应 `Stream::bindUdp`、`sendTo`、`receiveFrom`。这些方法要在协程内部调用，不能直接放在应用主线程里调用。
+
+可以先```mermaid
+flowchart LR
+    C[协程发起请求] -->|复制输入| Q[有界 I/O 队列]
+    Q --> W[固定数量 I/O 线程]
+    W --> H[libcurl HTTP 或 HTTPS]
+    H -->|操作完成| S[恢复协程]
+    T[到期或取消] --> S
+    C -. 等待时挂起 .-> O[协程线程执行其他任务]
+```
+
+运行完整的 C99 状态机示例 [coroutine_udp.c](../examples/coroutine_udp.c)：它绑定一个本机回环临时端口，把 JSON 状态消息发给这个端口，再接收并释放句柄。跨越挂起点的数据都保存在任务状态里，cleanup 回调也负责取消后的清理。
+
+```sh
+cmake --build build --config Release --target hx_os_coroutine_udp
+```
+
+Linux／WSL 运行 `./build/bin/hx_os_coroutine_udp`；Visual Studio 运行 `.\build\bin\Release\hx_os_coroutine_udp.exe`。把 `build` 换成已有构建目录；需要开启 examples、NETWORK、LOOP、COROUTINES 和 COROUTINE_IO。不用另开服务端，也不用传参数，预期输出：
+
+```text
+UDP JSON: {"type":"status","device_id":7}
+```
+
+每次接收只消费一条数据报。空数据报返回成功和零字节，不是 EOF。缓冲区太小时返回 `LIMIT`、实际复制字节数和发送者地址，剩余部分已丢弃；不要把这段前缀当成完整 JSON 解析。超时或取消仍会等原生 I/O 退场后再归还借用缓冲区；无栈返回 `WOULD_BLOCK` 时，缓冲区必须继续保留并通过 `AWAIT` 再次调用。发送成功只表示本机接受了数据，不是对端确认收到。这些协程入口暂不提供 packet-info／组播控制，也不增加可靠性；UDP 仍可能丢失、重复或乱序。它们与已有协程 I/O 共用句柄、请求数和字节预算。
+
 ## 7. 容量、取消与生命周期
 
 | 配置或操作 | 契约 |
@@ -241,6 +269,7 @@ flowchart LR
 | `hx_os_go` | [go.cpp](../examples/go.cpp) | C++11，channel 传回 `Answer: 42` |
 | `hx_os_cpp_coroutine` | [coroutine.cpp](../examples/coroutine.cpp) | C++11，Task 返回 `Answer: 42` |
 | `hx_os_coroutine` | [coroutine.c](../examples/coroutine.c) | C99，依次输出 `Count: 1`、`Count: 2`、`Count: 3` |
+| `hx_os_coroutine_udp` | [coroutine_udp.c](../examples/coroutine_udp.c) | C99，发送并接收一条 JSON UDP 数据报 |
 | `hx_os_cpp_coroutine20` | [coroutine20.cpp](../examples/coroutine20.cpp) | C++20，co_await 后返回 `Answer: 42` |
 
 例如 `cmake --build build --config Release --target hx_os_coroutine`，再运行 Windows 的 `.\build\bin\Release\hx_os_coroutine.exe` 或 Linux 的 `./build/bin/hx_os_coroutine`。仍在库源码根目录操作。
@@ -290,3 +319,21 @@ C++20 提供 `async::acquire(mutex)`、`async::wait(event/semaphore)`、`async::
 `Group group(runtime, capacity)` 收集有界的一批 void／`Result<void>` 任务。`group.spawn(...)` 保存任务句柄，`group.waitUntil(deadline)` 等待并消费已经完成的条目；超时保留未完成条目，最终报告首个保存的提交／执行失败。某个任务失败不会跳过其余任务的等待。`group.cancel()` 请求协作取消。任务组由同一个调用方串行操作，不是支持并发 Add 的 Go WaitGroup；析构只释放句柄，不暗中等待或取消，被引用的应用数据仍需满足执行生命周期。组内错误持续保留，新错误范围请创建新任务组。
 
 需要返回值时用 `runtime.submit(函数, 参数...)`。`Task<T>::getUntil` 只在任务完成后消耗句柄，等待超时保留句柄，释放句柄也不会强杀任务。[C++11 完整返回值示例](../examples/coroutine.cpp) 与 [C++20 示例](../examples/coroutine20.cpp) 继续保留。普通自动持有任务、可选任务组和有返回值任务，共用同一份任务／栈预算及调度器。
+
+## 11. 等待 TLS 或 HTTP 时让出协程线程
+
+已有 TLS owner 时，把同步就绪等待、发送、接收、冲刷换成 `hx_os_coro_tls_wait_ready`、`hx_os_coro_tls_send_until`、`hx_os_coro_tls_receive_until` 或 `hx_os_coro_tls_flush_until`。这些操作向已有 TLS 工作线程登记等待，不新增轮询线程。C++11 有栈任务可以使用 `<hx/CoroutineNetwork.hpp>` 中借用 owner 的 `hx::coro::Tls`。原始 TLS 仍需要业务协议分帧，并显式关闭端点。
+
+HTTP 使用显式创建的 `hx_os_coro_http` 服务，内部是独立、有容量上限的 I/O 线程池。默认两个线程、最多十六个已接收请求，按复制输入和最大响应数据预留 64 MiB。容器扩容峰值及 curl／TLS 原生分配另计；这是请求接收预算，不是进程内存硬上限。输入在挂起前复制，成功时才替换响应。
+
+运行完整的 C99 状态机示例 [coroutine_http.c](../examples/coroutine_http.c)：
+
+```sh
+cmake --build build --config Release --target hx_os_coroutine_http
+# 先按 HTTP_FILES.zh-CN.md 启动本地 HTTP 服务：
+build/bin/hx_os_coroutine_http http://127.0.0.1:8080/hello.txt
+```
+
+Visual Studio 使用 `build/bin/Release/hx_os_coroutine_http.exe`。假设 `hello.txt` 内容为 `hello`，输出为 `HTTP 200`，下一行显示 `hello`。程序展示创建服务、`HX_OS_CORO_AWAIT`、释放响应，以及先关闭 I/O 服务再关闭运行时的流程。有栈任务只需调用 `hx_os_coro_http_get(service, url, NULL, &response, &error)`；C++ 使用 `hx::coro::Http(service).get(url, response)`。
+
+无栈任务把参数、缓冲区和截止时间放进持久状态，收到 `WOULD_BLOCK` 后继续同一个待完成操作。TLS 发送保留累计完成的字节数。取消协程会唤醒等待，未结束的 HTTP 后台操作继续持有自己的数据副本。原生 owner 线程用 `close_until` 关闭 HTTP 服务；超时后保留对象供重试，包括阻塞在系统 DNS 中的工作线程。不要先销毁运行时，也不要把 HTTP 取消当作服务端操作撤销。普通流式文件操作见 [HTTP 传输](HTTP_FILES.zh-CN.md)，信任校验及 profile 见 [TLS](TLS.zh-CN.md)。

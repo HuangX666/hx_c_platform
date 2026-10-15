@@ -18,8 +18,8 @@ static int parse_index(const char *text, uint32_t *index)
 	return 1;
 }
 
-static hx_os_status send_discovery(hx_os_socket *socket,
-	const hx_os_address *group, hx_os_error *error)
+static hx_os_status send_discovery(
+	hx_os_socket *socket, const hx_os_address *group, hx_os_error *error)
 {
 	const char message[] =
 		"{\"type\":\"discover\",\"request_id\":\"demo-1\"}";
@@ -27,25 +27,15 @@ static hx_os_status send_discovery(hx_os_socket *socket,
 	size_t sent = 0;
 	hx_os_status status;
 
-	for (;;) {
-		status = hx_os_socket_send_to(socket, group, message,
-			sizeof(message) - 1, &sent, error);
-		if (status != HX_OS_WOULD_BLOCK)
-			break;
-
-		status = hx_os_socket_wait_until(
-			socket, HX_OS_WAIT_WRITE, deadline, error);
-		if (status != HX_OS_OK)
-			break;
-	}
+	status = hx_os_socket_send_to_until(socket, group, message,
+		sizeof(message) - 1, deadline, &sent, error);
 	if (status == HX_OS_OK)
 		printf("Sent %zu bytes: %s\n", sent, message);
 
 	return status;
 }
 
-static hx_os_status receive_discovery(hx_os_socket *socket,
-	hx_os_error *error)
+static hx_os_status receive_discovery(hx_os_socket *socket, hx_os_error *error)
 {
 	char message[1024], host[64];
 	hx_os_address sender;
@@ -55,17 +45,8 @@ static hx_os_status receive_discovery(hx_os_socket *socket,
 
 	puts("Listening for one discovery datagram (10 seconds)...");
 	fflush(stdout);
-	for (;;) {
-		status = hx_os_socket_receive_from(socket, &sender, message,
-			sizeof(message), &received, error);
-		if (status != HX_OS_WOULD_BLOCK)
-			break;
-
-		status = hx_os_socket_wait_until(
-			socket, HX_OS_WAIT_READ, deadline, error);
-		if (status != HX_OS_OK)
-			break;
-	}
+	status = hx_os_socket_receive_from_until(socket, &sender, message,
+		sizeof(message), deadline, &received, error);
 	if (status != HX_OS_OK)
 		return status;
 
@@ -95,7 +76,8 @@ int main(int argc, char **argv)
 		(strcmp(argv[1], "listen") && strcmp(argv[1], "send")) ||
 		!parse_index(argv[3], &index)) {
 		fputs("Usage: multicast_discovery listen|send GROUP INDEX "
-		      "[PORT]\n", stderr);
+		      "[PORT]\n",
+			stderr);
 		return 2;
 	}
 
@@ -105,9 +87,9 @@ int main(int argc, char **argv)
 	if (!net_demo_check(status, &error, "parse group"))
 		return 2;
 
-	if (!port || (group.family == HX_OS_IPV4
-			     ? (group.bytes[0] & 0xf0) != 0xe0
-			     : group.bytes[0] != 0xff)) {
+	if (!port ||
+		(group.family == HX_OS_IPV4 ? (group.bytes[0] & 0xf0) != 0xe0
+					    : group.bytes[0] != 0xff)) {
 		fputs("Use a multicast address and a nonzero port.\n", stderr);
 		return 2;
 	}
@@ -129,8 +111,8 @@ int main(int argc, char **argv)
 
 	if (status == HX_OS_OK && listening) {
 		status = hx_os_address_parse(
-			group.family == HX_OS_IPV4 ? "0.0.0.0" : "::",
-			port, &local, &error);
+			group.family == HX_OS_IPV4 ? "0.0.0.0" : "::", port,
+			&local, &error);
 		if (status == HX_OS_OK)
 			status = hx_os_socket_bind(socket, &local, &error);
 		if (status == HX_OS_OK)
@@ -145,7 +127,7 @@ int main(int argc, char **argv)
 
 	if (joined &&
 		!net_demo_check(hx_os_socket_leave_multicast(
-				       socket, &group, index, &error),
+					socket, &group, index, &error),
 			&error, "leave multicast group"))
 		ok = 0;
 	if (!net_demo_close(&socket, &network))

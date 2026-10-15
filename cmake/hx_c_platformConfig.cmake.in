@@ -5,6 +5,9 @@ set(hx_c_platform_saved_prefix "${CMAKE_PREFIX_PATH}")
 list(PREPEND CMAKE_PREFIX_PATH "${PACKAGE_PREFIX_DIR}")
 
 find_dependency(Threads)
+if(@HX_OS_HAVE_CARES@)
+	find_dependency(c-ares 1.34.8 CONFIG)
+endif()
 
 if(@HX_OS_HAVE_OPENSSL@)
 	# Function scope keeps the consumer's preference variables intact.

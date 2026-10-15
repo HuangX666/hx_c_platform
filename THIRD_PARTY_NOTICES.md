@@ -94,3 +94,7 @@ Only the library components selected by `tools/dependencies` are built. Upstream
 | utf8proc | 2.12.0, commit `79cdd5ab40c79afa559f689ffc13b76812dee1ac` | [MIT and retained Unicode data notices](deps/utf8proc/LICENSE.md) |
 
 These optional adapters preserve upstream code and licenses. Native headers remain callable through the installed dependency targets. The self-developed regex engine does not link PCRE2; any local PCRE2 differential checks are maintainer-only and are not distributed as a regex backend.
+
+## Optional c-ares DNS resolver
+
+c-ares 1.34.8 is integrated at commit `c7a3138dcfe3bb0eaaf10c0c24c36dc66dc790ab` from [upstream](https://github.com/c-ares/c-ares). Sources remain unchanged under `deps/c-ares`, or use the same FetchContent pin. Its [MIT license and retained notices](deps/c-ares/LICENSE.md) are installed as `share/hx_c_platform/licenses/c-ares-LICENSE.md`. Enabled builds link the static resolver and install its native SDK; disabled builds do not depend on it. This pin identifies the selected integration, not a claim of perpetual latest-version support.

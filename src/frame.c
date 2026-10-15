@@ -7,7 +7,8 @@
 struct hx_os_frame {
 	hx_os_frame_callbacks callbacks;
 	void *user, *backend, *write_backend;
-	hx_os_mutex *read_mutex, *write_mutex;
+	hx_os_mutex *admission;
+	hx_os_condition *available;
 	hx_os_atomic read_owner, write_owner;
 	hx_bytes received, sending;
 	size_t maximum, header_read, content_read, sent;
@@ -21,11 +22,12 @@ int hx_os_frame_available(void)
 	return HX_OS_ENABLE_FRAME;
 }
 
-static hx_os_status hx_os_frame_enter(
-	hx_os_frame *frame, int writing, hx_os_error *error)
+static hx_os_status hx_os_frame_enter(hx_os_frame *frame, int writing,
+	hx_os_deadline deadline, hx_os_error *error)
 {
 	uint64_t thread = hx_os_thread_id();
 	hx_os_status status;
+	hx_os_atomic *owner;
 
 	if (!HX_OS_ENABLE_FRAME)
 		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
@@ -36,21 +38,29 @@ static hx_os_status hx_os_frame_enter(
 		(uint64_t)hx_os_atomic_load(
 			&frame->write_owner, HX_OS_ACQUIRE) == thread)
 		return hx_os_i_error(error, HX_OS_DEADLOCK, 0, 0);
-	status = hx_os_mutex_lock(
-		writing ? frame->write_mutex : frame->read_mutex, error);
+	owner = writing ? &frame->write_owner : &frame->read_owner;
+	status = hx_os_mutex_lock(frame->admission, error);
+	if (status != HX_OS_OK)
+		return status;
+	while (hx_os_atomic_load(owner, HX_OS_ACQUIRE)) {
+		status = hx_os_condition_wait_until(
+			frame->available, frame->admission, deadline, error);
+		if (status != HX_OS_OK)
+			break;
+	}
 	if (status == HX_OS_OK)
-		hx_os_atomic_store(
-			writing ? &frame->write_owner : &frame->read_owner,
-			(int64_t)thread, HX_OS_RELEASE);
+		hx_os_atomic_store(owner, (int64_t)thread, HX_OS_RELEASE);
+	(void)hx_os_mutex_unlock(frame->admission, NULL);
 	return status;
 }
 
 static void hx_os_frame_leave(hx_os_frame *frame, int writing)
 {
+	(void)hx_os_mutex_lock(frame->admission, NULL);
 	hx_os_atomic_store(writing ? &frame->write_owner : &frame->read_owner,
 		0, HX_OS_RELEASE);
-	(void)hx_os_mutex_unlock(
-		writing ? frame->write_mutex : frame->read_mutex, NULL);
+	hx_os_condition_notify_all(frame->available);
+	(void)hx_os_mutex_unlock(frame->admission, NULL);
 }
 
 hx_os_status hx_os_frame_create(hx_os_context *context,
@@ -82,12 +92,12 @@ hx_os_status hx_os_frame_create(hx_os_context *context,
 	hx_bytes_init(&frame->sending, context);
 	hx_os_atomic_store(&frame->read_owner, 0, HX_OS_RELAXED);
 	hx_os_atomic_store(&frame->write_owner, 0, HX_OS_RELAXED);
-	status = hx_os_mutex_create(context, 0, &frame->read_mutex, error);
+	status = hx_os_mutex_create(context, 0, &frame->admission, error);
 	if (status == HX_OS_OK)
-		status = hx_os_mutex_create(
-			context, 0, &frame->write_mutex, error);
+		status = hx_os_condition_create(
+			context, &frame->available, error);
 	if (status != HX_OS_OK) {
-		hx_os_mutex_destroy(frame->read_mutex);
+		hx_os_mutex_destroy(frame->admission);
 		hx_bytes_destroy(&frame->received);
 		hx_bytes_destroy(&frame->sending);
 		hx_os_memory_free(frame);
@@ -307,7 +317,7 @@ static hx_os_status hx_os_frame_flush(
 hx_os_status hx_os_frame_flush_until(
 	hx_os_frame *frame, hx_os_deadline deadline, hx_os_error *error)
 {
-	hx_os_status status = hx_os_frame_enter(frame, 1, error);
+	hx_os_status status = hx_os_frame_enter(frame, 1, deadline, error);
 
 	if (status != HX_OS_OK)
 		return status;
@@ -333,7 +343,7 @@ hx_os_status hx_os_frame_send_until(hx_os_frame *frame,
 		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 	if (message.size > frame->maximum)
 		return hx_os_i_error(error, HX_OS_LIMIT, 0, 0);
-	status = hx_os_frame_enter(frame, 1, error);
+	status = hx_os_frame_enter(frame, 1, deadline, error);
 	if (status != HX_OS_OK)
 		return status;
 	status = hx_os_frame_flush(frame, deadline, error);
@@ -442,7 +452,7 @@ static hx_os_status hx_os_frame_receive(hx_os_frame *frame,
 
 	if (!out)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
-	status = hx_os_frame_enter(frame, 0, error);
+	status = hx_os_frame_enter(frame, 0, deadline, error);
 	if (status != HX_OS_OK)
 		return status;
 	status = hx_os_frame_ready(frame, deadline, error);
@@ -511,8 +521,8 @@ hx_os_status hx_os_frame_destroy(hx_os_frame **frame, hx_os_error *error)
 		value->pending || value->header_read)
 		return hx_os_i_error(error, HX_OS_BUSY, 0, 0);
 	*frame = NULL;
-	hx_os_mutex_destroy(value->read_mutex);
-	hx_os_mutex_destroy(value->write_mutex);
+	hx_os_condition_destroy(value->available);
+	hx_os_mutex_destroy(value->admission);
 	hx_bytes_destroy(&value->received);
 	hx_bytes_destroy(&value->sending);
 	hx_os_memory_free(value);

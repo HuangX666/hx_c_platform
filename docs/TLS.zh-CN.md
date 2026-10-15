@@ -203,15 +203,15 @@ TLS 提供字节流，一次读取不保证对应一条 JSON。示例的[小型�
 
 ## 5. 证书验证、信任来源与发布
 
-证书失败保留原生 OpenSSL 错误，并通过 `error.cause_code` 保留 X.509 验证结果。客户端始终验证服务端证书链及 DNS／IP Subject Alternative Name。DNS／Punycode 名称使用 SNI，并拒绝部分通配符；数字 IP 使用 IP 验证。不自动做 IDNA 转换，也不回退到 Common Name。`server_name` 改变被验证的身份，不改变实际连接地址。TCP 失败时，在同一个连接／握手截止时间内顺序尝试解析得到的地址；证书失败不会回退到不验证模式。
+证书失败保留原生 OpenSSL 错误，并通过 `error.cause_code` 保留 X.509 验证结果。客户端始终验证服务端证书链及 DNS／IP Subject Alternative Name。DNS／Punycode 名称使用 SNI，并拒绝部分通配符；数字 IP 使用 IP 验证。不自动做 IDNA 转换，也不回退到 Common Name。`server_name` 改变被验证的身份，不改变实际连接地址。原有连接入口仍顺序尝试解析得到的地址；第 7 节的扩展入口在同一个连接／握手预算内错峰尝试 IPv4／IPv6 地址。证书失败不会回退到不验证模式。
 
 提供 `ca_file` 时替换默认信任来源。服务端必须给出证书链和私钥 PEM 路径；客户端也可同时提供二者用于双向认证。服务端只有显式选择 `HX_OS_TLS_REQUIRE_CLIENT_CERTIFICATE` 才强制验证客户端证书。证书链上限为 1 MiB／64 项，CA 包为 4 MiB／4096 项，私钥为 64 KiB，UTF-8 密码为 1024 字节。加密 PEM 使用传入密码，不弹出交互式密码输入。相对路径在创建时根据当前工作目录固定，文件内容需要保持稳定直到启动完成。Windows 路径通过 hx 的 UTF-8 文件接口打开，再从内存解析；私钥临时缓冲的自有清理路径会擦除内容。
 
 默认信任适配使用 Windows ROOT 存储、常见 Linux／BSD 系统 CA 包位置、macOS 系统信任锚，或 Android system／Conscrypt 证书目录。信任来源不可用时明确失败，不会静默关闭验证。没有系统 CA 包的嵌入式设备可传入明确的 CA 文件。非 macOS 的 Apple 默认信任适配返回 `NOT_SUPPORTED`，需要显式提供 CA。当前 Android 模拟器证据和动态库部署见 [Android 说明](ANDROID.zh-CN.md)；不同系统／API／应用沙箱仍需各自验收，macOS 验证暂缓。
 
-验证引擎采用 OpenSSL X.509 策略，不复刻 Windows 证书扩展以外的存储属性，也不复刻 macOS Keychain 专有策略覆盖。本模块不自动下载 AIA，不提供吊销／OCSP 服务、证书固定策略或系统 UI。指纹供应用制定策略，不会自动改变信任结果。TLS 1.3 客户端握手完成本身不能证明服务端已接受客户端证书，后续 alert 仍可能报告拒绝。
+验证引擎采用 OpenSSL X.509 策略，不复刻 Windows 证书扩展以外的存储属性，也不复刻 macOS Keychain 专有策略覆盖。本模块不自动下载 AIA，不提供在线 OCSP 服务或系统 UI。扩展选项可以增加下文介绍的叶证书固定值及显式本地 CRL 检查；两者都不能跳过正常证书验证。TLS 1.3 客户端握手完成本身不能证明服务端已接受客户端证书，后续 alert 仍可能报告拒绝。
 
-只启用 TLS 1.2／1.3、现代认证密码套件和 OpenSSL 安全级别 2。不启用重新协商、会话恢复、early data、DTLS 或 QUIC；原始 TLS 也不包含 HTTP、JSON 请求路由和业务授权。
+只启用 TLS 1.2／1.3、现代认证密码套件和 OpenSSL 安全级别 2。不启用重新协商、early data、DTLS 或 QUIC；会话恢复通过第 8 节的显式 profile 按需开启；原始 TLS 也不包含 HTTP、JSON 请求路由和业务授权。
 
 OpenSSL 继续默认动态链接。构建及安装会包含选定的 SSL 和 Crypto 两个运行库，静态核心消费者也需要对应 SDK 包；仍可显式选择 `HX_OS_OPENSSL_STATIC=ON`。端点的私有 context 只在所属工作线程使用，该线程退出前完成原生线程清理。卸载本库或 OpenSSL 前，停止业务调用、回收端点并等待工作线程真正退出。外部原始加密调用者仍遵守单独的[静态链接清理契约](CRYPTO.zh-CN.md#5-线程内存与插件卸载)。
 
@@ -222,3 +222,87 @@ OpenSSL 继续默认动态链接。构建及安装会包含选定的 SSL 和 Cry
 销毁端点前停止发起新调用，已经在途的调用会被唤醒并退出，同一时刻只允许一个关闭者。`peer_close_until`／`peer_abort_until` 对一个服务端 peer 应用相同规则。端点仍被持有时，分配器、其 user 数据以及库代码都必须保持有效。
 
 目标平台的编译、部署要求及限制见[平台支持](PLATFORMS.zh-CN.md)。公开示例独立于维护者的本地回归。
+
+
+## 7. 配置 TCP、ALPN 和明确的证书策略
+
+TLS 连接需要 Keepalive、系统缓冲区大小、明确的双栈监听或 ALPN 时，使用扩展入口。原来的 `hx_os_tls_options` 及函数保持不变。可运行的[客户端示例](../examples/tls_json_client.c)已经改用扩展入口配置 Keepalive，第 1 节的命令和 JSON 输出不变。
+
+```c
+hx_os_tls *connection = NULL;
+hx_os_tls_options_ex options = HX_OS_TLS_OPTIONS_EX_INIT;
+hx_os_error error;
+
+options.base.ca_file = "ca.pem";
+options.socket.nodelay = 1;
+options.socket.keepalive = 1;
+options.socket.keepalive_idle_seconds = 30;
+options.socket.keepalive_interval_seconds = 5;
+
+hx_os_status status = hx_os_tls_connect_ex_until(NULL,
+	"localhost", 4433, &options, hx_os_deadline_after_ms(5000),
+	&connection, &error);
+```
+
+先检查 `status`，成功后再收发。与原来的 TLS 接口相同，启动失败后只要 `connection` 非 NULL，就仍需关闭或中止。上述设置表示空闲 30 秒后开始 TCP 探测，请求 5 秒的探测间隔；探测次数默认是零，保留系统设置，也适用于 Windows 7／8.1。Keepalive 不表示对方程序已经处理了业务消息。
+
+| 设置 | 含义 |
+| --- | --- |
+| `socket.nodelay`、`keepalive`、`dual_stack` | `-1` 保留现有设置，`0` 关闭，`1` 开启；显式 `nodelay` 优先于 base 中的同类标志。 |
+| `socket.dual_stack = 1` | 在 IPv6 监听器绑定 `::` 前配置双栈；接入的 IPv4 对端保留映射后的 IPv6 地址，不隐式创建第二个监听器。 |
+| `socket.send_buffer_bytes`、`receive_buffer_bytes` | 零保留系统缓冲，正数请求容量，操作系统可以调整实际值；这不会改变 TLS 明文队列的容量。 |
+| `attempt_delay_ms` | 默认 250 ms 后启动下一个地址候选，最多同时连接两个；候选失败时立即推进，不等待整个间隔。 |
+| `base.handshake_timeout_ms` | 扩展客户端的 DNS 完成、地址连接和 TLS 握手共用一个预算。原生 DNS／文件工作可能超过预算，不能强制打断。 |
+
+不使用 TLS 时，也能直接使用 [hx_os_dial.h](../include/hx_os_dial.h) 中的 `hx_os_tcp_dial_until()` 和 `hx_os_tcp_dial_addresses_until()`。后者接收地址数组，不执行 DNS。两者都会关闭没有胜出的未发布 socket；成功返回的 socket 由调用者持有，关闭前应保持对应 network 有效。取消后不会遗留隐藏的后台连接任务。
+
+### 7.1 用 ALPN 确认双方使用的业务协议
+
+ALPN 在 TLS 握手时选择协议名称，不负责解析协议，也不增加消息边界。例如两端都使用本例 JSON 分帧时，可以配置：
+
+```c
+const char *protocols[] = {"hx-json/1"};
+options.alpn = protocols;
+options.alpn_count = 1;
+options.require_alpn = 1;
+```
+
+服务端调用 `hx_os_tls_listen_ex_until()` 时也传入对应设置，按服务端列表顺序选择首个双方都支持的名称。连接／接入成功后，准备 `hx_string selected = HX_STRING_INIT`，调用 `hx_os_tls_get_alpn(connection, 0, &selected, &error)`；服务端把 `0` 换成实际 peer ID。成功后字符串为 `hx-json/1`。没有协商结果时返回 `HX_OS_NOT_FOUND`，字符串保持原值；使用后销毁字符串。`require_alpn` 会拒绝没有协商成功的连接；如果明确要兼容不提供 ALPN 的对端，就保持为零。
+
+名称使用可打印 ASCII，每个最多 255 字节，最多 16 项；启动返回前已复制，不借用调用栈数据，协商时也不会回调业务函数。TLS 1.3 服务端的策略拒绝可能在客户端本地握手完成后才到达，因此后续 I/O 错误也要处理。
+
+### 7.2 要求指定证书或检查本地吊销列表
+
+把预期叶证书 SHA-256 指纹的 32 个原始字节赋给 `options.certificate_sha256`。指纹应来自事先可信的分发渠道，不能把正在验证的连接自己提供的指纹直接当作信任依据。这是正常 CA 和主机名验证之外的附加检查：指纹相同，也不能放过过期、不受信任或主机名不符的证书。更换证书时创建采用新固定值的端点。接口会复制这些字节，此字段不接收十六进制文本。
+
+如果部署流程会分发 PEM 证书吊销列表，设置 `options.crl_file = "revocations.pem"`、`options.crl_mode = HX_OS_TLS_CRL_LEAF`。需要同时检查证书链时使用 `HX_OS_TLS_CRL_CHAIN`。缺少适用 CRL、签名无效或 CRL 过期都会导致验证失败；已吊销证书返回认证错误并保留 X.509 原因码。文件上限为 4 MiB，本库不会自动下载或刷新。启动期间保持文件稳定，由部署流程更新，再创建新端点加载。服务端使用固定证书或 CRL 检查时，必须开启 `HX_OS_TLS_REQUIRE_CLIENT_CERTIFICATE`。
+
+C++11 对应 `connectEx()`、`listenEx()`、`alpn()`，继续使用 `Result` 和显式关闭规则。客户端会话复用使用第 8 节的 profile；不提供在线 OCSP。
+
+
+### 7.3 让 DNS 随 TLS 启动一起取消
+
+准备 `hx_os_resolver_options dns = HX_OS_RESOLVER_OPTIONS_INIT`，在调用 `hx_os_tls_connect_ex_until()` 前设置 `options.resolver = &dns`。TLS 会复制这份配置，在已有 I/O 工作线程内创建私有 c-ares 解析器，让 DNS 共用连接／握手截止时间；关闭或中止启动时也会取消 DNS，不额外启动 DNS 工作线程。可选的 `dns.servers` 用于指定数字服务器地址。没有编入 c-ares 时，按正常启动结果及所有者保留规则报告 `HX_OS_NOT_SUPPORTED`。
+
+`options.resolver=NULL` 继续使用原来的系统解析器。c-ares 不会复刻所有系统 DNS／VPN 策略，也不能把文件系统配置读取变成硬实时，具体见[解析器用法与限制](NETWORK_OPTIONS.zh-CN.md#12-按名称连接并选择可以取消的-dns)。服务端只接受数字绑定地址；传入解析器配置会明确报错，不会静默忽略。
+
+## 8. 重连时复用同一份已验证 TLS 配置
+
+设备需要反复连接同一个服务时，先创建一个 profile，后面的连接重复使用它。它固定保存主机、端口、信任证书、客户端身份、ALPN、指纹和 CRL 配置。每个 profile 最多缓存一份会话，新连接取用后便移出缓存；多个消费者不会共用全局会话缓存。
+
+```c
+hx_os_tls_profile *profile = NULL;
+hx_os_tls *connection = NULL;
+hx_os_status status = hx_os_tls_profile_create(NULL, "localhost", port,
+	&options, &profile, &error);
+
+if (status == HX_OS_OK)
+	status = hx_os_tls_profile_connect_until(profile,
+		hx_os_deadline_after_ms(5000), &connection, &error);
+```
+
+这里的 `options` 使用第 7 节的扩展配置，`port` 是你的服务端口。先收发业务数据，按原有显式关闭流程关闭连接，再次调用 `profile_connect_until` 建立下一条连接。用 `hx_os_tls_get_peer_info` 查看结果：包含 `HX_OS_TLS_PEER_RESUMED` 表示服务端接受了会话复用，否则正常进行完整的证书验证和握手。TLS 1.3 的票据可能在握手之后才到达，刚连接就立即中止，不保证已经拿到可复用会话。
+
+超时后 `connection` 可能仍非空，必须保留并继续等待或关闭。停止创建新连接后，用 `hx_os_tls_profile_release` 释放自己的 profile 引用；存活连接持有各自的引用。C++11 提供 `<hx/TlsProfile.hpp>`、`hx::TlsProfile::create()` 和 `connect(owner, deadline)`，同样保留超时后的 owner。
+
+复用会话仍会根据 profile 的信任材料和当前时间重新验证缓存证书链，并检查所配置的身份、指纹和 ALPN。CA／CRL 文件更新后，需要新建 profile 才会加载；不发送提前数据。使用本库服务端时，显式设置 `options.enable_session_tickets=1`，让该监听器签发数量受限的无状态会话票据。原有连接及服务端接口继续默认关闭会话复用。

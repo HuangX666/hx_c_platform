@@ -608,9 +608,13 @@ static void hx_ipc_peer_retire(hx_ipc_connection *peer)
 	peer->state = endpoint->server ? 0 : 5;
 	if (!endpoint->server && !endpoint->closing &&
 		endpoint->attempts < endpoint->options.reconnect_attempts) {
+		uint64_t delay = endpoint->options.reconnect_delay_ms;
+
 		++endpoint->attempts;
-		endpoint->retry_at = hx_os_deadline_after_ms(
-			endpoint->options.reconnect_delay_ms);
+		if (endpoint->use_backoff)
+			(void)hx_os_backoff_next(
+				&endpoint->backoff, &delay, NULL);
+		endpoint->retry_at = hx_os_deadline_after_ms(delay);
 	}
 	else
 		endpoint->retry_at = 0;

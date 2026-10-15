@@ -34,7 +34,7 @@ No files, arguments or manually started thread are needed. Success prints `Answe
 | `receive(NOW)` | Take the integer already in the channel, then print it |
 | `shutdownUntil(...)` | Close the runtime and wait for its own threads to exit |
 
-The short snippets explain individual steps. For your first copy, use the complete go.cpp as `main.cpp` and link it with the [minimal C++ project](USAGE.md#cpp-project). Section 8 lists three other complete examples.
+The short snippets explain individual steps. For your first copy, use the complete go.cpp as `main.cpp` and link it with the [minimal C++ project](USAGE.md#cpp-project). Section 8 lists additional complete examples.
 
 ## 1. Choose a calling style
 
@@ -209,6 +209,24 @@ flowchart LR
 
 The dispatcher owns all native socket/pipe calls. Its stream wrappers can cross runtime workers, with one read and one write per socket; conflicting operations return `BUSY`. A pipe endpoint accepts one operation. Cancellation requests native retirement and does not release a borrowed buffer early. Completion becomes visible after the native callback returns. Stream release does not wait for I/O retirement; the dispatcher closes the native resource. Successful runtime close retires every native stream, while retained wrappers remain releasable. No native handle escapes this ownership boundary.
 
+### 6.1 Receive UDP without blocking a worker
+
+Use `hx_os_coro_udp_bind` to bind a UDP address and obtain the same retained `hx_os_coro_stream` handle. Port zero asks the system for an available port; `bound` returns the actual address. Send one datagram with `hx_os_coro_send_to`, and receive one with `hx_os_coro_receive_from`. Both go through the runtime's existing I/O dispatcher and native loop; they suspend the task, without a polling loop or a new thread per request. In C++11 stackful tasks, the corresponding methods are `Stream::bindUdp`, `sendTo` and `receiveFrom`. Call them inside a coroutine, not directly on the application's main thread.
+
+Try [coroutine_udp.c](../examples/coroutine_udp.c), a complete C99 state-machine program. It binds an ephemeral loopback UDP port, sends a JSON status message to that port, receives the message and releases its handle. All values needed after suspension live in the task's state; the cleanup callback also handles cancellation.
+
+```sh
+cmake --build build --config Release --target hx_os_coroutine_udp
+```
+
+Run `./build/bin/hx_os_coroutine_udp` on Linux/WSL, or `.\build\bin\Release\hx_os_coroutine_udp.exe` with Visual Studio. Reuse your existing build directory; the target needs examples, NETWORK, LOOP, COROUTINES and COROUTINE_IO enabled. No server or arguments are needed. The expected output is:
+
+```text
+UDP JSON: {"type":"status","device_id":7}
+```
+
+Each receive consumes one datagram. An empty datagram succeeds with zero bytes; it is not EOF. A small receive buffer returns `LIMIT`, the copied byte count and sender address, and discards the remainder. Do not parse that prefix as a complete JSON message. Timeout/cancellation keeps borrowed buffers until native I/O retires; stackless `WOULD_BLOCK` still requires persistent buffers and another `AWAIT` call. Successful send is local acceptance, not a delivery acknowledgment. These UDP entries do not add reliability or packet-info/multicast controls; ordinary UDP loss, duplicate and reordering rules still apply. The existing coroutine handle/request/byte budgets are shared.
+
 ## 7. Bounds, cancellation and lifetime
 
 | Setting or operation | Contract |
@@ -241,6 +259,7 @@ Choose one target; building all four is unnecessary. None needs arguments or inp
 | `hx_os_go` | [go.cpp](../examples/go.cpp) | C++11 channel returns `Answer: 42` |
 | `hx_os_cpp_coroutine` | [coroutine.cpp](../examples/coroutine.cpp) | C++11 Task returns `Answer: 42` |
 | `hx_os_coroutine` | [coroutine.c](../examples/coroutine.c) | C99 prints `Count: 1`, `Count: 2`, `Count: 3` in order |
+| `hx_os_coroutine_udp` | [coroutine_udp.c](../examples/coroutine_udp.c) | C99 sends and receives a JSON UDP datagram |
 | `hx_os_cpp_coroutine20` | [coroutine20.cpp](../examples/coroutine20.cpp) | C++20 returns `Answer: 42` after co_await |
 
 For example, run `cmake --build build --config Release --target hx_os_coroutine`, then `.\build\bin\Release\hx_os_coroutine.exe` on Windows or `./build/bin/hx_os_coroutine` on Linux. Stay in the library checkout root.
@@ -290,3 +309,31 @@ C++20 adds `async::acquire(mutex)`, `async::wait(event/semaphore)`, `async::read
 `Group group(runtime, capacity)` collects a bounded batch of void/`Result<void>` tasks. `group.spawn(...)` retains task handles; `group.waitUntil(deadline)` waits and consumes completed entries, keeps unfinished entries on timeout, and reports the first stored submission/execution failure. Task failure does not skip waiting for the rest. `group.cancel()` requests cooperative cancellation. The group is used by one serialized caller; it is not concurrent Go `WaitGroup.Add`. Destruction only releases handles, with no hidden wait or cancellation, so referenced application data still needs its execution lifetime. Its error remains sticky for that group; construct a new group for a new error scope.
 
 Use `runtime.submit(function, args...)` for typed results. `Task<T>::getUntil` consumes the handle only after task completion. A timeout keeps it usable; releasing a task handle never kills the task. The complete typed examples remain [C++11](../examples/coroutine.cpp) and [C++20](../examples/coroutine20.cpp). Ordinary managed tasks, optional groups and typed handles all share the same task/stack budgets and scheduler.
+
+## 11. Suspend while TLS or HTTP is waiting
+
+For an existing TLS owner, replace synchronous readiness/send/receive/flush with `hx_os_coro_tls_wait_ready`, `hx_os_coro_tls_send_until`, `hx_os_coro_tls_receive_until` or `hx_os_coro_tls_flush_until`. They register with that owner's existing worker, without adding a polling thread. C++11 stackful tasks may use the borrowed `hx::coro::Tls` facade in `<hx/CoroutineNetwork.hpp>`. Raw TLS still needs your framing and explicit endpoint close.
+
+HTTP uses an explicitly created `hx_os_coro_http` service with a separate bounded I/O pool. Defaults are two threads, sixteen accepted requests and 64 MiB reserved for copied inputs and maximum response data. Container growth peaks and native curl/TLS allocations are additional; this is an admission budget, not a process RSS limit. Inputs are copied; the response changes only on success.
+
+```mermaid
+flowchart LR
+    C[Coroutine request] -->|Copy inputs| Q[Bounded I/O queue]
+    Q --> W[Fixed I/O workers]
+    W --> H[libcurl HTTP or HTTPS]
+    H -->|Completion| S[Resume coroutine]
+    T[Deadline or cancellation] --> S
+    C -. Suspend .-> O[Coroutine worker runs other tasks]
+```
+
+Run the complete C99 state-machine example [coroutine_http.c](../examples/coroutine_http.c):
+
+```sh
+cmake --build build --config Release --target hx_os_coroutine_http
+# Start the local HTTP server described in HTTP_FILES.md first.
+build/bin/hx_os_coroutine_http http://127.0.0.1:8080/hello.txt
+```
+
+On Visual Studio use `build/bin/Release/hx_os_coroutine_http.exe`. With `hello.txt` containing `hello`, output is `HTTP 200` followed by `hello`. The program shows creation, `HX_OS_CORO_AWAIT`, response cleanup and closing the I/O service before the runtime. Inside a stackful task the operation is one `hx_os_coro_http_get(service, url, NULL, &response, &error)` call. C++ uses `hx::coro::Http(service).get(url, response)`.
+
+Stackless tasks keep arguments, buffers and deadlines in persistent state and repeat the pending operation after `WOULD_BLOCK`. TLS sends preserve cumulative partial bytes. Coroutine cancellation wakes a suspended call; unfinished HTTP background work retains its own copied data. Close HTTP from a native owner thread using `close_until`; timeout retains the service for retry, including a worker blocked in system DNS. Do not destroy the runtime first or assume HTTP cancellation undoes a server operation. See [HTTP transfers](HTTP_FILES.md) for ordinary streaming files and [TLS](TLS.md) for trust and profiles.

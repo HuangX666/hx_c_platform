@@ -35,3 +35,9 @@ New configurations build the library only. Enable `HX_OS_BUILD_EXAMPLES=ON` to c
 See [dependency preparation](DEPENDENCIES.md), [build options and installation](REFERENCE.md#section-27), and [native SDK access](NATIVE_DEPENDENCIES.md). Shared-library deployments include their selected runtime dependencies. Static core linkage does not automatically make every dependency static.
 
 Start with a small example for the facility used by your application, then check its actual permissions, paths, input sizes and close behavior on the deployment target. Detailed regression logs and historical audit records are maintained locally and are excluded from the repository and installed SDK. Remote CI is disabled.
+
+## 4. Additional network boundaries
+
+The new UDP packet metadata, vector I/O, bounded TCP dialer, c-ares resolver, TLS profiles, HTTP streaming and coroutine bridges target Windows, Linux and Android. Linux ARMv7/AArch64 use the shared POSIX path; cross-compilation and QEMU/emulator execution do not establish hardware acceptance. BSD, iOS, QNX, RTOS, Harmony and WASM are not new validated targets in this work.
+
+Interface changes use native notifications and can be rejected by Android sandbox/SELinux permissions. Requery the snapshot after a notification; it is not a guaranteed event history. TCP user timeout is Linux/Android-specific, UDP ICMP reset control is Windows-specific. Named IPv6 zones require NET_OPTIONS. IDNA depends on the selected curl backend; unsupported conversions report `NOT_SUPPORTED`. c-ares is optional and is not a replacement for every system/VPN DNS policy. No adapter changes firewall rules, WSL mode or global networking settings.

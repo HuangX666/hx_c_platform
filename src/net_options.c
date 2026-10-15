@@ -1,4 +1,5 @@
 #include "net_private.h"
+#include "hx_os_net_extra.h"
 #if defined(_WIN32)
 #include <mstcpip.h>
 #ifndef TCP_KEEPCNT
@@ -28,8 +29,8 @@ static hx_os_status hx_os_i_option_error(hx_os_error *error, int code)
 	return hx_os_i_socket_error(error, code);
 }
 
-static hx_os_status hx_os_i_option_socket(hx_os_socket *socket,
-	int protocol, int family, hx_os_error *error)
+static hx_os_status hx_os_i_option_socket(
+	hx_os_socket *socket, int protocol, int family, hx_os_error *error)
 {
 	if (!socket || (protocol && socket->protocol != protocol) ||
 		(family && socket->family != family) ||
@@ -151,8 +152,8 @@ hx_os_status hx_os_socket_configure_keepalive(hx_os_socket *socket,
 #endif
 	if (probe_count) {
 #if defined(TCP_KEEPCNT)
-		status = hx_os_i_option_int(socket, IPPROTO_TCP,
-			TCP_KEEPCNT, (int)probe_count, error);
+		status = hx_os_i_option_int(socket, IPPROTO_TCP, TCP_KEEPCNT,
+			(int)probe_count, error);
 		if (status != HX_OS_OK)
 			return status;
 #else
@@ -176,11 +177,11 @@ hx_os_status hx_os_socket_configure_keepalive(hx_os_socket *socket,
 	}
 #else
 #if defined(__APPLE__)
-	status = hx_os_i_option_int(socket, IPPROTO_TCP, TCP_KEEPALIVE,
-		(int)idle_seconds, error);
+	status = hx_os_i_option_int(
+		socket, IPPROTO_TCP, TCP_KEEPALIVE, (int)idle_seconds, error);
 #else
-	status = hx_os_i_option_int(socket, IPPROTO_TCP, TCP_KEEPIDLE,
-		(int)idle_seconds, error);
+	status = hx_os_i_option_int(
+		socket, IPPROTO_TCP, TCP_KEEPIDLE, (int)idle_seconds, error);
 #endif
 	if (status != HX_OS_OK)
 		return status;
@@ -249,6 +250,154 @@ hx_os_status hx_os_socket_set_broadcast(
 #endif
 }
 
+hx_os_status hx_os_socket_set_buffers(hx_os_socket *socket, uint32_t send_bytes,
+	uint32_t receive_bytes, hx_os_error *error)
+{
+#if HX_OS_ENABLE_NETWORK && HX_OS_ENABLE_NET_OPTIONS
+	hx_os_status status = hx_os_i_option_socket(socket, 0, 0, error);
+
+	if (status != HX_OS_OK)
+		return status;
+	if (send_bytes > INT_MAX || receive_bytes > INT_MAX)
+		return hx_os_i_error(error, HX_OS_RANGE, 0, 0);
+	if (send_bytes)
+		status = hx_os_i_option_int(
+			socket, SOL_SOCKET, SO_SNDBUF, (int)send_bytes, error);
+	if (status == HX_OS_OK && receive_bytes)
+		status = hx_os_i_option_int(socket, SOL_SOCKET, SO_RCVBUF,
+			(int)receive_bytes, error);
+
+	return status == HX_OS_OK ? hx_os_i_error(error, HX_OS_OK, 0, 0)
+				  : status;
+#else
+	(void)socket;
+	(void)send_bytes;
+	(void)receive_bytes;
+
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
+}
+
+hx_os_status hx_os_socket_get_buffers(hx_os_socket *socket,
+	uint32_t *send_bytes, uint32_t *receive_bytes, hx_os_error *error)
+{
+	int send_value = 0, receive_value = 0;
+	size_t bytes = sizeof(send_value);
+	hx_os_status status;
+
+	if (!send_bytes || !receive_bytes)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+
+	status = hx_os_socket_option_get(
+		socket, SOL_SOCKET, SO_SNDBUF, &send_value, &bytes, error);
+	if (status != HX_OS_OK)
+		return status;
+	if (bytes != sizeof(send_value) || send_value < 0)
+		return hx_os_i_error(error, HX_OS_IO_ERROR, 0, 0);
+
+	bytes = sizeof(receive_value);
+	status = hx_os_socket_option_get(
+		socket, SOL_SOCKET, SO_RCVBUF, &receive_value, &bytes, error);
+	if (status != HX_OS_OK)
+		return status;
+	if (bytes != sizeof(receive_value) || receive_value < 0)
+		return hx_os_i_error(error, HX_OS_IO_ERROR, 0, 0);
+
+	*send_bytes = (uint32_t)send_value;
+	*receive_bytes = (uint32_t)receive_value;
+
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+}
+
+static hx_os_status hx_os_i_multicast_source(hx_os_socket *socket,
+	const hx_os_address *group, const hx_os_address *source,
+	uint32_t interface_index, int join, hx_os_error *error)
+{
+#if HX_OS_ENABLE_NETWORK && HX_OS_ENABLE_NET_OPTIONS &&                        \
+	defined(MCAST_JOIN_SOURCE_GROUP) && defined(MCAST_LEAVE_SOURCE_GROUP)
+	struct group_source_req request;
+	hx_os_address destination, sender;
+	hx_os_i_socklen length;
+	hx_os_status status =
+		hx_os_i_option_socket(socket, HX_OS_UDP, 0, error);
+	size_t i;
+	unsigned nonzero = 0;
+
+	if (status != HX_OS_OK)
+		return status;
+	if (!group || !source || group->family != socket->family ||
+		source->family != socket->family ||
+		(group->family == HX_OS_IPV4 &&
+			(group->bytes[0] & 0xf0) != 0xe0) ||
+		(group->family == HX_OS_IPV6 && group->bytes[0] != 0xff) ||
+		(source->family == HX_OS_IPV4 && source->bytes[0] >= 224) ||
+		(source->family == HX_OS_IPV6 && source->bytes[0] == 0xff))
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+
+	for (i = 0; i < (source->family == HX_OS_IPV4 ? 4u : 16u); ++i)
+		nonzero |= source->bytes[i];
+	if (!nonzero)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+
+	destination = *group;
+	sender = *source;
+	destination.port = sender.port = 0;
+	if (group->family == HX_OS_IPV6) {
+		if (!interface_index)
+			interface_index = group->scope_id ? group->scope_id
+							  : source->scope_id;
+		if ((group->scope_id && group->scope_id != interface_index) ||
+			(source->scope_id &&
+				source->scope_id != interface_index))
+			return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+		destination.scope_id = interface_index;
+		if (source->bytes[0] == 0xfe &&
+			(source->bytes[1] & 0xc0) == 0x80)
+			sender.scope_id = interface_index;
+	}
+
+	memset(&request, 0, sizeof(request));
+	request.gsr_interface = interface_index;
+	(void)hx_os_i_address_native(&destination, &request.gsr_group, &length);
+#if defined(__APPLE__)
+	((struct sockaddr *)&request.gsr_group)->sa_len = (uint8_t)length;
+#endif
+	(void)hx_os_i_address_native(&sender, &request.gsr_source, &length);
+#if defined(__APPLE__)
+	((struct sockaddr *)&request.gsr_source)->sa_len = (uint8_t)length;
+#endif
+
+	return hx_os_socket_option_set(socket,
+		group->family == HX_OS_IPV4 ? IPPROTO_IP : IPPROTO_IPV6,
+		join ? MCAST_JOIN_SOURCE_GROUP : MCAST_LEAVE_SOURCE_GROUP,
+		&request, sizeof(request), error);
+#else
+	(void)socket;
+	(void)group;
+	(void)source;
+	(void)interface_index;
+	(void)join;
+
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
+}
+
+hx_os_status hx_os_socket_join_multicast_source(hx_os_socket *socket,
+	const hx_os_address *group, const hx_os_address *source,
+	uint32_t interface_index, hx_os_error *error)
+{
+	return hx_os_i_multicast_source(
+		socket, group, source, interface_index, 1, error);
+}
+
+hx_os_status hx_os_socket_leave_multicast_source(hx_os_socket *socket,
+	const hx_os_address *group, const hx_os_address *source,
+	uint32_t interface_index, hx_os_error *error)
+{
+	return hx_os_i_multicast_source(
+		socket, group, source, interface_index, 0, error);
+}
+
 static hx_os_status hx_os_i_multicast_membership(hx_os_socket *socket,
 	const hx_os_address *group, uint32_t interface_index, int join,
 	hx_os_error *error)
@@ -289,8 +438,8 @@ static hx_os_status hx_os_i_multicast_membership(hx_os_socket *socket,
 #endif
 	return hx_os_socket_option_set(socket,
 		group->family == HX_OS_IPV4 ? IPPROTO_IP : IPPROTO_IPV6,
-		join ? MCAST_JOIN_GROUP : MCAST_LEAVE_GROUP,
-		&request, sizeof(request), error);
+		join ? MCAST_JOIN_GROUP : MCAST_LEAVE_GROUP, &request,
+		sizeof(request), error);
 #else
 	(void)socket;
 	(void)group;
@@ -318,8 +467,8 @@ hx_os_status hx_os_socket_leave_multicast(hx_os_socket *socket,
 }
 
 #if HX_OS_ENABLE_NETWORK && HX_OS_ENABLE_NET_OPTIONS && defined(__APPLE__)
-static hx_os_status hx_os_i_multicast_address(uint32_t interface_index,
-	struct in_addr *address, hx_os_error *error)
+static hx_os_status hx_os_i_multicast_address(
+	uint32_t interface_index, struct in_addr *address, hx_os_error *error)
 {
 	struct ifaddrs *interfaces = NULL;
 	struct ifaddrs *item;
@@ -343,8 +492,9 @@ static hx_os_status hx_os_i_multicast_address(uint32_t interface_index,
 	}
 	freeifaddrs(interfaces);
 
-	return found ? HX_OS_OK : hx_os_i_error(
-		error, HX_OS_NOT_FOUND, HX_OS_ERROR_ERRNO, ENODEV);
+	return found ? HX_OS_OK
+		     : hx_os_i_error(error, HX_OS_NOT_FOUND, HX_OS_ERROR_ERRNO,
+			       ENODEV);
 }
 #endif
 
@@ -409,8 +559,8 @@ hx_os_status hx_os_socket_set_multicast_interface(
 #endif
 }
 
-static hx_os_status hx_os_i_multicast_value(hx_os_socket *socket,
-	int ipv4_name, int ipv6_name, uint32_t value, hx_os_error *error)
+static hx_os_status hx_os_i_multicast_value(hx_os_socket *socket, int ipv4_name,
+	int ipv6_name, uint32_t value, hx_os_error *error)
 {
 #if HX_OS_ENABLE_NETWORK && HX_OS_ENABLE_NET_OPTIONS
 	hx_os_status status =
@@ -432,8 +582,8 @@ static hx_os_status hx_os_i_multicast_value(hx_os_socket *socket,
 	{
 		unsigned char byte = (unsigned char)value;
 
-		return hx_os_socket_option_set(socket, IPPROTO_IP,
-			ipv4_name, &byte, sizeof(byte), error);
+		return hx_os_socket_option_set(socket, IPPROTO_IP, ipv4_name,
+			&byte, sizeof(byte), error);
 	}
 #endif
 #else
@@ -449,8 +599,8 @@ static hx_os_status hx_os_i_multicast_value(hx_os_socket *socket,
 hx_os_status hx_os_socket_set_multicast_hops(
 	hx_os_socket *socket, uint32_t hops, hx_os_error *error)
 {
-	return hx_os_i_multicast_value(socket,
-		IP_MULTICAST_TTL, IPV6_MULTICAST_HOPS, hops, error);
+	return hx_os_i_multicast_value(
+		socket, IP_MULTICAST_TTL, IPV6_MULTICAST_HOPS, hops, error);
 }
 
 hx_os_status hx_os_socket_set_multicast_loopback(
@@ -484,6 +634,48 @@ hx_os_status hx_os_socket_peer_address(
 	(void)socket;
 	(void)address;
 
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
+}
+
+hx_os_status hx_os_socket_set_tcp_user_timeout(
+	hx_os_socket *socket, uint32_t milliseconds, hx_os_error *error)
+{
+#if HX_OS_ENABLE_NETWORK && HX_OS_ENABLE_NET_OPTIONS && defined(__linux__) &&  \
+	defined(TCP_USER_TIMEOUT)
+	hx_os_status status =
+		hx_os_i_option_socket(socket, HX_OS_TCP, 0, error);
+
+	if (status != HX_OS_OK)
+		return status;
+	return hx_os_socket_option_set(socket, IPPROTO_TCP, TCP_USER_TIMEOUT,
+		&milliseconds, sizeof(milliseconds), error);
+#else
+	(void)socket;
+	(void)milliseconds;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
+}
+
+hx_os_status hx_os_socket_set_udp_icmp_errors(
+	hx_os_socket *socket, int enabled, hx_os_error *error)
+{
+#if HX_OS_ENABLE_NETWORK && HX_OS_ENABLE_NET_OPTIONS && defined(_WIN32)
+	hx_os_status status =
+		hx_os_i_option_socket(socket, HX_OS_UDP, 0, error);
+	BOOL value = enabled != 0;
+	DWORD completed;
+
+	if (status != HX_OS_OK)
+		return status;
+	return hx_os_i_option_error(error,
+		WSAIoctl(socket->native, SIO_UDP_CONNRESET, &value,
+			sizeof(value), NULL, 0, &completed, NULL, NULL)
+			? WSAGetLastError()
+			: 0);
+#else
+	(void)socket;
+	(void)enabled;
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 #endif
 }

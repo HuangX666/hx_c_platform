@@ -1,6 +1,38 @@
 #include "tls_private.h"
 
 #if !HX_OS_HAVE_TLS
+hx_os_status hx_os_tls_start_connect_ex(hx_os_context *context,
+	const char *host, uint16_t port, const hx_os_tls_options_ex *options,
+	hx_os_tls **out, hx_os_error *error)
+{
+	(void)context;
+	(void)host;
+	(void)port;
+	(void)options;
+	if (out)
+		*out = NULL;
+
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_tls_start_listen_ex(hx_os_context *context, const char *host,
+	uint16_t port, const hx_os_tls_options_ex *options, hx_os_tls **out,
+	hx_os_error *error)
+{
+	return hx_os_tls_start_connect_ex(
+		context, host, port, options, out, error);
+}
+
+hx_os_status hx_os_tls_get_alpn(
+	hx_os_tls *tls, uint64_t peer, hx_string *out, hx_os_error *error)
+{
+	(void)tls;
+	(void)peer;
+	(void)out;
+
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
 hx_os_status hx_os_tls_start_connect(hx_os_context *context, const char *host,
 	uint16_t port, const hx_os_tls_options *options, hx_os_tls **out,
 	hx_os_error *error)

@@ -11,6 +11,7 @@ typedef struct hx_os_coro_local hx_os_coro_local;
 typedef struct hx_os_coro_sync_waiter hx_os_coro_sync_waiter;
 
 enum { HX_OS_CO_READY, HX_OS_CO_RUNNING, HX_OS_CO_WAITING, HX_OS_CO_FINISHED };
+
 enum {
 	HX_OS_CO_WAIT_NONE,
 	HX_OS_CO_WAIT_YIELD,
@@ -18,7 +19,9 @@ enum {
 	HX_OS_CO_WAIT_TASK,
 	HX_OS_CO_WAIT_CHANNEL,
 	HX_OS_CO_WAIT_IO,
-	HX_OS_CO_WAIT_SYNC
+	HX_OS_CO_WAIT_SYNC,
+	HX_OS_CO_WAIT_TLS,
+	HX_OS_CO_WAIT_HTTP
 };
 
 typedef struct hx_os_coro_execution {
@@ -50,6 +53,8 @@ struct hx_os_coro {
 	hx_os_error wait_result;
 	hx_os_coro_waiter *cases;
 	void *io;
+	void *tls_wait;
+	void *http_wait;
 	hx_os_coro_local *locals;
 	hx_os_coro_sync_waiter *sync_wait;
 	hx_os_deadline deadline;
@@ -161,7 +166,11 @@ void hx_os_i_coro_sync_free(hx_os_coro_runtime *runtime, void *memory);
 int hx_os_i_coro_sync_finish(hx_os_coro *coroutine, hx_os_error *result);
 
 void hx_os_i_coro_sync_dispose(hx_os_coro *coroutine);
-enum { HX_OS_CO_DIAL = 100, HX_OS_CO_LISTEN, HX_OS_CO_PIPE };
+void hx_os_i_coro_tls_dispose(hx_os_coro *coroutine);
+void hx_os_i_coro_http_dispose(hx_os_coro *coroutine);
+void hx_os_i_coro_http_cancel(hx_os_coro *coroutine);
+
+enum { HX_OS_CO_DIAL = 100, HX_OS_CO_LISTEN, HX_OS_CO_PIPE, HX_OS_CO_UDP };
 
 hx_os_status hx_os_i_coro_io_call(hx_os_coro_stream *stream, int kind,
 	const hx_os_operation *input, int backlog, int reuse,

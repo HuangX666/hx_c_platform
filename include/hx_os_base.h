@@ -83,7 +83,8 @@ enum {
 	HX_OS_ERROR_LZMA,
 	HX_OS_ERROR_ZSTD,
 	HX_OS_ERROR_CURL,
-	HX_OS_ERROR_CURL_URL
+	HX_OS_ERROR_CURL_URL,
+	HX_OS_ERROR_CARES
 };
 
 typedef struct hx_os_error {

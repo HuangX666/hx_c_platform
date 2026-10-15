@@ -308,6 +308,7 @@ hx_os_status hx_os_tls_cancel_waits(hx_os_tls *tls, hx_os_error *error)
 	if (status != HX_OS_OK)
 		return status;
 	++tls->cancelled;
+	hx_tls_i_notify(tls);
 
 	return hx_tls_leave(tls, NULL, HX_OS_OK, error);
 }
@@ -332,6 +333,33 @@ hx_os_status hx_os_tls_get_peer_info(hx_os_tls *tls, uint64_t id,
 		*out = peer->info;
 
 	return hx_tls_leave(tls, peer, status, error);
+}
+
+hx_os_status hx_os_tls_get_alpn(
+	hx_os_tls *tls, uint64_t id, hx_string *out, hx_os_error *error)
+{
+	hx_os_status status = hx_tls_enter(tls, error);
+	hx_tls_peer *peer;
+	char protocol[256];
+
+	if (status != HX_OS_OK)
+		return status;
+	peer = hx_tls_peer_get(tls, id);
+	if (!out || !peer)
+		status = peer ? HX_OS_INVALID : HX_OS_NOT_FOUND;
+	else if (!peer->ready)
+		status = peer->error.status ? hx_tls_error(error, &peer->error)
+					    : HX_OS_WOULD_BLOCK;
+	else if (!peer->alpn[0])
+		status = HX_OS_NOT_FOUND;
+	else
+		memcpy(protocol, peer->alpn, sizeof(protocol));
+	// Copying into the caller's string may invoke its allocator.
+	status = hx_tls_leave(tls, peer, status, error);
+	if (status == HX_OS_OK)
+		status = hx_string_assign_cstr(out, protocol, error);
+
+	return status;
 }
 
 static hx_os_status hx_tls_peer_close(hx_os_tls *tls, uint64_t id,

@@ -232,3 +232,18 @@ Linux 运行：
 先替换输入和值，再替换得到结果后的处理函数。保留创建、错误检查和释放顺序；有后台工作的对象先停止新任务，再等待退出。超时后仍在使用的数据不能先销毁。输出中的时间、UUID、密文、CPU/GPU 信息会随环境变化，应比较含义而不是照抄固定数值。
 
 这里的输出是用法预期，目标平台能否运行仍取决于[平台边界](../docs/PLATFORMS.zh-CN.md)。详细接口契约放在各专题后半部分，遇到容量、并发、取消或卸载问题时再按需要查阅。
+
+## 新增网络 I/O 示例
+
+在同一个已配置目录构建需要的目标；Visual Studio 可执行文件位于 `bin/Release`，单配置构建位于 `bin`。
+
+| 用途 | 源码／目标 | 参数与预期结果 |
+| --- | --- | --- |
+| 接收 UDP 目标地址和网卡信息 | [udp_packet.c](udp_packet.c) / `hx_os_udp_packet` | 无参数；打印本机 JSON 报文、地址和网卡编号 |
+| 使用可取消 DNS 查询主机 | [dns_lookup.c](dns_lookup.c) / `hx_os_dns_lookup` | `HOST [DNS_IP:PORT]`；打印数字地址 |
+| 可信局域网 KCP 请求／应答 | [kcp_session.c](kcp_session.c) / `hx_os_kcp_session` | 先运行 `server IP:PORT`，再运行 `client IP:PORT`；打印 JSON 请求和回复 |
+| HTTP 流式传输文件 | [http_file.c](http_file.c) / `hx_os_http_file` | `download URL FILE [CA]` 或 `upload URL FILE [CA]`；打印 HTTP 状态 |
+| C99 协程等待 UDP | [coroutine_udp.c](coroutine_udp.c) / `hx_os_coroutine_udp` | 无参数；打印发给自己的 JSON 报文 |
+| C99 协程等待 HTTP | [coroutine_http.c](coroutine_http.c) / `hx_os_coroutine_http` | `URL`；打印 HTTP 状态和响应正文 |
+
+完整命令和资源持有规则见[网络 I/O](../docs/NETWORK_IO.zh-CN.md)、[HTTP 文件传输](../docs/HTTP_FILES.zh-CN.md)及[协程等待](../docs/COROUTINES.zh-CN.md)。DNS 需要可达的已配置服务器，HTTP 需要你的服务 URL。示例不会修改防火墙或部署外部服务。

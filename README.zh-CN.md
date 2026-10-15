@@ -299,6 +299,8 @@ C++ 自动按参数类型选择格式化方式。自定义结构体和更多占�
 | TCP 的订单发送与回执 | [TCP 独立示例](docs/TCP_BUSINESS.zh-CN.md) |
 | UDP 的采样发送与反馈 | [UDP 独立示例](docs/UDP_BUSINESS.zh-CN.md) |
 | Keepalive、IPv6 双栈、广播、组播与网卡查询 | [网络选项与设备发现](docs/NETWORK_OPTIONS.zh-CN.md) |
+| UDP 元数据、批量收发、分散缓冲区与可信局域网 KCP | [网络 I/O 实用入口](docs/NETWORK_IO.zh-CN.md) |
+| HTTP 流式文件传输及协程请求 | [HTTP 传输](docs/HTTP_FILES.zh-CN.md) |
 | KCP 的可靠数据块传输 | [KCP 独立示例](docs/KCP_BUSINESS.zh-CN.md) |
 | 进程通信、双向消息、多线程、其他语言对端 | [IPC 教程与协议](docs/IPC.zh-CN.md) |
 | 压缩文件／目录、密码 ZIP、可选加密 7z | [压缩教程与完整程序](docs/ARCHIVE.zh-CN.md) |

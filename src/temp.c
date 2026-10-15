@@ -23,6 +23,7 @@ static hx_os_status hx_os_temp_create(hx_os_context *context,
 	hx_os_status status;
 	unsigned attempt;
 	size_t bytes, offset;
+	const char *separator;
 
 	if (!out)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
@@ -44,6 +45,17 @@ static hx_os_status hx_os_temp_create(hx_os_context *context,
 		hx_string_destroy(&root);
 		return status;
 	}
+	bytes = root.size;
+#if defined(_WIN32)
+	// Extended Windows paths require backslashes and no doubled separator.
+	separator = bytes &&
+			(root.data[bytes - 1] == '/' ||
+				root.data[bytes - 1] == '\\')
+		? ""
+		: "\\";
+#else
+	separator = bytes && root.data[bytes - 1] == '/' ? "" : "/";
+#endif
 	temp = hx_os_i_zero(context, sizeof(*temp));
 	if (!temp) {
 		hx_string_destroy(&root);
@@ -59,9 +71,9 @@ static hx_os_status hx_os_temp_create(hx_os_context *context,
 		if (status == HX_OS_OK)
 			status = hx_os_uuid_format(uuid, suffix);
 		if (status == HX_OS_OK)
-			status =
-				hx_string_format(&temp->path, error, "%s/%s-%s",
-					hx_string_c_str(&root), prefix, suffix);
+			status = hx_string_format(&temp->path, error,
+				"%s%s%s-%s", hx_string_c_str(&root), separator,
+				prefix, suffix);
 		if (status != HX_OS_OK)
 			break;
 		status = directory

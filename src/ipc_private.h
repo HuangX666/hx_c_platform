@@ -8,7 +8,9 @@
 #include "hx_os_loop_fd.h"
 
 enum { HX_IPC_I_HEADER = 64, HX_IPC_I_PACKET = 65536 };
+
 enum { HX_IPC_I_TCP, HX_IPC_I_UDP, HX_IPC_I_KCP, HX_IPC_I_LOCAL };
+
 enum {
 	HX_IPC_I_HELLO = 1,
 	HX_IPC_I_WELCOME,
@@ -131,6 +133,7 @@ struct hx_ipc {
 	hx_ipc_options options;
 	hx_ipc_statistics statistics;
 	hx_os_error error;
+	hx_os_backoff backoff;
 
 	uint64_t serial;
 	uint64_t retry_at;
@@ -152,6 +155,8 @@ struct hx_ipc {
 	int finished;
 	int close_running;
 	int overflow;
+	int use_backoff;
+	int remote_kcp;
 #if !defined(_WIN32)
 	uint64_t path_device;
 	uint64_t path_inode;
@@ -161,6 +166,10 @@ struct hx_ipc {
 
 hx_os_status hx_ipc_i_native_prepare(
 	hx_ipc *endpoint, const char *address, hx_os_error *error);
+
+hx_os_status hx_ipc_i_open_kcp(hx_os_context *context, const char *address,
+	const hx_ipc_options *options, int server, hx_os_deadline deadline,
+	hx_ipc **out, hx_os_error *error);
 
 hx_os_status hx_ipc_i_native_connect(
 	hx_ipc_connection *peer, hx_os_error *error);

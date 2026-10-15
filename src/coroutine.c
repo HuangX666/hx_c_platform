@@ -613,6 +613,8 @@ void hx_os_i_coro_cancel_wait(hx_os_coro *coroutine, hx_os_status status)
 		return;
 
 	(void)hx_os_i_error(&error, status, 0, 0);
+	if (coroutine->wait_kind == HX_OS_CO_WAIT_HTTP)
+		hx_os_i_coro_http_cancel(coroutine);
 	if (coroutine->wait_kind == HX_OS_CO_WAIT_IO) {
 		hx_os_coro_timer_remove(coroutine);
 		coroutine->wait_result = error;
@@ -711,6 +713,10 @@ void hx_os_i_coro_clear_wait(hx_os_coro *coroutine)
 		hx_os_i_coro_io_dispose_wait(coroutine);
 	else if (kind == HX_OS_CO_WAIT_SYNC)
 		hx_os_i_coro_sync_dispose(coroutine);
+	else if (kind == HX_OS_CO_WAIT_TLS)
+		hx_os_i_coro_tls_dispose(coroutine);
+	else if (kind == HX_OS_CO_WAIT_HTTP)
+		hx_os_i_coro_http_dispose(coroutine);
 
 	hx_os_coro_release(target);
 }

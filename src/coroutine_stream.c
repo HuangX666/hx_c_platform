@@ -66,6 +66,7 @@ hx_os_status hx_os_coro_accept(hx_os_coro_stream *listener,
 
 static hx_os_status hx_os_coro_transfer(hx_os_coro_stream *stream, int kind,
 	void *data, size_t bytes, hx_os_deadline deadline, size_t *completed,
+	const hx_os_address *destination, hx_os_address *peer,
 	hx_os_error *error)
 {
 	hx_os_operation operation;
@@ -75,6 +76,9 @@ static hx_os_status hx_os_coro_transfer(hx_os_coro_stream *stream, int kind,
 	if (completed)
 		*completed = 0;
 
+	if (peer)
+		memset(peer, 0, sizeof(*peer));
+
 	if (!stream || (!data && bytes) || !completed)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 
@@ -83,10 +87,14 @@ static hx_os_status hx_os_coro_transfer(hx_os_coro_stream *stream, int kind,
 	operation.data = data;
 	operation.bytes = bytes;
 	operation.deadline = deadline;
+	if (destination)
+		operation.address = *destination;
 
 	status = hx_os_i_coro_io_call(stream, kind, &operation, 0, 0, NULL,
 		NULL, NULL, &completion, error);
 	*completed = completion.bytes;
+	if (peer && (status == HX_OS_OK || status == HX_OS_LIMIT))
+		*peer = completion.peer;
 
 	return status;
 }
@@ -95,8 +103,8 @@ hx_os_status hx_os_coro_read(hx_os_coro_stream *stream, void *data,
 	size_t bytes, hx_os_deadline deadline, size_t *completed,
 	hx_os_error *error)
 {
-	return hx_os_coro_transfer(
-		stream, HX_OS_OP_READ, data, bytes, deadline, completed, error);
+	return hx_os_coro_transfer(stream, HX_OS_OP_READ, data, bytes, deadline,
+		completed, NULL, NULL, error);
 }
 
 hx_os_status hx_os_coro_write(hx_os_coro_stream *stream, const void *data,
@@ -104,7 +112,55 @@ hx_os_status hx_os_coro_write(hx_os_coro_stream *stream, const void *data,
 	hx_os_error *error)
 {
 	return hx_os_coro_transfer(stream, HX_OS_OP_WRITE, (void *)data, bytes,
-		deadline, completed, error);
+		deadline, completed, NULL, NULL, error);
+}
+
+hx_os_status hx_os_coro_udp_bind(const hx_os_address *address,
+	int reuse_address, hx_os_coro_stream **out, hx_os_address *bound,
+	hx_os_error *error)
+{
+	hx_os_operation operation;
+	hx_os_completion completion;
+	hx_os_status status;
+
+	if (out)
+		*out = NULL;
+
+	if (!out || !address)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+
+	hx_os_operation_init(&operation, HX_OS_OP_POST);
+	operation.address = *address;
+
+	status = hx_os_i_coro_io_call(NULL, HX_OS_CO_UDP, &operation, 0,
+		reuse_address, out, NULL, NULL, &completion, error);
+	if (status == HX_OS_OK && bound)
+		*bound = completion.peer;
+
+	return status;
+}
+
+hx_os_status hx_os_coro_send_to(hx_os_coro_stream *socket,
+	const hx_os_address *peer, const void *data, size_t bytes,
+	hx_os_deadline deadline, size_t *completed, hx_os_error *error)
+{
+	if (!peer) {
+		if (completed)
+			*completed = 0;
+
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	}
+
+	return hx_os_coro_transfer(socket, HX_OS_OP_SEND_TO, (void *)data,
+		bytes, deadline, completed, peer, NULL, error);
+}
+
+hx_os_status hx_os_coro_receive_from(hx_os_coro_stream *socket,
+	hx_os_address *peer, void *data, size_t capacity,
+	hx_os_deadline deadline, size_t *completed, hx_os_error *error)
+{
+	return hx_os_coro_transfer(socket, HX_OS_OP_RECEIVE_FROM, data,
+		capacity, deadline, completed, NULL, peer, error);
 }
 
 hx_os_status hx_os_coro_resolve(const char *host, uint16_t port,

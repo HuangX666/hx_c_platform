@@ -7,6 +7,8 @@
 #if HX_OS_HAVE_TLS
 #include "crypto_private.h"
 #include "loop_private.h"
+#include "dial_private.h"
+#include "resolver_private.h"
 #include <openssl/ssl.h>
 
 #define HX_TLS_RECORD 16384
@@ -25,6 +27,7 @@ typedef struct hx_tls_peer {
 	hx_os_tls *owner;
 	hx_os_socket *socket;
 	SSL *ssl;
+	SSL_SESSION *pending_session;
 	BIO *bio;
 	hx_os_request *reading, *writing, *connecting;
 	unsigned char *buffers;
@@ -32,6 +35,7 @@ typedef struct hx_tls_peer {
 	hx_tls_marker markers[HX_TLS_MARKERS];
 	hx_os_tls_peer_info info;
 	hx_os_error error;
+	char alpn[256];
 	hx_os_deadline handshake;
 	uint64_t accepted, encoded, flushed, produced, sent;
 	size_t wire_bytes, wire_offset, tx_bytes;
@@ -52,21 +56,52 @@ struct hx_os_tls {
 	hx_os_socket *listener;
 	hx_os_request *accepting;
 	hx_os_crypto *crypto;
+	hx_os_tls_profile *profile;
+	void *coroutine_waiters;
+	uint64_t change_sequence;
 	SSL_CTX *ssl_context;
 	hx_tls_peer *peers;
 	char *host;
 	hx_os_tls_options options;
+	hx_os_tcp_options tcp_options;
+	hx_os_resolver_options resolver_options;
+	char *resolver_servers;
+	char *crl_file;
+	unsigned char alpn[4096], certificate_sha256[32];
+	size_t alpn_bytes;
+	uint32_t attempt_delay_ms, crl_mode;
 	hx_os_address local;
 	hx_os_error error;
 	uint64_t next_id, cancelled;
 	size_t users, address_index;
 	uint16_t port;
 	int server, ready, closing, close_caller;
+	int extended, pinned, require_alpn, resolve_async;
+	int session_tickets;
 };
+
+struct hx_os_tls_profile {
+	hx_os_atomic references;
+	hx_os_mutex *mutex;
+	hx_os_tls *configuration;
+	SSL_SESSION *session;
+};
+
+hx_os_status hx_tls_i_configuration(hx_os_context *context, const char *host,
+	uint16_t port, const hx_os_tls_options_ex *options, hx_os_tls **out,
+	hx_os_error *error);
+hx_os_status hx_tls_i_profile_start(
+	hx_os_tls_profile *profile, hx_os_tls **out, hx_os_error *error);
+int hx_tls_i_profile_new_session(SSL *ssl, SSL_SESSION *session);
+void hx_tls_i_profile_capture(hx_tls_peer *peer);
+hx_os_status hx_tls_i_profile_ssl(hx_tls_peer *peer, hx_os_error *error);
+int hx_tls_i_profile_verify(hx_tls_peer *peer);
 
 void hx_tls_i_lock(hx_os_tls *tls);
 void hx_tls_i_unlock(hx_os_tls *tls);
 void hx_tls_i_wake(hx_os_tls *tls);
+void hx_tls_i_notify(hx_os_tls *tls);
+void hx_tls_i_coro_notify(hx_os_tls *tls);
 int hx_tls_i_reentrant(hx_os_tls *tls);
 void hx_tls_i_guard(hx_os_tls *tls);
 void hx_tls_i_dispose(hx_os_tls *tls);

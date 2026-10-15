@@ -315,3 +315,9 @@ python3 examples/run_ipc_business.py --bin-dir build/bin
 ```
 
 Run from the library checkout root; change both configuration and executable path for Debug. The runner starts two processes and checks commands and notifications for two devices. Success prints `PASS ipc_business_local`. Python only launches and checks the demo; the C library does not require it. See the [IPC business guide](IPC_BUSINESS.md) for the workflow, manual two-terminal commands and files to copy, and [platform support](PLATFORMS.md) for target limitations.
+
+## 10. Spread out reconnect attempts
+
+When many local clients restart together, use `hx_ipc_connect_backoff_until` instead of the fixed-delay factory. Its arguments match `connect_until` with an additional optional backoff configuration. NULL selects 100 ms initial delay, a 30-second cap, eight retries and 20% jitter with a per-endpoint seed. The budget resets after a successful handshake. Existing factories keep their fixed-delay behavior.
+
+This changes connection retries only: it never resends business requests automatically. Keep the non-NULL owner after a timeout, wait again or close with the usual deadline. Between trusted machines, use the separate [KCP session example](NETWORK_IO.md); IPC factories remain local-only.

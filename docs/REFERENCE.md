@@ -1852,6 +1852,7 @@ All new native/common modules default to ON; optional third-party encoding and p
 | `HX_OS_BUILD_EXAMPLES` | OFF | Build standalone C examples |
 | `HX_OS_BUILD_BENCHMARKS` | OFF | Build development microbenchmarks |
 | `HX_OS_ENABLE_NETWORK` | ON | Build native networking |
+| `HX_OS_ENABLE_CARES` | ON | Explicit cancellable DNS backend; requires NETWORK |
 | `HX_OS_ENABLE_LOOP` | ON | Build asynchronous event loop |
 | `HX_OS_ENABLE_THREAD_POOL` | ON | Build bounded task pools |
 | `HX_OS_ENABLE_DELAYED_TASKS` | ON | Build bounded delayed pool tasks |
@@ -1911,7 +1912,7 @@ All new native/common modules default to ON; optional third-party encoding and p
 | `HX_OS_ICONV_SOURCE_DIR` | empty | Unmodified iconv source path |
 | `HX_OS_<PARSER>_SOURCE_DIR` | empty | Selected parser source path |
 
-Disabled modules preserve public declarations and ABI entry points; creation or active operations report NOT_SUPPORTED and capability bits are cleared. Dependency combinations are checked explicitly. A local loop remains useful without NETWORK; asynchronous DNS needs NETWORK, LOOP and THREAD_POOL. Capture also needs PIPE and LOOP; catalog file loading needs TEXT_LOOKUP, LEXER and FILE_UTILS. Header presence alone is not runtime capability proof.
+Disabled modules preserve public declarations and ABI entry points; creation or active operations report NOT_SUPPORTED and capability bits are cleared. Dependency combinations are checked explicitly. A local loop remains useful without NETWORK; the original asynchronous system DNS needs NETWORK, LOOP and THREAD_POOL. Explicit c-ares resolution needs NETWORK and CARES, without a loop or worker; coroutine HTTP needs HTTP, COROUTINES and THREAD_POOL. See [network I/O](NETWORK_IO.md) and [HTTP transfers](HTTP_FILES.md). Capture also needs PIPE and LOOP; catalog file loading needs TEXT_LOOKUP, LEXER and FILE_UTILS. Header presence alone is not runtime capability proof.
 
 ### 27.2 Optional configuration backends
 

@@ -359,6 +359,51 @@ hx_os_status hx_os_coro_resolve(const char *host, uint16_t port,
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
+hx_os_status hx_os_coro_udp_bind(const hx_os_address *address,
+	int reuse_address, hx_os_coro_stream **out, hx_os_address *bound,
+	hx_os_error *error)
+{
+	(void)address;
+	(void)reuse_address;
+	(void)bound;
+	if (out)
+		*out = NULL;
+
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_coro_send_to(hx_os_coro_stream *socket,
+	const hx_os_address *peer, const void *data, size_t bytes,
+	hx_os_deadline deadline, size_t *completed, hx_os_error *error)
+{
+	(void)socket;
+	(void)peer;
+	(void)data;
+	(void)bytes;
+	(void)deadline;
+	if (completed)
+		*completed = 0;
+
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
+hx_os_status hx_os_coro_receive_from(hx_os_coro_stream *socket,
+	hx_os_address *peer, void *data, size_t capacity,
+	hx_os_deadline deadline, size_t *completed, hx_os_error *error)
+{
+	(void)socket;
+	(void)data;
+	(void)capacity;
+	(void)deadline;
+	if (completed)
+		*completed = 0;
+
+	if (peer)
+		memset(peer, 0, sizeof(*peer));
+
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
 hx_os_status hx_os_coro_pipe_pair(hx_os_coro_stream **reader,
 	hx_os_coro_stream **writer, hx_os_error *error)
 {

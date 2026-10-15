@@ -260,3 +260,125 @@ hx::Result<void> configureMulticast(hx_os_socket *socket,
 ```
 
 Bind the receiver as shown in section 5 before using it. Use `options.leaveMulticast(group, index)` when ending membership; closing the socket also releases memberships. `SocketOptions` never closes its borrowed socket. All setters require exclusive access and return `HX_OS_BUSY` after loop attachment, even when the loop is idle. Configure first, then hand the socket to its I/O owner. Snapshot readers can run concurrently, but snapshot destruction must wait for readers to stop.
+
+## 8. Parse an endpoint without losing its IPv6 scope
+
+Use `hx_os_endpoint_parse()` when configuration contains both a numeric address and a port. It accepts `192.168.1.20:9000` and `[fe80::1%7]:9000`; the `%7` selects interface index 7. A native interface name is also accepted as the zone. This is not DNS or URL parsing: IPv6 requires brackets, the port is mandatory, and URI percent escaping is not decoded.
+
+```c
+hx_os_address destination;
+hx_os_error error = {0};
+char text[96];
+
+hx_os_status status = hx_os_endpoint_parse(
+	"[fe80::1%7]:9000", &destination, &error);
+if (status == HX_OS_OK)
+	status = hx_os_endpoint_format(
+		&destination, text, sizeof(text), &error);
+if (status == HX_OS_OK)
+	puts(text);
+```
+
+The output is `[fe80::1%7]:9000`. Formatting always uses a numeric zone. Parsing and formatting leave their output unchanged on failure. The parser accepts at most 255 bytes.
+
+For dual-stack peers, `hx_os_address_is_ipv4_mapped()` identifies `::ffff:192.168.1.20`; `hx_os_address_unmap_ipv4()` restores an IPv4 value, and `hx_os_address_map_ipv4()` performs the reverse conversion. Both preserve the port and allow in-place use. `hx_os_address_equal(&a, &b, 1)` compares addresses and ports while treating unscoped mapped IPv6 as IPv4; pass `0` to require the same family. IPv6 scope is part of equality. These helpers do not perform DNS or change socket state.
+
+## 9. Find the route for this destination
+
+Do not select the first `UP` interface from the snapshot. `hx_os_route_query(network, &destination, &route, &error)` asks which local source address and interface apply to the destination. It does not send an application datagram or prove the remote device is alive. The returned source port is zero.
+
+The interface example now has a route mode. With the existing executable, run:
+
+```powershell
+.\build\bin\Debug\hx_os_network_interfaces.exe --route 127.0.0.1:9000
+```
+
+Linux/WSL:
+
+```sh
+./build/bin/hx_os_network_interfaces --route 127.0.0.1:9000
+```
+
+Example output: `Destination 127.0.0.1:9000 uses 127.0.0.1:0 on interface 1`. The index depends on the machine. For a real device, substitute its address and port; IPv6 uses a quoted endpoint such as `"[fe80::1%7]:9000"`.
+
+Windows uses the native route query. POSIX obtains the selected source through a temporary UDP connection and matches the IP snapshot. If the same selected address belongs to multiple interfaces, the call returns `HX_OS_NOT_SUPPORTED` rather than choosing one arbitrarily. Network changes or enumeration restrictions may also cause failure; query again after a change. Unscoped mapped IPv6 destinations use an IPv4 lookup. C++ uses `hx::NetworkInterfaces::routeTo(network, destination)` and returns `Result<hx_os_route_info>`.
+
+## 10. Refresh the list after a network change
+
+Run the existing example with `--watch`:
+
+```sh
+./build/bin/hx_os_network_interfaces --watch
+```
+
+On Windows, append `--watch` to the `.exe` command above. It subscribes first, prints the initial snapshot, then waits up to 30 seconds for one change. A notification prints `Network changed; querying a fresh snapshot:` followed by a new list. With no change, it prints `No interface changes within 30 seconds.` and exits successfully. The example does not change network settings itself.
+
+Applications use this sequence: create an `hx_os_interface_watch`, query their initial snapshot, call `hx_os_interface_watch_wait_until()` with a monotonic deadline, then query again after success. Close with `hx_os_interface_watch_close(&watch, error)` after the waiter has returned. `NOW` polls; a timeout keeps the watch valid.
+
+Notifications are rescan hints, not an ordered event history. They may coalesce, include routing or non-IP changes, or require a refresh after native overflow. The next snapshot may therefore be unchanged. The library starts no worker and allocates no unbounded event queue. Windows uses native callbacks that only signal its event; closing waits for those short internal callbacks. Linux/Android uses netlink, and macOS uses a routing socket. There is no polling fallback.
+
+Android application policy may deny the native subscription even when address enumeration works. Report that permission error; a host application can forward its platform network-change notifications and request a fresh snapshot instead. Shell/emulator execution does not establish ordinary APK permission behavior. Native registration failure normally returns a null watch; if rollback itself fails, a non-null owner is retained for close retry. Always close a non-null result, even after creation failed. Exclude closing from an active wait.
+
+## 11. Tune socket buffers and restrict multicast sources
+
+`hx_os_socket_set_buffers(socket, 65536, 65536, error)` requests 64 KiB send and receive buffers. Zero preserves that direction. `hx_os_socket_get_buffers()` returns both native capacities; check them rather than assuming they equal the request. Operating systems may clamp, round or account for capacity differently, including Linux's doubled values. Updates are sequential and may partially apply on failure. These are transport buffers, not the Frame/IPC/TLS application queue limits.
+
+In C++, `hx::SocketOptions(socket).buffers(65536, 65536)` returns a status result; `.buffers()` returns `Result<SocketOptions::BufferSizes>` with `sendBytes` and `receiveBytes`.
+
+For multicast from a specific sender, use `hx_os_socket_join_multicast_source(socket, &group, &source, index, error)` and leave with `hx_os_socket_leave_multicast_source()` using the same values. For example, group `232.1.2.3` and source `192.168.1.20` request only that sender on the selected IPv4 interface. Both addresses must match the socket family; source is unicast, ports are ignored, and membership does not bind the socket or choose its outgoing interface. Unsupported native filters report `HX_OS_NOT_SUPPORTED`; the call never falls back to receiving every source. C++ exposes `.joinMulticastSource(group, source, index)` and `.leaveMulticastSource(...)`.
+
+Source filtering is not authentication: a sender's IP address does not establish its identity. These additions retain the existing platform boundaries; target compilation, shell operation and real application permissions are separate verification steps.
+
+
+## 12. Connect by name and select cancellable DNS
+
+Use `hx_os_tcp_dial_until(network, host, port, NULL, deadline, &socket, error)` when you want the library to resolve a name, create candidate sockets and keep the first successful connection. IPv4 and IPv6 candidates alternate, with a default 250 ms stagger and at most two live attempts. One deadline covers the operation; losing sockets are closed before return. Success transfers the connected socket to the caller, who closes it before destroying `network`. `hx::TcpDial(owner).connect(...)` provides the same explicit-owner C++11 facade.
+
+By default, name resolution uses the existing system resolver. Its blocking DNS call cannot be forcibly cancelled. If you already have addresses, use `hx_os_tcp_dial_addresses_until()` instead. If network DNS waiting must respond to cancellation, explicitly create an `hx_os_resolver` and set `hx_os_dial_options.resolver` to it. The resolver is borrowed only during the dial call, and its DNS query shares that call's deadline and cancel token. Neither path starts a detached worker.
+
+### 12.1 Run the DNS example
+
+The optional `HX_OS_ENABLE_CARES` module uses the pinned c-ares dependency, with submodules/FetchContent handled by the [dependency setup](DEPENDENCIES.md). When unavailable, `hx_os_resolver_available()` is zero and creation returns `HX_OS_NOT_SUPPORTED`. Build the public example in your existing directory:
+
+```sh
+cmake --build build --config Release --target hx_os_dns_lookup
+```
+
+Windows PowerShell:
+
+```powershell
+.\build\bin\Release\hx_os_dns_lookup.exe 127.0.0.1
+```
+
+Linux / WSL:
+
+```sh
+./build/bin/hx_os_dns_lookup 127.0.0.1
+```
+
+Both print `IPv4 127.0.0.1 port=443`; this local check does not need internet access. Replace the address with a DNS name to list its current IPv4/IPv6 results. An optional second argument selects a numeric DNS server, for example `127.0.0.1:5353` for your own local DNS service. The example does not start that service. The address port 443 is just attached to the result; the example does not connect to it. An unanswered query reports timeout after its two-second overall budget, subject to local setup and OS scheduling.
+
+### 12.2 Own one resolver and reuse it
+
+```c
+hx_os_resolver *resolver = NULL;
+hx_os_address_list *addresses = NULL;
+hx_os_error error;
+
+hx_os_status status = hx_os_resolver_create(NULL, NULL, &resolver, &error);
+if (status == HX_OS_OK)
+	status = hx_os_resolver_resolve_until(resolver, "localhost", 443,
+		HX_OS_TCP, hx_os_deadline_after_ms(2000), NULL,
+		&addresses, &error);
+
+/* Check status, then inspect addresses with the address-list getters. */
+hx_os_address_list_destroy(addresses);
+if (resolver)
+	(void)hx_os_resolver_destroy(&resolver, NULL);
+```
+
+The resolver drives c-ares asynchronous sockets on the calling thread, so this convenience call still occupies that thread while waiting; it is not a coroutine await or an `hx_os_loop` request. One active query per object is allowed. Concurrent calls return `BUSY`, same-thread reentry returns `DEADLOCK`, and no internal queue grows. Pass an `hx_os_cancel_token` to cancel from another thread; cancellation is checked within 50 ms during network waits, subject to scheduling. The native cancellation callbacks retire before the call returns, so timeout does not retain the caller's buffers. Exclude new calls before destroying the resolver. Result lists own their storage and can outlive it.
+
+Up to 256 unique addresses and 64 active native sockets are allowed. Native cache is disabled to avoid unbounded accumulation of unique names; c-ares's own parsing/configuration allocations remain outside the hx allocator budget. Names are ASCII/Punycode. Default lookups use the hosts file and DNS; `use_hosts_file=0` chooses DNS only. This does not reproduce every OS NSS plugin, VPN resolver policy or mDNS behavior. Configuration/hosts-file reads are not hard-real-time operations. Recreate the resolver after changing DNS configuration.
+
+C++ uses `<hx/Resolver.hpp>`, `hx::Resolver(owner).create()`, and `.resolve(host, port)` returning `Result<hx::Addresses>`; the address list releases itself. `.close()` explicitly releases the resolver. Direct native c-ares use remains possible through the dependency target, but the host must coordinate process-global initialization, cleanup and allocator changes across native users and libcurl users sharing the same c-ares binary. Do not initialize it from Windows `DllMain`.

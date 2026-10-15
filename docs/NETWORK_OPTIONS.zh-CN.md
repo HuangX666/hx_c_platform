@@ -260,3 +260,125 @@ hx::Result<void> configureMulticast(hx_os_socket *socket,
 ```
 
 接收端还需要按第 5 节绑定端口。结束时可以调用 `options.leaveMulticast(group, index)`，关闭 socket 也会释放成员关系。`SocketOptions` 不会关闭借用的 socket。所有设置调用都要求独占访问，socket 交给 loop 后返回 `HX_OS_BUSY`，即使 loop 当前空闲也一样。因此应先配置，再交给负责 I/O 的线程或 loop。网卡快照允许并发读取，但销毁前必须保证读取者已经停止使用。
+
+## 8. 解析地址和端口，同时保留 IPv6 网卡范围
+
+配置里同时包含数字地址和端口时，使用 `hx_os_endpoint_parse()`。它接受 `192.168.1.20:9000`、`[fe80::1%7]:9000`；其中 `%7` 表示网卡索引 7，也可以换成原生网卡名称。这个接口不查询 DNS，也不是 URL 解析器：IPv6 必须带方括号，端口不可省略，不会解码 URI 的百分号转义。
+
+```c
+hx_os_address destination;
+hx_os_error error = {0};
+char text[96];
+
+hx_os_status status = hx_os_endpoint_parse(
+	"[fe80::1%7]:9000", &destination, &error);
+if (status == HX_OS_OK)
+	status = hx_os_endpoint_format(
+		&destination, text, sizeof(text), &error);
+if (status == HX_OS_OK)
+	puts(text);
+```
+
+输出是 `[fe80::1%7]:9000`。格式化统一输出数字网卡索引。解析或格式化失败时，输出参数保留原值；解析输入最多 255 字节。
+
+处理双栈对端时，`hx_os_address_is_ipv4_mapped()` 可以识别 `::ffff:192.168.1.20`；`hx_os_address_unmap_ipv4()` 把它还原为 IPv4，`hx_os_address_map_ipv4()` 做反向转换。两者保留端口，也允许原地转换。`hx_os_address_equal(&a, &b, 1)` 比较地址和端口，并把无 scope 的映射 IPv6 视为对应 IPv4；最后传 `0` 则要求地址族相同。IPv6 的 scope 也参与比较。这些工具不查询 DNS、不改变 socket 状态。
+
+## 9. 查询到这台设备会使用哪张网卡
+
+不要从快照里随意挑第一张 `UP` 网卡。调用 `hx_os_route_query(network, &destination, &route, &error)`，可以查询针对该目标选中的本地地址和网卡。它不会发送业务数据报，也不能证明远端设备在线；返回的源端口为零。
+
+网卡示例新增了路由查询模式，使用已有可执行程序即可：
+
+```powershell
+.\build\bin\Debug\hx_os_network_interfaces.exe --route 127.0.0.1:9000
+```
+
+Linux/WSL：
+
+```sh
+./build/bin/hx_os_network_interfaces --route 127.0.0.1:9000
+```
+
+例如输出 `Destination 127.0.0.1:9000 uses 127.0.0.1:0 on interface 1`，表示到该目标使用本地 `127.0.0.1` 和索引为 1 的接口；实际索引以当前电脑为准。查询设备时替换为设备地址和端口，IPv6 使用带引号的 `"[fe80::1%7]:9000"` 形式。
+
+Windows 使用原生路由查询；POSIX 通过临时 UDP 连接取得系统选中的源地址，再匹配 IP 网卡快照。如果同一个源地址对应多张网卡，返回 `HX_OS_NOT_SUPPORTED`，不会随意选一个。网络变化或枚举权限也可能导致失败，变化后应重新查询。无 scope 的映射 IPv6 目标会按 IPv4 查询。C++ 调用 `hx::NetworkInterfaces::routeTo(network, destination)`，返回 `Result<hx_os_route_info>`。
+
+## 10. 网络变化后重新取得网卡列表
+
+给现有示例加上 `--watch`：
+
+```sh
+./build/bin/hx_os_network_interfaces --watch
+```
+
+Windows 则给前面的 `.exe` 命令追加 `--watch`。示例先订阅，再打印初始快照，然后最多等待 30 秒的一次变化。有通知时打印 `Network changed; querying a fresh snapshot:` 并重新列出网卡；没有变化则打印 `No interface changes within 30 seconds.`，正常退出。示例本身不会修改系统网络设置。
+
+业务调用顺序是：创建 `hx_os_interface_watch`，取得初始快照，使用单调截止时间调用 `hx_os_interface_watch_wait_until()`，成功后重新查询。等待者返回后，用 `hx_os_interface_watch_close(&watch, error)` 关闭订阅。`NOW` 表示只检查当前是否有通知，超时后对象仍可继续使用。
+
+通知表示“应重新查询”，并不是逐条、有顺序的事件历史。多个变化可能合并，通知也可能涉及路由、无 IP 的接口或原生通知溢出，因此再次查询得到的快照可能没有变化。库不启动工作线程，不分配无界事件队列。Windows 的原生回调只负责唤醒事件，关闭时会等待这些短小的内部回调退出；Linux/Android 使用 netlink，macOS 使用路由 socket，不会偷偷降级为轮询。
+
+Android 的普通应用策略可能允许枚举地址，却禁止原生订阅。此时应报告权限错误；宿主应用也可以接收平台提供的网络变化通知，再请求新的快照。shell／模拟器进程可运行，不代表普通 APK 拥有相同权限。创建失败通常返回空指针；若原生注册失败后的回滚本身也失败，会保留非空对象供关闭重试。因此即使创建失败，也应关闭非空结果。不能在另一个线程仍等待时销毁对象。
+
+## 11. 调整 socket 缓冲区，以及只接收指定组播源
+
+`hx_os_socket_set_buffers(socket, 65536, 65536, error)` 请求 64 KiB 的发送和接收缓冲区，某个方向传零表示保留该方向原值。`hx_os_socket_get_buffers()` 读回原生实际容量，不要假设一定等于请求值：系统可能取整、限制大小或采用不同的统计方式，例如 Linux 返回的数值可能加倍。设置按顺序进行，后续失败可能保留前面的修改。这里调整的是传输层缓冲区，不是 Frame／IPC／TLS 的业务队列上限。
+
+C++ 的 `hx::SocketOptions(socket).buffers(65536, 65536)` 返回设置结果；不带参数的 `.buffers()` 返回 `Result<SocketOptions::BufferSizes>`，通过 `sendBytes` 和 `receiveBytes` 读取容量。
+
+需要限制组播发送者时，调用 `hx_os_socket_join_multicast_source(socket, &group, &source, index, error)`，结束时用相同参数调用 `hx_os_socket_leave_multicast_source()`。例如组地址 `232.1.2.3`、源地址 `192.168.1.20` 表示在选中的 IPv4 网卡上只接收该发送者的组播。两者必须与 socket 地址族一致；源地址是单播地址，端口被忽略，加入操作不会替你绑定端口或选择发送网卡。原生系统不支持时返回 `HX_OS_NOT_SUPPORTED`，不会改成接收所有来源。C++ 对应 `.joinMulticastSource(group, source, index)` 和 `.leaveMulticastSource(...)`。
+
+源地址过滤不等于身份认证，不能仅凭 IP 判断发送者可信。这些新增接口仍遵守既有平台范围；目标编译、shell 运行和真实应用权限需要分别验证。
+
+
+## 12. 按名称连接，并选择可以取消的 DNS
+
+想让库完成“解析名称、创建候选 socket、保留首个成功连接”时，调用 `hx_os_tcp_dial_until(network, host, port, NULL, deadline, &socket, error)`。IPv4／IPv6 地址交替尝试，默认相隔 250 ms，最多同时尝试两个；整个操作共用截止时间，没有胜出的 socket 会在返回前关闭。成功的 socket 归调用者持有，先关闭它，再销毁 `network`。C++11 对应显式所有者便利层 `hx::TcpDial(owner).connect(...)`。
+
+默认沿用原来的系统名称解析，它的阻塞 DNS 调用无法被强制取消。已有地址时，可以直接使用 `hx_os_tcp_dial_addresses_until()`。如果 DNS 网络等待也需要响应取消，则显式创建 `hx_os_resolver`，把它赋给 `hx_os_dial_options.resolver`。连接调用期间借用这个对象，解析与连接共用 deadline 和 cancel token；两条路径都不会启动分离的后台线程。
+
+### 12.1 运行 DNS 示例
+
+可裁剪的 `HX_OS_ENABLE_CARES` 模块采用固定版本 c-ares，按照[依赖准备](DEPENDENCIES.zh-CN.md)使用子模块或 FetchContent。不可用时，`hx_os_resolver_available()` 返回零，创建返回 `HX_OS_NOT_SUPPORTED`。在现有构建目录编译公开示例：
+
+```sh
+cmake --build build --config Release --target hx_os_dns_lookup
+```
+
+Windows PowerShell：
+
+```powershell
+.\build\bin\Release\hx_os_dns_lookup.exe 127.0.0.1
+```
+
+Linux／WSL：
+
+```sh
+./build/bin/hx_os_dns_lookup 127.0.0.1
+```
+
+两边都会打印 `IPv4 127.0.0.1 port=443`，这个本地检查不需要互联网。把地址换成域名后，会列出它当前的 IPv4／IPv6 解析结果。可选的第二个参数指定数字 DNS 服务器地址，例如 `127.0.0.1:5353` 表示你自己运行的本地 DNS 服务；示例不会替你启动它。结果中的 443 只是附加的端口值，并没有发起连接。没有应答的查询按两秒总预算报告超时，仍受本地初始化和系统调度影响。
+
+### 12.2 创建一个解析器并重复使用
+
+```c
+hx_os_resolver *resolver = NULL;
+hx_os_address_list *addresses = NULL;
+hx_os_error error;
+
+hx_os_status status = hx_os_resolver_create(NULL, NULL, &resolver, &error);
+if (status == HX_OS_OK)
+	status = hx_os_resolver_resolve_until(resolver, "localhost", 443,
+		HX_OS_TCP, hx_os_deadline_after_ms(2000), NULL,
+		&addresses, &error);
+
+/* Check status, then inspect addresses with the address-list getters. */
+hx_os_address_list_destroy(addresses);
+if (resolver)
+	(void)hx_os_resolver_destroy(&resolver, NULL);
+```
+
+解析器在调用线程上驱动 c-ares 的异步 socket，因此这个便利函数等待期间仍占用调用线程；它不是协程挂起，也不是 `hx_os_loop` 请求。同一个解析器一次只允许一个查询：并发调用返回 `BUSY`，同线程重入返回 `DEADLOCK`，不会在内部无限排队。传入 `hx_os_cancel_token` 后，可以从另一线程请求取消；网络等待时每隔不超过 50 ms 检查一次，实际响应仍受调度影响。取消回调在返回前退出，超时不会遗留借用调用方缓冲区的后台工作。销毁前停止发起新调用；结果列表独立持有内存，可以活得比解析器更久。
+
+结果最多 256 个不同地址，最多跟踪 64 个原生 socket。默认关闭原生缓存，避免不断解析不同名称时缓存无限累积；c-ares 自身的解析和配置内存不计入 hx 分配器预算。名称使用 ASCII／Punycode，默认查询 hosts 文件及 DNS；`use_hosts_file=0` 只查询 DNS。这不等于复刻操作系统的全部 NSS 插件、VPN 解析策略或 mDNS 行为。配置及 hosts 文件读取不是硬实时操作，DNS 配置变化后应重新创建解析器。
+
+C++ 包含 `<hx/Resolver.hpp>`，使用 `hx::Resolver(owner).create()` 和 `.resolve(host, port)`；后者返回 `Result<hx::Addresses>`，地址列表自动释放，解析器通过 `.close()` 显式关闭。仍可通过依赖目标直接使用原生 c-ares，但宿主需要协调原生调用者，以及共享同一 c-ares 二进制的 libcurl 调用者之间的全局初始化、清理和分配器修改。不要在 Windows `DllMain` 中初始化。

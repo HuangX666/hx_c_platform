@@ -1,4 +1,5 @@
 #include "ipc_private.h"
+#include "hx_os_net_extra.h"
 #include <stdio.h>
 #if defined(_WIN32)
 #include <mstcpip.h>
@@ -333,6 +334,9 @@ static hx_os_status hx_ipc_parse_ip(
 	unsigned long number = 0;
 	hx_os_status status;
 
+	if (endpoint->remote_kcp)
+		return hx_os_endpoint_parse(begin, &endpoint->address, error);
+
 	if (*begin == '[') {
 		const char *end = strchr(++begin, ']');
 		if (!end || end[1] != ':')
@@ -489,8 +493,13 @@ static hx_os_status hx_ipc_prepare(
 	}
 #endif
 	local = endpoint->address;
-	if (!endpoint->server)
+	if (!endpoint->server) {
 		local.port = 0;
+		if (endpoint->remote_kcp) {
+			memset(local.bytes, 0, sizeof(local.bytes));
+			local.scope_id = 0;
+		}
+	}
 
 	if (status == HX_OS_OK)
 		status = hx_os_socket_bind(endpoint->listener, &local, error);
@@ -500,8 +509,19 @@ static hx_os_status hx_ipc_prepare(
 			(int)endpoint->options.max_peers, error);
 
 	if (status == HX_OS_OK && endpoint->server) {
+		char endpoint_text[128];
+
 		status = hx_os_socket_local_address(
 			endpoint->listener, &local, error);
+		if (status == HX_OS_OK && endpoint->remote_kcp) {
+			status = hx_os_endpoint_format(&local, endpoint_text,
+				sizeof(endpoint_text), error);
+			if (status == HX_OS_OK)
+				status = hx_string_format(
+					&endpoint->address_text, error,
+					"kcp://%s", endpoint_text);
+			return status;
+		}
 		if (status == HX_OS_OK)
 			status = hx_string_format(&endpoint->address_text,
 				error, "%s://%s:%u",
@@ -581,8 +601,8 @@ void hx_ipc_i_dispose(hx_ipc *endpoint)
 }
 
 static hx_os_status hx_ipc_create(hx_os_context *context, const char *address,
-	const hx_ipc_options *input, int server, hx_ipc **out,
-	hx_os_error *error)
+	const hx_ipc_options *input, const hx_os_backoff_options *backoff,
+	int server, int remote_kcp, hx_ipc **out, hx_os_error *error)
 {
 	hx_ipc_options options;
 	hx_ipc *endpoint;
@@ -632,6 +652,7 @@ static hx_os_status hx_ipc_create(hx_os_context *context, const char *address,
 	endpoint->context = context;
 	endpoint->options = options;
 	endpoint->server = server;
+	endpoint->remote_kcp = remote_kcp;
 #if !defined(_WIN32)
 	endpoint->lock_descriptor = -1;
 #endif
@@ -653,6 +674,15 @@ static hx_os_status hx_ipc_create(hx_os_context *context, const char *address,
 	if (status == HX_OS_OK)
 		status = hx_os_random_bytes(
 			&endpoint->serial, sizeof(endpoint->serial), error);
+	if (status == HX_OS_OK && backoff) {
+		hx_os_backoff_options policy = *backoff;
+
+		if (!policy.seed)
+			policy.seed = endpoint->serial;
+		status = hx_os_backoff_init(&endpoint->backoff, &policy, error);
+		endpoint->use_backoff = 1;
+		endpoint->options.reconnect_attempts = policy.max_retries;
+	}
 
 	if (status == HX_OS_OK)
 		status = hx_ipc_prepare(endpoint, address, error);
@@ -676,7 +706,7 @@ hx_os_status hx_ipc_listen_with_options(hx_os_context *context,
 	const char *address, const hx_ipc_options *options, hx_ipc **out,
 	hx_os_error *error)
 {
-	return hx_ipc_create(context, address, options, 1, out, error);
+	return hx_ipc_create(context, address, options, NULL, 1, 0, out, error);
 }
 
 hx_os_status hx_ipc_connect_until(hx_os_context *context, const char *address,
@@ -684,8 +714,8 @@ hx_os_status hx_ipc_connect_until(hx_os_context *context, const char *address,
 	hx_os_error *error)
 {
 	hx_ipc_peer peer;
-	hx_os_status status =
-		hx_ipc_create(context, address, options, 0, out, error);
+	hx_os_status status = hx_ipc_create(
+		context, address, options, NULL, 0, 0, out, error);
 
 	if (status == HX_OS_OK)
 		status = hx_ipc_wait_connected_until(
@@ -1266,3 +1296,73 @@ hx_os_status hx_ipc_close_until(
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 #endif
+
+hx_os_status hx_ipc_connect_backoff_until(hx_os_context *context,
+	const char *address, const hx_ipc_options *options,
+	const hx_os_backoff_options *backoff, hx_os_deadline deadline,
+	hx_ipc **out, hx_os_error *error)
+{
+#if HX_OS_HAVE_IPC
+	hx_os_backoff_options defaults = HX_OS_BACKOFF_OPTIONS_INIT;
+	hx_os_status status;
+	hx_ipc_peer peer;
+
+	defaults.seed = 0;
+	status = hx_ipc_create(context, address, options,
+		backoff ? backoff : &defaults, 0, 0, out, error);
+	if (status == HX_OS_OK)
+		status = hx_ipc_wait_connected_until(
+			*out, deadline, &peer, error);
+	return status;
+#else
+	(void)context;
+	(void)address;
+	(void)options;
+	(void)backoff;
+	(void)deadline;
+	if (out)
+		*out = NULL;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
+}
+
+hx_os_status hx_ipc_i_open_kcp(hx_os_context *context, const char *address,
+	const hx_ipc_options *options, int server, hx_os_deadline deadline,
+	hx_ipc **out, hx_os_error *error)
+{
+#if HX_OS_HAVE_IPC
+	hx_string uri = HX_STRING_INIT;
+	hx_os_status status;
+	hx_os_address numeric;
+	hx_ipc_peer peer;
+
+	if (!out)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	*out = NULL;
+	if (address && !strncmp(address, "kcp://", 6))
+		address += 6;
+	status = hx_os_endpoint_parse(address, &numeric, error);
+	if (status != HX_OS_OK)
+		return status;
+	if (!server && !numeric.port)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	status = hx_string_format(&uri, error, "kcp://%s", address);
+	if (status == HX_OS_OK)
+		status = hx_ipc_create(context, hx_string_c_str(&uri), options,
+			NULL, server, 1, out, error);
+	hx_string_destroy(&uri);
+	if (status == HX_OS_OK && !server)
+		status = hx_ipc_wait_connected_until(
+			*out, deadline, &peer, error);
+	return status;
+#else
+	(void)context;
+	(void)address;
+	(void)options;
+	(void)server;
+	(void)deadline;
+	if (out)
+		*out = NULL;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
+}

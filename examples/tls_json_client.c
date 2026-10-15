@@ -52,7 +52,7 @@ static void *HX_OS_CALL receive_responses(void *user)
 int main(int argc, char **argv)
 {
 	hx_os_tls *owner = NULL;
-	hx_os_tls_options options = HX_OS_TLS_OPTIONS_INIT;
+	hx_os_tls_options_ex options = HX_OS_TLS_OPTIONS_EX_INIT;
 	hx_os_error error = {0};
 	tls_session session = {0};
 	telemetry_job sender = {&session, 0}, receiver = {&session, 0};
@@ -65,10 +65,15 @@ int main(int argc, char **argv)
 
 		return 2;
 	}
-	options.ca_file = argv[2];
-	options.server_name = "localhost";
-	status = hx_os_tls_connect(
-		"127.0.0.1", net_demo_port(argv[1]), &options, &owner, &error);
+	options.base.ca_file = argv[2];
+	options.base.server_name = "localhost";
+	options.socket.nodelay = 1;
+	options.socket.keepalive = 1;
+	options.socket.keepalive_idle_seconds = 30;
+	options.socket.keepalive_interval_seconds = 5;
+	status = hx_os_tls_connect_ex_until(NULL, "127.0.0.1",
+		net_demo_port(argv[1]), &options, hx_os_deadline_after_ms(5000),
+		&owner, &error);
 	ok = net_demo_check(status, &error, "verified TLS connect");
 	session.tls = owner;
 	session.deadline = hx_os_deadline_after_ms(10000);

@@ -29,6 +29,7 @@
 #cmakedefine01 HX_OS_ENABLE_CLI
 #cmakedefine01 HX_OS_HAVE_URL
 #cmakedefine01 HX_OS_HAVE_HTTP
+#cmakedefine01 HX_OS_HAVE_CARES
 #cmakedefine01 HX_OS_HAVE_UNICODE
 #cmakedefine01 HX_OS_ENABLE_REGEX
 #cmakedefine01 HX_OS_ENABLE_ONCE

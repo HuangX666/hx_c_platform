@@ -1,11 +1,6 @@
 #include "net_private.h"
 #include <stdio.h>
 
-struct hx_os_address_list {
-	size_t count;
-	hx_os_address addresses[256];
-};
-
 hx_os_status hx_os_network_create(
 	hx_os_context *context, hx_os_network **out, hx_os_error *error)
 {
@@ -398,8 +393,8 @@ hx_os_status hx_os_socket_accept(hx_os_socket *listener, hx_os_socket **out,
 		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 
 #if defined(__linux__)
-	native = accept4(listener->native, (struct sockaddr *)&address,
-		&length, SOCK_CLOEXEC | SOCK_NONBLOCK);
+	native = accept4(listener->native, (struct sockaddr *)&address, &length,
+		SOCK_CLOEXEC | SOCK_NONBLOCK);
 #else
 	native = accept(listener->native, (struct sockaddr *)&address, &length);
 #endif
@@ -634,6 +629,7 @@ hx_os_status hx_os_socket_receive_from(hx_os_socket *socket,
 	struct sockaddr_storage address;
 	hx_os_i_socklen length = sizeof(address);
 	hx_os_status status = HX_OS_OK;
+	int native_code = 0;
 
 	if (!socket || socket->protocol != HX_OS_UDP || !completed ||
 		(!data && bytes) || bytes > INT_MAX)
@@ -656,8 +652,10 @@ hx_os_status hx_os_socket_receive_from(hx_os_socket *socket,
 			return hx_os_i_socket_error(error, code);
 
 		*completed = count;
-		if (code)
+		if (code) {
 			status = HX_OS_LIMIT;
+			native_code = code;
+		}
 	}
 #else
 	{
@@ -683,6 +681,9 @@ hx_os_status hx_os_socket_receive_from(hx_os_socket *socket,
 #endif
 	if (peer)
 		(void)hx_os_i_address_public((struct sockaddr *)&address, peer);
+
+	if (native_code)
+		return hx_os_i_socket_error(error, native_code);
 
 	return hx_os_i_error(error, status, 0, 0);
 }

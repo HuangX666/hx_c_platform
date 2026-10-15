@@ -443,6 +443,43 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_write(hx_os_coro_stream *stream,
 	const void *data, size_t bytes, hx_os_deadline deadline,
 	size_t *completed, hx_os_error *error);
 
+/**
+ * \brief Create and bind a UDP handle owned by this runtime's dispatcher.
+ *
+ * \details Port zero selects an ephemeral port, returned in optional bound.
+ * reuse_address is explicit. Failure sets *out=NULL and preserves bound.
+ * Release the handle with coro_stream_release. Uses the existing handle,
+ * request and byte budgets; no additional polling thread is created.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_udp_bind(
+	const hx_os_address *address, int reuse_address,
+	hx_os_coro_stream **out, hx_os_address *bound, hx_os_error *error);
+
+/**
+ * \brief Send one UDP datagram or receive one, suspending instead of polling.
+ *
+ * \details Requires a UDP handle from coro_udp_bind. One send and one receive
+ * may coexist; conflicting operations return BUSY. completed is required,
+ * reset to zero, and retains copied byte progress on error. Empty datagrams
+ * are valid; payloads are limited to INT_MAX bytes and the runtime's budget.
+ * Receive LIMIT consumes a truncated datagram and preserves copied bytes and
+ * peer; its remainder is discarded. Other outcomes clear optional peer.
+ * Sending succeeds when the local transport accepts the entire datagram,
+ * without a delivery, ordering or duplication guarantee. Cancellation and
+ * deadline expiration keep buffers until native retirement; no later writes
+ * to them occur after the final return. Stackless WOULD_BLOCK is not a final
+ * return: keep all arguments/output storage alive and repeat via AWAIT.
+ * No packet-info, multicast or per-packet route controls are provided here.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_send_to(hx_os_coro_stream *socket,
+	const hx_os_address *peer, const void *data, size_t bytes,
+	hx_os_deadline deadline, size_t *completed, hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_receive_from(
+	hx_os_coro_stream *socket, hx_os_address *peer, void *data,
+	size_t capacity, hx_os_deadline deadline, size_t *completed,
+	hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_resolve(const char *host,
 	uint16_t port, hx_os_deadline deadline, hx_os_address_list **out,
 	hx_os_error *error);

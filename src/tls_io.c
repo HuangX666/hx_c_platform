@@ -27,6 +27,7 @@ void hx_tls_i_peer_fail(hx_tls_peer *peer, const hx_os_error *error)
 	peer->terminal = 1;
 	if (!tls->server && !tls->ready && !tls->error.status)
 		tls->error = peer->error;
+	hx_tls_i_notify(tls);
 	hx_tls_i_wake(tls);
 	hx_tls_i_unlock(tls);
 }
@@ -53,7 +54,7 @@ static void hx_tls_marker_complete(hx_tls_peer *peer)
 		peer->marker_head = (peer->marker_head + 1) % HX_TLS_MARKERS;
 		--peer->marker_count;
 	}
-	hx_os_condition_notify_all(tls->condition);
+	hx_tls_i_notify(tls);
 	hx_tls_i_unlock(tls);
 }
 
@@ -216,7 +217,7 @@ static int hx_tls_ssl_result(
 		hx_tls_i_lock(peer->owner);
 		if (!peer->error.status)
 			(void)hx_os_i_error(&peer->error, HX_OS_EOF, 0, 0);
-		hx_os_condition_notify_all(peer->owner->condition);
+		hx_tls_i_notify(peer->owner);
 		hx_tls_i_unlock(peer->owner);
 
 		return 0;
@@ -243,6 +244,8 @@ static int hx_tls_ready(hx_tls_peer *peer)
 	X509 *certificate = SSL_get1_peer_certificate(peer->ssl);
 	EVP_MD *digest = EVP_MD_fetch(tls->crypto->native, "SHA256", NULL);
 	unsigned int bytes;
+	const unsigned char *protocol = NULL;
+	unsigned int protocol_bytes = 0;
 	hx_os_address local;
 	hx_os_error error;
 	size_t required;
@@ -265,6 +268,18 @@ static int hx_tls_ready(hx_tls_peer *peer)
 
 		return 0;
 	}
+	SSL_get0_alpn_selected(peer->ssl, &protocol, &protocol_bytes);
+	if ((tls->pinned &&
+		    (!(info.flags & HX_OS_TLS_PEER_VERIFIED) ||
+			    CRYPTO_memcmp(tls->certificate_sha256,
+				    info.certificate_sha256, 32))) ||
+		(tls->require_alpn && !protocol_bytes) ||
+		!hx_tls_i_profile_verify(peer)) {
+		hx_tls_peer_status(peer, HX_OS_AUTH_FAILED);
+		return 0;
+	}
+	if (SSL_session_reused(peer->ssl))
+		info.flags |= HX_OS_TLS_PEER_RESUMED;
 	if (hx_os_i_text_copy(SSL_get_version(peer->ssl), info.protocol,
 		    sizeof(info.protocol), &required, &error) != HX_OS_OK ||
 		hx_os_i_text_copy(SSL_get_cipher_name(peer->ssl), info.cipher,
@@ -282,13 +297,17 @@ static int hx_tls_ready(hx_tls_peer *peer)
 	}
 	hx_tls_i_lock(tls);
 	peer->info = info;
+	if (protocol_bytes)
+		memcpy(peer->alpn, protocol, protocol_bytes);
+	peer->alpn[protocol_bytes] = '\0';
 	peer->ready = 1;
 	if (!tls->server) {
 		tls->local = local;
 		tls->ready = 1;
 	}
-	hx_os_condition_notify_all(tls->condition);
+	hx_tls_i_notify(tls);
 	hx_tls_i_unlock(tls);
+	hx_tls_i_profile_capture(peer);
 
 	return 1;
 }
@@ -306,7 +325,8 @@ static int hx_tls_plain_write(hx_tls_peer *peer)
 		hx_tls_i_lock(tls);
 		peer->tx_bytes = hx_tls_i_ring_read(&peer->tx,
 			tls->options.queue_capacity, buffer, HX_TLS_RECORD);
-		hx_os_condition_notify_all(tls->condition);
+		if (peer->tx_bytes)
+			hx_tls_i_notify(tls);
 		hx_tls_i_unlock(tls);
 	}
 	if (!peer->tx_bytes)
@@ -353,7 +373,7 @@ static int hx_tls_plain_read(hx_tls_peer *peer, int closing)
 		hx_tls_i_lock(tls);
 		(void)hx_tls_i_ring_write(
 			&peer->rx, tls->options.queue_capacity, buffer, bytes);
-		hx_os_condition_notify_all(tls->condition);
+		hx_tls_i_notify(tls);
 		hx_tls_i_unlock(tls);
 	}
 
@@ -377,6 +397,8 @@ static void hx_tls_retire(hx_tls_peer *peer)
 		return;
 	}
 	SSL_free(peer->ssl);
+	SSL_SESSION_free(peer->pending_session);
+	peer->pending_session = NULL;
 	BIO_free(peer->bio);
 	peer->ssl = NULL;
 	peer->bio = NULL;
@@ -385,7 +407,7 @@ static void hx_tls_retire(hx_tls_peer *peer)
 	// Failed, never announced server handshakes do not consume a slot.
 	if (peer->owner->server && !peer->ready)
 		peer->release = 1;
-	hx_os_condition_notify_all(peer->owner->condition);
+	hx_tls_i_notify(peer->owner);
 	hx_tls_i_unlock(peer->owner);
 }
 
@@ -501,8 +523,17 @@ static hx_tls_peer *hx_tls_new_peer(hx_os_tls *tls, hx_os_socket *socket,
 	if (status == HX_OS_OK && !socket)
 		status = hx_os_socket_create(tls->network, address->family,
 			HX_OS_TCP, &peer->socket, error);
-	if (status == HX_OS_OK && (tls->options.flags & HX_OS_TLS_NODELAY))
+	if (status == HX_OS_OK && !tls->extended &&
+		(tls->options.flags & HX_OS_TLS_NODELAY))
 		status = hx_os_socket_set_nodelay(peer->socket, 1, error);
+	if (status == HX_OS_OK && tls->extended && tls->server) {
+		hx_os_tcp_options options = tls->tcp_options;
+
+		// The listener already chose the address-family binding policy.
+		options.dual_stack = -1;
+		status = hx_os_socket_apply_tcp_options(
+			peer->socket, &options, error);
+	}
 	if (status == HX_OS_OK) {
 		if (socket)
 			peer->connected = 1;
@@ -545,6 +576,50 @@ static void HX_OS_CALL hx_tls_accept_done(
 	hx_os_request_release(request);
 }
 
+static int hx_tls_connect_cancelled(void *user)
+{
+	hx_os_tls *tls = user;
+	int cancelled;
+
+	hx_tls_i_lock(tls);
+	cancelled = tls->closing;
+	hx_tls_i_unlock(tls);
+
+	return cancelled != 0;
+}
+
+static hx_os_status hx_tls_dial(
+	hx_os_tls *tls, hx_os_deadline deadline, hx_os_error *error)
+{
+	hx_os_address addresses[256], address;
+	hx_os_dial_options options = HX_OS_DIAL_OPTIONS_INIT;
+	hx_os_socket *socket = NULL;
+	hx_tls_peer *peer;
+	hx_os_status status;
+	size_t count = hx_os_address_list_count(tls->addresses), i;
+
+	for (i = 0; i < count && i < 256; ++i)
+		addresses[i] = *hx_os_address_list_get(tls->addresses, i);
+	options.socket = tls->tcp_options;
+	options.attempt_delay_ms = tls->attempt_delay_ms;
+	status = hx_os_i_tcp_dial_addresses_until(tls->network, addresses,
+		count, &options, deadline, hx_tls_connect_cancelled, tls,
+		&socket, error);
+	if (status != HX_OS_OK)
+		return status;
+	status = hx_os_socket_peer_address(socket, &address, error);
+	if (status != HX_OS_OK) {
+		hx_os_i_socket_discard(&socket);
+		return status;
+	}
+	peer = hx_tls_new_peer(tls, socket, &address, error);
+	if (!peer)
+		return error->status;
+	peer->handshake = deadline;
+
+	return HX_OS_OK;
+}
+
 static hx_os_status hx_tls_startup(hx_os_tls *tls, hx_os_error *error)
 {
 	hx_os_loop_options options;
@@ -570,8 +645,27 @@ static hx_os_status hx_tls_startup(hx_os_tls *tls, hx_os_error *error)
 	if (status != HX_OS_OK)
 		return status;
 	if (!tls->server) {
-		status = hx_os_resolve(tls->network, tls->host, tls->port,
-			HX_OS_TCP, &tls->addresses, error);
+		hx_os_deadline deadline = hx_os_deadline_after_ms(
+			tls->options.handshake_timeout_ms);
+
+		if (tls->resolve_async) {
+			hx_os_resolver *resolver = NULL;
+
+			status = hx_os_resolver_create(tls->context,
+				&tls->resolver_options, &resolver, error);
+			if (status == HX_OS_OK)
+				status = hx_os_i_resolver_resolve_until(
+					resolver, tls->host, tls->port,
+					HX_OS_TCP, deadline, NULL,
+					hx_tls_connect_cancelled, tls,
+					&tls->addresses, error);
+			(void)hx_os_resolver_destroy(&resolver, NULL);
+		}
+		else
+			status = hx_os_resolve(tls->network, tls->host,
+				tls->port, HX_OS_TCP, &tls->addresses, error);
+		if (status == HX_OS_OK && tls->extended)
+			return hx_tls_dial(tls, deadline, error);
 		if (status == HX_OS_OK) {
 			const hx_os_address *first =
 				hx_os_address_list_get(tls->addresses, 0);
@@ -591,6 +685,9 @@ static hx_os_status hx_tls_startup(hx_os_tls *tls, hx_os_error *error)
 			HX_OS_TCP, &tls->listener, error);
 	if (status == HX_OS_OK && (tls->options.flags & HX_OS_TLS_REUSEADDR))
 		status = hx_os_socket_set_reuseaddr(tls->listener, 1, error);
+	if (status == HX_OS_OK && tls->extended)
+		status = hx_os_socket_apply_tcp_options(
+			tls->listener, &tls->tcp_options, error);
 	if (status == HX_OS_OK)
 		status = hx_os_socket_bind(tls->listener, &address, error);
 	if (status == HX_OS_OK)
@@ -603,7 +700,7 @@ static hx_os_status hx_tls_startup(hx_os_tls *tls, hx_os_error *error)
 		hx_tls_i_lock(tls);
 		tls->local = address;
 		tls->ready = 1;
-		hx_os_condition_notify_all(tls->condition);
+		hx_tls_i_notify(tls);
 		hx_tls_i_unlock(tls);
 	}
 
@@ -687,7 +784,9 @@ void *HX_OS_CALL hx_tls_i_worker(void *user)
 	size_t i;
 
 	hx_tls_i_guard(tls);
-	status = hx_os_i_crypto_enter(NULL, tls->context, &scope, &error);
+	status = hx_os_i_crypto_enter(
+		tls->profile ? tls->profile->configuration->crypto : NULL,
+		tls->context, &scope, &error);
 	if (status == HX_OS_OK) {
 		tls->crypto = scope.crypto;
 		status = hx_tls_startup(tls, &error);
@@ -729,7 +828,7 @@ void *HX_OS_CALL hx_tls_i_worker(void *user)
 	// This thread is library-owned, including when OpenSSL is static.
 	hx_os_crypto_thread_cleanup();
 	hx_tls_i_lock(tls);
-	hx_os_condition_notify_all(tls->condition);
+	hx_tls_i_notify(tls);
 	hx_tls_i_unlock(tls);
 	hx_tls_i_guard(NULL);
 

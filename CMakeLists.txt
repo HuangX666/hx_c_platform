@@ -24,6 +24,7 @@ if(HX_OS_BUILD_TESTS AND
 endif()
 
 option(HX_OS_ENABLE_NETWORK "Build native networking" ON)
+option(HX_OS_ENABLE_CARES "Build cancellable c-ares DNS backend" ON)
 option(HX_OS_ENABLE_KCP "Build bounded reliable UDP protocol adapter" ON)
 option(HX_OS_ENABLE_IPC "Build local full-duplex message endpoints" ON)
 option(HX_OS_ENABLE_LOOP "Build asynchronous event loop" ON)
@@ -375,6 +376,7 @@ include(cmake/HxCrypto.cmake)
 include(cmake/HxArchive.cmake)
 include(cmake/HxSqlite.cmake)
 include(cmake/HxTransferSdk.cmake)
+include(cmake/HxResolver.cmake)
 
 if(NOT HX_OS_ENABLE_COROUTINES)
 	set(HX_OS_ENABLE_STACKFUL_COROUTINES OFF)
@@ -419,7 +421,12 @@ add_library(hx_c_platform
 	src/ring.c src/bitset.c src/cache.c src/algorithm.c
 	src/sysinfo.c src/library.c src/path.c src/env.c src/paths.c
 	src/thread_extra.c src/pipe.c src/file_at.c src/net_options.c
-	src/net_interfaces.c
+	src/net_interfaces.c src/net_watch.c src/datagram.c src/dial.c
+	src/net_vectors.c src/net_interop.c src/resolver.c src/kcp_session.c
+	src/net_loop_options.c
+	src/tls_profile.c
+	src/coroutine_tls.c
+	src/coroutine_http.c
 	src/file_info.c src/bom.c src/number.c src/config_serialize.c
 	src/config_build.c src/codec.c
 	src/timer.c src/util.c src/uuid.c src/vm.c src/file_extra.c
@@ -712,6 +719,8 @@ if(HX_OS_ENABLE_THREAD_POOL)
 	target_sources(hx_c_platform PRIVATE src/thread_pool.c)
 endif()
 
+target_sources(hx_c_platform PRIVATE src/net_extra.c)
+
 if(HX_OS_ENABLE_NETWORK)
 	target_sources(hx_c_platform PRIVATE src/net.c)
 endif()
@@ -798,7 +807,7 @@ add_library(hx_c_platform_native INTERFACE)
 add_library(hx_c_platform::native ALIAS hx_c_platform_native)
 set_target_properties(hx_c_platform_native PROPERTIES EXPORT_NAME native)
 target_link_libraries(hx_c_platform_native INTERFACE hx_c_platform)
-foreach(dependency sqlite openssl curl utf8proc archive zlib lzma zstd)
+foreach(dependency sqlite openssl curl utf8proc archive zlib lzma zstd cares)
 	if(TARGET hx_c_platform::${dependency})
 		target_link_libraries(hx_c_platform_native INTERFACE
 			hx_c_platform::${dependency})
@@ -836,6 +845,9 @@ endif()
 hx_link_crypto(hx_c_platform)
 hx_link_archive(hx_c_platform)
 hx_link_transfer_sdk(hx_c_platform)
+if(HX_OS_HAVE_CARES)
+	target_link_libraries(hx_c_platform PRIVATE c-ares::cares)
+endif()
 if(HX_OS_HAVE_SHARED_MEMORY AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	find_library(HX_OS_SHM_RT_LIBRARY rt)
 	if(HX_OS_SHM_RT_LIBRARY)
@@ -1011,6 +1023,9 @@ install(FILES
 	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/hx_c_platform)
 
 set(HX_OS_PC_LIBS_PRIVATE "")
+if(HX_OS_HAVE_CARES)
+	string(APPEND HX_OS_PC_LIBS_PRIVATE " -lcares")
+endif()
 
 if(HX_OS_HAVE_HTTP OR HX_OS_HAVE_URL)
 	string(APPEND HX_OS_PC_LIBS_PRIVATE " -lcurl")

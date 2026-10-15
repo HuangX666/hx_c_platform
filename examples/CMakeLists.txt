@@ -5,7 +5,7 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 	text_utilities encoding read_lines control coordination integer_tools
 	persistent_queue unicode_tools incremental_hash fast_algorithms
 	regex once framed_messages compress_memory url_query command_line
-	http_json temporary_file serial_message shared_memory
+	http_json http_file temporary_file serial_message shared_memory
 	encrypt_text archive_files tls_json_client tls_json_server
 	load_plugin text_file environment special_paths thread_options
 	windows_info
@@ -20,12 +20,12 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 	profile_intervals profile_statistics high_resolution_time
 	atomic_publication
 	common_tasks parse_script preprocess_config variant find_files
-	coroutine ordered_map
+	coroutine coroutine_udp coroutine_http ordered_map
 	format
 	ipc_server ipc_client ipc_device_server ipc_device_client
 	tcp_order_server tcp_order_client udp_dashboard udp_sensor
-	network_interfaces multicast_discovery
-	kcp_transfer_server kcp_transfer_client)
+	network_interfaces multicast_discovery dns_lookup udp_packet
+	kcp_transfer_server kcp_transfer_client kcp_session)
 	add_executable(hx_os_${example} ${example}.c)
 	target_link_libraries(hx_os_${example} PRIVATE hx_c_platform)
 	set_target_properties(hx_os_${example} PROPERTIES

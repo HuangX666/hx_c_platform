@@ -2,6 +2,7 @@
 #define HX_C_PLATFORM_IPC_H
 
 #include "hx_os_base.h"
+#include "hx_os_control.h"
 #include "hx_string.h"
 
 #ifdef __cplusplus
@@ -78,6 +79,19 @@ HX_OS_API hx_os_status HX_OS_CALL hx_ipc_listen(
 
 HX_OS_API hx_os_status HX_OS_CALL hx_ipc_connect(
 	const char *address, hx_ipc **out, hx_os_error *error);
+
+/**
+ * \brief Connect with bounded exponential reconnect delay and jitter.
+ * \details NULL backoff uses 100 ms to 30 s, eight retries, 20% jitter, and
+ * a per-endpoint random seed. Explicit seed=0 also selects that seed. The
+ * retry budget resets after a successful handshake. Requests are never
+ * replayed automatically. Other creation/timeout ownership rules match
+ * connect_until. Existing connect functions retain their fixed-delay policy.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_ipc_connect_backoff_until(
+	hx_os_context *context, const char *address,
+	const hx_ipc_options *options, const hx_os_backoff_options *backoff,
+	hx_os_deadline deadline, hx_ipc **out, hx_os_error *error);
 
 HX_OS_API hx_os_status HX_OS_CALL hx_ipc_send_text(
 	hx_ipc *endpoint, const char *text, hx_os_error *error);

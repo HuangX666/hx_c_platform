@@ -92,3 +92,7 @@ return HX_OS_OK;
 `Native::socket`, `Native::process` and `Native::thread` follow the same Result pattern. The thread result holds `hx::NativeThread` (void pointer/HANDLE on Windows, pthread_t on POSIX); this facade includes pthread.h only on POSIX. No destructor closes a borrowed native value, and no exception is used.
 
 The runnable [native_file.c](../examples/native_file.c) demonstrates borrowing a native file handle and reading through the library. Build `hx_os_native_file` and pass a UTF-8 file path. See [platform support](PLATFORMS.md) for target boundaries.
+
+## 4. Import a socket you already own
+
+Borrowing above leaves ownership with this library. To bring an existing native nonblocking TCP/UDP socket into the library, use `hx_os_socket_import` from `<hx_os_net_interop.h>`. `HX_OS_SOCKET_TAKE` consumes the input handle only on success; `HX_OS_SOCKET_DUP` leaves it owned by the caller and creates a second handle for the same endpoint. Exclude active I/O, close and event-loop registrations before either operation. Windows callers also guarantee OVERLAPPED capability; importing cannot move an existing IOCP association. See [import and shutdown examples](NETWORK_IO.md#5-existing-native-sockets-and-shutdown) for shared-state and timeout rules.

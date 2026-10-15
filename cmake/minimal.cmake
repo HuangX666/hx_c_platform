@@ -1,6 +1,7 @@
 # Initial-cache profile for a small C-only deployment. Use -C with a fresh
 # build directory; command-line -D options after -C can selectively re-enable.
-foreach(module IN ITEMS NETWORK LOOP IPC KCP THREAD_POOL DELAYED_TASKS QUEUES
+foreach(module IN ITEMS NETWORK CARES LOOP IPC KCP THREAD_POOL DELAYED_TASKS
+	QUEUES
 	MEMORY_POOLS
 	ICONV CONFIG CONTAINERS COROUTINES STACKFUL_COROUTINES COROUTINE_IO
 	SYSINFO LIBRARY FILE_UTILS STREAM ENCODING LINE_READER

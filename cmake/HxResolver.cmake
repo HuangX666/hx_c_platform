@@ -1,0 +1,26 @@
+set(HX_OS_HAVE_CARES 0)
+if(HX_OS_ENABLE_NETWORK AND HX_OS_ENABLE_CARES)
+	hx_dependency_source(c-ares hx_cares_source)
+	set(CARES_STATIC ON CACHE BOOL "Build static c-ares" FORCE)
+	set(CARES_SHARED OFF CACHE BOOL "No extra DNS runtime library" FORCE)
+	set(CARES_STATIC_PIC ON CACHE BOOL "Link c-ares into shared libraries"
+		FORCE)
+	set(CARES_BUILD_TESTS OFF CACHE BOOL "No vendor test targets" FORCE)
+	set(CARES_BUILD_CONTAINER_TESTS OFF CACHE BOOL "No vendor containers"
+		FORCE)
+	set(CARES_BUILD_TOOLS OFF CACHE BOOL "No vendor tools" FORCE)
+	set(CARES_INSTALL ON CACHE BOOL "Install native c-ares SDK" FORCE)
+	set(CARES_THREADS ON CACHE BOOL "Thread-safe c-ares contexts" FORCE)
+	add_subdirectory("${hx_cares_source}" "${PROJECT_BINARY_DIR}/cares")
+	get_target_property(hx_cares_target c-ares::cares ALIASED_TARGET)
+	set_target_properties(${hx_cares_target} PROPERTIES FOLDER "deps")
+	add_library(hx_c_platform_cares INTERFACE)
+	add_library(hx_c_platform::cares ALIAS hx_c_platform_cares)
+	set_target_properties(hx_c_platform_cares PROPERTIES EXPORT_NAME cares)
+	target_link_libraries(hx_c_platform_cares INTERFACE c-ares::cares)
+	install(TARGETS hx_c_platform_cares EXPORT hx_c_platformTargets)
+	install(FILES "${hx_cares_source}/LICENSE.md"
+		DESTINATION "${CMAKE_INSTALL_DATADIR}/hx_c_platform/licenses"
+		RENAME c-ares-LICENSE.md)
+	set(HX_OS_HAVE_CARES 1)
+endif()

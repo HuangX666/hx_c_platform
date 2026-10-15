@@ -1844,6 +1844,7 @@ int main(void)
 | `HX_OS_BUILD_EXAMPLES` | OFF | C 示例；存在 C++ 编译器时增加 C++ 示例 |
 | `HX_OS_BUILD_BENCHMARKS` | OFF | 开发用性能基准 |
 | `HX_OS_ENABLE_NETWORK` | ON | 原生套接字与网络生命周期 |
+| `HX_OS_ENABLE_CARES` | ON | 显式可取消 DNS 后端，依赖 NETWORK |
 | `HX_OS_ENABLE_LOOP` | ON | 有界异步请求、轮询和完成回调 |
 | `HX_OS_ENABLE_THREAD_POOL` | ON | 有界线程池与任务 |
 | `HX_OS_ENABLE_DELAYED_TASKS` | ON | 与线程池共享容量的延迟任务 |
@@ -1903,7 +1904,7 @@ int main(void)
 | `HX_OS_ICONV_SOURCE_DIR` | 空 | 未修改的 iconv 源码路径 |
 | `HX_OS_<PARSER>_SOURCE_DIR` | 空 | 所选解析器的源码路径 |
 
-关闭模块后保留公共声明和 ABI 入口，创建或实际操作返回 NOT_SUPPORTED，对应能力位清除；依赖组合明确检查。NETWORK 关闭时仍能用本地 loop；异步 DNS 需要 NETWORK、LOOP、THREAD_POOL。进程捕获还需要 PIPE 与 LOOP；翻译文件加载需要 TEXT_LOOKUP、LEXER、FILE_UTILS。能包含头文件不等于目标平台具备该能力。
+关闭模块后保留公共声明和 ABI 入口，创建或实际操作返回 NOT_SUPPORTED，对应能力位清除；依赖组合明确检查。NETWORK 关闭时仍能用本地 loop；原有系统异步 DNS 需要 NETWORK、LOOP、THREAD_POOL；显式 c-ares 解析需要 NETWORK 和 CARES，不需要 loop 或工作线程；HTTP 协程需要 HTTP、COROUTINES、THREAD_POOL。见[网络 I/O](NETWORK_IO.zh-CN.md)及 [HTTP 传输](HTTP_FILES.zh-CN.md)。进程捕获还需要 PIPE 与 LOOP；翻译文件加载需要 TEXT_LOOKUP、LEXER、FILE_UTILS。能包含头文件不等于目标平台具备该能力。
 
 ### 27.2 可选配置后端
 

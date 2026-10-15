@@ -2,6 +2,7 @@
 #define HX_C_PLATFORM_CPP_SOCKET_OPTIONS_HPP
 
 #include <hx_os_net.h>
+#include <hx_os_net_extra.h>
 #include <hx/Status.hpp>
 
 namespace hx {
@@ -56,8 +57,8 @@ public:
 	Result<void> dualStack(bool enabled = true) const noexcept
 	{
 		hx_os_error error = {};
-		auto status = hx_os_socket_set_dual_stack(
-			m_socket_, enabled, &error);
+		auto status =
+			hx_os_socket_set_dual_stack(m_socket_, enabled, &error);
 
 		return detail::Status(status, error);
 	}
@@ -65,8 +66,8 @@ public:
 	Result<void> broadcast(bool enabled = true) const noexcept
 	{
 		hx_os_error error = {};
-		auto status = hx_os_socket_set_broadcast(
-			m_socket_, enabled, &error);
+		auto status =
+			hx_os_socket_set_broadcast(m_socket_, enabled, &error);
 
 		return detail::Status(status, error);
 	}
@@ -91,8 +92,8 @@ public:
 		return detail::Status(status, error);
 	}
 
-	Result<void> multicastInterface(uint32_t interfaceIndex = 0) const
-		noexcept
+	Result<void> multicastInterface(
+		uint32_t interfaceIndex = 0) const noexcept
 	{
 		hx_os_error error = {};
 		auto status = hx_os_socket_set_multicast_interface(
@@ -115,6 +116,54 @@ public:
 		hx_os_error error = {};
 		auto status = hx_os_socket_set_multicast_loopback(
 			m_socket_, enabled, &error);
+
+		return detail::Status(status, error);
+	}
+
+	Result<void> buffers(
+		uint32_t sendBytes, uint32_t receiveBytes) const noexcept
+	{
+		hx_os_error error = {};
+		auto status = hx_os_socket_set_buffers(
+			m_socket_, sendBytes, receiveBytes, &error);
+
+		return detail::Status(status, error);
+	}
+
+	struct BufferSizes {
+		uint32_t sendBytes, receiveBytes;
+	};
+
+	Result<BufferSizes> buffers() const noexcept
+	{
+		BufferSizes value = {};
+		hx_os_error error = {};
+		auto status = hx_os_socket_get_buffers(m_socket_,
+			&value.sendBytes, &value.receiveBytes, &error);
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+
+		return value;
+	}
+
+	Result<void> joinMulticastSource(const hx_os_address &group,
+		const hx_os_address &source,
+		uint32_t interfaceIndex = 0) const noexcept
+	{
+		hx_os_error error = {};
+		auto status = hx_os_socket_join_multicast_source(
+			m_socket_, &group, &source, interfaceIndex, &error);
+
+		return detail::Status(status, error);
+	}
+
+	Result<void> leaveMulticastSource(const hx_os_address &group,
+		const hx_os_address &source,
+		uint32_t interfaceIndex = 0) const noexcept
+	{
+		hx_os_error error = {};
+		auto status = hx_os_socket_leave_multicast_source(
+			m_socket_, &group, &source, interfaceIndex, &error);
 
 		return detail::Status(status, error);
 	}

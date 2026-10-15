@@ -35,3 +35,9 @@
 操作见[依赖准备](DEPENDENCIES.zh-CN.md)、[构建选项与安装](REFERENCE.zh-CN.md#section-27)、[底层 SDK 调用](NATIVE_DEPENDENCIES.zh-CN.md)。共享库部署需要带上所选运行库；静态链接本库不等于所有依赖都已静态链接。
 
 先运行与业务相关的小示例，再在部署目标检查真实权限、路径、输入容量和关闭行为。详细回归日志及历史审查记录由维护者本地保存，不进入公开仓库和安装 SDK。远端 CI 保持关闭。
+
+## 4. 新增网络入口的边界
+
+新增 UDP 报文元数据、分散缓冲区 I/O、有界 TCP 拨号、c-ares resolver、TLS profile、HTTP 流式传输及协程桥接面向 Windows、Linux、Android。Linux ARMv7／AArch64 使用共用 POSIX 实现；交叉编译和 QEMU／模拟器运行不能写成板卡验收。BSD、iOS、QNX、RTOS、Harmony、WASM 不属于本次新增并验收的平台。
+
+网卡变化使用原生通知，Android 沙盒／SELinux 可能禁止订阅。收到通知后重新查询快照，它不保证完整事件历史。TCP user timeout 属于 Linux／Android 扩展，UDP ICMP reset 控制属于 Windows 扩展。命名 IPv6 zone 依赖 NET_OPTIONS。IDNA 由所选 curl 后端决定，不支持的转换明确返回 `NOT_SUPPORTED`。c-ares 可裁剪，也不能代替所有系统／VPN DNS 规则。适配层不修改防火墙、WSL 模式或全局网络设置。

@@ -15,6 +15,7 @@ int hx_os_i_coro_io_inside(void)
 }
 
 typedef struct hx_os_coro_io_job hx_os_coro_io_job;
+
 struct hx_os_coro_stream {
 	hx_os_atomic references;
 	hx_os_coro_runtime *runtime;
@@ -241,9 +242,11 @@ static hx_os_status hx_os_coro_io_open(
 	socket = &job->output->socket;
 
 	status = hx_os_socket_create(state->network,
-		job->operation.address.family, HX_OS_TCP, socket, error);
+		job->operation.address.family,
+		job->kind == HX_OS_CO_UDP ? HX_OS_UDP : HX_OS_TCP, socket,
+		error);
 	job->operation.socket = *socket;
-	if (job->kind != HX_OS_CO_LISTEN)
+	if (job->kind != HX_OS_CO_LISTEN && job->kind != HX_OS_CO_UDP)
 		return status;
 
 	if (status == HX_OS_OK && job->reuse)
@@ -253,7 +256,7 @@ static hx_os_status hx_os_coro_io_open(
 		status = hx_os_socket_bind(
 			*socket, &job->operation.address, error);
 
-	if (status == HX_OS_OK)
+	if (status == HX_OS_OK && job->kind == HX_OS_CO_LISTEN)
 		status = hx_os_socket_listen(*socket, job->backlog, error);
 
 	if (status == HX_OS_OK)
