@@ -2,6 +2,8 @@
 
 [简体中文](NATIVE_DEPENDENCIES.zh-CN.md) · [README](../README.md)
 
+**Use the same native SDK when a convenience wrapper does not cover your operation.** Existing SQLite code can still include sqlite3.h and execute SQL without shipping another SQLite alongside the queue API. Below are the CMake targets and a complete in-memory sample-table program: success is exit code 0 with no disk database. Supply the prefix through the [installed package setup](USAGE.md#installed-project).
+
 ## 1. Link once
 
 The convenience API and the native SDK can coexist. Use the installed package, or the existing source target:

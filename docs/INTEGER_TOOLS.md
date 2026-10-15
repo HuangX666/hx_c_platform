@@ -2,6 +2,16 @@
 
 [简体中文](INTEGER_TOOLS.zh-CN.md) · [README](../README.md)
 
+**Start with a complete program.** Use Varint/ZigZag for compact protocol integers and UUID v7 when a record ID should carry a timestamp.
+
+Open [integer_tools.c](../examples/integer_tools.c). varint_encode 300 → decode → zigzag_encode -1 → uuid_v7_generate_string → destroy the string.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_integer_tools`. This program needs no arguments or input files.
+
+**Expected result:** The first lines are `300 uses 2 bytes; decoded: 300` and `ZigZag -1: 1`; the UUID varies. Respect the consumed-byte count when decoding multiple fields.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 ## 1. Compact integers
 
 Include `hx_os.h` or `hx_os_varint.h`. Buffer operations need no initialization or optional dependency. Varints store unsigned 64-bit values in 1–10 bytes, using the shortest base-128 representation. `300` encodes as `ac 02`. ZigZag maps signed values to unsigned values: `0 → 0`, `-1 → 1`, `1 → 2`, and `-2 → 3`. This is an integer encoding utility, not a complete Protocol Buffers implementation.

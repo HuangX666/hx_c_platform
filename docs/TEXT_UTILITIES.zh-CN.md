@@ -2,6 +2,16 @@
 
 [English](TEXT_UTILITIES.md) · [字符串工具](COMMON_UTILITIES.zh-CN.md) · [README](../README.zh-CN.md)
 
+**先运行一个完整例子。** 处理分隔字段、端口文字和 file2/file10 这样的名称时，使用文本拆分、严格数字转换和自然比较。
+
+打开 [text_utilities.c](../examples/text_utilities.c)。split_init／next 逐段借用输入 → parse_u64／i64 转成整数 → compare_natural 比较含数字的名称。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_text_utilities`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**能看到 alpha、beta、空段、gamma、空段；随后输出端口 443、偏移 -42，以及 file2 排在 file10 前。保存拆分结果供以后使用时，需要复制原文或保证原文仍在。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 ## 1. 不复制原文的拆分
 
 `<hx_text_utils.h>` 提供放在栈上的游标，每次返回一个指向现有输入的 `hx_string_view`。它不分配内存，也不修改输入。如果结果需要持有一份自己的原文副本，继续使用已有的 `hx_string_split()` / `hx::Strings::split()`。

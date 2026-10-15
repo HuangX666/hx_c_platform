@@ -2,6 +2,8 @@
 
 [English](IPC.md) · [README](../README.zh-CN.md) · [公开 C 接口](../include/hx_ipc.h) · [C++11 接口](../include/hx/Ipc.hpp)
 
+构建前先完成一次[示例配置](../examples/README.zh-CN.md#run)。下文的 build 是已有构建目录的占位名，换成自己的目录即可，不必为每种协议再建一个目录。命令从库源码根目录执行；只构建本例需要的两端程序。
+
 **业务示例按通信方式独立组织：**[本地 IPC 设备控制](IPC_BUSINESS.zh-CN.md)、[TCP 订单](TCP_BUSINESS.zh-CN.md)、[UDP 采样](UDP_BUSINESS.zh-CN.md)、[KCP 数据块](KCP_BUSINESS.zh-CN.md)。每套都有自己的 C 程序和运行器；TCP／UDP／KCP 业务使用 socket/KCP 接口，不调用 IPC 设备程序。下文的最小回显示例用于验证 IPC 接口连通性，并说明其生命周期和跨语言协议。
 
 四套业务示例的请求、回复和主动通知现已全部使用 UTF-8 JSON，包含实际解析、字段类型检查和安全字符串转义。下文回显程序属于底层接口连通性检查，不承载这些业务协议。
@@ -26,29 +28,33 @@ TCP/UDP/KCP 也接受 `[::1]`，拒绝非回环 IP。监听端口可以为 `0`�
 在仓库根目录构建。已有自己的构建目录时，可以继续使用它。
 
 ```sh
-cmake -S . -B build-ipc -DHX_OS_BUILD_EXAMPLES=ON
-cmake --build build-ipc --config Release --parallel 4
+cmake -S . -B build -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build build --config Release --target hx_os_ipc_server
+cmake --build build --config Release --target hx_os_ipc_client
+cmake --build build --config Release --target hx_os_ipc_threads
 ```
 
-下方 Windows 路径适用于 Visual Studio 生成器；使用 Ninja 时可执行文件直接在 `build-ipc/bin`，去掉路径中的 `Release`。
+第 3 节的 ipc_threads 是 C++11 示例；只使用第 2 节 C 客户端时可跳过该目标。
+
+下方 Windows 路径适用于 Visual Studio 生成器；使用 Ninja 时可执行文件直接在 `build/bin`，去掉路径中的 `Release`。
 
 **Windows PowerShell，终端一：**
 
 ```powershell
-.\build-ipc\bin\Release\hx_os_ipc_server.exe local://demo 1
+.\build\bin\Release\hx_os_ipc_server.exe local://demo 1
 ```
 
 **Windows PowerShell，终端二：**
 
 ```powershell
-.\build-ipc\bin\Release\hx_os_ipc_client.exe local://demo
+.\build\bin\Release\hx_os_ipc_client.exe local://demo
 ```
 
 **Linux/macOS，终端一和终端二分别执行：**
 
 ```sh
-./build-ipc/bin/hx_os_ipc_server local://demo 1
-./build-ipc/bin/hx_os_ipc_client local://demo
+./build/bin/hx_os_ipc_server local://demo 1
+./build/bin/hx_os_ipc_client local://demo
 ```
 
 服务端命令会等待，因此第二条命令需要在另一个终端执行。客户端输出 `Reply: Hello from C`；服务端输出实际监听地址，处理完后输出 `Handled 1 complete messages.` 并退出。服务端最后的 `1` 表示处理一条业务消息后结束。将两个命令中的地址一起改为表中的 TCP、UDP 或 KCP 地址，即可切换传输。
@@ -80,16 +86,16 @@ hx_ipc_message_release(reply);
 重新启动服务端，让它处理 20 条请求：
 
 ```powershell
-.\build-ipc\bin\Release\hx_os_ipc_server.exe local://demo 20
+.\build\bin\Release\hx_os_ipc_server.exe local://demo 20
 ```
 
 另一个终端运行：
 
 ```powershell
-.\build-ipc\bin\Release\hx_os_ipc_threads.exe local://demo
+.\build\bin\Release\hx_os_ipc_threads.exe local://demo
 ```
 
-Linux/macOS 对应命令是 `./build-ipc/bin/hx_os_ipc_server local://demo 20` 和 `./build-ipc/bin/hx_os_ipc_threads local://demo`。
+Linux/macOS 对应命令是 `./build/bin/hx_os_ipc_server local://demo 20` 和 `./build/bin/hx_os_ipc_threads local://demo`。
 
 [完整 C++11 示例](../examples/ipc_threads.cpp) 创建四个业务线程，每个线程发送五次请求。每个线程使用同一个底层连接，调用方式如下：
 
@@ -132,7 +138,7 @@ flowchart LR
 终端一先启动：
 
 ```powershell
-.\build-ipc\bin\Release\hx_os_ipc_server.exe tcp://127.0.0.1:39001 1
+.\build\bin\Release\hx_os_ipc_server.exe tcp://127.0.0.1:39001 1
 ```
 
 终端二执行：
@@ -288,7 +294,7 @@ KCP 模式的 HELLO/WELCOME 是普通外层 HXIP UDP 帧。双方确定会话值
 ## 9. 运行示例
 
 ```sh
-python examples/run_ipc_business.py --bin-dir build-ipc/bin/Release
+python examples/run_ipc_business.py --bin-dir build/bin/Release
 ```
 
 该入口启动独立服务端和客户端，使用 JSON 完成设备命令与通知。跨语言协议与双终端手动运行方式见前文；自动回归仅由维护者本机保留。平台要求与限制见[平台支持](PLATFORMS.zh-CN.md)。

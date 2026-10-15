@@ -2,6 +2,16 @@
 
 [English](CRYPTO.md) · [首页](../README.zh-CN.md) · [依赖构建](DEPENDENCIES.zh-CN.md)
 
+**先运行一个完整例子。** 需要保存只有持有密码的一方才能还原的文本时，可以使用文本加解密便利入口。
+
+打开 [encrypt_text.c](../examples/encrypt_text.c)。encrypt_text 输入密码和 UTF-8 → 保存带认证的加密文本 → decrypt_text → 使用还原结果 → 销毁字符串并清理本线程加密资源。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_encrypt_text`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**输出一行 `Encrypted: ...` 和 `Decrypted: Hello, UTF-8!`。随机盐和 nonce 让密文每次不同；示例密码只用于演示，业务应从自己的安全输入取得密码。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。使用[安装包接入](USAGE.zh-CN.md#installed-project)时，也必须保留对应 SDK 模块。
+
 ## 1. 构建与发布
 
 `HX_OS_ENABLE_CRYPTO` 默认开启，将固定版本的 OpenSSL 3.5 SDK 接入编译库；业务仍只需要包含 hx 头文件。核心继续使用 C99，C++11 包装不使用异常。模块启用后不会启动后台线程。

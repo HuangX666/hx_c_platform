@@ -2,6 +2,16 @@
 
 [English](CONTROL.md) · [README](../README.zh-CN.md)
 
+**先运行一个完整例子。** 请求失败后要延迟重试、限制发送频率，或测量一个步骤耗时时，选择退避、令牌桶或秒表。
+
+打开 [control.c](../examples/control.c)。stopwatch_start → backoff_next 算三次重试延迟 → token_bucket_try_take 尝试领取额度 → elapsed_ns 读取耗时。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_control`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**输出三次延迟、`Retry budget exhausted.`，以及限流时建议的截止时间和本次耗时。耗时随运行变化；这些入口不会替业务自动重试或发送请求。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 ## 1. 三种工具分别做什么
 
 `<hx_os_control.h>` 提供三个可以放在栈上的小对象。它们不分配内存、不创建线程，也不会暗中休眠或重试业务操作。全部属于始终可用的核心，不依赖可选宽位运算模块。复制对象得到独立快照；使用前先初始化，共享对象的修改由调用者串行化。输出变量不得与状态对象重叠。不要直接修改成员，也不要把 `&watch.started_ns`、`&bucket.updated_ns` 等成员地址当作输出参数。

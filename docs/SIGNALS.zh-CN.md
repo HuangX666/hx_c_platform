@@ -2,6 +2,16 @@
 
 [English](SIGNALS.md) · [README](../README.zh-CN.md)
 
+**先运行一个完整例子。** 一个模块完成动作，需要通知当前进程中多个订阅者时，使用信号。回调在 emit 调用线程同步执行。
+
+打开 [signal_observer.c](../examples/signal_observer.c)。create handler → connect_all 订阅所有名称 → calldata 写 items=42 → emit ready 和 saved → close_until。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_signal_observer`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**输出 `ready: 42 items` 和 `saved: 42 items`。只关注某一种事件时改用具名订阅；允许修改参数的完整例子是 signal_mutable.c，会把 volume 从 80 改为 60。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 ## 1. 订阅一个名称，或订阅全部名称
 
 信号处理器属于你的某个组件，负责保存订阅，在组件发出信号时同步调用回调。它不会创建工作线程、消息队列或进程级全局事件总线。

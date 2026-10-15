@@ -2,6 +2,16 @@
 
 [English](CONFIGURATION.md) · [README](../README.zh-CN.md)
 
+**先运行一个完整例子。** 程序启动时需要读取配置值，读取完成后保持只读查询时，使用配置文档。
+
+打开 [configuration.c](../examples/configuration.c)。parse 解析示例内置 TOML → 找 server.port 节点 → get_i64 取得整数 → release 整份文档。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_configuration`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**输出 `Server port: 8080`，不需要准备输入文件。换成文件时使用 load；JSON 的完整文件程序见入门教程，字段不匹配要检查类型错误。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 如果程序要从 `config.json` 读出端口或设备名称，先看[读取 JSON 的完整程序](USAGE.zh-CN.md#configuration)。一次加载会得到一份只读文档；你按字段路径取值，用完释放文档。修改原文件不会自动改变已经加载的值，需要再次加载。
 
 本文说明各格式可以表示什么、如何选择解析器，以及数据能用多久。需要修改内存中的值并保存，用[设置教程](USAGE.zh-CN.md#settings)；需要把自己的结构体转换成 JSON 等文本，用[序列化教程](SERIALIZATION.zh-CN.md)。

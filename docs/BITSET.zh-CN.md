@@ -2,6 +2,16 @@
 
 [English](BITSET.md) | [容器](CONTAINERS.zh-CN.md)
 
+**先运行一个完整例子。** 任务有连续编号，只需要记录完成／未完成时，用位集合可以避免为每个编号创建对象。
+
+打开 [bitset.c](../examples/bitset.c)。`create(100, 1000)` 准备 100 个标志并限制最大数量 → `set_range` 标记 0～9 → `set` 标记 42 → `find_next` 查找未完成编号 → `destroy`。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_bitset`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**输出 `Completed: 11 of 100` 和 `Next unfinished job: 10`。把 100 改为当前任务数，完成一个任务时标记它的下标；这里的容量单位是位。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 ## 1. 记录大量编号的状态
 
 `hx_os_bitset` 为每个编号保存一个布尔标志，适合记录任务完成情况、槽位占用、设备选择和有限整数集合。编号从零开始。C++11 包装为 `<hx/Bitset.hpp>` 中的 `hx::Bitset`，通过 `Result` 返回结果，不使用异常。

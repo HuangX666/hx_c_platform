@@ -2,6 +2,16 @@
 
 [English](COMMON_UTILITIES.md) · [返回首页](../README.zh-CN.md)
 
+**先运行一个完整例子。** 需要拆分文字、按名字调用一段处理逻辑，或精确换算时间单位时，先用这个小程序观察每个结果。
+
+打开 [common_tasks.c](../examples/common_tasks.c)。trim／split → muldiv_u64 换算帧间隔 → 注册并调用 twice → 读取参数包 output → repeat 执行两次 tick → 释放。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_common_tasks`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**完整模块配置下会看到 `pieces: 3`、`frame interval: 33366667 ns`、`procedure result: 42` 和两次 tick。命名过程在当前线程调用，不是远程 RPC。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 这批接口沿用 OBS 的思路：常见动作由一个入口完成，复杂控制留在扩展入口。实现独立于 OBS，没有复制 OBS 源码或增加第三方依赖。C99 与 C++11 使用同一份平台实现；旧公共结构体布局和既有函数保持不变。
 
 ## 从要完成的动作选择入口

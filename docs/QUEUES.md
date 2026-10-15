@@ -2,6 +2,16 @@
 
 [简体中文](QUEUES.zh-CN.md) · [Fixed byte rings](RING.md) · [README](../README.md)
 
+**Start with a complete program.** Use a message queue to pass complete records from a collection thread to a storage/upload thread.
+
+Open [message_queue.c](../examples/message_queue.c). Create a two-record queue → producer sends six samples in a batch → main receives batches → drain after close → join → destroy.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_message_queue`. This program needs no arguments or input files.
+
+**Expected result:** It prints six device-17 readings, from `sample 1: 20.5` to `sample 6: 23.0`. Replace device_sample and the processing code while retaining completion counts and shutdown order.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 ## 1. Choose an interface
 
 | Requirement | Interface | Behavior |

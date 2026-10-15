@@ -2,6 +2,8 @@
 
 [简体中文](UDP_BUSINESS.zh-CN.md) · [README](../README.md) · [Socket C API](../include/hx_os_net.h)
 
+Complete the [example setup](../examples/README.md#run) first. Below, build is a placeholder for your existing directory; protocols do not each need a new build directory. Run commands from the checkout and build the endpoints used here.
+
 ## 1. Independent UDP datagrams
 
 This example calls `hx_os_socket_send_to()` and `hx_os_socket_receive_from()` with no IPC endpoint, HXIP framing or implicit handshake. One sensor thread publishes samples while another receives feedback. The dashboard holds two devices' latest state and replies. It runs with IPC disabled.
@@ -11,32 +13,33 @@ UDP retains loss, duplication and reordering. The chosen application policy keep
 ## 2. Build and run
 
 ```sh
-cmake -S . -B build-net -DHX_OS_BUILD_EXAMPLES=ON
-cmake --build build-net --config Release --parallel 4
+cmake -S . -B build -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build build --config Release --target hx_os_udp_dashboard
+cmake --build build --config Release --target hx_os_udp_sensor
 ```
 
 Windows PowerShell, Visual Studio build:
 
 ```powershell
-python examples/run_udp_business.py --bin-dir build-net/bin/Release
-python examples/run_udp_business.py --simulate-gaps --bin-dir build-net/bin/Release
+python examples/run_udp_business.py --bin-dir build/bin/Release
+python examples/run_udp_business.py --simulate-gaps --bin-dir build/bin/Release
 ```
 
-Linux/WSL uses `python3` with `--bin-dir build-net/bin`. Existing development paths are `build-shared-msvc/bin/Release` or `build-shared-linux/bin`; omit `Release` with Windows Ninja. The runner chooses a port and verifies both processes' state and feedback.
+Linux/WSL uses `python3` with `--bin-dir build/bin`. Existing development paths are `build-shared-msvc/bin/Release` or `build-shared-linux/bin`; omit `Release` with Windows Ninja. The runner chooses a port and verifies both processes' state and feedback.
 
 Manual Windows **terminal one**:
 
 ```powershell
-.\build-net\bin\Release\hx_os_udp_dashboard.exe 39002
+.\build\bin\Release\hx_os_udp_dashboard.exe 39002
 ```
 
 After `Listening:`, **terminal two**:
 
 ```powershell
-.\build-net\bin\Release\hx_os_udp_sensor.exe 39002 --simulate-gaps
+.\build\bin\Release\hx_os_udp_sensor.exe 39002 --simulate-gaps
 ```
 
-Omit `--simulate-gaps` for the ordinary run. On Linux/WSL use `./build-net/bin/hx_os_udp_dashboard 39002` and `./build-net/bin/hx_os_udp_sensor 39002 --simulate-gaps`. Both use `127.0.0.1`; the argument is a port number, not a `udp://` URI. Restart the dashboard for each workflow.
+Omit `--simulate-gaps` for the ordinary run. On Linux/WSL use `./build/bin/hx_os_udp_dashboard 39002` and `./build/bin/hx_os_udp_sensor 39002 --simulate-gaps`. Both use `127.0.0.1`; the argument is a port number, not a `udp://` URI. Restart the dashboard for each workflow.
 
 ## 3. One JSON object per datagram
 
@@ -108,10 +111,10 @@ Short mutexes serialize nonblocking socket calls; retry sleeps occur outside loc
 ## 6. Run the business example
 
 ```sh
-python examples/run_udp_business.py --bin-dir build-net/bin/Release
-python examples/run_udp_business.py --bin-dir build-net/bin/Release --simulate-gaps
+python examples/run_udp_business.py --bin-dir build/bin/Release
+python examples/run_udp_business.py --bin-dir build/bin/Release --simulate-gaps
 ```
 
-Run normal samples/feedback first, then add gaps, duplicates and late data to observe receiver behavior. Use build-net/bin on Linux.
+Run normal samples/feedback first, then add gaps, duplicates and late data to observe receiver behavior. Use build/bin on Linux.
 
 With WSL2 mirrored networking, `127.0.0.1` can traverse a virtual network with MTU 1500. This machine lost fragments above 1472 bytes of IPv4 UDP payload. The example keeps JSON to 1023 bytes. For larger business messages, see the [KCP example](KCP_BUSINESS.md) or [TCP example](TCP_BUSINESS.md); the library does not silently split ordinary UDP or change its loss semantics. Validate WSL-internal loopback separately from Windows/WSL communication; see the [IPC platform note](IPC.md).

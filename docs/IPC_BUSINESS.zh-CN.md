@@ -2,6 +2,8 @@
 
 [English](IPC_BUSINESS.md) · [README](../README.zh-CN.md) · [IPC 接口与协议](IPC.zh-CN.md)
 
+构建前先完成一次[示例配置](../examples/README.zh-CN.md#run)。下文的 build 是已有构建目录的占位名，换成自己的目录即可，不必为每种协议再建一个目录。命令从库源码根目录执行；只构建本例需要的两端程序。
+
 ## 1. 本例做什么
 
 客户端的两个请求线程分别操作设备 `101`、`102`，另一个接收线程处理服务端主动通知。服务端保存这两个模拟设备的参数，处理打开、查询、修改和关闭。运行不需要真实硬件。
@@ -13,20 +15,21 @@
 在仓库根目录构建默认模块：
 
 ```sh
-cmake -S . -B build-net -DHX_OS_BUILD_EXAMPLES=ON
-cmake --build build-net --config Release --parallel 4
+cmake -S . -B build -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build build --config Release --target hx_os_ipc_device_server
+cmake --build build --config Release --target hx_os_ipc_device_client
 ```
 
 Windows PowerShell，Visual Studio 生成器：
 
 ```powershell
-python examples/run_ipc_business.py --bin-dir build-net/bin/Release
+python examples/run_ipc_business.py --bin-dir build/bin/Release
 ```
 
 Linux/WSL：
 
 ```sh
-python3 examples/run_ipc_business.py --bin-dir build-net/bin
+python3 examples/run_ipc_business.py --bin-dir build/bin
 ```
 
 脚本启动两个独立 C 进程，自动选择唯一的本地名称，核对业务状态，成功输出 `PASS ipc_business_local`。已有构建可以直接指定 `build-shared-msvc/bin/Release` 或 `build-shared-linux/bin`；Windows Ninja 构建去掉 `Release`。运行器仅使用 Python 标准库。
@@ -36,16 +39,16 @@ python3 examples/run_ipc_business.py --bin-dir build-net/bin
 Windows 终端一：
 
 ```powershell
-.\build-net\bin\Release\hx_os_ipc_device_server.exe local://device-demo
+.\build\bin\Release\hx_os_ipc_device_server.exe local://device-demo
 ```
 
 看到 `Listening:` 后，在终端二执行：
 
 ```powershell
-.\build-net\bin\Release\hx_os_ipc_device_client.exe local://device-demo
+.\build\bin\Release\hx_os_ipc_device_client.exe local://device-demo
 ```
 
-Linux/WSL 分别执行 `./build-net/bin/hx_os_ipc_device_server local://device-demo` 和 `./build-net/bin/hx_os_ipc_device_client local://device-demo`。服务端演示总时限为 30 秒；每次重跑流程重新启动服务端。手工运行不需要 Python。
+Linux/WSL 分别执行 `./build/bin/hx_os_ipc_device_server local://device-demo` 和 `./build/bin/hx_os_ipc_device_client local://device-demo`。服务端演示总时限为 30 秒；每次重跑流程重新启动服务端。手工运行不需要 Python。
 
 ## 4. JSON 消息与线程
 
@@ -128,7 +131,7 @@ hx_string_destroy(&request);
 ## 6. 所有权与运行示例
 
 ```sh
-python examples/run_ipc_business.py --bin-dir build-net/bin/Release
+python examples/run_ipc_business.py --bin-dir build/bin/Release
 ```
 
-主线程持有端点和工作参数，先等待工作线程退出，再关闭端点。逐条释放消息、配置文档与临时字符串。关闭超时保留所有者以便重试；请求超时不代表对方未执行。运行器启动两个真实程序，检查 14 个回复、bye 和两条通知。Linux 的程序目录改为 build-net/bin。
+主线程持有端点和工作参数，先等待工作线程退出，再关闭端点。逐条释放消息、配置文档与临时字符串。关闭超时保留所有者以便重试；请求超时不代表对方未执行。运行器启动两个真实程序，检查 14 个回复、bye 和两条通知。Linux 的程序目录改为 build/bin。

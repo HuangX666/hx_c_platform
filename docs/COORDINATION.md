@@ -2,6 +2,16 @@
 
 [简体中文](COORDINATION.zh-CN.md)
 
+**Start with a complete program.** Combine cancellation, WaitGroup and a read/write lock when a controller must stop workers and wait for cleanup.
+
+Open [coordination.c](../examples/coordination.c). Register work before starting two workers → increment under the write lock → request cancellation → wait for completion → join → destroy coordination objects.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_coordination`. This program needs no arguments or input files.
+
+**Expected result:** It prints `Processed ... records, then stopped cooperatively.`; the count varies with scheduling. A cancellation request is not completion: wait and join before freeing worker data.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 ## 1. Three independent tools
 
 Enable `HX_OS_ENABLE_THREAD_EX`. These facilities use native threads and require no thread pool, coroutine runtime or background worker.

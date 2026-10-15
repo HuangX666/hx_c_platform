@@ -2,6 +2,16 @@
 
 [简体中文](BYTE_QUEUE.zh-CN.md) · [README](../README.md)
 
+**Start with a complete program.** Use ByteQueue to accumulate partial serial/network bytes and consume them in order. It does not parse messages.
+
+Open [byte_queue_ring.c](../examples/byte_queue_ring.c). `example_queue` creates a bounded queue → `write` adds hello → `read_some` returns available bytes and their count → `destroy`.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_byte_queue_ring`. This program needs no arguments or input files.
+
+**Expected result:** The first line is `ByteQueue: 5 bytes: hello`; the program then demonstrates a fixed ring. Process the returned byte count. The buffer adds neither a string terminator nor thread synchronization.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 Use `hx_os_byte_queue` to accumulate a byte stream and consume complete pieces. It reuses the existing deque storage and CONTAINERS switch. It does not provide message framing, locking, blocking waits or background threads. For concurrent producers/consumers, the caller supplies synchronization or uses the higher-level IPC API.
 
 ## 1. Append, inspect and consume a block

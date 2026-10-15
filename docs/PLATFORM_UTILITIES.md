@@ -2,6 +2,23 @@
 
 [简体中文](PLATFORM_UTILITIES.zh-CN.md)
 
+**Start with a concrete action.** This page covers several OS facilities. Pick a row, build through the [example instructions](../examples/README.md#run), and prepare paths/arguments using [input setup](../examples/README.md#inputs).
+
+| Task | Complete program | Call sequence and result |
+| --- | --- | --- |
+| Inspect OS and process CPU usage | [system_info.c](../examples/system_info.c) | Version → create sampler → query after an interval → print version/percentage |
+| Read text and optionally save a copy | [text_file.c](../examples/text_file.c) | read_text → optional write_text → display → destroy string |
+| Read four bytes from the middle of a file | [positioned_read.c](../examples/positioned_read.c) | open → read_at(4) → close; demo.txt prints 34 35 36 37 |
+| Map an existing file | [mapped_file.c](../examples/mapped_file.c) | map_open → inspect bytes → size/CRC32 → destroy |
+| Read an environment variable | [environment.c](../examples/environment.c) | Pass a name such as PATH → get_string → print; no variable is changed |
+| Locate a user's configuration directory | [special_paths.c](../examples/special_paths.c) | config_home_string → print path; this does not create the directory |
+| Observe directory changes | [watch_directory.c](../examples/watch_directory.c) | Create watch → callbacks for five seconds → close; edit from another terminal |
+| Start a program and collect output | [capture_process.c](../examples/capture_process.c) | Executable/arguments → capture_run → wait → use output and close |
+| Load an application plugin | [load_plugin.c](../examples/load_plugin.c) | Open → check ABI → bind/call → unload; use the [public plugin](../examples/README.md#plugin) |
+| Transfer through local pipes | [pipe_transfer.c](../examples/pipe_transfer.c) | Create loop/endpoints → submit I/O → completion → close |
+
+Check status at each step. Paths, metrics and event counts depend on the environment; support still depends on platform facilities and permissions. Later snippets explain individual calls; linked complete programs contain setup and shutdown.
+
 Common operations have direct C entry points. Optional C++11 headers wrap the same implementation. A NULL context selects the existing immutable default allocator. Feature switches retain declarations and failure stubs, with the corresponding capability bit cleared.
 
 ## System information
@@ -76,7 +93,7 @@ Paths are UTF-8 filesystem paths; a relative filename is resolved against the cu
 
 Serialize each handle with its close. A symbol borrows module storage, and NULL can be a successful POSIX data-symbol address. Stop calls, release plugin objects, disconnect callbacks and finish plugin TLS destructors before unload. Close consumes the handle even on native failure; an explicit C++ close can report errors, whereas the destructor cannot report its status. Loading/unloading may run module constructors/destructors and can block.
 
-`examples/load_plugin.c` loads the test module, negotiates ABI using the library's ABI query, and reads the plugin version. CTest builds this fixture itself; the example needs no preinstalled plugin or external process.
+[load_plugin.c](../examples/load_plugin.c) and [demo_plugin.c](../examples/demo_plugin.c) form a public pair. Follow the [run steps](../examples/README.md#plugin) to build both and obtain `Compatible plugin: Example plugin 1.0`, without private test fixtures.
 
 C callers can use `hx_os_library_bind` or `_bind_ex` to write a native function pointer directly into a typed variable, passing its address and `sizeof(variable)`. This avoids repeating pointer conversion code. The destination stays unchanged on failure.
 
@@ -119,7 +136,7 @@ hx::Result<void> list_directory(const char *path) noexcept
 
 File::open and Directory::open return move-only core owners, including with FILE_UTILS disabled. File::get borrows its native handle. Serialize cursor operations. readSome/readAt return Result<ReadResult>; EOF and failures can retain byte progress through hasValue(). Files convenience methods return Result<String> or Result<Buffer>. Directory::next(true) also queries entry kind; default next() requires no optional file-info capability.
 
-`examples/text_file.c` reads UTF-8 in one call and optionally atomically publishes it to a second path; CTest runs the same C source on both hosts.
+`examples/text_file.c` reads UTF-8 in one call and optionally atomically publishes it to a second path. Check the destination before passing a second path.
 
 `File::read` additionally treats EOF as successful `ReadResult{bytes, eof}`; errors still retain progress. `hx_os_directory_visit` and `Directory::forEach` visit directly with one reusable bounded name buffer and guaranteed close; EOF/explicit stop is success. See [visitor and text-view contracts](COMMON_UTILITIES.md).
 
@@ -140,7 +157,7 @@ hx::Result<hx::String> application_mode() noexcept
 }
 ```
 
-`examples/environment.c` queries a named variable directly. Its CTest supplies a private test value in the child environment and does not edit host settings.
+`examples/environment.c` queries a named variable directly. A missing variable returns NOT_FOUND; querying does not modify host settings.
 
 ## Special paths
 
@@ -320,7 +337,9 @@ hx_os_status status = hx_os_loop_attach_fd(loop, fd, HX_OS_WAIT_READ,
 // Drive loop; finally check hx_os_loop_detach_fd(&watch, &error).
 ```
 
-## Process control, capture and system helpers (batch 18)
+<a id="process-control-capture-and-system-helpers-batch-18"></a>
+
+## Process control, capture and system helpers
 
 PROCESS and SYSTEM_UTILS default to ON and can be disabled independently. The system module adds Shell32 on Windows for native Unicode arguments. Capture requires PROCESS + PIPE + LOOP, and works with NETWORK disabled. The integer helpers and explicit POSIX timespec conversions remain available without either module; Windows timespec operations return NOT_SUPPORTED.
 
@@ -371,7 +390,9 @@ if (status == HX_OS_OK) {
 
 See [capture_process.c](../examples/capture_process.c) for an executable example with an explicit retry/discard policy, and the public process header for all ownership/error contracts. Native macOS, Windows 7 and embedded targets remain pending validation.
 
-## Scheduling requests and delayed tasks (batch 19)
+<a id="scheduling-requests-and-delayed-tasks-batch-19"></a>
+
+## Scheduling requests and delayed tasks
 
 THREAD_EX adds explicit thread/current-thread priority and affinity requests. Windows maps idle/normal/time-critical to native relative thread priorities; the process priority class still matters. Linux requests SCHED_IDLE/OTHER with priority zero, or SCHED_RR at its native maximum. Apple requests the native scheduler's low/middle/high ranges (SCHED_OTHER for idle/normal, RR for high). Permission/native failures are preserved. These requests promise neither a fixed CPU frequency nor hard real-time response. Raising priority on an idle worker in tests is followed by restoring normal before it is released. Changing priority back can itself require privileges on older systems. Callers exclude concurrent join/destruction/scheduling changes.
 
@@ -407,7 +428,9 @@ hx::Result<hx::Task<int>> delayed_answer(hx::ThreadPool &pool) noexcept
 
 See [delayed_task.c](../examples/delayed_task.c) for a C example and the existing pool ownership contracts for shutdown. Native references: [Linux affinity](https://man7.org/linux/man-pages/man3/pthread_setaffinity_np.3.html), [Windows affinity](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setthreadaffinitymask).
 
-## Local sockets and duplex file endpoints (batch 20)
+<a id="local-sockets-and-duplex-file-endpoints-batch-20"></a>
+
+## Local sockets and duplex file endpoints
 
 LOCAL_SOCKETS defaults ON and requires NETWORK. A pathname local stream uses HX_OS_LOCAL / HX_OS_LOCAL_STREAM; both the dedicated factory and ordinary socket_create accept that combination. Local address storage is separate from the existing IP address/operation ABI. Paths are strict UTF-8 with a terminating NUL inside 108 bytes; macOS further enforces its shorter native sun_path. Abstract addresses, descriptor passing, peer credentials and datagrams are outside this interface. Native returned names must fit and validate as UTF-8; empty output denotes an unnamed peer. No truncation is hidden.
 
@@ -458,7 +481,9 @@ hx::Result<std::pair<hx::File, hx::File>> make_channel() noexcept
 See [duplex_message.c](../examples/duplex_message.c). [Microsoft AF_UNIX description](https://devblogs.microsoft.com/commandline/af_unix-comes-to-windows/) documents the UTF-8 pathname/provider boundary. macOS, Win7 and embedded native runs remain pending.
 
 
-## Registry, power requests and obfuscation (batch 21)
+<a id="registry-power-requests-and-obfuscation-batch-21"></a>
+
+## Registry, power requests and obfuscation
 
 Use `hx_os_registry_open_user` to open an explicit HKCU path and `hx_os_registry_read_string` to receive strict UTF-8 directly in `hx_string`. A two-pass `read_string_buffer` entry shares that decoder. String reads accept REG_SZ/REG_EXPAND_SZ literally, never expand environment variables, bound native values to 1 MiB and retry capacity races at most eight times. Invalid UTF-16, embedded NUL, malformed DWORD and type mismatch remain distinct failures. Outputs stay unchanged on failure. Paths are relative registry paths with backslash separators, not filesystem paths. Creation, write access and WOW64 view selection are explicit. Exclusive creation preserves existing keys. Native creation may create parents and is not transactional. Serialize use of a key and exclude close. Close consumes the handle even on a native error. Other systems and disabled builds return NOT_SUPPORTED.
 
@@ -471,7 +496,9 @@ String obfuscation is reversible XOR, not cryptography. `tools/obfuscate_string.
 REGISTRY, SLEEP_INHIBIT, PERFORMANCE_REQUEST and OBFUSCATION are independent CMake switches, default ON. Capabilities describe compiled adapters; native policy and version restrictions still apply. Windows adds advapi32 only when registry or the existing random fallback needs it. Apple propagates framework and Objective-C runtime link requirements for static consumers.
 
 
-## Calendar, translation table and bit streams (batch 22)
+<a id="calendar-translation-table-and-bit-streams-batch-22"></a>
+
+## Calendar, translation table and bit streams
 
 `hx_os_wall_time_format_utc_string(milliseconds, NULL, &text, &error)` returns an ISO-like UTC timestamp directly in an owning UTF-8 string. The buffer entry supports two-pass capacity queries without partial output. Unix milliseconds are floored to seconds, including negative values. The shared Gregorian implementation covers years 0001..9999, independent of native time_t limits. The strict UTF-8 pattern is bounded to 65536 bytes and accepts %CCYY, %MM, %DD, %hh, %mm, %ss and %% only. Invalid patterns/encoding and out-of-range dates leave output unchanged. NULL chooses %CCYY-%MM-%DDT%hh:%mm:%ssZ. No leap-second representation, locale change or allocation occurs in the buffer formatter. The string entry allocates bounded temporary/output storage with its context.
 
@@ -484,7 +511,9 @@ Bit reader/writer values live on the stack and borrow caller buffers. Count unit
 CALENDAR, TEXT_LOOKUP and BITSTREAM are independent default-on switches. Disabled operations return NOT_SUPPORTED with absent capability bits. The C++11 conveniences are `hx::Calendar::utc`, `hx::TextLookup::get` and `hx::BitReader`/`hx::BitWriter`; they reuse the C implementations. Bit cursors remain borrowed views, while TextLookup provides movable synchronous RAII.
 
 
-## Synchronous signals and stack parameters (batch 23a)
+<a id="synchronous-signals-and-stack-parameters-batch-23a"></a>
+
+## Synchronous signals and stack parameters
 
 Create a dispatcher with `hx_os_signal_handler_create`, connect a copied signal name, and call `hx_os_signal_emit` with an optional stack `hx_os_calldata` pack. The C example is `examples/signal_notifications.c`. No background thread or queue is created. Callbacks run synchronously on the emitter, outside locks, in registration order for that emission's snapshot. Connections added after acceptance wait for the next emit. Disconnected callbacks that have not started are skipped. Concurrent emits can invoke the same callback concurrently; its user state must support that use. Callback failures do not suppress later eligible callbacks; emit returns the first non-OK status and matching native error details. The callback receives an initialized, non-NULL error pointer borrowed for the call. A mismatched error.status is normalized to its returned status without inventing native details.
 
@@ -501,7 +530,9 @@ CallData setters return Result<void>; getters return Result<T>. SignalHandler::c
 
 `CallData::edit()` / `hx_os_calldata_edit_*` group immediate assignments with one final error check; earlier successes survive a later failure. `CallDataView::stringView` borrows the pack without allocation until mutation/destruction; `string` still copies. These helpers preserve signal and named-procedure publication contracts.
 
-## Mutable settings and retained snapshots (batch 23b)
+<a id="mutable-settings-and-retained-snapshots-batch-23b"></a>
+
+## Mutable settings and retained snapshots
 
 `hx_settings_create` makes an independent mutable object. Use typed setters, `set_default_*`, and typed getters directly; `examples/settings.c` shows the common path. Explicit and default values are separate. Only an absent literal key falls back; null, wrong types, invalid data and permission errors never do. There is no numeric-string coercion or recursive default merge. Root keys are literal byte keys, so a dot does not imply a path. The view APIs support empty and NUL-containing UTF-8 keys and values. The standard C-string conveniences borrow their arguments for the call. Setters copy into the object's context.
 
@@ -521,7 +552,9 @@ SETTINGS is independent of CONFIG, CONFIG_SERIALIZE, FILE_UTILS, SIGNALS and CON
 
 Settings string references (`hx_settings_get_string_ref`, `SettingValue::asStringView`, `Settings::stringView`) retain immutable bytes without copying/allocating. They survive owner updates/close and retain the originating context; C leases must be initialized, copied through the lease API and released. `Settings::update` / `hx_settings_update_*` reuse individual setters and notifications, preserve prior successes on first failure and report applied count at finish. There is no rollback or combined atomic publication. See [common-call ownership](COMMON_UTILITIES.md).
 
-## Bounded interval profiler (batch 23c)
+<a id="bounded-interval-profiler-batch-23c"></a>
+
+## Bounded interval profiler
 
 For owned structured snapshots, means, standard deviations and opt-in bounded P50/P95/P99, see the [profiler tutorial](PROFILER.md). The existing TSV format and shutdown behavior below remain compatible.
 

@@ -2,6 +2,8 @@
 
 [简体中文](TLS.zh-CN.md) · [README](../README.md) · [Cryptography](CRYPTO.md)
 
+Reuse the [configured example directory](../examples/README.md#run), replacing build and Release for your setup. Prepare a localhost-compatible demo certificate before running the peers; linking a crypto library does not supply identity or trust configuration.
+
 ## 1. Build and run the complete example
 
 TLS here means Transport Layer Security. Thread-local storage still uses `hx_os_tls_key`. This module implements standard TLS 1.2/1.3 over TCP, so the other endpoint can use Python, Go, Java or another standard TLS implementation.

@@ -2,6 +2,16 @@
 
 [English](RING.md) · [ByteQueue](BYTE_QUEUE.zh-CN.md) · [README](../README.zh-CN.md)
 
+**先运行一个完整例子。** 已经有一块固定内存，希望循环使用，并直接写入可用空间时，使用固定环形缓冲。
+
+打开 [byte_queue_ring.c](../examples/byte_queue_ring.c)。`example_ring` 初始化 8 字节数组 → 写 abcdef → 消费 abcd → 借用两个空闲片段写 x → `commit` → 借用读取片段 → `consume`。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_byte_queue_ring`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**Ring 部分输出 `Ring: efxxxxxx`。两个片段按顺序拼起来就是逻辑数据；commit 之前新字节不可读，consume 之后才能复用空间。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 ## 1. 选择存储方式
 
 `hx_os_ring` 使用调用者提供的数组。环形对象和字节数组都可以放在栈上或静态存储区。它不会分配内存、扩容、覆盖未读数据、启动线程或等待数据。模块复用 `HX_OS_ENABLE_CONTAINERS` 构建开关；关闭后，返回状态的操作会报告 `HX_OS_NOT_SUPPORTED`。

@@ -2,6 +2,16 @@
 
 [简体中文](PARSING.zh-CN.md) · [README](../README.md)
 
+**Start with a complete program.** Use Lexer helpers when a custom configuration has required fields and optional extension blocks to skip.
+
+Open [parse_script.c](../examples/parse_script.c). Create lexer → read_title checks title, equals, string and semicolon → skip_group skips extensions → require END → destroy.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_parse_script`. This program needs no arguments or input files.
+
+**Expected result:** The built-in input produces `Title: Camera`. Replace the input and write a reader for each required field. This does not alter C/C++ source syntax.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 For constants, conditional branches and bounded includes before parsing, see [runtime preprocessing](PREPROCESSING.md).
 
 ## 1. From tokens to a small grammar

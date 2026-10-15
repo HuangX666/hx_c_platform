@@ -2,6 +2,16 @@
 
 [English](UNICODE.md) · [README](../README.zh-CN.md)
 
+**先运行一个完整例子。** 需要按统一 Unicode 大小写规则匹配用户输入时，先转换比较用的副本，再比较；展示文字可以保留原样。
+
+打开 [unicode_tools.c](../examples/unicode_tools.c)。提供 UTF-8 视图 Straße → unicode_casefold 写入 hx_string → 使用结果 → destroy。需要 UNICODE 和对应 utf8proc SDK。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_unicode_tools`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**输出 `strasse`。它展示 ß 可以变成两个字母 ss，长度不一定保持不变。不要自动把这一步应用于密码或要求精确区分的业务 ID。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。使用[安装包接入](USAGE.zh-CN.md#installed-project)时，也必须保留对应 SDK 模块。
+
 ## 1. 选择转换
 
 hx_os_unicode_normalize(input, form, out, error) 支持 NFC、NFD、NFKC、NFKD；hx_os_unicode_casefold(input, out, error) 做 Unicode 大小写折叠，并输出 NFC。out 是已初始化的 hx_string，使用自己的分配器；失败保留原值，input 可以借用 out。

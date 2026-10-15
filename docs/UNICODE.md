@@ -2,6 +2,16 @@
 
 [简体中文](UNICODE.zh-CN.md) · [README](../README.md)
 
+**Start with a complete program.** For Unicode-insensitive input matching, transform a comparison copy while preserving the original display text.
+
+Open [unicode_tools.c](../examples/unicode_tools.c). Pass a UTF-8 view of Straße → unicode_casefold writes hx_string → use the result → destroy. Enable UNICODE with its utf8proc SDK.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_unicode_tools`. This program needs no arguments or input files.
+
+**Expected result:** It prints `strasse`: ß becomes two letters, so length can change. Do not automatically apply this to passwords or IDs requiring exact comparison.
+
+Short snippets below explain individual calls; use the complete example when running them. An [installed SDK consumer](USAGE.md#installed-project) must also enable the corresponding SDK module.
+
 ## 1. Choose a transformation
 
 `hx_os_unicode_normalize(input, form, out, error)` supports NFC, NFD, NFKC and NFKD. `hx_os_unicode_casefold(input, out, error)` applies Unicode case folding and NFC. The initialized hx_string keeps its value on failure and uses its own allocator. Input may borrow it.

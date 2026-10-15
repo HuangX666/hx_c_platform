@@ -8,8 +8,11 @@ static int hx_example_main(int argc, const char *const *argv)
 	hx_os_error error;
 	hx_os_status status;
 
-	if (argc != 2)
+	if (argc != 2) {
+		fprintf(stderr, "Usage: %s <file>\n", argv[0]);
+
 		return 1;
+	}
 
 	status = hx_os_file_map_open(argv[1], HX_OS_MAP_READ, &map, &error);
 	if (status == HX_OS_EOF) {

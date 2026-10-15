@@ -2,6 +2,10 @@
 
 [简体中文](CPP_RESULTS.zh-CN.md) · [README](../README.md) · [Thread pool](CPP_POOL.md)
 
+**Start with a call that can actually succeed or fail.** The [complete C++ file program](USAGE.md#files) calls readText, checks `if (!text)`, then prints `text.value().c_str()`. With hello.txt present it prints the contents; a missing path produces `Read failed` and the error category.
+
+Result carries either a value or an error without try/catch. Usually read value only after success. Explicit partial-completion interfaces, such as batch I/O, can also retain a count on failure; follow that interface's contract. The sections below explain these differences and ownership.
+
 All fallible first-party C++ entry points use `hx::Result<T>` or `hx::Result<void>`. No exception syntax, exception objects or deferred exception propagation are used. The C99 library and public C ABI are unchanged. Include the desired `hx/*.hpp` header and link `hx_c_platform::cpp`.
 
 ## Reading and propagating a result

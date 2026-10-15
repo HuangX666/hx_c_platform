@@ -2,6 +2,16 @@
 
 [简体中文](REGEX.zh-CN.md) · [README](../README.md)
 
+**Start with a complete program.** Use regex to extract or replace fields in loosely structured text; use a JSON parser for structured JSON.
+
+Open [regex.c](../examples/regex.c). Compile named captures → find device/request → read captured byte spans → replace display text → destroy.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_regex`. This program needs no arguments or input files.
+
+**Expected result:** It prints `Device: Door_01`, `Request: 42` and `Door_01: #42`. Reuse compiled patterns for repeated work and distinguish no-match from exhausted budgets.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 ## 1. Match a whole value
 
 Save the complete program below as `main.c` and build the [minimal project](USAGE.md#c-project). It checks the device ID `AB1234`: `[A-Z]{2}` requires two uppercase ASCII letters and `[0-9]{4}` requires four digits. It prints `Valid`; changing the input to `A1234` prints `Invalid`.

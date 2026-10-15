@@ -2,6 +2,16 @@
 
 [English](INCREMENTAL_HASH.md) · [README](../README.zh-CN.md)
 
+**先运行一个完整例子。** 大文件或网络内容是一块一块到达时，可以逐块计算摘要，避免先把全部内容放进内存。
+
+打开 [incremental_hash.c](../examples/incremental_hash.c)。digest_create 选择 SHA-256 → update 输入 ab → update 输入 c → finish 取得十六进制结果 → destroy。HMAC 使用带密钥的创建入口。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_incremental_hash`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**得到 abc 的 SHA-256：`ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad`。换成文件读取循环时，每次只传实际读到的字节数；需要 CRYPTO 和 OpenSSL SDK。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。使用[安装包接入](USAGE.zh-CN.md#installed-project)时，也必须保留对应 SDK 模块。
+
 ## 1. 分块输入，最后取结果
 
 ```c

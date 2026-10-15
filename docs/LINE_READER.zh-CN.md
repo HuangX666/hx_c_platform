@@ -2,6 +2,12 @@
 
 [English](LINE_READER.md)
 
+**先读取一个小文本文件。** 文件较大，或者业务按行处理记录时，不必先把整份文件读进字符串。
+
+按[输入准备](../examples/README.zh-CN.md#inputs)创建 demo.txt，再构建 `hx_os_read_lines`。在 build 中，Linux 运行 `./bin/hx_os_read_lines demo.txt`；Windows 运行 `.\bin\Release\hx_os_read_lines.exe demo.txt`。输出 `0123456789`。把文件换成多行，就会逐行输出。
+
+[read_lines.c](../examples/read_lines.c) 的顺序是 open → 循环 next → 处理一行 → EOF 后 close → destroy 字符串。把 fwrite 换成解析一条记录的逻辑；EOF 是正常结束，坏编码、过长行和 I/O 错误不是 EOF。
+
 ## 1. 一次读取一行
 
 `hx_os_line_reader` 不需要把整个文件读入内存，就能逐行读取 UTF-8 文本。开启 `HX_OS_ENABLE_LINE_READER` 和它依赖的 `HX_OS_ENABLE_STREAM`。`max_line_bytes=0` 使用默认单行 1 MiB 上限，没有后台线程或隐藏的网络截止时间。

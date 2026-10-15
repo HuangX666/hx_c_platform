@@ -2,6 +2,16 @@
 
 [简体中文](CACHE.zh-CN.md)
 
+**Start with a complete program.** Use LRU caching for frequently repeated device lookups or calculations when only a limited number of recent results should remain.
+
+Open [lru_cache.c](../examples/lru_cache.c). Limit storage to two entries → put sensor-a/sensor-b → get sensor-a → put sensor-c → observe sensor-b eviction → insert temporary with a TTL → query after expiry → destroy.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_lru_cache`. This program needs no arguments or input files.
+
+**Expected result:** It prints `Recent sensor-a: 20`, followed by eviction and expiry messages. Use device IDs as keys and copyable records as values. Reads do not extend the TTL.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 ## 1. Keep recently used results
 
 `hx_os_cache` stores copied binary keys and fixed-size values. A successful `get` makes its entry most recently used; `peek` reads without changing the order. When a successful insertion exceeds `max_items`, an expired entry is removed first if available; otherwise the least recently used entry is evicted. Updating an existing key also makes it recent.

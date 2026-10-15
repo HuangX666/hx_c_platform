@@ -2,6 +2,8 @@
 
 [English](REFERENCE.md) · [首页](../README.zh-CN.md) · [常用任务教程](USAGE.zh-CN.md)
 
+更多专题先从[可运行示例目录](../examples/README.zh-CN.md)选择：每项列出使用场景、构建目标、所需输入和预期结果。
+
 这份参考集中说明平台差异、接口限制、资源管理、构建开关和验证状态。第一次使用时，先阅读首页和常用任务教程；需要了解某个操作的边界，再查询这里。除另有说明，构建命令在库源码根目录执行。
 
 默认 SDK 模块需要匹配的依赖：CRYPTO／TLS 使用 OpenSSL，HTTP／URL 使用 libcurl，UNICODE 使用 utf8proc，归档／内存压缩使用对应编解码库，PERSISTENT_QUEUE 使用锁定版本的 SQLite 适配。先准备[依赖 SDK](DEPENDENCIES.zh-CN.md)，再通过 `CMAKE_PREFIX_PATH` 或 `HX_OS_DEPENDENCY_PREFIX` 传入 prefix。不用的模块显式关闭，或采用 `cmake/minimal.cmake`。[底层依赖教程](NATIVE_DEPENDENCIES.zh-CN.md)也说明直接调用 SDK 的方法。

@@ -2,6 +2,16 @@
 
 [简体中文](PREPROCESSING.zh-CN.md) · [README](../README.md)
 
+**Start with a complete program.** Preprocess runtime configuration text when it needs constants and conditional sections before JSON or custom parsing.
+
+Open [preprocess_config.c](../examples/preprocess_config.c). Prepare independent define/if text → preprocess_text_ex expands it → check status/diagnostic → use output → destroy.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_preprocess_config`. This program needs no arguments or input files.
+
+**Expected result:** The JSON output contains title Camera, port 8080 and enabled true. The demo only prints this text; application code still parses and validates fields. Includes require an explicitly bounded loader.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 ## 1. Start with one operation
 
 The preprocessor transforms UTF-8 configuration text at runtime. It does not change C/C++ source syntax, invoke a compiler or add a code-generation step. Keep templates as data files, such as `.hxconf`, rather than compilation units.

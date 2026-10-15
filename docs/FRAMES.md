@@ -2,6 +2,16 @@
 
 [简体中文](FRAMES.zh-CN.md)
 
+**Start with a complete program.** Wrap a TCP or TLS byte stream when the application wants one complete JSON message per receive.
+
+Open [framed_messages.c](../examples/framed_messages.c). Memory stream → from_stream → send_text_until writes length and JSON → seek to start → receive_text_until → destroy frame → close stream.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_framed_messages`. This program needs no arguments or input files.
+
+**Expected result:** It prints `{"device":"door-1","request":42}`. For a real connection use from_socket/from_tls, remove seek, and have the peer implement the same length framing.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 ## 1. Receive complete messages
 
 Include `hx_os_frame.h`. A frame uses a four-byte unsigned big-endian length followed by that many payload bytes. TCP, local stream sockets, TLS and user callbacks share this wire format. UDP keeps its datagram semantics and is not wrapped by this interface. Other languages need only implement this length prefix.

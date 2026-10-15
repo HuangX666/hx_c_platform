@@ -4,6 +4,8 @@
 
 [简体中文](README.zh-CN.md) · [Complete getting-started guide](docs/USAGE.md) · [Find a feature](#section-6) · [API reference](docs/REFERENCE.md)
 
+Choose further tasks from the [runnable example directory](examples/README.md), which lists use cases, build targets, inputs and expected results.
+
 <a id="section-1"></a>
 
 ## 1. What this library is for

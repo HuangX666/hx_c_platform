@@ -2,6 +2,16 @@
 
 [English](PROFILER.md) · [README](../README.zh-CN.md)
 
+**先运行一个完整例子。** 要比较采集、解析等业务步骤的耗时分布时，用区间 profiler 记录多次调用，再取快照查看统计。
+
+打开 [profile_statistics.c](../examples/profile_statistics.c)。创建并开启直方图 → 为 read_sensor 记录 12 次区间 → 创建快照 → 关闭 profiler → 从独立快照读取均值和分位数 → release。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_profile_statistics`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**输出 `read_sensor: 12 samples`、均值、标准差以及 P50/P95/P99 的区间。实际时间随系统调度变化；把示例 sleep 换成要测量的代码。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 ## 1. 它测量什么
 
 你想知道“读取传感器花了多久”“一帧里哪个子操作最耗时”，就可以使用 Profiler。操作前调用 `start_root`，结束后调用 `leave`；进入子操作时调用 `reach`。每次成功进入都要在同一线程或本库协程中配对一次 leave。

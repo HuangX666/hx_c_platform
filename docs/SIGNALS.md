@@ -2,6 +2,16 @@
 
 [简体中文](SIGNALS.zh-CN.md) · [README](../README.md)
 
+**Start with a complete program.** Use signals to notify in-process subscribers when a module completes an action. Callbacks run synchronously on the emitting thread.
+
+Open [signal_observer.c](../examples/signal_observer.c). Create handler → connect_all subscribes to every name → calldata sets items=42 → emit ready and saved → close_until.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_signal_observer`. This program needs no arguments or input files.
+
+**Expected result:** It prints `ready: 42 items` and `saved: 42 items`. Use a named subscription for one event. The separate signal_mutable.c program changes volume from 80 to 60.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 ## 1. Choose one name or every name
 
 A signal handler belongs to your component. It holds subscriptions and synchronously calls them when that component emits a signal. It does not create a worker, message queue, or process-wide event bus.

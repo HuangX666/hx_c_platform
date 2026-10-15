@@ -2,6 +2,12 @@
 
 [English](TEXT_INTEROP.md) · [README](../README.zh-CN.md)
 
+**这页有两份可直接保存为 main.c 的程序。** 按[最小 C 工程](USAGE.zh-CN.md#c-project)分别运行，每次选择一份。
+
+第 1 份在当前工作目录创建或覆盖 `message-中文.txt`，成功时退出码为 0，文件内容是 `Hello, 中文!` 加换行；它不在控制台打印成功提示。第 2 份把原生 wchar_t 文字转成 UTF-8，正常显示 `中文😀`；控制台也要能按 UTF-8 显示。
+
+前者适用于第三方接口要求 FILE* 的场合，后者适用于系统接口给出宽字符串的场合。普通读取 UTF-8 文件可直接使用文件便利入口，无需自己经过宽字符串。
+
 当已有原生接口需要 `wchar_t`，或者第三方接口需要标准 `FILE *` 时，使用这些辅助函数。普通整文件文本读取仍使用 `hx_os_file_read_text()` / `hx::Files::readText()`。
 
 ## 1. 用 UTF-8 文件名打开标准 FILE

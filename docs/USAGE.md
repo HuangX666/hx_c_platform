@@ -2,6 +2,8 @@
 
 [简体中文](USAGE.zh-CN.md) · [Home](../README.md) · [Detailed reference](REFERENCE.md)
 
+Choose further tasks from the [runnable example directory](../examples/README.md), which lists use cases, build targets, inputs and expected results.
+
 - [1. How to use these tutorials](#using-guide)
 - [2. Prepare a small project](#project)
 - [3. Read and display a text file](#files)

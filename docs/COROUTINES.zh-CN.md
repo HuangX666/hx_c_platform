@@ -2,6 +2,16 @@
 
 [English](COROUTINES.md) · [README](../README.zh-CN.md)
 
+**先运行一个完整例子。** 有很多任务需要等待 channel、定时或协程 I/O，又希望共享少量工作线程时，可以用协程运行时。
+
+打开 [go.cpp](../examples/go.cpp)。创建 Runtime → Scope 选择运行时 → go 提交任务 → channel 传 42 → waitUntil → receive → shutdownUntil。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_go`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**输出 `Answer: 42`。先用这个 C++11 完整程序理解生命周期，再看后面的 C 状态机和 C++20 写法。普通阻塞 SDK 调用仍会占住工作线程。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#cpp-project)把完整源码作为自己的 main。
+
 ## 1. 先选择一种写法
 
 协程是能够在等待时暂停、让工作线程去运行其他任务的任务。本库自研调度器、队列、定时等待、channel/select 和生命周期管理；Windows 使用操作系统原生 fiber，POSIX 使用本库的 CPU 上下文切换代码。没有使用 minicoro、Boost.Context 或其他协程库。

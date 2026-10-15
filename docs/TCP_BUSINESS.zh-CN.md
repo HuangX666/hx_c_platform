@@ -2,6 +2,8 @@
 
 [English](TCP_BUSINESS.md) · [README](../README.zh-CN.md) · [socket C 接口](../include/hx_os_net.h)
 
+构建前先完成一次[示例配置](../examples/README.zh-CN.md#run)。下文的 build 是已有构建目录的占位名，换成自己的目录即可，不必为每种协议再建一个目录。命令从库源码根目录执行；只构建本例需要的两端程序。
+
 ## 1. 独立的 TCP 程序
 
 本例直接使用 `hx_os_socket_*`，由自己的 TCP 客户端和服务端完成订单业务。它不调用 `hx_ipc_*`，不使用 HXIP 协议，也不启动 IPC 的设备服务端。关闭 `HX_OS_ENABLE_IPC` 后仍能构建和运行。
@@ -13,32 +15,33 @@
 仓库根目录：
 
 ```sh
-cmake -S . -B build-net -DHX_OS_BUILD_EXAMPLES=ON
-cmake --build build-net --config Release --parallel 4
+cmake -S . -B build -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build build --config Release --target hx_os_tcp_order_server
+cmake --build build --config Release --target hx_os_tcp_order_client
 ```
 
 Windows PowerShell，Visual Studio 构建：
 
 ```powershell
-python examples/run_tcp_business.py --bin-dir build-net/bin/Release
-python examples/run_tcp_business.py --fragmented --bin-dir build-net/bin/Release
+python examples/run_tcp_business.py --bin-dir build/bin/Release
+python examples/run_tcp_business.py --fragmented --bin-dir build/bin/Release
 ```
 
-Linux/WSL 对应使用 `python3` 和 `--bin-dir build-net/bin`。已有构建可替换为 `build-shared-msvc/bin/Release` 或 `build-shared-linux/bin`；Windows Ninja 去掉 `Release`。自动运行器选择空闲端口。
+Linux/WSL 对应使用 `python3` 和 `--bin-dir build/bin`。已有构建可替换为 `build-shared-msvc/bin/Release` 或 `build-shared-linux/bin`；Windows Ninja 去掉 `Release`。自动运行器选择空闲端口。
 
 手工运行时，**终端一**：
 
 ```powershell
-.\build-net\bin\Release\hx_os_tcp_order_server.exe 39001
+.\build\bin\Release\hx_os_tcp_order_server.exe 39001
 ```
 
 看到 `Listening:` 后，**终端二**：
 
 ```powershell
-.\build-net\bin\Release\hx_os_tcp_order_client.exe 39001
+.\build\bin\Release\hx_os_tcp_order_client.exe 39001
 ```
 
-Linux/WSL 分别运行 `./build-net/bin/hx_os_tcp_order_server 39001` 和 `./build-net/bin/hx_os_tcp_order_client 39001`。参数是端口号；本例固定连接/监听 `127.0.0.1`，不接收 `tcp://` URI。服务端整体期限 15 秒，客户端 I/O 期限 10 秒；每次演示重新启动服务端。
+Linux/WSL 分别运行 `./build/bin/hx_os_tcp_order_server 39001` 和 `./build/bin/hx_os_tcp_order_client 39001`。参数是端口号；本例固定连接/监听 `127.0.0.1`，不接收 `tcp://` URI。服务端整体期限 15 秒，客户端 I/O 期限 10 秒；每次演示重新启动服务端。
 
 ## 3. 发送 JSON 订单，接收 JSON 回执
 
@@ -114,10 +117,10 @@ hx_string_destroy(&wire);
 ## 5. 运行业务示例
 
 ```sh
-python examples/run_tcp_business.py --bin-dir build-net/bin/Release
-python examples/run_tcp_business.py --bin-dir build-net/bin/Release --fragmented
-python examples/run_tcp_business.py --bin-dir build-net/bin/Release \
+python examples/run_tcp_business.py --bin-dir build/bin/Release
+python examples/run_tcp_business.py --bin-dir build/bin/Release --fragmented
+python examples/run_tcp_business.py --bin-dir build/bin/Release \
   --json-errors
 ```
 
-第一条运行正常订单流程；--fragmented 演示分段和合并收包；--json-errors 演示非法字段与错误回复。三种方式均只使用公开示例，Linux 的程序目录改为 build-net/bin。
+第一条运行正常订单流程；--fragmented 演示分段和合并收包；--json-errors 演示非法字段与错误回复。三种方式均只使用公开示例，Linux 的程序目录改为 build/bin。

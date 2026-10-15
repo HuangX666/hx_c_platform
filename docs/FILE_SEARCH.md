@@ -2,6 +2,12 @@
 
 [简体中文](FILE_SEARCH.zh-CN.md) · [Home](../README.md) · [File API](../include/hx_os_file.h)
 
+**Start by finding files you can inspect.** Recursive search suits occasional scans that process each result immediately; it does not maintain a persistent index.
+
+Build `hx_os_find_files`, then enter build as shown in the [run instructions](../examples/README.md#run). Linux: `./bin/hx_os_find_files ../examples "*.c"`; Windows: `.\bin\Release\hx_os_find_files.exe ..\examples "*.c"`. Quote the pattern; the input tree is the checkout's examples directory.
+
+Matching paths appear line by line, followed by `Files: count`; the count changes with the checkout. Replace printing in [find_files.c](../examples/find_files.c)'s print_file callback with your processing. The later pool example keeps work off a UI thread. Copy callback paths if you need to retain them.
+
 - [1. Choose an entry](#entry)
 - [2. Get the first matching path](#first)
 - [3. Process matches as they arrive](#stream)

@@ -4,6 +4,8 @@
 
 [English](README.md) · [完整入门教程](docs/USAGE.zh-CN.md) · [按功能查找](#section-6) · [接口参考](docs/REFERENCE.zh-CN.md)
 
+更多专题先从[可运行示例目录](examples/README.zh-CN.md)选择：每项列出使用场景、构建目标、所需输入和预期结果。
+
 <a id="section-1"></a>
 
 ## 1. 这个库用来做什么

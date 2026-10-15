@@ -2,6 +2,8 @@
 
 [简体中文](UTILITY_EXTENSIONS.zh-CN.md)
 
+**These tools solve separate tasks and need no combined initialization.** Compression processes bytes, URL tools manipulate addresses, and HTTP performs network transfers. Serial I/O needs a device protocol; shared memory needs an agreed data/synchronization layout. Pick a complete program below before its detailed limits. Build targets and locations are also listed in the [example directory](../examples/README.md#sdk).
+
 Choose the action you need first. The table links to complete programs; the shorter blocks later on this page show the essential calls to place inside your own function. Start with the [project setup](USAGE.md#project) if you have not linked the library yet.
 
 | Task | Complete program | What it shows |

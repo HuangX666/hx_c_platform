@@ -2,6 +2,16 @@
 
 [简体中文](FORMAT.zh-CN.md) · [README](../README.md)
 
+**Start with a complete program.** Use typed format arguments for brace formatting while keeping standard C99.
+
+Open [format.c](../examples/format.c). Build an argument array with hx_fmt_str/hx_fmt_f64 → hx_print_args renders {} and {:.2f} → check status.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_format`. This program needs no arguments or input files.
+
+**Expected result:** A UTF-8 terminal shows `张三: 3.75`. Replace the arguments with application values. This form needs no generator; automatic expression typing has a separate build integration.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 ## 1. Choose a calling style
 
 These styles use the same C99 UTF-8 formatting engine. None uses C++ exceptions. `HX_OS_ENABLE_FORMAT` defaults ON; when disabled, runtime entries return `HX_OS_NOT_SUPPORTED` and `HX_OS_CAP_FORMAT` is absent.

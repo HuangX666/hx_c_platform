@@ -2,6 +2,12 @@
 
 [简体中文](PERSISTENT_QUEUE.zh-CN.md) · [README](../README.md)
 
+**Start with three recognition records that need eventual upload.** Build `hx_os_persistent_queue` with the SQLite backend. Inside build, run `hx_os_persistent_queue publish records.db`, then `hx_os_persistent_queue consume records.db`, using the bin/configuration prefix from the [run instructions](../examples/README.md#run).
+
+Publish stores three JSON records. Consume prints three `Handle recognition-...` lines and acknowledges them. A second consume waits about one second and ends without redelivering acknowledged records. In [persistent_queue.c](../examples/persistent_queue.c), replace printing with upload; ack only after the platform confirms success, or release after failure.
+
+Use a fresh demo database for the first run. Processes can share the queue, but taking a record grants a timed lease. Redelivery can repeat work; deduplicate by stable message ID.
+
 ## 1. Write, take, acknowledge
 
 Use this queue for records that must survive disconnects or application restarts. A producer assigns a stable record ID and pushes JSON or arbitrary bytes. A consumer takes an owned message, handles/uploads it, then acknowledges only after business success.

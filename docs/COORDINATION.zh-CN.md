@@ -2,6 +2,16 @@
 
 [English](COORDINATION.md)
 
+**先运行一个完整例子。** 主线程需要通知多个工作线程停止，并等它们完成清理时，组合取消令牌、WaitGroup 和读写锁。
+
+打开 [coordination.c](../examples/coordination.c)。先登记任务 → 启动两个 worker → 在写锁内累计完成数 → 主线程请求取消 → WaitGroup 等完成 → join → 销毁协调对象。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_coordination`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**输出 `Processed ... records, then stopped cooperatively.`，数量随调度变化。取消只是请求；等待和 join 成功后才可以释放 worker 使用的数据。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 ## 1. 三种独立工具
 
 开启 `HX_OS_ENABLE_THREAD_EX` 即可使用。这些工具面向原生线程，不要求线程池、协程运行时或后台工作线程。

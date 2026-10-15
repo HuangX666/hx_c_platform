@@ -2,6 +2,10 @@
 
 [English](VARIANT.md) · [首页](../README.zh-CN.md) · [常用任务教程](USAGE.zh-CN.md#variant)
 
+**需要一个变量在不同阶段保存不同类型时，从这里开始。** 按[入门教程的完整 C／C++ 程序](USAGE.zh-CN.md#variant)运行：先保存整数 42，再保存 hello，最后保存 Point(2, 5)。输出分别是 `Integer: 42`、`String: hello` 和 `Point: 2.0, 5.0`。
+
+调用顺序是初始化 → set 当前类型 → 用同类型 get 读取 → 再 set 新类型 → destroy。切换类型时旧内容自动清理。自己的结构体只含普通数值时用 trivial 描述；含指针或拥有内存时再看第 4 节的复制／清理回调，不能直接浅拷贝。
+
 - [1. 它解决什么问题](#purpose)
 - [2. 用 C 保存整数、字符串和结构体](#c-start)
 - [3. 复制、移动和取值](#ownership)

@@ -2,6 +2,16 @@
 
 [English](PARAMETERS.md) · [README](../README.zh-CN.md)
 
+**先运行一个完整例子。** 插件调用或通知需要按名字携带整数、字符串和二进制参数，但字段数量不是固定的时，使用可增长参数包。
+
+打开 [parameters.c](../examples/parameters.c)。params_create → fill_request 写设备 ID、名称、标志和四个字节 → show_request 按名字读取 → destroy。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_parameters`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**输出 `Device 42 (camera): 4 binary bytes`。写入时复制字符串和字节；读取的视图借用参数包，不能在销毁后继续保存指针。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 ## 1. 怎样选择参数包
 
 `hx_os_params` 用于在同一进程内，按名字向函数传递一组值。它自己复制持有名称、UTF-8 字符串和任意字节数据，可以超出原有栈上 `hx_os_calldata` 的 16 项、512 字节限制。原有栈上参数包的布局和行为保持不变。

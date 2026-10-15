@@ -35,6 +35,17 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 	hx_apply_warnings(hx_os_${example})
 endforeach()
 
+add_library(hx_os_demo_plugin SHARED demo_plugin.c)
+target_include_directories(hx_os_demo_plugin PRIVATE
+	"${PROJECT_SOURCE_DIR}/include")
+set_target_properties(hx_os_demo_plugin PROPERTIES
+	C_STANDARD 99
+	C_STANDARD_REQUIRED YES
+	C_EXTENSIONS NO
+	RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
+	LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+hx_apply_warnings(hx_os_demo_plugin)
+
 if(TARGET hx_c_platform::sqlite AND TARGET hx_c_platform::openssl
 		AND TARGET hx_c_platform::curl
 		AND TARGET hx_c_platform::utf8proc)

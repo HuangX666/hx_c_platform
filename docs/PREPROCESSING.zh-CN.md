@@ -2,6 +2,16 @@
 
 [English](PREPROCESSING.md) · [README](../README.zh-CN.md)
 
+**先运行一个完整例子。** 运行时配置希望复用常量，并按条件保留不同文本时，先做预处理，再把输出交给 JSON 或自己的解析器。
+
+打开 [preprocess_config.c](../examples/preprocess_config.c)。准备含 define／if 的独立文本 → preprocess_text_ex 展开 → 检查状态和 diagnostic → 使用输出 → destroy。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_preprocess_config`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**输出包含 title=Camera、port=8080、enabled=true 的 JSON 文本。示例此时只打印文本；真实业务还要解析和校验字段，文件包含必须显式提供受限加载器。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 ## 1. 从一次调用开始
 
 预处理器在运行时转换 UTF-8 配置文本，不修改 C/C++ 源码语法、不调用编译器，也不增加代码生成步骤。把模板保存为 `.hxconf` 等数据文件即可，不把它作为编译单元。

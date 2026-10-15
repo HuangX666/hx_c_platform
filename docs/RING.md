@@ -2,6 +2,16 @@
 
 [简体中文](RING.zh-CN.md) · [ByteQueue](BYTE_QUEUE.md) · [README](../README.md)
 
+**Start with a complete program.** Use a fixed ring when you already have storage and want to fill its free regions directly.
+
+Open [byte_queue_ring.c](../examples/byte_queue_ring.c). `example_ring` initializes eight bytes → writes abcdef → consumes abcd → fills two free spans with x → `commit` → borrows read spans → `consume`.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_byte_queue_ring`. This program needs no arguments or input files.
+
+**Expected result:** The ring section prints `Ring: efxxxxxx`. Concatenating the spans gives the logical sequence. New bytes become readable after commit; consume makes their space reusable.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 ## 1. Choose the storage model
 
 `hx_os_ring` uses an array supplied by the caller. Both the ring object and its bytes can live on the stack or in static storage. It never allocates, grows, overwrites unread bytes, starts a thread, or waits for data. It uses the `HX_OS_ENABLE_CONTAINERS` build switch; disabled status-returning operations report `HX_OS_NOT_SUPPORTED`.

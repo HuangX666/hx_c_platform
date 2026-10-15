@@ -2,6 +2,10 @@
 
 [English](WINDOWS_UTILITIES.md) · [README](../README.zh-CN.md)
 
+**需要显示 Windows 版本资源或 GPU 身份时使用。** 构建 `hx_os_windows_info` 后，按[运行说明](../examples/README.zh-CN.md#run)直接运行可枚举 GPU；额外传入带版本资源的 DLL／EXE 路径，可先读取该文件版本。
+
+[windows_info.c](../examples/windows_info.c) 的输出包括 GPU 名称、LUID、显存，以及所选文件的 `File version`。这些值取决于电脑和文件，不能拿示例数字作为断言。此程序演示版本及 GPU 查询，窗口句柄查询是后文的独立接口，需要业务提供真实窗口。非 Windows 平台明确报告不支持。
+
 ## 1. 读取 DLL 或可执行文件版本
 
 传入 UTF-8 文件路径即可。库内部相对当前工作目录解析路径、转换 Windows 编码、限制资源分配大小，并在返回前释放临时资源。查询只读取资源，不执行目标文件，也不沿 DLL 搜索目录查找。

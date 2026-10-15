@@ -2,6 +2,16 @@
 
 [简体中文](BITSET.zh-CN.md) | [Containers](CONTAINERS.md)
 
+**Start with a complete program.** Use a bitset when jobs have consecutive IDs and each only needs a completed/not-completed flag.
+
+Open [bitset.c](../examples/bitset.c). `create(100, 1000)` allocates 100 flags with a growth limit → `set_range` marks 0–9 → `set` marks 42 → `find_next` finds an unfinished ID → `destroy`.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_bitset`. This program needs no arguments or input files.
+
+**Expected result:** It prints `Completed: 11 of 100` and `Next unfinished job: 10`. Replace 100 with the job count and mark each completed index. Capacity is measured in bits.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 ## 1. Track many numbered items
 
 `hx_os_bitset` stores one boolean flag per numbered item. Use it for completed jobs, occupied slots, selected devices, or membership in a bounded integer set. Bits are numbered from zero. The C++11 wrapper is `hx::Bitset` in `<hx/Bitset.hpp>`; its operations return `Result` and never throw.

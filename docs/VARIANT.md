@@ -2,6 +2,10 @@
 
 [简体中文](VARIANT.zh-CN.md) · [Home](../README.md) · [Task tutorial](USAGE.md#variant)
 
+**Start here when one variable must hold different types at different times.** Run the [complete C/C++ tutorial](USAGE.md#variant): store integer 42, then hello, then Point(2, 5). Output is `Integer: 42`, `String: hello` and `Point: 2.0, 5.0`.
+
+The sequence is initialize → set type/value → get the matching type → set another type → destroy. Replacement cleans the old value. Use a trivial descriptor for plain numeric structures; structures owning memory need the copy/cleanup callbacks in section 4 rather than a shallow copy.
+
 - [1. What it does](#purpose)
 - [2. Store numbers, strings and a structure in C](#c-start)
 - [3. Copy, move and read values](#ownership)

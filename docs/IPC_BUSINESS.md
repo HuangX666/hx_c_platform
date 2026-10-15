@@ -2,6 +2,8 @@
 
 [简体中文](IPC_BUSINESS.zh-CN.md) · [README](../README.md) · [IPC API and protocol](IPC.md)
 
+Complete the [example setup](../examples/README.md#run) first. Below, build is a placeholder for your existing directory; protocols do not each need a new build directory. Run commands from the checkout and build the endpoints used here.
+
 ## 1. What this example does
 
 Two client request threads operate devices `101` and `102`; a third thread receives server notifications. The server holds two simulated devices and processes open, query, change and close commands. No hardware is required.
@@ -13,20 +15,21 @@ This example accepts only `local://`, Windows `pipe://`, or POSIX `unix://` addr
 Build the default modules from the repository root:
 
 ```sh
-cmake -S . -B build-net -DHX_OS_BUILD_EXAMPLES=ON
-cmake --build build-net --config Release --parallel 4
+cmake -S . -B build -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build build --config Release --target hx_os_ipc_device_server
+cmake --build build --config Release --target hx_os_ipc_device_client
 ```
 
 Windows PowerShell with the Visual Studio generator:
 
 ```powershell
-python examples/run_ipc_business.py --bin-dir build-net/bin/Release
+python examples/run_ipc_business.py --bin-dir build/bin/Release
 ```
 
 Linux/WSL:
 
 ```sh
-python3 examples/run_ipc_business.py --bin-dir build-net/bin
+python3 examples/run_ipc_business.py --bin-dir build/bin
 ```
 
 The runner starts two independent C processes with a unique local name, checks business state, and prints `PASS ipc_business_local`. Existing development directories can be used as `build-shared-msvc/bin/Release` or `build-shared-linux/bin`. Omit `Release` for Windows Ninja. The runner uses only the Python standard library.
@@ -36,16 +39,16 @@ The runner starts two independent C processes with a unique local name, checks b
 Windows terminal one:
 
 ```powershell
-.\build-net\bin\Release\hx_os_ipc_device_server.exe local://device-demo
+.\build\bin\Release\hx_os_ipc_device_server.exe local://device-demo
 ```
 
 After `Listening:` appears, use terminal two:
 
 ```powershell
-.\build-net\bin\Release\hx_os_ipc_device_client.exe local://device-demo
+.\build\bin\Release\hx_os_ipc_device_client.exe local://device-demo
 ```
 
-On Linux/WSL run `./build-net/bin/hx_os_ipc_device_server local://device-demo` and `./build-net/bin/hx_os_ipc_device_client local://device-demo` separately. The server's demonstration limit is 30 seconds; restart it for each workflow. Manual execution needs no Python.
+On Linux/WSL run `./build/bin/hx_os_ipc_device_server local://device-demo` and `./build/bin/hx_os_ipc_device_client local://device-demo` separately. The server's demonstration limit is 30 seconds; restart it for each workflow. Manual execution needs no Python.
 
 ## 4. JSON messages and threads
 
@@ -128,7 +131,7 @@ Although general configuration getters accept numeric strings, this example expl
 ## 6. Ownership and running the example
 
 ```sh
-python examples/run_ipc_business.py --bin-dir build-net/bin/Release
+python examples/run_ipc_business.py --bin-dir build/bin/Release
 ```
 
-Main owns the endpoint and worker parameters; join workers before closing. Release each message, parsed document and temporary string. Close timeout retains ownership for retry; request timeout does not prove non-execution. The runner starts both programs and checks 14 replies, bye and two notifications. Use build-net/bin on Linux.
+Main owns the endpoint and worker parameters; join workers before closing. Release each message, parsed document and temporary string. Close timeout retains ownership for retry; request timeout does not prove non-execution. The runner starts both programs and checks 14 replies, bye and two notifications. Use build/bin on Linux.

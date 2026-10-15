@@ -2,6 +2,16 @@
 
 [English](FRAMES.md)
 
+**先运行一个完整例子。** TCP 或 TLS 交付的是字节流，业务却希望每次收到一个完整 JSON 时，可以在连接外包一层消息帧。
+
+打开 [framed_messages.c](../examples/framed_messages.c)。内存流 → from_stream → send_text_until 写长度和 JSON → seek 回开头 → receive_text_until → destroy 帧 → close 流。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_framed_messages`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**输出 `{"device":"door-1","request":42}`。示例先用内存解释协议；接到真实连接时改用 from_socket/from_tls，去掉 seek，并由对端按同样长度格式收发。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 ## 1. 接收完整消息
 
 包含 `hx_os_frame.h`。线上格式为四字节大端无符号长度，随后是对应长度的消息内容。TCP、本地流套接字、TLS 和自定义回调使用相同格式；UDP 保留数据报语义，不使用这个封装。其他语言只需实现相同的长度前缀。

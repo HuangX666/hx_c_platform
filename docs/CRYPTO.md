@@ -2,6 +2,16 @@
 
 [简体中文](CRYPTO.zh-CN.md) · [README](../README.md) · [Dependency setup](DEPENDENCIES.md)
 
+**Start with a complete program.** Use the text encryption helper when stored text should only be recoverable with the password.
+
+Open [encrypt_text.c](../examples/encrypt_text.c). encrypt_text accepts a password and UTF-8 → retain authenticated ciphertext → decrypt_text → use plaintext → destroy strings and clean up thread crypto resources.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_encrypt_text`. This program needs no arguments or input files.
+
+**Expected result:** It prints `Encrypted: ...` and `Decrypted: Hello, UTF-8!`. Random salt/nonce change the ciphertext each run. The embedded demo password must be replaced with application secret input.
+
+Short snippets below explain individual calls; use the complete example when running them. An [installed SDK consumer](USAGE.md#installed-project) must also enable the corresponding SDK module.
+
 ## 1. Build and deploy
 
 Enable `HX_OS_ENABLE_CRYPTO` (default ON). This adds the pinned OpenSSL 3.5 SDK to the compiled library; application code still includes only the hx headers. The core remains C99, with optional exception-free C++11 wrappers. There are no worker threads started by this module.

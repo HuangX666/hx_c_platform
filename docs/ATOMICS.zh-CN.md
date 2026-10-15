@@ -2,6 +2,16 @@
 
 [English](ATOMICS.md)
 
+**先运行一个完整例子。** 一个线程算出结果，另一个线程需要确认结果已写完时，可以用原子标志发布一次结果。
+
+打开 [atomic_publication.c](../examples/atomic_publication.c)。`calculate` 写入 42 → release 写 ready → 主线程 acquire 读 ready → 读取 answer → join 并回收线程。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_atomic_publication`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**输出 `answer: 42`。改业务时替换计算部分，并保留发布顺序。示例只说明短等待；设备响应等长等待应使用事件或条件变量，不能照搬忙循环。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 hx_os_atomic.h 提供的 C99 类型和函数可直接用于 C++11。既有 hx_os_atomic 继续占 8 字节、按 8 字节对齐；独立 hx_os_atomic32 占 4 字节、按 4 字节对齐；指针类型按原生指针对齐。不要压缩结构体对齐、复制正在使用的存储、并发访问原始 value 成员，也不能把 std::atomic 强转成本库类型。发布前完成初始化，外层对象负责生命周期。指针原子操作不负责回收、所有权转移和 ABA 保护。
 
 常见的数据发布使用 release store 配 acquire load，见 [同一份 C 示例](../examples/atomic_publication.c)。C++ 可以直接用这套 API；纯 C++ 对象也可用自己的 std::atomic 存储，不能混用同一块存储。较长等待应使用事件或条件变量，cpu_relax 不是阻塞等待替代品。
@@ -22,7 +32,7 @@ GCC/Clang 按常量内存序分支调用内建函数；直接传运行期整数�
 
 编译器依据： [GCC 原子内建](https://gcc.gnu.org/onlinedocs/gcc/_005f_005fatomic-Builtins.html)、 [Microsoft Interlocked CAS](https://learn.microsoft.com/en-us/cpp/intrinsics/interlockedcompareexchange-intrinsic-functions)。
 
-is_lock_free 返回针对正确对齐存储的保守编译目标保证。缺少原生 64 位原子能力的 GCC 目标由 CMake 检测并链接工具链 libatomic。这些接口不通过 hx context 分配，不调用用户回调，但运行时回退可能有锁。无锁不等于无等待，也不保证所有信号上下文可用。本批没有加入未经测量的汇编优化，保留原有 CPU 等待提示。
+is_lock_free 返回针对正确对齐存储的保守编译目标保证。缺少原生 64 位原子能力的 GCC 目标由 CMake 检测并链接工具链 libatomic。这些接口不通过 hx context 分配，不调用用户回调，但运行时回退可能有锁。无锁不等于无等待，也不保证所有信号上下文可用。CPU 等待提示沿用原生能力，不承诺忙等待一定更快。
 
 现有调用点已核查：线程 join、线程池 close、watch close 的 acquire 争用与 release 释放配对；join 结果另有自己的 release/acquire 发布。IOCP 唤醒去重使用 acq_rel CAS、release 复位及既有队列锁；Apple run-loop 指针使用 release 发布、acquire 获取，后续 relaxed 读取发生在 join 后。不依赖隐藏的 seq_cst。
 

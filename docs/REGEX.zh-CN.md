@@ -2,6 +2,16 @@
 
 [English](REGEX.md) · [README](../README.zh-CN.md)
 
+**先运行一个完整例子。** 从格式不完全固定的一段文字中提取字段或替换内容时，可以使用正则；结构化 JSON 仍应交给 JSON 解析器。
+
+打开 [regex.c](../examples/regex.c)。compile 命名捕获 → find 查找 device/request → 读取捕获字节范围 → replace 生成展示文本 → destroy。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_regex`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**输出 `Device: Door_01`、`Request: 42` 和 `Door_01: #42`。重复处理同一规则时复用编译对象；匹配失败和预算耗尽需要分别处理。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 ## 1. 检查整个字符串
 
 把下面的完整程序保存为 `main.c`，按[最小项目](USAGE.zh-CN.md#c-project)构建。它检查设备编号 `AB1234`：`[A-Z]{2}` 要求两个大写英文字母，`[0-9]{4}` 要求四个数字。正常输出 `Valid`；改为 `A1234` 会输出 `Invalid`。

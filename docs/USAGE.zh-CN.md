@@ -2,6 +2,8 @@
 
 [English](USAGE.md) · [首页](../README.zh-CN.md) · [详细参考](REFERENCE.zh-CN.md)
 
+更多专题先从[可运行示例目录](../examples/README.zh-CN.md)选择：每项列出使用场景、构建目标、所需输入和预期结果。
+
 - [1. 怎样使用这份教程](#using-guide)
 - [2. 准备一个最小项目](#project)
 - [3. 读取并显示文本文件](#files)

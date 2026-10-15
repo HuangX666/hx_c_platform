@@ -2,7 +2,17 @@
 
 [简体中文](CPP_POOL.zh-CN.md) · [README](../README.md) · [Result contracts](CPP_RESULTS.md)
 
-`hx/ThreadPool.hpp` provides a header-only C++11 interface over the bounded C pool. Link `hx_c_platform::cpp`. The scheduler and C ABI remain C99. The facade uses explicit results and supports builds with exceptions disabled. Coroutines remain deferred.
+**Start with a complete program.** Use a thread pool for independent background work with a bounded number of workers and a result retrieved later.
+
+Open [thread_pool.cpp](../examples/thread_pool.cpp). withThreads(owner, 2) → submit passes 21 to the task → getUntil retrieves the result → shutdownUntil closes; check each Result.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_cpp_thread_pool`. This program needs no arguments or input files.
+
+**Expected result:** It prints `Task result: 42`. Replace the lambda with your work. Captured references must outlive the task; retain owner if shutdown times out.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#cpp-project).
+
+`hx/ThreadPool.hpp` provides a header-only C++11 interface over the bounded C pool. Link `hx_c_platform::cpp`. The scheduler and C ABI remain C99. The facade uses explicit results and supports builds with exceptions disabled. Coroutines are a [separate module](COROUTINES.md), unnecessary for ordinary pool tasks.
 
 ## Ownership and shutdown
 

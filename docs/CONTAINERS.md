@@ -2,6 +2,16 @@
 
 [简体中文](CONTAINERS.zh-CN.md) · [README](../README.md)
 
+**Start with a complete program.** Start with vector or queue to store values or process them in insertion order in C.
+
+Open [containers.c](../examples/containers.c). Initialize element size → create bounded queue → push an integer → pop into local storage → destroy.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_containers`. This program needs no arguments or input files.
+
+**Expected result:** It prints `Queue result: 42`. For ordered keys, ordered_map.c traverses a red-black tree as a, b, b while retaining both values associated with b.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 Start with [storing two integers and taking items in order](USAGE.md#containers). A vector is a growable array; a queue removes the oldest item first. Both introductory examples include complete programs and expected output. This page then covers strings, structures, maps and resource ownership.
 
 Include `hx_container.h`, or the C umbrella `hx_os.h`. The implementation is C99 and exposes only C types and opaque handles. No C++ runtime is required. `HX_OS_ENABLE_CONTAINERS=ON` is the default. OFF excludes sequence, tree and uthash implementation code; constructors return `HX_OS_NOT_SUPPORTED` and `HX_OS_CAP_CONTAINERS` is cleared. No global initialization is needed.

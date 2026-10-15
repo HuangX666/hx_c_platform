@@ -2,6 +2,8 @@
 
 [English](CONFIG_EDIT.md) · [首页](../README.zh-CN.md)
 
+**适合改一两个配置项，再保存到磁盘。** 示例把 network.port 设置成字符串 8080。按第 2 节先保存、把主文件手改为 9000、再保存一次，就能观察主文件变回 8080、备份保留 9000；最后显式 restore 恢复 9000。它演示的是保存／恢复流程，不是后台自动恢复。构建目录和运行位置按[示例指南](../examples/README.zh-CN.md#run)复用，使用演示文件操作。
+
 ## 1. 按 section 和 key 修改 INI
 
 `hx_os_ini_create()` 创建空文档，`hx_os_ini_load()` 加载现有 UTF-8 文件。用 `hx_os_ini_set(&document, "network", "port", "8080", &error)` 设置字符串；缺失的 section、key 会自动创建。只有新文档完整构造成功，才替换调用者持有的指针。如果之前保留了旧文档，旧节点仍然有效，内容不变。
@@ -20,7 +22,7 @@ host=localhost
 port=8080
 ```
 
-在项目根目录执行：
+先按[示例配置](../examples/README.zh-CN.md#run)准备依赖和已有构建目录，再从库源码根目录构建：
 
 ```sh
 cmake -S . -B build -DHX_OS_BUILD_EXAMPLES=ON

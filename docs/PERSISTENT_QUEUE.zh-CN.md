@@ -2,6 +2,12 @@
 
 [English](PERSISTENT_QUEUE.md) · [README](../README.zh-CN.md)
 
+**先模拟三条需要补报的识别记录。** 使用包含 SQLite 后端的配置，构建 `hx_os_persistent_queue`。在 build 中先运行 `hx_os_persistent_queue publish records.db`，再运行 `hx_os_persistent_queue consume records.db`；程序路径按[运行说明](../examples/README.zh-CN.md#run)添加 bin／配置目录。
+
+publish 把三条 JSON 写入 records.db；consume 输出三行 `Handle recognition-...` 并确认。再 consume 会等待约一秒后结束，已确认的消息不会重新出现。[persistent_queue.c](../examples/persistent_queue.c) 中，把打印位置替换成实际上传，只有平台确认成功后才 ack；上传失败时 release，不能打印完成就当作业务成功。
+
+第一次练习用新的演示数据库。多个进程可以打开同一队列，但一次取出得到的是带期限的处理权；超时重投可能重复，业务应按稳定 ID 去重。
+
 ## 1. 写入、取出、确认
 
 需要在断网或重启后继续处理的记录，可以放进这个队列。生产者给记录分配稳定 ID，写入 JSON 或任意字节；消费者取出消息，处理／上传成功后再确认。

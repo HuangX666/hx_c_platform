@@ -2,6 +2,16 @@
 
 [简体中文](COMMON_UTILITIES.zh-CN.md) · [Home](../README.md)
 
+**Start with a complete program.** Use this small program to see text splitting, named procedure calls and exact time-unit conversion.
+
+Open [common_tasks.c](../examples/common_tasks.c). trim/split → muldiv_u64 converts a frame interval → register/call twice → read parameter output → repeat two ticks → release.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_common_tasks`. This program needs no arguments or input files.
+
+**Expected result:** With these modules enabled, output includes `pieces: 3`, `frame interval: 33366667 ns`, `procedure result: 42` and two ticks. Named procedures run on the caller thread, not through remote RPC.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 These interfaces follow OBS's direct-entry/shared-implementation pattern. No OBS source was copied and no dependency was added. C99 and the optional C++11 facade share implementations; existing C public layouts and calls remain. C++ methods use Result<T>; see [the migration guide](CPP_RESULTS.md).
 
 ## Choose an operation

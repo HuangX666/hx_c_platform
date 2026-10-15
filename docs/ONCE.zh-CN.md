@@ -2,26 +2,57 @@
 
 [English](ONCE.md)
 
+**先运行一个完整例子。** 多个工作线程都依赖同一份初始化结果时，让它们经过同一个 once 对象，再访问初始化后的数据。
+
+打开 [once.c](../examples/once.c)。创建 once → 启动四个线程 → 每个线程调用 once_run → 成功后读取端口 → join 所有线程 → destroy。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_once`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**`Settings initialized once` 只出现一次，`Worker uses port 8080` 出现四次。替换 initialize 的业务内容；once 管理初始化协调，不替你释放业务资源。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 ## 1. 共享数据只初始化一次
 
 `hx_os_once` 让多个线程共用一次成功初始化的结果。对象独立持有，不自动启动线程，不修改进程全局配置。
 
+下面这份顺序调用两次的程序同样只输出一次初始化提示，随后是 `Port: 8080`。它可直接保存为 main.c；前面的 once.c 则演示四个线程共同使用同一个对象。
+
 ```c
+#include <hx_os.h>
+#include <stdio.h>
+
 static hx_os_status initialize(void *user, hx_os_error *error)
 {
 	int *port = user;
 
 	(void)error;
 	*port = 8080;
+	puts("Settings initialized once");
+
 	return HX_OS_OK;
 }
 
-hx_os_once *once = NULL;
-int port = 0;
+int main(void)
+{
+	hx_os_once *once = NULL;
+	int port = 0;
 
-hx_os_status status = hx_os_once_create(NULL, &once, NULL);
-if (status == HX_OS_OK)
-	status = hx_os_once_run(once, initialize, &port, NULL);
+	hx_os_status status = hx_os_once_create(NULL, &once, NULL);
+	if (status == HX_OS_OK)
+		status = hx_os_once_run(once, initialize, &port, NULL);
+	if (status == HX_OS_OK)
+		status = hx_os_once_run(once, initialize, &port, NULL);
+
+	if (status == HX_OS_OK)
+		printf("Port: %d\n", port);
+	else
+		fprintf(stderr, "Initialize: %s\n", hx_os_status_name(status));
+
+	(void)hx_os_once_destroy(&once, NULL);
+
+	return status == HX_OS_OK ? 0 : 1;
+}
 ```
 
 工作线程使用期间，`once` 和 `port` 都要保持有效。各调用者应使用同一种初始化逻辑及同一份共享数据。初始化返回 `OK` 后，后续成功调用者可以安全看到初始化写入的数据。失败不会永久锁定对象，之后允许重试；回调需要自行回收本次失败时已经创建的资源。

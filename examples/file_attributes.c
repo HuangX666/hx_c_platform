@@ -8,9 +8,19 @@ static int hx_example_main(int argc, const char *const *argv)
 	int64_t milliseconds;
 	hx_os_error error;
 
-	if (argc != 2 ||
-		hx_os_wall_time_read(&milliseconds, &error) != HX_OS_OK)
+	if (argc != 2) {
+		fprintf(stderr, "Usage: %s <file-to-update>\n", argv[0]);
+
 		return 1;
+	}
+
+	if (hx_os_wall_time_read(&milliseconds, &error) != HX_OS_OK) {
+		fprintf(stderr, "Read clock: %s\n",
+			hx_os_status_name(error.status));
+
+		return 1;
+	}
+
 	times.fields = HX_OS_TIME_MODIFIED;
 	times.modified_seconds = milliseconds / 1000;
 	if (milliseconds % 1000 < 0) {

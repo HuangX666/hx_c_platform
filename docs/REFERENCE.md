@@ -2,6 +2,8 @@
 
 [简体中文](REFERENCE.zh-CN.md) · [Home](../README.md) · [Task tutorials](USAGE.md)
 
+Choose further tasks from the [runnable example directory](../examples/README.md), which lists use cases, build targets, inputs and expected results.
+
 This reference covers platform differences, interface limits, resource management, build options and validation status. Start with the homepage and task tutorials when using the library for the first time, then consult this reference for an operation's boundaries. Build commands run from the library source root unless stated otherwise.
 
 The default SDK-backed modules need the matching dependencies: OpenSSL for CRYPTO/TLS, libcurl for HTTP/URL, utf8proc for UNICODE, and archive/compression codecs. PERSISTENT_QUEUE uses the pinned SQLite adapter. Prepare the [dependency SDK](DEPENDENCIES.md), then pass its prefix through `CMAKE_PREFIX_PATH` or `HX_OS_DEPENDENCY_PREFIX`. Disable unused modules explicitly or select `cmake/minimal.cmake`. The [native dependency guide](NATIVE_DEPENDENCIES.md) also shows direct SDK calls.

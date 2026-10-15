@@ -2,6 +2,16 @@
 
 [简体中文](TEXT_UTILITIES.zh-CN.md) · [String tools](COMMON_UTILITIES.md) · [README](../README.md)
 
+**Start with a complete program.** Use these tools for delimited fields, numeric option text and names such as file2/file10.
+
+Open [text_utilities.c](../examples/text_utilities.c). split_init/next borrows successive fields → parse_u64/i64 produces integers → compare_natural compares numeric names.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_text_utilities`. This program needs no arguments or input files.
+
+**Expected result:** The fields are alpha, beta, empty, gamma, empty; then port 443, offset -42 and file2 before file10. Copy retained fields or keep the original text alive.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 ## 1. Split without copying the text
 
 `<hx_text_utils.h>` provides a stack cursor that returns `hx_string_view` pieces of an existing input. It allocates no memory and does not modify the input. Use the existing `hx_string_split()` / `hx::Strings::split()` when the result should own its input copy instead.

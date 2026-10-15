@@ -2,6 +2,16 @@
 
 [English](CONTAINERS.md) · [README](../README.zh-CN.md)
 
+**先运行一个完整例子。** 需要在 C 程序里保存一串值，或按先放先取的顺序处理任务时，从 vector／queue 开始。
+
+打开 [containers.c](../examples/containers.c)。初始化元素尺寸 → 创建有界 queue → push 放入整数 → pop 写入本地变量 → destroy。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_containers`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**输出 `Queue result: 42`。需要按键排序时，运行 ordered_map.c：红黑树按 a、b、b 顺序输出，并保留两个 b 对应的值。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 第一次使用时，从[保存两个整数和依次取出任务](USAGE.zh-CN.md#containers)开始。vector 像能增长的数组，queue 按先放先取的顺序保存数据。这两个入门例子都有完整程序和预期输出；下文再说明字符串、结构体、map 及资源所有权。
 
 包含 `hx_container.h` 或 C 总头 `hx_os.h` 即可使用。实现按 C99 编译，公共接口使用 C 类型和不透明句柄，无需 C++ 运行库。 `HX_OS_ENABLE_CONTAINERS` 默认 ON；关闭后排除序列、树和 uthash 实现，创建接口返回 `HX_OS_NOT_SUPPORTED`，能力位 `HX_OS_CAP_CONTAINERS` 清除。不需要进程级初始化。

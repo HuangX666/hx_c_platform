@@ -2,6 +2,23 @@
 
 [English](PLATFORM_UTILITIES.md)
 
+**从一个实际动作开始读。** 这页涵盖多个系统功能，按需要选择下面一行。先按[示例运行说明](../examples/README.zh-CN.md#run)构建对应目标；运行参数和文件输入见[输入准备](../examples/README.zh-CN.md#inputs)。
+
+| 想做什么 | 完整程序 | 调用顺序与得到的结果 |
+| --- | --- | --- |
+| 查看当前系统和本进程 CPU 用量 | [system_info.c](../examples/system_info.c) | 系统版本 → 创建 CPU 采样器 → 间隔后 query → 输出版本与百分比 |
+| 读取文字，另存一份 | [text_file.c](../examples/text_file.c) | read_text → 可选 write_text → 显示内容 → 释放字符串 |
+| 从文件中间读四个字节 | [positioned_read.c](../examples/positioned_read.c) | open → read_at(4) → close；demo.txt 输出 34 35 36 37 |
+| 映射已有文件 | [mapped_file.c](../examples/mapped_file.c) | map_open → 使用字节视图 → 输出大小和 CRC32 → destroy |
+| 查询环境变量 | [environment.c](../examples/environment.c) | 传 PATH 等变量名 → get_string → 显示该值；不修改变量 |
+| 找到用户配置目录 | [special_paths.c](../examples/special_paths.c) | config_home_string → 输出路径；返回路径不代表已创建目录 |
+| 监听目录变化 | [watch_directory.c](../examples/watch_directory.c) | create watch → 五秒内处理回调 → close；另一个终端修改文件 |
+| 启动程序并收集输出 | [capture_process.c](../examples/capture_process.c) | 传可执行文件及参数 → capture_run → 等退出 → 使用输出并关闭 |
+| 加载自己的插件 | [load_plugin.c](../examples/load_plugin.c) | 打开 → 查 ABI → 绑定函数 → 调用 → 卸载，配套[公开插件](../examples/README.zh-CN.md#plugin) |
+| 在本地管道传递数据 | [pipe_transfer.c](../examples/pipe_transfer.c) | 创建 loop 和端点 → 提交 I/O → 收到完成 → 关闭 |
+
+这些程序中的 status 都要检查。路径、系统指标、事件数量随环境变化；API 表中的“支持”仍受平台能力和权限约束。后面的短片段说明单个调用，完整初始化和关闭顺序以链接中的程序为准。
+
 常用操作提供直接可用的 C 入口，可选 C++11 头文件封装同一份实现。 NULL context 使用现有不可变默认分配器。关闭功能时保留声明和失败桩，对应能力位清零。
 
 ## 系统信息
@@ -76,7 +93,7 @@ hx::Result<uint32_t> plugin_abi(const char *path) noexcept
 
 每个句柄的使用与关闭由调用者串行协调。符号借用模块存储；POSIX 数据符号地址即使为 NULL，也可能成功。卸载前必须结束调用、释放插件对象、断开回调，并完成插件 TLS 析构。关闭失败也消耗句柄；C++ 显式 close 可报告错误，析构不抛异常。加载／卸载可能执行模块构造／析构代码，因此可能阻塞。
 
-`examples/load_plugin.c` 加载测试模块，使用基础库 ABI 查询协商版本，再读取插件版本文本。CTest 自行构建配套模块，不依赖预装插件或外部进程。
+[load_plugin.c](../examples/load_plugin.c) 与 [demo_plugin.c](../examples/demo_plugin.c) 是配套公开示例。按[运行步骤](../examples/README.zh-CN.md#plugin)构建两者，输出 `Compatible plugin: Example plugin 1.0`；不需要私有测试模块。
 
 C 调用者可用 `hx_os_library_bind` 或 `_bind_ex`，传入函数指针变量的地址和 `sizeof(variable)`，直接取得可调用的指针，不必重复编写转换代码。失败时目标变量保持不变。
 
@@ -119,7 +136,7 @@ hx::Result<void> list_directory(const char *path) noexcept
 
 File::open 和 Directory::open 返回唯一持有核心句柄的 Result，即使 FILE_UTILS 关闭仍可使用。File::get 借用句柄，游标操作由调用者串行化。readSome/readAt 返回 Result<ReadResult>，EOF 和失败时可通过 hasValue() 读取字节进度；Files 返回 Result<String> 或 Result<Buffer>。Directory::next(true) 额外查询类型，默认 next() 不要求启用 FILE_INFO。
 
-`examples/text_file.c` 一次调用读取 UTF-8，并可原子发布到第二个路径； CTest 在两个平台运行同一份 C 源码。
+`examples/text_file.c` 一次调用读取 UTF-8，并可原子发布到第二个路径。传入第二个路径前，确认它是你要保存的目标。
 
 `File::read` 将 EOF 作为成功的 `ReadResult{bytes, eof}`，错误仍保留进度。`hx_os_directory_visit` 和 `Directory::forEach` 内部复用有界名称缓冲区，完成遍历后关闭，EOF／主动停止均成功。详见 [遍历与文本视图契约](COMMON_UTILITIES.zh-CN.md)。
 
@@ -140,7 +157,7 @@ hx::Result<hx::String> application_mode() noexcept
 }
 ```
 
-`examples/environment.c` 直接查询指定变量。CTest 只在测试子进程环境中注入专用测试值，不修改宿主设置。
+`examples/environment.c` 直接查询指定变量。传入不存在的变量名时返回 NOT_FOUND，读取本身不修改宿主设置。
 
 ## 常用目录
 
@@ -246,7 +263,7 @@ C++ PeriodicTimer::every 返回 Result<PeriodicTimer> 并引用宿主原生指�
 
 hx_os_thread_pool_inside(pool, &inside) 查询当前线程是否属于指定的存活线程池，任务 cleanup 中也返回真。无效参数／模块关闭返回 INVALID／NOT_SUPPORTED，输出不变；调用期间保持池存活，不转移所有权。复用现有线程局部状态，不新增锁、分配、系统调用或工作线程记账；C++ 直接调用 pool.inside()。
 
-工作线程等待本池未完成任务返回 DEADLOCK，零截止时间同样如此；等待已经完成的任务可以成功。关闭自身线程池也返回 DEADLOCK。查询其他池为假不代表跨池等待必然安全，循环依赖仍由调用方避免。本批不加入任务依赖图、窃取或内联执行。
+工作线程等待本池未完成任务返回 DEADLOCK，零截止时间同样如此；等待已经完成的任务可以成功。关闭自身线程池也返回 DEADLOCK。查询其他池为假不代表跨池等待必然安全，循环依赖仍由调用方避免。这里不提供任务依赖图、工作窃取或内联执行。
 
 ```c
 int inside;
@@ -320,7 +337,9 @@ hx_os_status status = hx_os_loop_attach_fd(loop, fd, HX_OS_WAIT_READ,
 // Drive loop; finally check hx_os_loop_detach_fd(&watch, &error).
 ```
 
-## 进程、输出捕获与系统工具（第 18 批）
+<a id="进程输出捕获与系统工具第-18-批"></a>
+
+## 进程、输出捕获与系统工具
 
 PROCESS 与 SYSTEM_UTILS 默认开启，可独立关闭。Windows 的系统工具为原生 Unicode 参数读取增加 Shell32 链接。捕获依赖 PROCESS、PIPE、LOOP，关闭 NETWORK 仍可用。整数微工具和显式 POSIX timespec 转换不依赖这两个模块； Windows 的 timespec 操作返回 NOT_SUPPORTED。
 
@@ -346,7 +365,9 @@ POSIX 时长转换检查 time_t 范围。截止时间转换要求明确传入 CL
 
 C++ System 返回 Result<String>、Result<StringList> 或标量结果。Process 和 ProcessCapture 在失败、超时后保留宿主原生句柄，析构不等待、不分离、不强杀。进程参数为有界 UTF-8 字符串初始化列表，在调用期间借用并由底层复制或消费。进程示例见 [capture_process.c](../examples/capture_process.c)，macOS、Win7 和嵌入式目标仍需原生验证。
 
-## 调度请求与延迟任务（第 19 批）
+<a id="调度请求与延迟任务第-19-批"></a>
+
+## 调度请求与延迟任务
 
 THREAD_EX 增加指定线程及当前线程的优先级、亲和性请求。Windows 映射原生 idle/normal/time-critical 相对优先级，仍受进程优先级类影响；Linux 请求 SCHED_IDLE／SCHED_OTHER 的零优先级，或 SCHED_RR 的原生最高优先级。 Apple 使用原生调度器低／中／高范围，低与普通对应 SCHED_OTHER，高对应 RR。权限及原生失败明确返回；这些请求不保证固定 CPU 频率或硬实时响应。测试提高被阻塞线程的优先级后，先恢复普通再放行；旧系统恢复优先级也可能需要权限。调用者需排除同一目标的并发 join、销毁及调度参数修改。
 
@@ -382,7 +403,9 @@ hx::Result<hx::Task<int>> delayed_answer(hx::ThreadPool &pool) noexcept
 
 C 示例见 [delayed_task.c](../examples/delayed_task.c)；关闭与持有规则沿用现有线程池契约。macOS、Win7、ARM/musl、处理器组及真实板卡仍待目标验证。
 
-## 本地套接字与双向文件端点（第 20 批）
+<a id="本地套接字与双向文件端点第-20-批"></a>
+
+## 本地套接字与双向文件端点
 
 LOCAL_SOCKETS 默认开启，依赖 NETWORK。本地路径流使用 HX_OS_LOCAL / HX_OS_LOCAL_STREAM，专用工厂和普通 socket_create 都支持这一组合。路径地址使用独立类型，不扩展既有 IP 地址及 operation ABI。路径为严格 UTF-8，108 字节内必须有 NUL；macOS 继续检查更短的原生 sun_path 上限。本接口不含抽象名字、传递描述符、对端凭据及数据报。查询返回的原生名字也必须放得下且为合法 UTF-8，不静默截断；空输出表示未命名对端。
 
@@ -432,7 +455,9 @@ hx::Result<std::pair<hx::File, hx::File>> make_channel() noexcept
 可执行示例见 [duplex_message.c](../examples/duplex_message.c)。 macOS、Win7、嵌入式原生环境仍待验证。
 
 
-## 注册表、电源请求和字符串混淆（第 21 批）
+<a id="注册表电源请求和字符串混淆第-21-批"></a>
+
+## 注册表、电源请求和字符串混淆
 
 常用入口 `hx_os_registry_open_user` 打开显式 HKCU 相对路径， `hx_os_registry_read_string` 直接输出严格 UTF-8 的 `hx_string`； `read_string_buffer` 共用解码实现，保留两段式容量协议。字符串读取接收 REG_SZ/REG_EXPAND_SZ 的字面值，不展开环境变量；原生值上限 1 MiB，容量变化最多重试 8 次。损坏 UTF-16、内部 NUL、错误 DWORD 长度和类型不匹配明确失败，失败保留输出。注册表路径用反斜杠、相对于指定根键，不按文件路径处理。创建、写权限、WOW64 视图均须显式选择；独占创建保护已有键。原生创建可能创建父键，不是事务。同一对象调用需串行，并排除并发关闭；关闭即使失败也消耗对象。非 Windows 或关闭模块时返回不支持。
 
@@ -443,7 +468,9 @@ hx::Result<std::pair<hx::File, hx::File>> make_channel() noexcept
 四个独立默认开启的开关为 REGISTRY、SLEEP_INHIBIT、PERFORMANCE_REQUEST、 OBFUSCATION。能力位表示编入适配，仍需处理运行系统和策略限制。Windows 在注册表或原有随机数回退需要时链接 advapi32；Apple 静态消费正确传递 framework 及 Objective-C runtime 链接依赖。
 
 
-## 日期、翻译表和位流（第 22 批）
+<a id="日期翻译表和位流第-22-批"></a>
+
+## 日期、翻译表和位流
 
 `hx_os_wall_time_format_utc_string(milliseconds, NULL, &text, &error)` 直接输出拥有存储的 UTF-8 UTC 时间；缓冲入口提供两段式容量查询，容量不足不产生部分输出。Unix 毫秒向下取整到秒，包括负值。共用公历实现覆盖 0001—9999 年，不受原生 time_t 年限限制。格式为严格 UTF-8，最多 65536 字节，支持 %CCYY、%MM、%DD、%hh、%mm、%ss、%%；NULL 使用 %CCYY-%MM-%DDT%hh:%mm:%ssZ。非法格式、编码错误、日期越界均保留输出。不表示闰秒，不修改 locale。缓冲格式化零分配；字符串入口使用自身 context 分配有界临时存储和结果。
 
@@ -456,7 +483,9 @@ hx::Result<std::pair<hx::File, hx::File>> make_channel() noexcept
 CALENDAR、TEXT_LOOKUP、BITSTREAM 独立默认开启；关闭时能力位清零、操作返回不支持。C++11 便利层为 Calendar::utc、TextLookup::get、BitReader/ BitWriter；复用 C 实现，位游标继续借用缓冲，翻译表提供可移动同步 RAII。
 
 
-## 同步信号和栈上参数包（第 23a 批）
+<a id="同步信号和栈上参数包第-23a-批"></a>
+
+## 同步信号和栈上参数包
 
 使用 `hx_os_signal_handler_create` 创建分发器，connect 注册复制的信号名， emit 传入可选的栈上 `hx_os_calldata` 参数包；完整 C 示例为 `examples/signal_notifications.c`。不创建后台线程或队列。回调在发出信号的线程、内部锁外同步执行，按本次快照的注册顺序调用。接受后新连的回调留到下一次发出；未开始前已断开的回调跳过。多个 emit 可以同时执行同一回调，用户状态须支持相应并发。一个回调失败不阻止其余符合条件的回调；返回首个失败状态，并保留与该状态匹配的原生错误详情。回调收到已初始化且非 NULL 的借用错误指针；返回状态和 error.status 不一致时只保留返回状态。
 
@@ -473,7 +502,9 @@ CallData setter 分别返回 Result<void>，getter 返回 Result<T>。SignalHand
 
 `CallData::edit()`／`hx_os_calldata_edit_*` 连续立即赋值，最后检查一次；后续失败保留之前成功项。`CallDataView::stringView` 不分配，借用参数包直到修改／销毁，`string` 继续复制。它们保留既有信号与命名过程发布契约。
 
-## 可变设置与保留快照（第 23b 批）
+<a id="可变设置与保留快照第-23b-批"></a>
+
+## 可变设置与保留快照
 
 `hx_settings_create` 创建独立对象，直接使用类型化 set/get 和 set_default_*；常用路径见 `examples/settings.c`。显式值与默认值分开，只有键缺失才回退； null、类型错误、损坏数据和权限错误均不回退。不做数字字符串强制转换或递归默认值合并，点号是普通键字符。view 接口支持空键、含 NUL 的 UTF-8 键值；普通 C 字符串便利入口在调用期间借用参数，设置结果复制到对象自身 context。
 
@@ -493,7 +524,9 @@ SETTINGS 独立于 CONFIG、CONFIG_SERIALIZE、FILE_UTILS、SIGNALS 和 CONTAINE
 
 设置字符串引用（`hx_settings_get_string_ref`、`SettingValue::asStringView`、`Settings::stringView`）持有不可变字节，不复制、不分配。owner 更新／关闭后仍有效，并保留原 context；C 引用须初始化、通过引用接口复制并释放。`Settings::update`／`hx_settings_update_*` 复用逐项 setter 和通知，首次失败保留此前成功项，finish 报告成功次数，不执行回滚或整体原子发布。详见 [常用调用所有权](COMMON_UTILITIES.zh-CN.md)。
 
-## 有界区间计时树（第 23c 批）
+<a id="有界区间计时树第-23c-批"></a>
+
+## 有界区间计时树
 
 独立结构化快照、均值、标准差和按需开启的有界 P50／P95／P99，见 [Profiler 教程](PROFILER.zh-CN.md)。下方既有 TSV 格式和关闭行为保持兼容。
 

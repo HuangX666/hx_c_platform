@@ -2,6 +2,12 @@
 
 [简体中文](TEXT_INTEROP.zh-CN.md) · [README](../README.md)
 
+**This page has two complete programs you can save as main.c.** Use the [minimal C project](USAGE.md#c-project), choosing one program at a time.
+
+The first creates or replaces `message-中文.txt` in the working directory. Success is exit code 0 and file content `Hello, 中文!` followed by newline; it prints no success message. The second converts native wchar_t text to UTF-8 and displays `中文😀` on a UTF-8-capable terminal.
+
+Use the first when a third-party interface requires FILE*, and the second when a native API provides wide text. Ordinary UTF-8 file reads can use the file convenience API directly.
+
 Use these helpers when an existing native API expects `wchar_t` or a third-party API expects a standard `FILE *`. Ordinary whole-text reading still uses `hx_os_file_read_text()` / `hx::Files::readText()`.
 
 ## 1. Open a standard FILE using a UTF-8 filename

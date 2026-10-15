@@ -2,6 +2,16 @@
 
 [English](QUEUES.md) · [固定字节环形缓冲](RING.zh-CN.md) · [README](../README.zh-CN.md)
 
+**先运行一个完整例子。** 采集线程生产记录、处理线程负责入库或上传时，用消息队列交接完整记录；线程无需自己拼接半条结构体。
+
+打开 [message_queue.c](../examples/message_queue.c)。创建容量为两条的队列 → 生产线程批量发送六条样本 → 主线程批量接收 → close 后取完剩余消息 → join → destroy。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_message_queue`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**依次输出设备 17 的六条测量值，从 `sample 1: 20.5` 到 `sample 6: 23.0`。改业务时替换 device_sample 和处理函数，保留实际完成条数及关闭顺序。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 ## 1. 选择入口
 
 | 需求 | 接口 | 行为 |

@@ -2,6 +2,16 @@
 
 [English](LINUX_DESKTOP.md) · [README](../README.zh-CN.md)
 
+**先运行一个完整例子。** 执行文件导出等短期工作，希望桌面系统暂时不自动休眠时，申请作用域内的防睡眠请求。
+
+打开 [sleep_inhibit.c](../examples/sleep_inhibit.c)。sleep_inhibit_create → 执行业务工作 → sleep_inhibit_destroy 释放请求。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_sleep_inhibit`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**服务可用时输出申请和释放两条提示。无相应桌面／登录服务时会报告不支持或原生错误；WSL 和无桌面的嵌入式系统不保证存在这种服务。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 ## 1. 继续使用同一个 C 入口
 
 较长的文件导出可以请求桌面在工作期间保持机器唤醒。工作开始时创建请求，结束后销毁：

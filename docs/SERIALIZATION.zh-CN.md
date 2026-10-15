@@ -2,6 +2,12 @@
 
 [English](SERIALIZATION.md) · [README](../README.zh-CN.md) · [解析格式范围](CONFIGURATION.zh-CN.md)
 
+**先把一个设备结构体转成 JSON，再读回。** 构建 `hx_os_serialization`，按[示例方法](../examples/README.zh-CN.md#run)运行，不传参数默认使用 JSON。[serialization.c](../examples/serialization.c) 和同目录的 [serialization_schema.h](../examples/serialization_schema.h) 需要一起阅读。
+
+示例先准备设备名、两条采样、上下限和启用状态；encode 生成文本，decode 创建拥有数据的结果对象，最后打印 JSON 并释放结果。输出会保留两条 samples 及内部字段，不会把它们展平为字符串。传 `yaml`、`xml` 或 `toml` 可以比较相同数据的另一种表示；这个含数组的结构不能直接改成 INI。
+
+开始接自己的类型时，先用宏或字段表声明一次映射，再替换结构体数据。字符串借用解码结果对象，必须在 release 之前使用。第 3 节给出完整调用代码和字段含义。
+
 ## 1. 先选择适合你的入口
 
 新数据类型可以用 `HX_CODEC_STRUCT` 一次声明结构体和字段映射，使用 `hx_os_codec_encode/decode`。已有结构体继续使用显式映射。字段可以是整数、浮点、布尔、字符串、子结构体或数组。C++11 使用 `hx::Codec<T>`，返回 `Result`，不使用异常。

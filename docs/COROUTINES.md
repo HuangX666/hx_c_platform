@@ -2,6 +2,16 @@
 
 [简体中文](COROUTINES.zh-CN.md) · [README](../README.md)
 
+**Start with a complete program.** Use the coroutine runtime for many tasks waiting on channels, timers or coroutine I/O while sharing worker threads.
+
+Open [go.cpp](../examples/go.cpp). Create Runtime → select it with Scope → go submits a task → channel sends 42 → waitUntil → receive → shutdownUntil.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_go`. This program needs no arguments or input files.
+
+**Expected result:** It prints `Answer: 42`. Learn lifetime handling with this C++11 program before the C state-machine or C++20 forms below. Ordinary blocking SDK calls still occupy a worker.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#cpp-project).
+
 ## 1. Choose a calling style
 
 A coroutine is a task that can pause while waiting and let its worker run another task. This library owns its scheduler, queues, timers, channel/select logic and lifetime rules. It uses Windows fibers as an operating-system primitive and its own CPU context switch on POSIX. It does not use minicoro, Boost.Context or another coroutine library.

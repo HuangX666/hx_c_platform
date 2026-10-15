@@ -2,6 +2,16 @@
 
 [简体中文](ALGORITHMS.zh-CN.md) | [Containers](CONTAINERS.md)
 
+**Start with a complete program.** Use the algorithms on an existing C array or structure array to sort, search or filter without moving it into another container.
+
+Open [algorithms.c](../examples/algorithms.c). Sort by device ID → lower_bound locates 23 → count_if counts pending records → copy_if copies them → fold totals work.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_algorithms`. This program needs no arguments or input files.
+
+**Expected result:** IDs appear as 17, 23, 31; device 23 is found, with two pending devices and two total work items. Adapt comparators and predicates with the record fields.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 ## 1. Use the data you already have
 
 The C99 functions in `<hx_algorithm.h>` work directly on ordinary arrays, including arrays of your structures. Creating an `hx_os_vector` is unnecessary. The C++11 header `<hx/Algorithms.hpp>` provides standard algorithm names in `hx::algo` and works with compatible standard iterators.

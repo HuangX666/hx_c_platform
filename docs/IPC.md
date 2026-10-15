@@ -2,6 +2,8 @@
 
 [简体中文](IPC.zh-CN.md) · [README](../README.md) · [C API](../include/hx_ipc.h) · [C++11 facade](../include/hx/Ipc.hpp)
 
+Complete the [example setup](../examples/README.md#run) first. Below, build is a placeholder for your existing directory; protocols do not each need a new build directory. Run commands from the checkout and build the endpoints used here.
+
 **Business workflows are separate:** [native IPC devices](IPC_BUSINESS.md), [TCP orders](TCP_BUSINESS.md), [UDP samples](UDP_BUSINESS.md), and [KCP blocks](KCP_BUSINESS.md). Each has its own C programs and runner; TCP/UDP/KCP business code uses socket/KCP APIs without invoking the IPC device program. The minimal echo example below checks IPC connectivity and introduces its lifetime and cross-language protocol.
 
 All four business examples now use UTF-8 JSON for requests, replies and notifications, with real parsing, field-type checks and safe string escaping. The echo programs below are low-level connectivity checks and do not implement those business protocols.
@@ -26,29 +28,33 @@ IP addresses also accept `[::1]`; non-loopback addresses are rejected. A listene
 Build from the repository root, or use an existing build directory:
 
 ```sh
-cmake -S . -B build-ipc -DHX_OS_BUILD_EXAMPLES=ON
-cmake --build build-ipc --config Release --parallel 4
+cmake -S . -B build -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build build --config Release --target hx_os_ipc_server
+cmake --build build --config Release --target hx_os_ipc_client
+cmake --build build --config Release --target hx_os_ipc_threads
 ```
 
-The Windows paths below assume a Visual Studio generator. With Ninja, executables are directly under `build-ipc/bin`; omit the `Release` path component.
+ipc_threads is the C++11 example for section 3; skip that target when using only the C client in section 2.
+
+The Windows paths below assume a Visual Studio generator. With Ninja, executables are directly under `build/bin`; omit the `Release` path component.
 
 **Windows PowerShell, terminal one:**
 
 ```powershell
-.\build-ipc\bin\Release\hx_os_ipc_server.exe local://demo 1
+.\build\bin\Release\hx_os_ipc_server.exe local://demo 1
 ```
 
 **Windows PowerShell, terminal two:**
 
 ```powershell
-.\build-ipc\bin\Release\hx_os_ipc_client.exe local://demo
+.\build\bin\Release\hx_os_ipc_client.exe local://demo
 ```
 
 **Linux/macOS, run these in separate terminals:**
 
 ```sh
-./build-ipc/bin/hx_os_ipc_server local://demo 1
-./build-ipc/bin/hx_os_ipc_client local://demo
+./build/bin/hx_os_ipc_server local://demo 1
+./build/bin/hx_os_ipc_client local://demo
 ```
 
 The server waits for the client. The client prints `Reply: Hello from C`. The server prints its actual listening address, then `Handled 1 complete messages.` and exits. Its last argument selects the number of business messages to handle. Change both programs' addresses to TCP, UDP or KCP to select another transport.
@@ -80,16 +86,16 @@ The server calls `hx_ipc_receive_until()` to obtain one complete message or life
 Restart the server with a count of 20:
 
 ```powershell
-.\build-ipc\bin\Release\hx_os_ipc_server.exe local://demo 20
+.\build\bin\Release\hx_os_ipc_server.exe local://demo 20
 ```
 
 In another terminal:
 
 ```powershell
-.\build-ipc\bin\Release\hx_os_ipc_threads.exe local://demo
+.\build\bin\Release\hx_os_ipc_threads.exe local://demo
 ```
 
-On Linux/macOS use `./build-ipc/bin/hx_os_ipc_server local://demo 20` and `./build-ipc/bin/hx_os_ipc_threads local://demo`.
+On Linux/macOS use `./build/bin/hx_os_ipc_server local://demo 20` and `./build/bin/hx_os_ipc_threads local://demo`.
 
 The [complete C++11 program](../examples/ipc_threads.cpp) creates four business threads, each issuing five requests over one shared endpoint. A thread uses:
 
@@ -132,7 +138,7 @@ These IPC waits **block an ordinary OS thread**. The library has coroutines, but
 Start a server:
 
 ```powershell
-.\build-ipc\bin\Release\hx_os_ipc_server.exe tcp://127.0.0.1:39001 1
+.\build\bin\Release\hx_os_ipc_server.exe tcp://127.0.0.1:39001 1
 ```
 
 In another terminal:
@@ -288,7 +294,7 @@ Advanced users can drive [hx_os_kcp](../include/hx_os_kcp.h) directly with packe
 ## 9. Run the examples
 
 ```sh
-python examples/run_ipc_business.py --bin-dir build-ipc/bin/Release
+python examples/run_ipc_business.py --bin-dir build/bin/Release
 ```
 
 This starts separate server/client processes for JSON device commands and notifications. See the earlier sections for the cross-language protocol and manual two-terminal usage. Regressions remain private to the maintainer; dated target results are in the validation records.

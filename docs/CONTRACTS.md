@@ -2,6 +2,10 @@
 
 [简体中文](CONTRACTS.zh-CN.md) · [README](../README.md)
 
+**Use this page to answer “what remains valid after an error or timeout?”** Start with the [file, configuration or pool tutorial](USAGE.md); this page collects their shared rules.
+
+After a successful text read, you own the string and the file is already closed. After a pool wait times out, work may still be running, so task data must remain alive. Check status, account for any documented partial progress, then decide whether to release resources or retain them for retry.
+
 ## Shared rules
 
 [Variant values](VARIANT.md) follow these ownership/error rules without requiring a global setup. They are independent of the immutable configuration tree and mutable settings. Clear releases the active value while keeping a context lease; destroy releases that lease. Custom descriptors/code/user state are borrowed until all associated objects retire; there is no global registration or automatic plugin pinning.

@@ -2,6 +2,16 @@
 
 [English](CACHE.md)
 
+**先运行一个完整例子。** 反复查询同一批设备资料或计算结果，希望只保留最近用过的少量结果时，使用 LRU 缓存。
+
+打开 [lru_cache.c](../examples/lru_cache.c)。设置最多两项 → put sensor-a／sensor-b → get sensor-a → put sensor-c → 检查 sensor-b 被淘汰 → 写入带有效期的 temporary → 等待后查询 → destroy。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_lru_cache`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**输出 `Recent sensor-a: 20`，随后说明 sensor-b 被淘汰、temporary 已过期。把键换成设备 ID，值换成可复制的业务记录；读取不会给有效期续时。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 ## 1. 留住最近使用的结果
 
 `hx_os_cache` 保存复制后的二进制键和固定大小的值。成功的 `get` 会把该项调整为最近使用；`peek` 只读取，不改变顺序。成功插入新项后，如果数量超过 `max_items`，优先清理过期项；没有过期项时，淘汰最久没有使用的一项。更新已有键也会使它成为最近使用项。

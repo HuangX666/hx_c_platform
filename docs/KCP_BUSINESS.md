@@ -2,6 +2,8 @@
 
 [简体中文](KCP_BUSINESS.zh-CN.md) · [README](../README.md) · [KCP C API](../include/hx_os_kcp.h)
 
+Complete the [example setup](../examples/README.md#run) first. Below, build is a placeholder for your existing directory; protocols do not each need a new build directory. Run commands from the checkout and build the endpoints used here.
+
 ## 1. Independent KCP programs
 
 This example directly uses `hx_os_kcp_*` and a UDP socket. It never calls `hx_ipc_*` or starts the IPC device service. A producer submits three blocks; an independent I/O thread receives UDP packets, drives KCP and receives business confirmations. The server applies the blocks in order and reports completion.
@@ -11,32 +13,33 @@ The KCP engine itself creates neither threads nor sockets. This example explicit
 ## 2. Build and run
 
 ```sh
-cmake -S . -B build-net -DHX_OS_BUILD_EXAMPLES=ON
-cmake --build build-net --config Release --parallel 4
+cmake -S . -B build -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build build --config Release --target hx_os_kcp_transfer_server
+cmake --build build --config Release --target hx_os_kcp_transfer_client
 ```
 
 Windows PowerShell, Visual Studio build:
 
 ```powershell
-python examples/run_kcp_business.py --bin-dir build-net/bin/Release
-python examples/run_kcp_business.py --drop-first --bin-dir build-net/bin/Release
+python examples/run_kcp_business.py --bin-dir build/bin/Release
+python examples/run_kcp_business.py --drop-first --bin-dir build/bin/Release
 ```
 
-Linux/WSL uses `python3` with `--bin-dir build-net/bin`. Existing development paths are `build-shared-msvc/bin/Release` or `build-shared-linux/bin`; omit `Release` with Windows Ninja. The runner chooses a port and checks actual block applications and replies.
+Linux/WSL uses `python3` with `--bin-dir build/bin`. Existing development paths are `build-shared-msvc/bin/Release` or `build-shared-linux/bin`; omit `Release` with Windows Ninja. The runner chooses a port and checks actual block applications and replies.
 
 Manual Windows **terminal one**:
 
 ```powershell
-.\build-net\bin\Release\hx_os_kcp_transfer_server.exe 39003 --drop-first
+.\build\bin\Release\hx_os_kcp_transfer_server.exe 39003 --drop-first
 ```
 
 After `Listening:`, **terminal two**:
 
 ```powershell
-.\build-net\bin\Release\hx_os_kcp_transfer_client.exe 39003 --drop-first
+.\build\bin\Release\hx_os_kcp_transfer_client.exe 39003 --drop-first
 ```
 
-On Linux/WSL run `./build-net/bin/hx_os_kcp_transfer_server 39003 --drop-first` and `./build-net/bin/hx_os_kcp_transfer_client 39003 --drop-first`. Omit both flags for normal transfer. Both sides use `127.0.0.1`; the argument is a port, not a `kcp://` URI. Start the client promptly: this demonstration has a 10-second session deadline.
+On Linux/WSL run `./build/bin/hx_os_kcp_transfer_server 39003 --drop-first` and `./build/bin/hx_os_kcp_transfer_client 39003 --drop-first`. Omit both flags for normal transfer. Both sides use `127.0.0.1`; the argument is a port, not a `kcp://` URI. Start the client promptly: this demonstration has a 10-second session deadline.
 
 ## 3. Produce JSON and receive JSON confirmations
 
@@ -100,8 +103,8 @@ After the final result, the client drives 500 ms more for trailing ACK retransmi
 ## 6. Run the business example
 
 ```sh
-python examples/run_kcp_business.py --bin-dir build-net/bin/Release
-python examples/run_kcp_business.py --bin-dir build-net/bin/Release --drop-first
+python examples/run_kcp_business.py --bin-dir build/bin/Release
+python examples/run_kcp_business.py --bin-dir build/bin/Release --drop-first
 ```
 
-These demonstrate normal JSON-block transfer and retransmission after dropping the first packet, checking totals, acknowledgements and cleanup. Private tests are not required. Use build-net/bin on Linux.
+These demonstrate normal JSON-block transfer and retransmission after dropping the first packet, checking totals, acknowledgements and cleanup. Private tests are not required. Use build/bin on Linux.

@@ -2,6 +2,16 @@
 
 [English](PARSING.md) · [README](../README.zh-CN.md)
 
+**先运行一个完整例子。** 自定义配置里既有需要读取的字段，又有可以忽略的扩展块时，可以用 Lexer 辅助检查符号、读值和跳过括号组。
+
+打开 [parse_script.c](../examples/parse_script.c)。create lexer → read_title 依次检查 title、等号、字符串和分号 → skip_group 跳过 extensions → 检查 END → destroy。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_parse_script`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**内置输入输出 `Title: Camera`。把输入字符串换成自己的规则，并为每个必需字段编写类似 read_title 的函数；这不会改变 C/C++ 源码语法。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 需要在解析前处理常量、条件分支和有界文件包含时，见[运行时预处理](PREPROCESSING.zh-CN.md)。
 
 ## 1. 从词法单元到简单语法

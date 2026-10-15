@@ -2,6 +2,16 @@
 
 [English](FAST_TOOLS.md) | [通用算法](ALGORITHMS.zh-CN.md)
 
+**先运行一个完整例子。** 需要随机抽取记录、按整数键排序或在消息中同时查找多个告警词时，先看这个组合示例。
+
+打开 [fast_algorithms.c](../examples/fast_algorithms.c)。固定种子初始化 RNG → shuffle/sample → radix_sort → bytes_find → matcher_scan 回调 → bloom 插入与查询 → 释放对象。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_fast_algorithms`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**排序边界为 `-3 .. 9`，error 位于字节 16，warning 和 error 分别触发回调。Bloom 的 `possibly present` 需要再查真实数据；固定种子 RNG 不用于生成密钥。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 ## 1. 持有二进制字节
 
 `hx_bytes` 是与 `hx_string` 对应的二进制值。通过 `HX_BYTES_INIT` 初始化后，可以赋值、追加、预留和调整大小，接受 NUL 及任意编码，不补字符串终止符。扩展大小会填零。赋值／追加可引用当前值，失败保持不变。容量最多 64 MiB，扩容期间可能同时持有新旧缓冲。持有资源的结构应通过移动／复制接口处理，不能直接按结构复制；修改需要外部串行化。

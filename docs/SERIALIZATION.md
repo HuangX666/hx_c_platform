@@ -2,6 +2,12 @@
 
 [简体中文](SERIALIZATION.zh-CN.md) · [README](../README.md) · [Parser profiles](CONFIGURATION.md)
 
+**Start by converting a device structure to JSON and reading it back.** Build `hx_os_serialization` and run it through the [example instructions](../examples/README.md#run). No argument selects JSON. Read [serialization.c](../examples/serialization.c) with its [serialization_schema.h](../examples/serialization_schema.h).
+
+The input has a device name, two samples, limits and an enabled flag. Encode produces text; decode creates an owning result; the program prints JSON and releases it. Nested samples remain structured values. Arguments `yaml`, `xml` and `toml` show alternative representations; the array-bearing structure is not directly representable as INI.
+
+Declare a mapping once using macros or a field table, then substitute your structure data. Decoded strings borrow the result and must be used before release. Section 3 explains the complete calls and fields.
+
 ## 1. Choose an entry point
 
 For new data types, use `HX_CODEC_STRUCT` to declare the structure and its mapping together, then call `hx_os_codec_encode/decode`. Existing structures retain explicit mapping. Fields can contain integers, floating-point values, booleans, strings, nested structures and arrays. C++11 uses `hx::Codec<T>` and `Result`, with exceptions disabled.

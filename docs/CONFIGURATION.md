@@ -2,6 +2,16 @@
 
 [简体中文](CONFIGURATION.zh-CN.md) · [README](../README.md)
 
+**Start with a complete program.** Use a configuration document to load settings and query an immutable parsed tree.
+
+Open [configuration.c](../examples/configuration.c). Parse the built-in TOML → locate server.port → get_i64 reads its integer → release the document.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_configuration`. This program needs no arguments or input files.
+
+**Expected result:** It prints `Server port: 8080` without an input file. Use load for files; the usage tutorial has the complete JSON file version. Check field types rather than treating errors as defaults.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 To read a port or device name from `config.json`, start with the [complete JSON program](USAGE.md#configuration). Loading creates a read-only document: query fields, then release it. Editing the original file does not change an already loaded value; load again to read the change.
 
 This page explains format limits, parser selection and data lifetimes. Use the [settings tutorial](USAGE.md#settings) to edit values in memory and save them, or the [serialization tutorial](SERIALIZATION.md) to convert your own structures to JSON and other text formats.

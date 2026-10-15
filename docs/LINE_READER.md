@@ -2,6 +2,12 @@
 
 [简体中文](LINE_READER.zh-CN.md)
 
+**Start with a small text file.** For large files or line-oriented records, a reader avoids loading the entire file into a string.
+
+Prepare demo.txt using [input setup](../examples/README.md#inputs) and build `hx_os_read_lines`. Inside build, run `./bin/hx_os_read_lines demo.txt` on Linux or `.\bin\Release\hx_os_read_lines.exe demo.txt` on Windows. It prints `0123456789`; a multiline input produces one output line per record.
+
+[read_lines.c](../examples/read_lines.c) follows open → repeated next → process line → close after EOF → destroy string. Replace fwrite with record processing. EOF is normal completion; invalid encoding, oversized lines and I/O failures are separate results.
+
 ## 1. Read one line at a time
 
 `hx_os_line_reader` reads UTF-8 text without loading the whole file. Enable `HX_OS_ENABLE_LINE_READER` and its `HX_OS_ENABLE_STREAM` dependency. `max_line_bytes=0` selects a 1 MiB line limit. There is no background thread or implicit network deadline.

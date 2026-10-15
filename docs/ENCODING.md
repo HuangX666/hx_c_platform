@@ -2,6 +2,16 @@
 
 [简体中文](ENCODING.zh-CN.md)
 
+**Start with a complete program.** Use Base64 or hexadecimal to represent binary bytes, including NUL, in JSON strings or text protocols.
+
+Open [encoding.c](../examples/encoding.c). Prepare 00 01 fe ff → base64_encode_string → base64_decode into an array → use the actual byte count → destroy the string.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_encoding`. This program needs no arguments or input files.
+
+**Expected result:** It prints `Base64: AAH+/w==` and `Decoded 4 bytes; last byte: 255`. This is reversible representation, not secrecy; use cryptography for confidentiality.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 ## 1. Encode bytes without OpenSSL
 
 Enable `HX_OS_ENABLE_ENCODING` for Base64, Base64URL and hexadecimal conversion. These are representations of bytes, not encryption. No OpenSSL, network initialization or container module is required. Disabled builds retain the functions and return `HX_OS_NOT_SUPPORTED`.

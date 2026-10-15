@@ -2,6 +2,8 @@
 
 [English](NATIVE_DEPENDENCIES.md) · [README](../README.zh-CN.md)
 
+**需要便利层以外的 SDK 功能时，继续用同一套底层库。** 例如已有 SQLite 代码仍可 include sqlite3.h、执行 SQL，不必为使用消息队列接口另带一套 SQLite。下面先说明 CMake 链接目标，再给一个只在内存中创建 sample 表的完整程序；成功退出码为 0，不会创建磁盘数据库。使用前仍需按[安装包接入教程](USAGE.zh-CN.md#installed-project)提供 prefix。
+
 ## 1. 一次接入
 
 便利接口和底层原生 API 可以一起使用。安装后，业务项目这样接入：

@@ -2,6 +2,16 @@
 
 [简体中文](PARAMETERS.zh-CN.md) · [README](../README.md)
 
+**Start with a complete program.** Use a growable parameter pack for named integers, text and binary fields in plugin calls or notifications.
+
+Open [parameters.c](../examples/parameters.c). params_create → fill_request writes ID, name, flag and four bytes → show_request reads by name → destroy.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_parameters`. This program needs no arguments or input files.
+
+**Expected result:** It prints `Device 42 (camera): 4 binary bytes`. Setters copy strings/bytes; returned views borrow the pack and cannot outlive it.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 ## 1. Choose a pack
 
 Use `hx_os_params` to pass named values between functions in one process. It owns copied names, UTF-8 strings and arbitrary byte spans. Unlike the original stack `hx_os_calldata`, it can grow beyond 16 fields and 512 text bytes. Existing stack packs keep their layout and behavior.

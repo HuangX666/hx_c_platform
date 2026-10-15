@@ -2,6 +2,16 @@
 
 [English](ENCODING.md)
 
+**先运行一个完整例子。** 需要把包含 NUL 的二进制数据放进 JSON 字符串或纯文本协议时，用 Base64／十六进制表示这些字节。
+
+打开 [encoding.c](../examples/encoding.c)。准备 00 01 fe ff → base64_encode_string → base64_decode 到调用者数组 → 按实际字节数读取 → destroy 字符串。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_encoding`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**输出 `Base64: AAH+/w==` 和 `Decoded 4 bytes; last byte: 255`。这只是表示方式，任何人都可以解码；需要保密时使用加密模块。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 ## 1. 不依赖 OpenSSL 的字节编码
 
 开启 `HX_OS_ENABLE_ENCODING` 即可使用 Base64、Base64URL 和十六进制转换。这些是字节的文本表示，不是加密，不要求 OpenSSL、网络初始化或容器模块。关闭模块后函数仍存在，返回 `HX_OS_NOT_SUPPORTED`。

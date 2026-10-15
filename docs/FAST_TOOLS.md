@@ -2,6 +2,16 @@
 
 [简体中文](FAST_TOOLS.zh-CN.md) | [General algorithms](ALGORITHMS.md)
 
+**Start with a complete program.** Start here for sampling records, sorting integer keys or finding several alert words in one message.
+
+Open [fast_algorithms.c](../examples/fast_algorithms.c). Seed the RNG → shuffle/sample → radix_sort → bytes_find → matcher_scan callbacks → bloom insertion/query → release objects.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_fast_algorithms`. This program needs no arguments or input files.
+
+**Expected result:** Sorted endpoints are `-3 .. 9`; error starts at byte 16, with callbacks for warning and error. Bloom `possibly present` requires a real lookup; the seeded RNG is not a key generator.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 ## 1. Owned binary bytes
 
 `hx_bytes` is the binary counterpart to `hx_string`: initialize with `HX_BYTES_INIT`, then assign, append, reserve or resize. It accepts NUL and arbitrary encoding, and adds no terminator. Resize zero-fills an extension. Assign/append may borrow the current value; failure leaves it unchanged. Capacity is at most 64 MiB, with old+new storage during growth. Use move/copy operations instead of copying its owning structure. Mutations require external serialization.

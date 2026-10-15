@@ -2,6 +2,16 @@
 
 [简体中文](LINUX_DESKTOP.zh-CN.md) · [README](../README.md)
 
+**Start with a complete program.** Request temporary sleep inhibition while completing work such as a file export on a desktop system.
+
+Open [sleep_inhibit.c](../examples/sleep_inhibit.c). sleep_inhibit_create → perform application work → sleep_inhibit_destroy releases the request.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_sleep_inhibit`. This program needs no arguments or input files.
+
+**Expected result:** Available services produce request/release messages. Missing desktop/login services report unsupported or native errors; WSL and headless embedded systems need not provide them.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 ## 1. The same ordinary C entry
 
 A long file export may ask the desktop to keep the computer awake while that work runs. Create a request at the beginning and destroy it afterward:

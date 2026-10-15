@@ -2,6 +2,8 @@
 
 [English](TLS.md) · [README](../README.zh-CN.md) · [数据加密](CRYPTO.zh-CN.md)
 
+下方命令复用[已配置的示例目录](../examples/README.zh-CN.md#run)，build 与 Release 按自己的配置替换。先准备与 localhost 匹配的演示证书，再运行两端；仅有加密库并不能替代证书和信任配置。
+
 ## 1. 构建并运行完整示例
 
 这里的 TLS 指传输层安全协议。线程局部存储仍使用 `hx_os_tls_key`。本模块实现 TCP 上的标准 TLS 1.2／1.3，对端可以使用 Python、Go、Java 或其他标准 TLS 实现。

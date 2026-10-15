@@ -2,6 +2,8 @@
 
 [English](ARCHIVE.md) · [README](../README.zh-CN.md) · [依赖构建](DEPENDENCIES.zh-CN.md)
 
+**先用一个小目录完成打包和解包。** 准备 records 目录，在里面放一个 device.json，内容为 `{"device":42}`。启用归档依赖并构建 hx_os_archive_files，按第 2 节依次 pack、list、unpack。list 应显示 device.json；解包后的同名文件应包含原 JSON。首次使用不需要密码或 7-Zip 后端，先跑通普通 ZIP，再按需要阅读后面的密码选项。
+
 ## 1. 先选择你要做的事
 
 包含 `<hx_os.h>`，也可以只包含 `<hx_os_archive.h>`。常用操作不需要全局初始化，不需要自己管理压缩对象、组织读写循环或配置底层编解码器。
@@ -35,7 +37,7 @@ int main(void)
 
 ## 2. 构建并运行完整程序
 
-ARCHIVE 默认开启，需要 FILE_UTILS、CONTAINERS，以及准备好的 libarchive、OpenSSL 和压缩依赖 SDK。设置 `HX_OS_ENABLE_ARCHIVE=OFF` 可以裁剪：函数仍可链接，但操作返回 `HX_OS_NOT_SUPPORTED`，`hx_os_archive_available()` 返回 0。完全不需要 OpenSSL 时，同时关闭 ARCHIVE 与 CRYPTO。
+ARCHIVE 默认开启，需要 FILE_UTILS、CONTAINERS，以及准备好的 libarchive、OpenSSL 和压缩依赖 SDK。设置 `HX_OS_ENABLE_ARCHIVE=OFF` 可以裁剪：函数仍可链接，但操作返回 `HX_OS_NOT_SUPPORTED`，`hx_os_archive_available()` 返回 0。OpenSSL 也可能被 CRYPTO、HTTP／URL 使用；裁剪时按[依赖目标](NATIVE_DEPENDENCIES.zh-CN.md)检查实际启用的模块。
 
 先按[依赖构建说明](DEPENDENCIES.zh-CN.md)准备 SDK，再用它的绝对 prefix 路径配置本库：
 
@@ -43,7 +45,7 @@ ARCHIVE 默认开启，需要 FILE_UTILS、CONTAINERS，以及准备好的 libar
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
   -DHX_OS_DEPENDENCY_PREFIX=/absolute/project/build-deps/prefix \
   -DHX_OS_BUILD_EXAMPLES=ON
-cmake --build build --config Release --parallel 4
+cmake --build build --config Release --target hx_os_archive_files
 ```
 
 完整 C 程序在 [archive_files.c](../examples/archive_files.c)。它直接使用这些公共入口，失败时显示复制后的诊断，最后报告已经发布了多少文件。示例复用已有参数辅助层，将 Windows 命令行参数转换为 UTF-8。

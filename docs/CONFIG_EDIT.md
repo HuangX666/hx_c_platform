@@ -2,6 +2,8 @@
 
 [简体中文](CONFIG_EDIT.zh-CN.md) · [README](../README.md)
 
+**Use this for editing a few configuration keys and saving them.** The example sets network.port to string 8080. Follow section 2: save, edit the main file to 9000, save again, then explicitly restore. The second save leaves 8080 in the main file and 9000 in the backup; restore puts 9000 back. This is an explicit save/restore workflow, not automatic recovery. Reuse the directory described in the [example guide](../examples/README.md#run) and work on demo files.
+
 ## 1. Edit an INI section and key
 
 `hx_os_ini_create()` creates an empty document; `hx_os_ini_load()` loads an existing UTF-8 file. Set strings with `hx_os_ini_set(&document, "network", "port", "8080", &error)`. The library creates missing sections/keys. It replaces the owner only after a complete new document is ready. If you retained the previous document, its nodes remain valid and unchanged.

@@ -2,6 +2,10 @@
 
 [English](NATIVE_INTEROP.md) · [README](../README.zh-CN.md)
 
+**已有系统接口需要原生文件句柄时再用这一层。** 先准备 [demo.txt](../examples/README.zh-CN.md#inputs)，构建 `hx_os_native_file`，在 build 目录把 demo.txt 作为参数运行。Windows 使用 `.\bin\Release\hx_os_native_file.exe demo.txt`；Linux 使用 `./bin/hx_os_native_file demo.txt`。
+
+输出 `Native query: 10 bytes`。[native_file.c](../examples/native_file.c) 先用本库打开文件，再借用 HANDLE／fd 调用 GetFileSizeEx／fstat，最后由原所有者关闭文件。业务接原生 API 时可沿用这个顺序；不要关闭借来的句柄，也不要在原文件对象销毁后继续使用。
+
 ## 1. 什么时候使用
 
 可移植的业务操作继续使用普通库接口。当另一个 API 必须接收原生文件、套接字、线程或进程对象时，才使用这里的互操作查询。每次取得的都是现有对象的借用值，不会复制对象、转移所有权、接管外部对象或延长生命周期。

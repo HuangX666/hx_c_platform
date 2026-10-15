@@ -2,6 +2,16 @@
 
 [English](STREAMS.md) · [首页](../README.zh-CN.md)
 
+**先运行一个完整例子。** 文件或协议规定了数字的字节顺序，需要把设备编号和温度写成二进制再读回时，使用流接口。
+
+打开 [binary_stream.c](../examples/binary_stream.c)。stream_memory → write_u32／write_f64 选择 BIG_ENDIAN → seek 回开头 → 用相同字节序 read → close。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_binary_stream`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**输出 `device=42 temperature=23.5`。实际文件可换成文件流；后台保存记录则看 buffered_file.c，它写入 samples.jsonl，并在成功关闭后报告保存三条数据。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 ## 1. 按任务选择入口
 
 | 任务 | 入口 | 执行方式 |

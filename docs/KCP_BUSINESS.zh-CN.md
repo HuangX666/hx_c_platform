@@ -2,6 +2,8 @@
 
 [English](KCP_BUSINESS.md) · [README](../README.zh-CN.md) · [KCP C 接口](../include/hx_os_kcp.h)
 
+构建前先完成一次[示例配置](../examples/README.zh-CN.md#run)。下文的 build 是已有构建目录的占位名，换成自己的目录即可，不必为每种协议再建一个目录。命令从库源码根目录执行；只构建本例需要的两端程序。
+
 ## 1. 独立的 KCP 程序
 
 本例直接使用 `hx_os_kcp_*` 和 UDP socket，不调用 `hx_ipc_*`，不运行 IPC 设备服务。生产线程提交三个数据块；独立 I/O 线程接收 UDP 包、驱动 KCP、接收业务确认。服务端按顺序应用三个块并发送处理完成消息。
@@ -11,32 +13,33 @@ KCP 引擎本身不创建线程或 socket。示例明确演示由谁驱动更新
 ## 2. 构建与运行
 
 ```sh
-cmake -S . -B build-net -DHX_OS_BUILD_EXAMPLES=ON
-cmake --build build-net --config Release --parallel 4
+cmake -S . -B build -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build build --config Release --target hx_os_kcp_transfer_server
+cmake --build build --config Release --target hx_os_kcp_transfer_client
 ```
 
 Windows PowerShell，Visual Studio 构建：
 
 ```powershell
-python examples/run_kcp_business.py --bin-dir build-net/bin/Release
-python examples/run_kcp_business.py --drop-first --bin-dir build-net/bin/Release
+python examples/run_kcp_business.py --bin-dir build/bin/Release
+python examples/run_kcp_business.py --drop-first --bin-dir build/bin/Release
 ```
 
-Linux/WSL 使用 `python3` 和 `--bin-dir build-net/bin`。已有构建可使用 `build-shared-msvc/bin/Release` 或 `build-shared-linux/bin`；Windows Ninja 去掉 `Release`。脚本自动选择端口，检查双方实际应用的数据块和回复。
+Linux/WSL 使用 `python3` 和 `--bin-dir build/bin`。已有构建可使用 `build-shared-msvc/bin/Release` 或 `build-shared-linux/bin`；Windows Ninja 去掉 `Release`。脚本自动选择端口，检查双方实际应用的数据块和回复。
 
 手工运行，Windows **终端一**：
 
 ```powershell
-.\build-net\bin\Release\hx_os_kcp_transfer_server.exe 39003 --drop-first
+.\build\bin\Release\hx_os_kcp_transfer_server.exe 39003 --drop-first
 ```
 
 看到 `Listening:` 后，**终端二**：
 
 ```powershell
-.\build-net\bin\Release\hx_os_kcp_transfer_client.exe 39003 --drop-first
+.\build\bin\Release\hx_os_kcp_transfer_client.exe 39003 --drop-first
 ```
 
-Linux/WSL 分别使用 `./build-net/bin/hx_os_kcp_transfer_server 39003 --drop-first` 和 `./build-net/bin/hx_os_kcp_transfer_client 39003 --drop-first`。去掉两边的 `--drop-first` 即为正常传输。两端使用 `127.0.0.1`，参数是端口号，不是 `kcp://` URI。服务端启动后请及时运行客户端；演示会话总时限为 10 秒。
+Linux/WSL 分别使用 `./build/bin/hx_os_kcp_transfer_server 39003 --drop-first` 和 `./build/bin/hx_os_kcp_transfer_client 39003 --drop-first`。去掉两边的 `--drop-first` 即为正常传输。两端使用 `127.0.0.1`，参数是端口号，不是 `kcp://` URI。服务端启动后请及时运行客户端；演示会话总时限为 10 秒。
 
 ## 3. 生产线程发 JSON，I/O 线程收 JSON 确认
 
@@ -100,8 +103,8 @@ json_field fields[] = {
 ## 6. 运行业务示例
 
 ```sh
-python examples/run_kcp_business.py --bin-dir build-net/bin/Release
-python examples/run_kcp_business.py --bin-dir build-net/bin/Release --drop-first
+python examples/run_kcp_business.py --bin-dir build/bin/Release
+python examples/run_kcp_business.py --bin-dir build/bin/Release --drop-first
 ```
 
-分别演示正常 JSON 块传输和首包丢失后的重传，核对总值、确认与资源回收。无需私有回归文件，Linux 的程序目录改为 build-net/bin。
+分别演示正常 JSON 块传输和首包丢失后的重传，核对总值、确认与资源回收。无需私有回归文件，Linux 的程序目录改为 build/bin。

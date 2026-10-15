@@ -2,6 +2,10 @@
 
 [简体中文](WINDOWS_UTILITIES.zh-CN.md) · [README](../README.md)
 
+**Use this module to display Windows version resources or GPU identity.** Build `hx_os_windows_info` and follow the [run instructions](../examples/README.md#run). No argument enumerates GPUs; supplying a DLL/EXE with version resources also queries that file first.
+
+[windows_info.c](../examples/windows_info.c) prints GPU names, LUIDs, memory and the chosen file's `File version`. Values depend on hardware and files. The program demonstrates version/GPU queries; the window-handle APIs below need a real window supplied by your application. Non-Windows platforms report unsupported.
+
 ## 1. Read a DLL or executable version
 
 Pass a UTF-8 file path. The library resolves relative paths against the current directory, converts the Windows path, bounds the resource allocation and releases it before returning. This reads the resource without executing the target file. It does not use DLL search paths.

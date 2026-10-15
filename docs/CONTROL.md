@@ -2,6 +2,16 @@
 
 [简体中文](CONTROL.zh-CN.md) · [README](../README.md)
 
+**Start with a complete program.** Choose backoff, a token bucket or a stopwatch for retry delays, send-rate limits or elapsed-time measurement.
+
+Open [control.c](../examples/control.c). stopwatch_start → backoff_next computes three delays → token_bucket_try_take requests capacity → elapsed_ns measures the interval.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_control`. This program needs no arguments or input files.
+
+**Expected result:** It prints three delays, `Retry budget exhausted.`, a retry deadline when rate-limited, and elapsed time. Timing varies; the helpers do not retry or send requests for you.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 ## 1. What each tool does
 
 `<hx_os_control.h>` contains three small stack values. They allocate no memory, create no threads and perform no hidden sleep or business retry. All are always available in the core; they do not depend on optional wide-math functionality. Copying one creates an independent snapshot. Initialize before use and externally serialize mutations of a shared object. Output variables must not overlap the state object. Do not modify fields or use fields as output parameters (for example, `&watch.started_ns` or `&bucket.updated_ns`).

@@ -2,6 +2,12 @@
 
 [English](FILE_SEARCH.md) · [首页](../README.zh-CN.md) · [文件接口](../include/hx_os_file.h)
 
+**先查找自己能看到的文件。** 需要偶尔扫描目录树、找到一项就处理一项时，用递归查询；它不会维护长期文件索引。
+
+构建 `hx_os_find_files` 后，按[示例运行目录](../examples/README.zh-CN.md#run)进入 build。Linux 执行 `./bin/hx_os_find_files ../examples "*.c"`；Windows 执行 `.\bin\Release\hx_os_find_files.exe ..\examples "*.c"`。模式加引号，扫描目标为源码中的 examples 目录。
+
+程序会逐行输出匹配路径，最后输出 `Files: 数量`，数量随源码变化。读 [find_files.c](../examples/find_files.c) 的 print_file 回调：把打印替换成自己的逐文件处理即可。需要界面保持响应时，看后面的线程池版本；回调中的路径是借用值，要长期保存就复制。
+
 - [1. 选择入口](#entry)
 - [2. 直接取得第一个匹配文件](#first)
 - [3. 找到一个就处理一个](#stream)

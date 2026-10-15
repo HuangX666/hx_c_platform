@@ -2,6 +2,16 @@
 
 [简体中文](PROFILER.zh-CN.md) · [README](../README.md)
 
+**Start with a complete program.** Record repeated intervals and inspect a snapshot to understand timing distributions of collection or parsing work.
+
+Open [profile_statistics.c](../examples/profile_statistics.c). Create with histogram support → record 12 read_sensor intervals → create snapshot → close profiler → read means/percentiles → release snapshot.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_profile_statistics`. This program needs no arguments or input files.
+
+**Expected result:** Output includes `read_sensor: 12 samples`, mean, deviation and P50/P95/P99 intervals. Timing depends on scheduling; replace the simulated sleep with measured work.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 ## 1. What this measures
 
 Use the profiler to answer questions such as “how long did reading the sensor take?” or “which child operation occupied most of a frame?” Call `start_root` before an operation and `leave` after it. Call `reach` to enter a child operation. Each successful entry needs one matching leave on the same thread or library coroutine.

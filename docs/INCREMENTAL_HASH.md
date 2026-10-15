@@ -2,6 +2,16 @@
 
 [简体中文](INCREMENTAL_HASH.zh-CN.md) · [README](../README.md)
 
+**Start with a complete program.** Compute a digest incrementally when file or network content arrives in chunks instead of buffering the whole input.
+
+Open [incremental_hash.c](../examples/incremental_hash.c). digest_create selects SHA-256 → update ab → update c → finish hexadecimal output → destroy. Use the keyed creation entry for HMAC.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_incremental_hash`. This program needs no arguments or input files.
+
+**Expected result:** The SHA-256 of abc is `ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad`. In a file loop, pass only bytes actually read. CRYPTO and the OpenSSL SDK are required.
+
+Short snippets below explain individual calls; use the complete example when running them. An [installed SDK consumer](USAGE.md#installed-project) must also enable the corresponding SDK module.
+
 ## 1. Feed chunks, finish once
 
 ```c

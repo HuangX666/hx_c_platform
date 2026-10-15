@@ -2,6 +2,16 @@
 
 [简体中文](STREAMS.zh-CN.md) · [README](../README.md)
 
+**Start with a complete program.** Use streams when a file or protocol defines numeric byte order, such as a binary device ID and temperature record.
+
+Open [binary_stream.c](../examples/binary_stream.c). stream_memory → write_u32/write_f64 with BIG_ENDIAN → seek to start → read with the same byte order → close.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_binary_stream`. This program needs no arguments or input files.
+
+**Expected result:** It prints `device=42 temperature=23.5`. Use a file stream for storage. For background output, buffered_file.c writes samples.jsonl and reports three saved records after successful close.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 ## 1. Choose the operation
 
 | Task | Entry point | Execution |

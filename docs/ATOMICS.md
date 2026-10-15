@@ -2,6 +2,16 @@
 
 [简体中文](ATOMICS.zh-CN.md)
 
+**Start with a complete program.** Use an atomic flag when one thread publishes a completed result to another.
+
+Open [atomic_publication.c](../examples/atomic_publication.c). `calculate` writes 42 → release-store ready → acquire-load ready → read answer → join and destroy the thread.
+
+Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_atomic_publication`. This program needs no arguments or input files.
+
+**Expected result:** It prints `answer: 42`. Replace the calculation while preserving publication order. This demonstrates a short wait; use an event or condition variable for device responses or other long waits.
+
+Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+
 The C99 storage types and functions in hx_os_atomic.h work from C++11 too. Existing hx_os_atomic remains an 8-byte, 8-aligned signed counter; hx_os_atomic32 is independently 4-byte, 4-aligned. Pointers use native pointer alignment. Do not pack these types, copy live storage, access the raw member concurrently, or reinterpret a std::atomic as hx storage. Initialize before publication; the containing owner controls lifetime. Pointer operations provide no reclamation, ownership transfer or ABA protection.
 
 For the usual result-publication pattern use release store and acquire load, as in [the shared C example](../examples/atomic_publication.c). The same API works in C++. A C++-only owner may use std::atomic for its own distinct storage. Long waits should use events or conditions rather than spin on cpu_relax.

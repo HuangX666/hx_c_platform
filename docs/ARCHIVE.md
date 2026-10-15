@@ -2,6 +2,8 @@
 
 [简体中文](ARCHIVE.zh-CN.md) · [README](../README.md) · [Dependency builds](DEPENDENCIES.md)
 
+**Start by packing and extracting a small directory.** Create records with a device.json containing `{"device":42}`. Enable archive dependencies, build hx_os_archive_files, then follow section 2 to pack, list and unpack. Listing shows device.json and the extracted file contains the original JSON. First run ordinary ZIP without a password or 7-Zip backend; add those options when needed.
+
 ## 1. Choose the operation
 
 Include `<hx_os.h>` or the smaller `<hx_os_archive.h>`. Normal calls need no global initialization, archive handle, manual read loop or explicit codec setup.
@@ -35,7 +37,7 @@ Existing destinations are preserved by default. A failed operation reports a sta
 
 ## 2. Build and use the complete program
 
-ARCHIVE is enabled by default and requires FILE_UTILS, CONTAINERS and the prepared libarchive/OpenSSL/compression SDK. Disable it with `HX_OS_ENABLE_ARCHIVE=OFF`; functions remain linkable and return `HX_OS_NOT_SUPPORTED`, and `hx_os_archive_available()` returns 0. Disable both ARCHIVE and CRYPTO to omit OpenSSL entirely.
+ARCHIVE is enabled by default and requires FILE_UTILS, CONTAINERS and the prepared libarchive/OpenSSL/compression SDK. Disable it with `HX_OS_ENABLE_ARCHIVE=OFF`; functions remain linkable and return `HX_OS_NOT_SUPPORTED`, and `hx_os_archive_available()` returns 0. OpenSSL may also serve CRYPTO and HTTP/URL; check the enabled [dependency targets](NATIVE_DEPENDENCIES.md) when trimming.
 
 Build the SDK as described in [DEPENDENCIES](DEPENDENCIES.md), then configure the library with its absolute prefix:
 
@@ -43,7 +45,7 @@ Build the SDK as described in [DEPENDENCIES](DEPENDENCIES.md), then configure th
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
   -DHX_OS_DEPENDENCY_PREFIX=/absolute/project/build-deps/prefix \
   -DHX_OS_BUILD_EXAMPLES=ON
-cmake --build build --config Release --parallel 4
+cmake --build build --config Release --target hx_os_archive_files
 ```
 
 The runnable C program is [archive_files.c](../examples/archive_files.c). It uses these same public calls, prints copied diagnostics on failure and reports how many files were published. The example converts Windows command-line arguments to UTF-8 using the existing argument helper.

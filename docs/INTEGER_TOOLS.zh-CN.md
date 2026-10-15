@@ -2,6 +2,16 @@
 
 [English](INTEGER_TOOLS.md) · [首页](../README.zh-CN.md)
 
+**先运行一个完整例子。** 协议希望小整数占用较少字节，或记录需要带时间信息的 UUID 时，分别使用 Varint／ZigZag 和 UUID v7。
+
+打开 [integer_tools.c](../examples/integer_tools.c)。varint_encode 300 → decode → zigzag_encode -1 → uuid_v7_generate_string → destroy 字符串。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_integer_tools`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**前两行是 `300 uses 2 bytes; decoded: 300`、`ZigZag -1: 1`；UUID 每次变化。Varint 解码返回消费字节数，不能把整段缓冲都当成一个整数。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 ## 1. 紧凑整数编码
 
 包含 `hx_os.h` 或 `hx_os_varint.h` 即可使用。缓冲区接口无需初始化或可选依赖。Varint 使用最短的 base-128 表示，把无符号 64 位整数编码为 1—10 字节。例如 `300` 编码为 `ac 02`。ZigZag 将有符号值映射为无符号值：`0 → 0`、`-1 → 1`、`1 → 2`、`-2 → 3`。这是整数编码工具，不是完整的 Protocol Buffers 实现。

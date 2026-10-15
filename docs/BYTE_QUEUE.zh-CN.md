@@ -2,6 +2,16 @@
 
 [English](BYTE_QUEUE.md) · [README](../README.zh-CN.md)
 
+**先运行一个完整例子。** 串口或网络每次只给一部分字节，需要先积累再按顺序取出时，可以用 ByteQueue。它本身不会解析消息。
+
+打开 [byte_queue_ring.c](../examples/byte_queue_ring.c)。`example_queue` 创建有上限的队列 → `write` 放入 hello → `read_some` 取出当前字节并返回实际数量 → `destroy`。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_byte_queue_ring`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**第一行是 `ByteQueue: 5 bytes: hello`。程序随后还演示固定 Ring。换成业务时按返回的字节数处理数据；缓冲不自带字符串结束符或线程同步。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 `hx_os_byte_queue` 用于积累字节流，再取出完整的一段。它复用现有 deque 存储和 CONTAINERS 开关，不自带消息分帧、锁、阻塞等待或后台线程。多个线程同时生产／消费时，由调用者同步，或者使用更上层的 IPC 接口。
 
 ## 1. 写入、预览、取出一段数据

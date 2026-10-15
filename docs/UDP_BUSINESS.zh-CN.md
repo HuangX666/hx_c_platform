@@ -2,6 +2,8 @@
 
 [English](UDP_BUSINESS.md) · [README](../README.zh-CN.md) · [socket C 接口](../include/hx_os_net.h)
 
+构建前先完成一次[示例配置](../examples/README.zh-CN.md#run)。下文的 build 是已有构建目录的占位名，换成自己的目录即可，不必为每种协议再建一个目录。命令从库源码根目录执行；只构建本例需要的两端程序。
+
 ## 1. 独立的 UDP 数据报程序
 
 本例使用 `hx_os_socket_send_to()` 和 `hx_os_socket_receive_from()`，没有 IPC 连接、HXIP 帧或隐式握手。传感器端通过一个线程发送样本，通过另一个线程接收反馈；接收端保留两个设备的最新状态并回复。关闭 IPC 模块仍能运行。
@@ -11,32 +13,33 @@ UDP 保留丢失、重复和乱序的语义。这个例子选择“保留最新�
 ## 2. 构建与运行
 
 ```sh
-cmake -S . -B build-net -DHX_OS_BUILD_EXAMPLES=ON
-cmake --build build-net --config Release --parallel 4
+cmake -S . -B build -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build build --config Release --target hx_os_udp_dashboard
+cmake --build build --config Release --target hx_os_udp_sensor
 ```
 
 Windows PowerShell，Visual Studio 构建：
 
 ```powershell
-python examples/run_udp_business.py --bin-dir build-net/bin/Release
-python examples/run_udp_business.py --simulate-gaps --bin-dir build-net/bin/Release
+python examples/run_udp_business.py --bin-dir build/bin/Release
+python examples/run_udp_business.py --simulate-gaps --bin-dir build/bin/Release
 ```
 
-Linux/WSL 使用 `python3` 和 `--bin-dir build-net/bin`。也可使用已有 `build-shared-msvc/bin/Release` 或 `build-shared-linux/bin`；Windows Ninja 去掉 `Release`。脚本自动选端口，检查两个进程的状态和反馈。
+Linux/WSL 使用 `python3` 和 `--bin-dir build/bin`。也可使用已有 `build-shared-msvc/bin/Release` 或 `build-shared-linux/bin`；Windows Ninja 去掉 `Release`。脚本自动选端口，检查两个进程的状态和反馈。
 
 手工运行，Windows **终端一**：
 
 ```powershell
-.\build-net\bin\Release\hx_os_udp_dashboard.exe 39002
+.\build\bin\Release\hx_os_udp_dashboard.exe 39002
 ```
 
 看到 `Listening:` 后，**终端二**：
 
 ```powershell
-.\build-net\bin\Release\hx_os_udp_sensor.exe 39002 --simulate-gaps
+.\build\bin\Release\hx_os_udp_sensor.exe 39002 --simulate-gaps
 ```
 
-去掉 `--simulate-gaps` 就是普通演示。Linux/WSL 分别运行 `./build-net/bin/hx_os_udp_dashboard 39002` 和 `./build-net/bin/hx_os_udp_sensor 39002 --simulate-gaps`。两端都使用 `127.0.0.1`；参数是端口号，不能填 `udp://`。每次重跑重新启动接收端。
+去掉 `--simulate-gaps` 就是普通演示。Linux/WSL 分别运行 `./build/bin/hx_os_udp_dashboard 39002` 和 `./build/bin/hx_os_udp_sensor 39002 --simulate-gaps`。两端都使用 `127.0.0.1`；参数是端口号，不能填 `udp://`。每次重跑重新启动接收端。
 
 ## 3. 一个数据报就是一个 JSON 对象
 
@@ -108,10 +111,10 @@ json_field fields[] = {
 ## 6. 运行业务示例
 
 ```sh
-python examples/run_udp_business.py --bin-dir build-net/bin/Release
-python examples/run_udp_business.py --bin-dir build-net/bin/Release --simulate-gaps
+python examples/run_udp_business.py --bin-dir build/bin/Release
+python examples/run_udp_business.py --bin-dir build/bin/Release --simulate-gaps
 ```
 
-第一条运行正常采样与反馈；第二条加入缺号、重复和迟到数据，演示接收方的处理方式。Linux 的程序目录改为 build-net/bin。
+第一条运行正常采样与反馈；第二条加入缺号、重复和迟到数据，演示接收方的处理方式。Linux 的程序目录改为 build/bin。
 
 在 WSL2 镜像模式下，`127.0.0.1` 也可能经过 MTU 1500 的虚拟网络；本机实测超过 1472 字节的 IPv4 UDP 载荷出现分片丢失。此示例的 JSON 上限为 1023 字节，保持小数据报。较大业务消息可参考 [KCP 示例](KCP_BUSINESS.zh-CN.md) 或 [TCP 示例](TCP_BUSINESS.zh-CN.md)；库不会自动拆分普通 UDP 或改变其丢包语义。WSL 内回环与 Windows／WSL 通信需分别验证，详见 [IPC 的平台说明](IPC.zh-CN.md)。

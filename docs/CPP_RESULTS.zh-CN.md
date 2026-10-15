@@ -2,6 +2,10 @@
 
 [English](CPP_RESULTS.md) · [README](../README.zh-CN.md) · [线程池](CPP_POOL.zh-CN.md)
 
+**先看一个真正会成功或失败的调用。** [读取文件的完整 C++ 程序](USAGE.zh-CN.md#files) 调用 readText，随后用 `if (!text)` 检查失败，再用 `text.value().c_str()` 显示结果。准备 hello.txt 后会显示文件内容；改成不存在的路径则打印 `Read failed` 和错误类别。
+
+Result 把返回值与错误放在一起，业务无需 try/catch。多数操作只在成功后取 value；批量收发等明确允许部分完成的入口还可能在失败时保留数量，要按该接口契约读取。下面解释这些差别和对象生命周期。
+
 本项目所有可能失败的 C++ 接口使用 `hx::Result<T>` 或 `hx::Result<void>`，不使用异常语法、异常对象或延迟异常转发。C99 实现和公开 C ABI 保持不变。包含需要的 `hx/*.hpp`，链接 `hx_c_platform::cpp`。
 
 ## 读取与传递结果

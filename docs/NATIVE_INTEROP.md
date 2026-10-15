@@ -2,6 +2,10 @@
 
 [简体中文](NATIVE_INTEROP.zh-CN.md) · [README](../README.md)
 
+**Use native interoperability when an existing system API needs a native handle.** Prepare [demo.txt](../examples/README.md#inputs), build `hx_os_native_file`, then run inside build: `.\bin\Release\hx_os_native_file.exe demo.txt` on Windows or `./bin/hx_os_native_file demo.txt` on Linux.
+
+Output is `Native query: 10 bytes`. [native_file.c](../examples/native_file.c) opens through this library, borrows HANDLE/fd for GetFileSizeEx/fstat, then closes through the original owner. Follow that order with native APIs; never close the borrowed handle or retain it beyond its owner.
+
 ## 1. When to use this
 
 Use ordinary library functions for portable work. Use these explicit interoperability queries when another API requires the native object of a file, socket, thread or process you already own. Each query borrows the existing object; there is no duplicate, ownership transfer, adopted external object or extended lifetime.

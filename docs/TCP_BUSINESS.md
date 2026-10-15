@@ -2,6 +2,8 @@
 
 [简体中文](TCP_BUSINESS.zh-CN.md) · [README](../README.md) · [Socket C API](../include/hx_os_net.h)
 
+Complete the [example setup](../examples/README.md#run) first. Below, build is a placeholder for your existing directory; protocols do not each need a new build directory. Run commands from the checkout and build the endpoints used here.
+
 ## 1. Independent TCP programs
 
 The dedicated TCP client and server call `hx_os_socket_*` directly. They use neither `hx_ipc_*`, HXIP framing nor the IPC device service. They can build and run with `HX_OS_ENABLE_IPC=OFF`.
@@ -13,32 +15,33 @@ One client sender and one receiver share a TCP connection. The sender submits th
 From the repository root:
 
 ```sh
-cmake -S . -B build-net -DHX_OS_BUILD_EXAMPLES=ON
-cmake --build build-net --config Release --parallel 4
+cmake -S . -B build -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build build --config Release --target hx_os_tcp_order_server
+cmake --build build --config Release --target hx_os_tcp_order_client
 ```
 
 Windows PowerShell, Visual Studio build:
 
 ```powershell
-python examples/run_tcp_business.py --bin-dir build-net/bin/Release
-python examples/run_tcp_business.py --fragmented --bin-dir build-net/bin/Release
+python examples/run_tcp_business.py --bin-dir build/bin/Release
+python examples/run_tcp_business.py --fragmented --bin-dir build/bin/Release
 ```
 
-Linux/WSL uses `python3` and `--bin-dir build-net/bin`. Existing development directories are `build-shared-msvc/bin/Release` or `build-shared-linux/bin`; omit `Release` with Windows Ninja. The automatic runner chooses a free port.
+Linux/WSL uses `python3` and `--bin-dir build/bin`. Existing development directories are `build-shared-msvc/bin/Release` or `build-shared-linux/bin`; omit `Release` with Windows Ninja. The automatic runner chooses a free port.
 
 For manual execution, **terminal one**:
 
 ```powershell
-.\build-net\bin\Release\hx_os_tcp_order_server.exe 39001
+.\build\bin\Release\hx_os_tcp_order_server.exe 39001
 ```
 
 After `Listening:`, **terminal two**:
 
 ```powershell
-.\build-net\bin\Release\hx_os_tcp_order_client.exe 39001
+.\build\bin\Release\hx_os_tcp_order_client.exe 39001
 ```
 
-On Linux/WSL run `./build-net/bin/hx_os_tcp_order_server 39001` and `./build-net/bin/hx_os_tcp_order_client 39001` separately. The argument is a port number; these programs bind/connect to `127.0.0.1`, not a `tcp://` URI. The server has a 15-second overall deadline; client I/O has 10 seconds. Restart the server for each demonstration.
+On Linux/WSL run `./build/bin/hx_os_tcp_order_server 39001` and `./build/bin/hx_os_tcp_order_client 39001` separately. The argument is a port number; these programs bind/connect to `127.0.0.1`, not a `tcp://` URI. The server has a 15-second overall deadline; client I/O has 10 seconds. Restart the server for each demonstration.
 
 ## 3. Send JSON orders and receive JSON results
 
@@ -114,10 +117,10 @@ A short mutex serializes nonblocking socket calls; retries sleep 1 ms outside it
 ## 5. Run the business example
 
 ```sh
-python examples/run_tcp_business.py --bin-dir build-net/bin/Release
-python examples/run_tcp_business.py --bin-dir build-net/bin/Release --fragmented
-python examples/run_tcp_business.py --bin-dir build-net/bin/Release \
+python examples/run_tcp_business.py --bin-dir build/bin/Release
+python examples/run_tcp_business.py --bin-dir build/bin/Release --fragmented
+python examples/run_tcp_business.py --bin-dir build/bin/Release \
   --json-errors
 ```
 
-The first command runs normal orders; --fragmented demonstrates split/coalesced frames; --json-errors demonstrates invalid fields and rejection replies. All use public example programs only. Use build-net/bin on Linux.
+The first command runs normal orders; --fragmented demonstrates split/coalesced frames; --json-errors demonstrates invalid fields and rejection replies. All use public example programs only. Use build/bin on Linux.

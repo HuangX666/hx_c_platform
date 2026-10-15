@@ -2,6 +2,16 @@
 
 [English](FORMAT.md) · [README](../README.zh-CN.md)
 
+**先运行一个完整例子。** 想用花括号组织文字和数字，同时保持标准 C99 时，用明确类型的格式参数即可。
+
+打开 [format.c](../examples/format.c)。用 hx_fmt_str／hx_fmt_f64 组成参数数组 → hx_print_args 按 {} 和 {:.2f} 输出 → 检查状态。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_format`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**UTF-8 终端会显示 `张三: 3.75`。把参数换成业务变量；这种写法不需要代码生成器。自动识别表达式的另一种写法有单独的构建接入步骤。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 ## 1. 先选一种写法
 
 下面几种写法共用 C99 的 UTF-8 格式化实现，都不使用 C++ 异常。`HX_OS_ENABLE_FORMAT` 默认开启；关闭后，运行时接口返回 `HX_OS_NOT_SUPPORTED`，能力查询不再包含 `HX_OS_CAP_FORMAT`。

@@ -2,7 +2,17 @@
 
 [English](CPP_POOL.md) · [README](../README.zh-CN.md) · [Result 契约](CPP_RESULTS.zh-CN.md)
 
-`hx/ThreadPool.hpp` 在有界 C 线程池上提供仅头文件的 C++11 接口，链接 `hx_c_platform::cpp`。调度器和 C ABI 继续使用 C99。便利层采用显式结果，支持关闭异常编译，协程继续暂缓。
+**先运行一个完整例子。** 把独立计算交给固定数量的后台线程，并在稍后取得结果时，使用线程池。
+
+打开 [thread_pool.cpp](../examples/thread_pool.cpp)。withThreads(owner, 2) → submit 把 21 交给任务 → getUntil 取得计算结果 → shutdownUntil 关闭；逐步检查 Result。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_cpp_thread_pool`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**输出 `Task result: 42`。把 lambda 换成自己的工作；捕获的引用必须活到任务完成，关闭超时后继续保留 owner。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#cpp-project)把完整源码作为自己的 main。
+
+`hx/ThreadPool.hpp` 在有界 C 线程池上提供仅头文件的 C++11 接口，链接 `hx_c_platform::cpp`。调度器和 C ABI 继续使用 C99。便利层采用显式结果，支持关闭异常编译，协程是[独立模块](COROUTINES.zh-CN.md)，不需要为了普通线程池任务启用它。
 
 ## 所有权与关闭
 

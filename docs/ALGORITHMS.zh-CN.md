@@ -2,6 +2,16 @@
 
 [English](ALGORITHMS.md) | [容器](CONTAINERS.zh-CN.md)
 
+**先运行一个完整例子。** 已经有 C 数组或结构体数组，要排序、查询或筛选时，可以直接使用通用算法，无需搬进另一个容器。
+
+打开 [algorithms.c](../examples/algorithms.c)。按设备 ID 排序 → lower_bound 找 23 → count_if 统计待处理项 → copy_if 复制它们 → fold 累计数量。
+
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_algorithms`。此例无命令行参数、无需输入文件。
+
+**会得到什么：**输出 ID 顺序 17、23、31，找到设备 23，待处理设备和累计任务数均为 2。修改记录字段后，同时修改比较器和谓词。
+
+下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+
 ## 1. 直接使用已有数据
 
 `<hx_algorithm.h>` 中的 C99 函数直接操作普通数组，也支持你自己的结构体数组，不需要先创建 `hx_os_vector`。C++11 的 `<hx/Algorithms.hpp>` 在 `hx::algo` 中提供标准算法名称，接受符合对应要求的标准迭代器。
