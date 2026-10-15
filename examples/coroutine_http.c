@@ -1,5 +1,6 @@
 #include <hx_os.h>
 #include <stdio.h>
+#include <string.h>
 
 typedef struct request_state {
 	hx_os_coro_http *service;
@@ -36,8 +37,9 @@ int main(int argc, char **argv)
 	hx_os_status status, closed;
 	request_state state = {0};
 
-	if (argc != 2) {
-		fprintf(stderr, "Usage: %s URL\n", argv[0]);
+	if ((argc != 2 && argc != 3) ||
+		(argc == 3 && strcmp(argv[2], "--cancellable-dns"))) {
+		fprintf(stderr, "Usage: %s URL [--cancellable-dns]\n", argv[0]);
 		return 2;
 	}
 	state.url = argv[1];
@@ -46,6 +48,9 @@ int main(int argc, char **argv)
 	if (status == HX_OS_OK)
 		status = hx_os_coro_http_create(
 			runtime, 0, 0, 0, &state.service, NULL);
+	if (status == HX_OS_OK && argc == 3)
+		status = hx_os_coro_http_use_cancellable_dns(
+			state.service, NULL, NULL);
 	if (status == HX_OS_OK)
 		status = hx_os_coro_go(runtime, HX_OS_CORO_STACKLESS, fetch,
 			&state, NULL, &task, NULL);

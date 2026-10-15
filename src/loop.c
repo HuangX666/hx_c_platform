@@ -1,4 +1,5 @@
 #include "loop_private.h"
+#include "resolver_private.h"
 
 static int hx_os_loop_owner(hx_os_loop *loop)
 {
@@ -123,9 +124,17 @@ void hx_os_request_release(hx_os_request *request)
 	hx_os_address_list_destroy(request->addresses);
 	hx_os_memory_free(request->owned_data);
 	hx_os_memory_free(request->owned_host);
+	hx_os_memory_free(request->resolver_options);
 	hx_os_event_destroy(request->finished);
 	hx_os_mutex_destroy(request->mutex);
 	hx_os_memory_free(request);
+}
+
+static int hx_os_loop_dns_cancelled(void *user)
+{
+	hx_os_request *request = user;
+
+	return hx_os_atomic_load(&request->cancelled, HX_OS_ACQUIRE) != 0;
 }
 
 static hx_os_status hx_os_loop_dns_worker(hx_os_task *task, void *user)
@@ -142,6 +151,21 @@ static hx_os_status hx_os_loop_dns_worker(hx_os_task *task, void *user)
 		return hx_os_i_error(
 			&request->completion.error, HX_OS_TIMEOUT, 0, 0);
 
+	if (request->resolver_options) {
+		hx_os_resolver *resolver = NULL;
+		hx_os_status status = hx_os_resolver_create(
+			request->loop->context, request->resolver_options,
+			&resolver, &request->completion.error);
+
+		if (status == HX_OS_OK)
+			status = hx_os_i_resolver_resolve_until(resolver,
+				op->host, op->address.port, op->protocol,
+				op->deadline, NULL, hx_os_loop_dns_cancelled,
+				request, &request->addresses,
+				&request->completion.error);
+		(void)hx_os_resolver_destroy(&resolver, NULL);
+		return status;
+	}
 	return hx_os_resolve(request->loop->network, op->host, op->address.port,
 		op->protocol, &request->addresses, &request->completion.error);
 }
@@ -193,7 +217,8 @@ static hx_os_status hx_os_loop_start_dns(
 }
 
 static hx_os_status hx_os_loop_validate(hx_os_loop *loop,
-	const hx_os_operation *op, size_t *budget, int *directions)
+	const hx_os_operation *op, size_t *budget, int *directions,
+	int cancellable_dns)
 {
 	int kind = op->kind;
 
@@ -205,7 +230,8 @@ static hx_os_status hx_os_loop_validate(hx_os_loop *loop,
 	if (kind != HX_OS_OP_POST && !hx_os_loop_owner(loop))
 		return HX_OS_BUSY;
 
-	if (!loop->network && kind >= HX_OS_OP_CONNECT)
+	if (!loop->network && kind >= HX_OS_OP_CONNECT &&
+		!(kind == HX_OS_OP_RESOLVE && cancellable_dns))
 		return HX_OS_NOT_SUPPORTED;
 
 	if (kind == HX_OS_OP_RESOLVE) {
@@ -270,14 +296,14 @@ static hx_os_status hx_os_loop_validate(hx_os_loop *loop,
 	return HX_OS_OK;
 }
 
-hx_os_status hx_os_i_loop_submit(hx_os_loop *loop, const hx_os_operation *op,
-	hx_os_pipe *pipe, hx_os_loop_watch *watch,
+static hx_os_status hx_os_loop_submit_internal(hx_os_loop *loop,
+	const hx_os_operation *op, hx_os_pipe *pipe, hx_os_loop_watch *watch,
 	hx_os_completion_fn completion, void *user, hx_os_request **out,
-	hx_os_error *error)
+	const hx_os_resolver_options *resolver_options, hx_os_error *error)
 {
 	hx_os_request *request = NULL;
 	hx_os_status status;
-	size_t budget;
+	size_t budget, host_bytes = 0, server_bytes = 0;
 	int directions;
 
 	if (!loop || !op || !completion || !out)
@@ -300,10 +326,23 @@ hx_os_status hx_os_i_loop_submit(hx_os_loop *loop, const hx_os_operation *op,
 					: HX_OS_OK;
 	}
 	else
-		status = hx_os_loop_validate(loop, op, &budget, &directions);
+		status = hx_os_loop_validate(loop, op, &budget, &directions,
+			resolver_options != NULL);
 
 	if (status != HX_OS_OK)
 		return hx_os_i_error(error, status, 0, 0);
+
+	if (op->kind == HX_OS_OP_RESOLVE)
+		host_bytes = budget;
+	if (resolver_options) {
+		if (!hx_os_resolver_available())
+			return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+		status = hx_os_i_resolver_options_check(
+			resolver_options, &server_bytes, error);
+		if (status != HX_OS_OK)
+			return status;
+		budget += sizeof(*resolver_options) + server_bytes;
+	}
 
 	(void)hx_os_mutex_lock(loop->mutex, NULL);
 	if (loop->closing)
@@ -360,15 +399,26 @@ hx_os_status hx_os_i_loop_submit(hx_os_loop *loop, const hx_os_operation *op,
 	}
 
 	if (op->kind == HX_OS_OP_RESOLVE) {
-		request->owned_host = hx_os_i_alloc(loop->context, budget, 0);
+		request->owned_host =
+			hx_os_i_alloc(loop->context, host_bytes, 0);
 		if (!request->owned_host) {
 			status = HX_OS_NO_MEMORY;
 			goto rejected;
 		}
 
-		memcpy(request->owned_host, op->host, budget);
+		memcpy(request->owned_host, op->host, host_bytes);
 		request->operation.host = request->owned_host;
 
+		if (resolver_options) {
+			request->resolver_options =
+				hx_os_i_resolver_options_copy(
+					loop->context, resolver_options, error);
+			if (!request->resolver_options) {
+				status =
+					error ? error->status : HX_OS_NO_MEMORY;
+				goto rejected;
+			}
+		}
 		status = hx_os_loop_start_dns(loop, request, error);
 		if (status != HX_OS_OK)
 			goto rejected;
@@ -435,6 +485,32 @@ rejected:
 		return status;
 
 	return hx_os_i_error(error, status, 0, 0);
+}
+
+hx_os_status hx_os_i_loop_submit(hx_os_loop *loop, const hx_os_operation *op,
+	hx_os_pipe *pipe, hx_os_loop_watch *watch,
+	hx_os_completion_fn completion, void *user, hx_os_request **out,
+	hx_os_error *error)
+{
+	return hx_os_loop_submit_internal(
+		loop, op, pipe, watch, completion, user, out, NULL, error);
+}
+
+hx_os_status hx_os_loop_resolve(hx_os_loop *loop, const char *host,
+	uint16_t port, int protocol, const hx_os_resolver_options *input,
+	hx_os_deadline deadline, hx_os_completion_fn completion, void *user,
+	hx_os_request **out, hx_os_error *error)
+{
+	const hx_os_resolver_options defaults = HX_OS_RESOLVER_OPTIONS_INIT;
+	hx_os_operation operation;
+
+	hx_os_operation_init(&operation, HX_OS_OP_RESOLVE);
+	operation.host = host;
+	operation.address.port = port;
+	operation.protocol = protocol;
+	operation.deadline = deadline;
+	return hx_os_loop_submit_internal(loop, &operation, NULL, NULL,
+		completion, user, out, input ? input : &defaults, error);
 }
 
 hx_os_status hx_os_loop_submit(hx_os_loop *loop, const hx_os_operation *op,
@@ -603,9 +679,13 @@ static size_t hx_os_loop_pump(hx_os_loop *loop, hx_os_deadline *next)
 				request->stop_status = HX_OS_TIMEOUT;
 		}
 
-		if (kind == HX_OS_OP_RESOLVE)
+		if (kind == HX_OS_OP_RESOLVE) {
+			if (request->stop_status)
+				hx_os_atomic_store(
+					&request->cancelled, 1, HX_OS_RELEASE);
 			request->ready = (int)hx_os_atomic_load(
 				&request->dns_finished, HX_OS_ACQUIRE);
+		}
 		else if (kind == HX_OS_OP_POST)
 			request->ready = 1;
 		else if (request->timer)
@@ -785,8 +865,7 @@ hx_os_status hx_os_loop_close_until(
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
 
-hx_os_status hx_os_i_loop_close_socket(
-	hx_os_socket *socket, hx_os_error *error)
+hx_os_status hx_os_i_loop_close_socket(hx_os_socket *socket, hx_os_error *error)
 {
 #if HX_OS_ENABLE_NETWORK
 	hx_os_loop *loop = socket->loop;

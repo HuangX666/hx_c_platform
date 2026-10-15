@@ -110,6 +110,15 @@ public:
 		return result;
 	}
 
+	Result<void> useCancellableDns(const char *servers = NULL) noexcept
+	{
+		hx_os_error error = {};
+		auto status = hx_os_http_use_cancellable_dns(
+			m_http_, servers, &error);
+
+		return detail::Status(status, error);
+	}
+
 	Result<HttpResponse> get(const char *url,
 		const hx_os_http_options *options = NULL,
 		hx_os_context *context = NULL) noexcept

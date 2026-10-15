@@ -2,6 +2,7 @@
 #define HX_C_PLATFORM_LOOP_H
 
 #include "hx_os_net.h"
+#include "hx_os_resolver.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -97,6 +98,22 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_loop_create_local(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_loop_submit(hx_os_loop *loop,
 	const hx_os_operation *operation, hx_os_completion_fn completion,
 	void *user, hx_os_request **out, hx_os_error *error);
+
+/**
+ * \brief Submit cancellable c-ares DNS without assembling an operation.
+ * \details NULL options selects resolver defaults. Host and options are copied.
+ * Uses this loop's bounded DNS pool and request/byte budgets; no extra pool.
+ * Deadline and request_cancel stop DNS network waiting. Completion runs once
+ * on the polling thread after native callbacks retire. Rejection calls none.
+ * Take the result with request_take_addresses, then release the request.
+ * Disabled c-ares returns NOT_SUPPORTED; no fallback to blocking system DNS.
+ * Existing OP_RESOLVE submissions keep the system-resolver contract.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_loop_resolve(hx_os_loop *loop,
+	const char *host, uint16_t port, int protocol,
+	const hx_os_resolver_options *options, hx_os_deadline deadline,
+	hx_os_completion_fn completion, void *user, hx_os_request **out,
+	hx_os_error *error);
 
 /**
  * \brief Poll performs one batch.

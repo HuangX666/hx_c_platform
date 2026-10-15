@@ -26,6 +26,7 @@ struct hx_os_request {
 	void *user;
 	void *owned_data;
 	char *owned_host;
+	hx_os_resolver_options *resolver_options;
 	hx_os_socket *accepted;
 	hx_os_pipe *pipe;
 	hx_os_timer *timer;

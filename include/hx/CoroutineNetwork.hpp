@@ -74,6 +74,15 @@ public:
 		return detail::Status(status, error);
 	}
 
+	Result<void> useCancellableDns(const char *servers = NULL) noexcept
+	{
+		hx_os_error error = {};
+		auto status = hx_os_coro_http_use_cancellable_dns(
+			*m_owner_, servers, &error);
+
+		return detail::Status(status, error);
+	}
+
 	Result<void> get(const char *url, HttpResponse &response,
 		const hx_os_http_options *options = NULL) const noexcept
 	{

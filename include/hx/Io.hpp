@@ -4,10 +4,12 @@
 #include <hx_os_pipe.h>
 #include <hx/Files.hpp>
 #include <hx/Callback.hpp>
+#include <hx/Resolver.hpp>
 
 namespace hx {
 
 class AsyncPipe;
+
 class IoRequest {
 public:
 	IoRequest() noexcept
@@ -86,6 +88,7 @@ public:
 
 private:
 	friend class AsyncPipe;
+	friend class IoLoop;
 	hx_os_request *m_request_;
 	detail::CallbackOwner m_callback_;
 
@@ -126,6 +129,30 @@ public:
 		return IoLoop(owner, context);
 	}
 
+	template <typename F>
+	Result<IoRequest> resolve(const char *host, uint16_t port, F &&function,
+		hx_os_deadline deadline,
+		const hx_os_resolver_options *options = NULL) const noexcept
+	{
+		typedef typename std::decay<F>::type Function;
+		auto callback = detail::CallbackOwner::create(
+			m_context_, std::forward<F>(function));
+		if (!callback)
+			return Failure(callback.error());
+		auto *state = callback.value().nativeLease();
+		hx_os_request *request = NULL;
+		hx_os_error error = {};
+		auto status = hx_os_loop_resolve(*m_owner_, host, port,
+			HX_OS_TCP, options, deadline, resolved<Function>, state,
+			&request, &error);
+
+		if (status != HX_OS_OK) {
+			state->release();
+			return Failure(status, error);
+		}
+		return IoRequest(request, std::move(callback.value()));
+	}
+
 	Result<void> runUntil(hx_os_deadline deadline) const noexcept
 	{
 		hx_os_error error = {};
@@ -161,6 +188,22 @@ public:
 	}
 
 private:
+	template <typename F>
+	static void HX_OS_CALL resolved(hx_os_request *request,
+		const hx_os_completion *completion, void *user) noexcept
+	{
+		auto *state = static_cast<detail::CallbackModel<F> *>(
+			static_cast<detail::CallbackState *>(user));
+		Result<Addresses> result = completion->error.status == HX_OS_OK
+			? Result<Addresses>(Addresses(
+				  hx_os_request_take_addresses(request)))
+			: Result<Addresses>(Failure(completion->error));
+
+		state->record(detail::InvokeCallback(
+			state->function(), std::move(result)));
+		detail::callback_cleanup(state);
+	}
+
 	hx_os_loop **m_owner_;
 	hx_os_context *m_context_;
 };
@@ -229,6 +272,7 @@ public:
 
 private:
 	hx_os_pipe **m_owner_;
+
 	template <typename F>
 	static void HX_OS_CALL completed(hx_os_request *,
 		const hx_os_completion *completion, void *user) noexcept

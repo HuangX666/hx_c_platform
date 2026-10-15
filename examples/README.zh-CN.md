@@ -240,10 +240,12 @@ Linux 运行：
 | 用途 | 源码／目标 | 参数与预期结果 |
 | --- | --- | --- |
 | 接收 UDP 目标地址和网卡信息 | [udp_packet.c](udp_packet.c) / `hx_os_udp_packet` | 无参数；打印本机 JSON 报文、地址和网卡编号 |
-| 使用可取消 DNS 查询主机 | [dns_lookup.c](dns_lookup.c) / `hx_os_dns_lookup` | `HOST [DNS_IP:PORT]`；打印数字地址 |
+| 使用可取消 DNS 查询主机 | [dns_lookup.c](dns_lookup.c) / `hx_os_dns_lookup` | `[--async|--coro] HOST [DNS_IP:PORT]`；打印数字地址 |
 | 可信局域网 KCP 请求／应答 | [kcp_session.c](kcp_session.c) / `hx_os_kcp_session` | 先运行 `server IP:PORT`，再运行 `client IP:PORT`；打印 JSON 请求和回复 |
 | HTTP 流式传输文件 | [http_file.c](http_file.c) / `hx_os_http_file` | `download URL FILE [CA]` 或 `upload URL FILE [CA]`；打印 HTTP 状态 |
 | C99 协程等待 UDP | [coroutine_udp.c](coroutine_udp.c) / `hx_os_coroutine_udp` | 无参数；打印发给自己的 JSON 报文 |
 | C99 协程等待 HTTP | [coroutine_http.c](coroutine_http.c) / `hx_os_coroutine_http` | `URL`；打印 HTTP 状态和响应正文 |
 
 完整命令和资源持有规则见[网络 I/O](../docs/NETWORK_IO.zh-CN.md)、[HTTP 文件传输](../docs/HTTP_FILES.zh-CN.md)及[协程等待](../docs/COROUTINES.zh-CN.md)。DNS 需要可达的已配置服务器，HTTP 需要你的服务 URL。示例不会修改防火墙或部署外部服务。
+
+`hx_os_dns_lookup --async 127.0.0.1` 和 `--coro 127.0.0.1` 演示事件循环／协程 DNS，两者打印同样的地址结果。HTTP 文件与协程示例可追加 `--cancellable-dns`；这需要显式选择 c-ares 版 SDK，默认系统 DNS SDK 会明确报不支持。完整命令、成功输出与失败处理见[网络选项](../docs/NETWORK_OPTIONS.zh-CN.md#123-事件循环和协程里怎么用)和 [HTTP 传输](../docs/HTTP_FILES.zh-CN.md#4-连-dns-无响应也需要取消时)。

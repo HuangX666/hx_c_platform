@@ -3,6 +3,12 @@
 
 #include "hx_os_resolver.h"
 
+hx_os_status hx_os_i_resolver_options_check(
+	const hx_os_resolver_options *options, size_t *server_bytes,
+	hx_os_error *error);
+hx_os_resolver_options *hx_os_i_resolver_options_copy(hx_os_context *context,
+	const hx_os_resolver_options *options, hx_os_error *error);
+
 hx_os_status hx_os_i_resolver_resolve_until(hx_os_resolver *resolver,
 	const char *host, uint16_t port, int protocol, hx_os_deadline deadline,
 	hx_os_cancel_token *cancel, int (*cancelled)(void *), void *user,

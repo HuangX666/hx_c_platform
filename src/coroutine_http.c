@@ -8,9 +8,10 @@ struct hx_os_coro_http {
 	hx_os_coro_runtime *runtime;
 	hx_os_thread_pool *pool;
 	hx_coro_http_job *jobs;
+	hx_string dns_servers;
 	size_t count, bytes, maximum, capacity;
 	size_t preparing;
-	int closing;
+	int closing, cancellable_dns;
 };
 
 struct hx_coro_http_job {
@@ -118,6 +119,12 @@ static hx_os_status HX_OS_CALL hx_coro_http_run(hx_os_task *task, void *user)
 	if (status == HX_OS_OK)
 		status = hx_os_http_create(
 			job->service->runtime->context, &http, &job->error);
+	if (status == HX_OS_OK && job->service->cancellable_dns)
+		status = hx_os_http_use_cancellable_dns(http,
+			job->service->dns_servers.size
+				? hx_string_c_str(&job->service->dns_servers)
+				: NULL,
+			&job->error);
 	if (status == HX_OS_OK)
 		status = hx_os_http_request_stream(http, job->method, job->url,
 			job->headers, job->header_count, &options,
@@ -192,6 +199,7 @@ hx_os_status hx_os_coro_http_create(hx_os_coro_runtime *runtime, size_t threads,
 		runtime->context, &options, &service->pool, error);
 	if (status == HX_OS_OK) {
 		hx_os_i_coro_runtime_retain(runtime);
+		hx_string_init(&service->dns_servers, runtime->context);
 		*out = service;
 	}
 	else
@@ -204,6 +212,40 @@ hx_os_status hx_os_coro_http_create(hx_os_coro_runtime *runtime, size_t threads,
 	(void)max_pending_bytes;
 	if (out)
 		*out = NULL;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
+}
+
+hx_os_status hx_os_coro_http_use_cancellable_dns(
+	hx_os_coro_http *service, const char *servers, hx_os_error *error)
+{
+#if HX_OS_ENABLE_COROUTINES && HX_OS_ENABLE_THREAD_POOL && HX_OS_HAVE_HTTP
+	hx_os_http *probe = NULL;
+	hx_os_status status;
+
+	if (!service)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	(void)hx_os_mutex_lock(service->runtime->mutex, NULL);
+	status = service->closing		       ? HX_OS_CLOSED
+		: service->count || service->preparing ? HX_OS_BUSY
+						       : HX_OS_OK;
+	(void)hx_os_mutex_unlock(service->runtime->mutex, NULL);
+	if (status != HX_OS_OK)
+		return hx_os_i_error(error, status, 0, 0);
+
+	status = hx_os_http_create(service->runtime->context, &probe, error);
+	if (status == HX_OS_OK)
+		status = hx_os_http_use_cancellable_dns(probe, servers, error);
+	(void)hx_os_http_close(&probe, NULL);
+	if (status == HX_OS_OK)
+		status = hx_string_assign_cstr(
+			&service->dns_servers, servers ? servers : "", error);
+	if (status == HX_OS_OK)
+		service->cancellable_dns = 1;
+	return status;
+#else
+	(void)service;
+	(void)servers;
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 #endif
 }
@@ -414,6 +456,7 @@ hx_os_status hx_os_coro_http_close_until(
 	status = hx_os_thread_pool_destroy(&service->pool, error);
 	if (status == HX_OS_OK) {
 		*owner = NULL;
+		hx_string_destroy(&service->dns_servers);
 		hx_os_memory_free(service);
 		hx_os_i_coro_runtime_release(runtime);
 	}

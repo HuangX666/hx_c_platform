@@ -336,6 +336,8 @@ Use `hx_os_tcp_dial_until(network, host, port, NULL, deadline, &socket, error)` 
 
 By default, name resolution uses the existing system resolver. Its blocking DNS call cannot be forcibly cancelled. If you already have addresses, use `hx_os_tcp_dial_addresses_until()` instead. If network DNS waiting must respond to cancellation, explicitly create an `hx_os_resolver` and set `hx_os_dial_options.resolver` to it. The resolver is borrowed only during the dial call, and its DNS query shares that call's deadline and cancel token. Neither path starts a detached worker.
 
+Stalled addresses no longer keep later candidates from starting. While untried addresses remain, each pending connection holds its slot for at most two seconds. A shorter overall budget is divided across remaining candidates and also caps the start delay. Ready connections are checked before retirement. Once every address has started, surviving candidates may use the remaining overall deadline. This preserves the two-connection bound but may abandon slow addresses; it does not affect established connections or guarantee network reachability. Extended TLS connections use this same dialer.
+
 ### 12.1 Run the DNS example
 
 The optional `HX_OS_ENABLE_CARES` module uses the pinned c-ares dependency, with submodules/FetchContent handled by the [dependency setup](DEPENDENCIES.md). When unavailable, `hx_os_resolver_available()` is zero and creation returns `HX_OS_NOT_SUPPORTED`. Build the public example in your existing directory:
@@ -382,3 +384,29 @@ The resolver drives c-ares asynchronous sockets on the calling thread, so this c
 Up to 256 unique addresses and 64 active native sockets are allowed. Native cache is disabled to avoid unbounded accumulation of unique names; c-ares's own parsing/configuration allocations remain outside the hx allocator budget. Names are ASCII/Punycode. Default lookups use the hosts file and DNS; `use_hosts_file=0` chooses DNS only. This does not reproduce every OS NSS plugin, VPN resolver policy or mDNS behavior. Configuration/hosts-file reads are not hard-real-time operations. Recreate the resolver after changing DNS configuration.
 
 C++ uses `<hx/Resolver.hpp>`, `hx::Resolver(owner).create()`, and `.resolve(host, port)` returning `Result<hx::Addresses>`; the address list releases itself. `.close()` explicitly releases the resolver. Direct native c-ares use remains possible through the dependency target, but the host must coordinate process-global initialization, cleanup and allocator changes across native users and libcurl users sharing the same c-ares binary. Do not initialize it from Windows `DllMain`.
+
+### 12.3 Use an event loop or coroutine
+
+Call `hx_os_loop_resolve()` when the calling thread needs to process other events while waiting. No resolver object or operation structure is needed. A loop from `hx_os_loop_create_local()` also works; NULL options selects c-ares defaults.
+
+```c
+hx_os_request *request = NULL;
+hx_os_status status = hx_os_loop_resolve(loop, "localhost", 443,
+	HX_OS_TCP, NULL, hx_os_deadline_after_ms(2000),
+	resolved, &state, &request, &error);
+```
+
+Here `resolved` is your completion callback and `state` holds your result. Drive the loop with `hx_os_loop_run_until` or `poll_until`. The callback runs once on that polling thread; take ownership with `hx_os_request_take_addresses()` and destroy the list when finished. See [dns_lookup.c](../examples/dns_lookup.c) for the complete definitions and cleanup.
+
+Another thread may call `hx_os_request_cancel(request)`. Keep polling and wait for the callback to return before releasing its state. A close timeout retains the loop and its owners for retry. Submission failure invokes no callback. Hosts/options are copied and charged to existing DNS-worker, request-count and byte limits; there is no thread per query. Disabled c-ares returns `NOT_SUPPORTED` without a blocking fallback.
+
+Inside a coroutine, call `hx_os_coro_resolve_cancellable(host, port, options, deadline, &addresses, &error)` to suspend while waiting. Stackful code calls it directly. C state machines use `HX_OS_CORO_AWAIT` with persistent output and deadline fields. Existing `hx_os_coro_resolve` and `HX_OS_OP_RESOLVE` retain system DNS.
+
+```sh
+./build/bin/hx_os_dns_lookup --async 127.0.0.1
+./build/bin/hx_os_dns_lookup --coro 127.0.0.1
+```
+
+On Windows use `build/bin/Release/hx_os_dns_lookup.exe`. Both modes print `IPv4 127.0.0.1 port=443`. Substitute a hostname to resolve it within the same two-second budget; optionally append your own `DNS_IP:PORT`. Numeric-address checks demonstrate the calling patterns without depending on an external DNS service.
+
+C++11 `hx::IoLoop::resolve(host, port, callback, deadline)` delivers an owning `Result<hx::Addresses>` and returns a cancellable `IoRequest`; still drive `runUntil` and explicitly `closeUntil`. Coroutines use `hx::coro::Addresses::resolveCancellable(host, port, deadline)`. C++20 uses `co_await hx::coro::async::resolveCancellable(...)`. All facades reuse the C implementation.

@@ -336,6 +336,8 @@ C++ 的 `hx::SocketOptions(socket).buffers(65536, 65536)` 返回设置结果；�
 
 默认沿用原来的系统名称解析，它的阻塞 DNS 调用无法被强制取消。已有地址时，可以直接使用 `hx_os_tcp_dial_addresses_until()`。如果 DNS 网络等待也需要响应取消，则显式创建 `hx_os_resolver`，把它赋给 `hx_os_dial_options.resolver`。连接调用期间借用这个对象，解析与连接共用 deadline 和 cancel token；两条路径都不会启动分离的后台线程。
 
+前面的地址不响应时，后面的地址也会获得连接机会：在还有候选尚未开始时，每个无响应连接最多占用一个并发位置 2 秒；总预算较短时，再按剩余候选分配更短的时间，同时缩短启动间隔。库先检查已就绪的连接，再淘汰超时候选。所有地址都已开始后，仍存活的候选继续等到总截止时间。这样始终最多两个并发连接，但可能放弃较慢的地址；它不影响已建立连接的收发，也不是完整网络可达性保证。同一个拨号器也供扩展 TLS 连接使用。
+
 ### 12.1 运行 DNS 示例
 
 可裁剪的 `HX_OS_ENABLE_CARES` 模块采用固定版本 c-ares，按照[依赖准备](DEPENDENCIES.zh-CN.md)使用子模块或 FetchContent。不可用时，`hx_os_resolver_available()` 返回零，创建返回 `HX_OS_NOT_SUPPORTED`。在现有构建目录编译公开示例：
@@ -382,3 +384,29 @@ if (resolver)
 结果最多 256 个不同地址，最多跟踪 64 个原生 socket。默认关闭原生缓存，避免不断解析不同名称时缓存无限累积；c-ares 自身的解析和配置内存不计入 hx 分配器预算。名称使用 ASCII／Punycode，默认查询 hosts 文件及 DNS；`use_hosts_file=0` 只查询 DNS。这不等于复刻操作系统的全部 NSS 插件、VPN 解析策略或 mDNS 行为。配置及 hosts 文件读取不是硬实时操作，DNS 配置变化后应重新创建解析器。
 
 C++ 包含 `<hx/Resolver.hpp>`，使用 `hx::Resolver(owner).create()` 和 `.resolve(host, port)`；后者返回 `Result<hx::Addresses>`，地址列表自动释放，解析器通过 `.close()` 显式关闭。仍可通过依赖目标直接使用原生 c-ares，但宿主需要协调原生调用者，以及共享同一 c-ares 二进制的 libcurl 调用者之间的全局初始化、清理和分配器修改。不要在 Windows `DllMain` 中初始化。
+
+### 12.3 事件循环和协程里怎么用
+
+需要让当前线程在等待期间处理其他事件时，调用 `hx_os_loop_resolve()`；不必创建 resolver 或填写 operation。`hx_os_loop_create_local()` 创建的 loop 也能使用它，传 `NULL` 选项采用 c-ares 默认配置。
+
+```c
+hx_os_request *request = NULL;
+hx_os_status status = hx_os_loop_resolve(loop, "localhost", 443,
+	HX_OS_TCP, NULL, hx_os_deadline_after_ms(2000),
+	resolved, &state, &request, &error);
+```
+
+这里的 `resolved` 是完成回调，`state` 是你提供的结果对象。通过 `hx_os_loop_run_until` 或 `poll_until` 驱动 loop，回调在该轮询线程上执行一次。回调通过 `hx_os_request_take_addresses()` 取走结果，用完后销毁列表。完整定义与清理代码见 [dns_lookup.c](../examples/dns_lookup.c)。
+
+其他线程可以调用 `hx_os_request_cancel(request)`。仍需轮询并等到回调返回，才能释放回调状态。关闭超时也必须保留 loop 和相关对象，稍后重试。提交失败没有回调。请求复制主机名及选项，使用原有 DNS 工作池、请求数量和字节预算；不会为每次解析创建线程。禁用 c-ares 返回 `NOT_SUPPORTED`，不偷偷退回阻塞解析。
+
+协程内调用 `hx_os_coro_resolve_cancellable(host, port, options, deadline, &addresses, &error)`，等待期间会挂起当前协程。有栈协程直接调用；C 状态机使用 `HX_OS_CORO_AWAIT`，把结果和截止时间保存在持久状态。旧的 `hx_os_coro_resolve` 和 `HX_OS_OP_RESOLVE` 继续使用系统 DNS。
+
+```sh
+./build/bin/hx_os_dns_lookup --async 127.0.0.1
+./build/bin/hx_os_dns_lookup --coro 127.0.0.1
+```
+
+Windows 把程序路径换成 `build/bin/Release/hx_os_dns_lookup.exe`。两种模式仍打印 `IPv4 127.0.0.1 port=443`；换成域名后按同一两秒预算解析，可追加自己的 `DNS_IP:PORT`。数字地址检查用于演示调用方式，不依赖外部 DNS 服务。
+
+C++11 中 `hx::IoLoop::resolve(host, port, callback, deadline)` 向回调传入拥有结果的 `Result<hx::Addresses>`，返回可取消的 `IoRequest`；仍需调用 `runUntil` 和显式 `closeUntil`。协程使用 `hx::coro::Addresses::resolveCancellable(host, port, deadline)`，C++20 使用 `co_await hx::coro::async::resolveCancellable(...)`。这些便利层复用同一 C 实现。

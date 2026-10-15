@@ -240,10 +240,12 @@ Build the chosen target in the same configured directory; use `bin/Release` for 
 | Task | Source / target | Inputs and expected result |
 | --- | --- | --- |
 | Receive UDP destination/interface metadata | [udp_packet.c](udp_packet.c) / `hx_os_udp_packet` | No arguments; prints a loopback JSON message, address and interface |
-| Look up a hostname using cancellable DNS | [dns_lookup.c](dns_lookup.c) / `hx_os_dns_lookup` | `HOST [DNS_IP:PORT]`; prints numeric addresses |
+| Look up a hostname using cancellable DNS | [dns_lookup.c](dns_lookup.c) / `hx_os_dns_lookup` | `[--async|--coro] HOST [DNS_IP:PORT]`; prints numeric addresses |
 | Request/reply over trusted-LAN KCP | [kcp_session.c](kcp_session.c) / `hx_os_kcp_session` | Run `server IP:PORT` then `client IP:PORT`; prints JSON request and reply |
 | Stream a file over HTTP | [http_file.c](http_file.c) / `hx_os_http_file` | `download URL FILE [CA]` or `upload URL FILE [CA]`; prints HTTP status |
 | Suspend a C99 coroutine on UDP | [coroutine_udp.c](coroutine_udp.c) / `hx_os_coroutine_udp` | No arguments; prints a JSON message sent to itself |
 | Suspend a C99 coroutine on HTTP | [coroutine_http.c](coroutine_http.c) / `hx_os_coroutine_http` | `URL`; prints HTTP status and response body |
 
 See [network I/O](../docs/NETWORK_IO.md), [HTTP files](../docs/HTTP_FILES.md) and [coroutine waiting](../docs/COROUTINES.md) for complete commands and ownership. DNS needs a reachable configured server; HTTP needs your service URL. The examples do not modify firewall settings or deploy external services.
+
+`hx_os_dns_lookup --async 127.0.0.1` and `--coro 127.0.0.1` demonstrate event-loop/coroutine DNS with the same address output. HTTP file and coroutine examples accept a final `--cancellable-dns` flag. This requires the opt-in c-ares SDK; the default system DNS SDK explicitly reports unsupported. See [network options](../docs/NETWORK_OPTIONS.md#123-use-an-event-loop-or-coroutine) and [HTTP transfers](../docs/HTTP_FILES.md#4-cancel-even-when-dns-receives-no-reply) for complete commands, output and failure handling.

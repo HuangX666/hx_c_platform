@@ -23,6 +23,15 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_http_create(
 	size_t max_pending_bytes, hx_os_coro_http **out, hx_os_error *error);
 
 /**
+ * \brief Require cancellable DNS for all subsequent service requests.
+ * \details Same SDK/server contract as http_use_cancellable_dns. Call on the
+ * owner thread before submissions, or while idle; exclude concurrent submit,
+ * configuration and close. Active work returns BUSY. No extra worker is added.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_http_use_cancellable_dns(
+	hx_os_coro_http *http, const char *servers, hx_os_error *error);
+
+/**
  * \brief Copy a request, then suspend until its bounded I/O worker completes.
  * \details Stackless callers repeat this call with persistent out after
  * WOULD_BLOCK. Inputs are copied before suspension; out changes only on

@@ -318,6 +318,27 @@ inline Awaiter<Resolve> resolve(const char *host, uint16_t port,
 	return Awaiter<Resolve>(Resolve{host, port, deadline});
 }
 
+struct ResolveCancellable {
+	const char *host;
+	const hx_os_resolver_options *options;
+	hx_os_deadline deadline;
+	uint16_t port;
+
+	Result<Addresses> operator()() const noexcept
+	{
+		return Addresses::resolveCancellable(
+			host, port, deadline, options);
+	}
+};
+
+inline Awaiter<ResolveCancellable> resolveCancellable(const char *host,
+	uint16_t port, hx_os_deadline deadline,
+	const hx_os_resolver_options *options = NULL) noexcept
+{
+	return Awaiter<ResolveCancellable>(
+		ResolveCancellable{host, options, deadline, port});
+}
+
 inline Awaiter<Accept> accept(Stream stream,
 	hx_os_deadline deadline = HX_OS_DEADLINE_INFINITE) noexcept
 {
@@ -464,6 +485,7 @@ public:
 
 private:
 	friend struct impl::FrameJob<T>;
+
 	Handle release() noexcept
 	{
 		Handle handle = m_handle_;

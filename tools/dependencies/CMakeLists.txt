@@ -19,6 +19,7 @@ if(NOT HX_DEPS_CONFIGURATION MATCHES "^(Release|Debug)$")
 endif()
 option(HX_DEPS_OPENSSL_ASM "Use OpenSSL assembler optimizations" ON)
 option(HX_DEPS_OPENSSL_SHARED "Build the OpenSSL shared runtime" ON)
+option(HX_DEPS_CURL_CARES "Use cancellable c-ares DNS in libcurl" OFF)
 
 if(NOT HX_DEPS_JOBS MATCHES "^[1-9][0-9]*$")
 	message(FATAL_ERROR "HX_DEPS_JOBS must be a positive integer")
@@ -229,12 +230,48 @@ ExternalProject_Add(hx_dep_build_utf8proc
 	BUILD_COMMAND ${hx_cmake_build}
 	INSTALL_COMMAND ${hx_cmake_install})
 
+set(hx_curl_dependencies hx_dep_build_openssl)
+set(hx_curl_dns_args -DENABLE_ARES:BOOL=${HX_DEPS_CURL_CARES})
+if(HX_DEPS_CURL_CARES)
+	hx_dependency_source(c-ares hx_cares_source)
+	ExternalProject_Add(hx_dep_build_cares
+		SOURCE_DIR "${hx_cares_source}"
+		BINARY_DIR "${CMAKE_BINARY_DIR}/cares"
+		DOWNLOAD_COMMAND "" UPDATE_COMMAND ""
+		CMAKE_ARGS ${hx_common_args}
+			-DCARES_STATIC:BOOL=ON
+			-DCARES_SHARED:BOOL=OFF
+			-DCARES_STATIC_PIC:BOOL=ON
+			-DCARES_THREADS:BOOL=ON
+			-DCARES_BUILD_TESTS:BOOL=OFF
+			-DCARES_BUILD_CONTAINER_TESTS:BOOL=OFF
+			-DCARES_BUILD_TOOLS:BOOL=OFF
+			-DCARES_INSTALL:BOOL=ON
+		BUILD_COMMAND ${hx_cmake_build}
+		INSTALL_COMMAND ${hx_cmake_install})
+	set(hx_cares_license "${CMAKE_INSTALL_PREFIX}/share/hx-dependencies")
+	ExternalProject_Add_Step(hx_dep_build_cares install_license
+		COMMAND "${CMAKE_COMMAND}" -E make_directory
+			"${hx_cares_license}"
+		COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+			"${hx_cares_source}/LICENSE.md"
+			"${hx_cares_license}/cares-LICENSE.md"
+		DEPENDEES install)
+	list(APPEND hx_curl_dependencies hx_dep_build_cares)
+	# The static-only package exports c-ares::cares with its native linkage.
+	list(APPEND hx_curl_dns_args
+		-DCURL_USE_PKGCONFIG:BOOL=OFF
+		-DCURL_USE_CMAKECONFIG:BOOL=ON
+		-DCARES_USE_STATIC_LIBS:BOOL=OFF
+		"-Dc-ares_DIR:PATH=${CMAKE_INSTALL_PREFIX}/lib/cmake/c-ares")
+endif()
+
 ExternalProject_Add(hx_dep_build_curl
 	SOURCE_DIR "${curl_source}"
 	BINARY_DIR "${CMAKE_BINARY_DIR}/curl"
 	DOWNLOAD_COMMAND "" UPDATE_COMMAND ""
-	DEPENDS hx_dep_build_openssl
-	CMAKE_ARGS ${hx_common_args}
+	DEPENDS ${hx_curl_dependencies}
+	CMAKE_ARGS ${hx_common_args} ${hx_curl_dns_args}
 		-DBUILD_SHARED_LIBS:BOOL=ON
 		-DBUILD_STATIC_LIBS:BOOL=OFF
 		-DBUILD_CURL_EXE:BOOL=OFF

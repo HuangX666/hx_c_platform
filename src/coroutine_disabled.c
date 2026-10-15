@@ -347,6 +347,19 @@ hx_os_status hx_os_coro_write(hx_os_coro_stream *stream, const void *data,
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
+hx_os_status hx_os_coro_resolve_cancellable(const char *host, uint16_t port,
+	const hx_os_resolver_options *options, hx_os_deadline deadline,
+	hx_os_address_list **out, hx_os_error *error)
+{
+	(void)host;
+	(void)port;
+	(void)options;
+	(void)deadline;
+	if (out)
+		*out = NULL;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
 hx_os_status hx_os_coro_resolve(const char *host, uint16_t port,
 	hx_os_deadline deadline, hx_os_address_list **out, hx_os_error *error)
 {

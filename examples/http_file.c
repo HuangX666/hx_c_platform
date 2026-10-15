@@ -9,10 +9,17 @@ int main(int argc, char **argv)
 	hx_os_http_stream_options options = HX_OS_HTTP_STREAM_OPTIONS_INIT;
 	hx_os_error error = {0};
 	hx_os_status status, closed;
+	int cancellable =
+		argc > 1 && !strcmp(argv[argc - 1], "--cancellable-dns");
+
+	if (cancellable)
+		--argc;
 
 	if (argc < 4 || argc > 5 ||
 		(strcmp(argv[1], "download") && strcmp(argv[1], "upload"))) {
-		fprintf(stderr, "Usage: %s download|upload URL FILE [CA.pem]\n",
+		fprintf(stderr,
+			"Usage: %s download|upload URL FILE [CA.pem] "
+			"[--cancellable-dns]\n",
 			argv[0]);
 		return 2;
 	}
@@ -20,6 +27,8 @@ int main(int argc, char **argv)
 	options.request.ca_file = argc == 5 ? argv[4] : NULL;
 
 	status = hx_os_http_create(NULL, &http, &error);
+	if (status == HX_OS_OK && cancellable)
+		status = hx_os_http_use_cancellable_dns(http, NULL, &error);
 	if (status == HX_OS_OK) {
 		if (!strcmp(argv[1], "download"))
 			status = hx_os_http_download_file(http, argv[2],

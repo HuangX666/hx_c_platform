@@ -59,6 +59,32 @@ Include `<hx/Http.hpp>`. `hx::Http::create()` returns `Result<Http>`. Reuse that
 
 For a coroutine runtime, explicitly create `hx_os_coro_http` once. Its defaults are two separate I/O threads, sixteen accepted requests and 64 MiB of reserved input/response capacity. The limits are configurable; the module does not start a worker per request. `hx_os_coro_http_request` copies the request before suspension; `get` is the common shortcut. C++ stackful callers can use `<hx/CoroutineNetwork.hpp>` and `hx::coro::Http(service).get(url, response)`.
 
-The coroutine resumes on completion, timeout or cancellation; it does not block a coroutine worker. Any still-running native DNS call retains only job-owned buffers. The I/O service stays owned until `hx_os_coro_http_close_until` succeeds; a close timeout can be retried. Use coroutine cancellation, or bind an external cancellation token to the coroutine: the copied HTTP options require `cancel=NULL`. Close the HTTP service from a native owner thread, then close the coroutine runtime. This bridge uses a bounded I/O pool, not libcurl multi, and does not provide an unbounded number of simultaneous transfers.
+The coroutine resumes on completion, timeout or cancellation; it does not block a coroutine worker. Any still-running native DNS call retains only job-owned buffers. The I/O service stays owned until `hx_os_coro_http_close_until` succeeds; a close timeout can be retried. Use coroutine cancellation, or bind an external cancellation token to the coroutine: the copied HTTP options require `cancel=NULL`. Close the HTTP service from a native owner thread, then close the coroutine runtime. This bridge keeps a bounded I/O pool rather than a shared multi-transfer scheduler. With cancellable DNS enabled, each worker drives one transfer through libcurl multi and checks cancellation between bounded waits.
 
 Each accepted request reserves its configured maximum response size, not just the bytes currently received. The byte budget may therefore bind before the request-count limit: with the default 16 MiB response limit, the 64 MiB service admits three simultaneous requests after input/header overhead. For small JSON responses, set `options.max_body_bytes` to a suitable value such as 64 KiB; alternatively explicitly raise the service budget. Container growth peaks and native curl/TLS allocations are additional.
+
+## 4. Cancel even when DNS receives no reply
+
+The default SDK retains system DNS for compatibility. For cancellable DNS, explicitly build the SDK with `HX_DEPS_CURL_CARES=ON` following [dependency setup](DEPENDENCIES.md#8-optional-cancellable-dns), then enable it after client creation:
+
+```c
+hx_os_status status = hx_os_http_use_cancellable_dns(http, NULL, &error);
+if (status == HX_OS_OK)
+	status = hx_os_http_download_file(http, url, "firmware.bin",
+		0, NULL, &response, &error);
+```
+
+NULL uses the platform DNS configuration discovered by c-ares; pass numeric servers such as `"127.0.0.1:5353"` to choose your own. Configuration is copied and belongs only to this client. An SDK without c-ares immediately returns `NOT_SUPPORTED`; do not ignore that error and assume cancellation is available. Successful reconfiguration clears this client's connection/DNS cache.
+
+The setting covers ordinary requests, JSON, streaming upload/download and redirects. libcurl still handles HTTPS certificate/hostname checks and proxies. No system DNS setting changes, and full enterprise VPN resolver compatibility is not implied. Cancellation/deadlines are checked within 50 ms of network waits, subject to scheduling. Configuration-file access, file I/O and application callbacks can still block; there is no hard-real-time guarantee. A remote proxy's own name resolution is outside this local DNS configuration.
+
+For coroutine HTTP, call `hx_os_coro_http_use_cancellable_dns(service, NULL, &error)` after service creation and before submitting work. All later requests inherit it. Exclude concurrent submissions, close and configuration calls; active jobs return `BUSY`. Cancellation stops waiting for the native DNS query, while service close retains its deadline/retry contract. C++ clients and `hx::coro::Http` expose `.useCancellableDns()`.
+
+Reuse the existing example targets:
+
+```sh
+./build/bin/hx_os_http_file download http://127.0.0.1:8080/hello.txt downloaded.txt --cancellable-dns
+./build/bin/hx_os_coroutine_http http://127.0.0.1:8080/hello.txt --cancellable-dns
+```
+
+Start the local server from section 1 first. The file example prints `HTTP 200` and saves the file; the coroutine example prints `HTTP 200` and `hello`. The ordinary SDK reports `not supported` with this flag; omit it to retain the original usage. Numeric-address demonstrations validate integration; actual DNS cancellation needs a hostname and an unresponsive DNS server.

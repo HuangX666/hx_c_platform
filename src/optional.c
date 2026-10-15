@@ -605,6 +605,24 @@ hx_os_status hx_os_loop_create(hx_os_network *network,
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
+hx_os_status hx_os_loop_resolve(hx_os_loop *loop, const char *host,
+	uint16_t port, int protocol, const hx_os_resolver_options *options,
+	hx_os_deadline deadline, hx_os_completion_fn completion, void *user,
+	hx_os_request **out, hx_os_error *error)
+{
+	(void)loop;
+	(void)host;
+	(void)port;
+	(void)protocol;
+	(void)options;
+	(void)deadline;
+	(void)completion;
+	(void)user;
+	if (out)
+		*out = NULL;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
 hx_os_status hx_os_loop_submit(hx_os_loop *loop,
 	const hx_os_operation *operation, hx_os_completion_fn completion,
 	void *user, hx_os_request **out, hx_os_error *error)
@@ -709,8 +727,7 @@ hx_os_status hx_os_loop_destroy(hx_os_loop **loop, hx_os_error *error)
 #if !HX_OS_ENABLE_LOOP && HX_OS_ENABLE_NETWORK
 #include "net_private.h"
 
-hx_os_status hx_os_i_loop_close_socket(
-	hx_os_socket *socket, hx_os_error *error)
+hx_os_status hx_os_i_loop_close_socket(hx_os_socket *socket, hx_os_error *error)
 {
 	(void)socket;
 

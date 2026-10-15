@@ -151,7 +151,7 @@ Android ARMv7 改为 `armeabi-v7a`／`android-arm`；x86_64 原生模拟器改�
 
 ## 7. 新 SDK 的部署细节
 
-Curl 固定到 `curl-8_22_0` 标签，该提交原始头文件报告 `8.22.0-DEV`，保留上游版本文字。构建使用 OpenSSL，关闭命令行工具、线程 DNS、libpsl、SSH、IDN2、GSSAPI 和隐式内容压缩。因此 HTTP 截止时间不能打断原生阻塞 DNS；URL 的 IDNA 能力也服从所选后端，不暗中增加依赖。Utf8proc 固定为 2.12.0，两个组件的头文件和许可证都随 SDK 安装。
+Curl 固定到 `curl-8_22_0` 标签，该提交原始头文件报告 `8.22.0-DEV`，保留上游版本文字。构建使用 OpenSSL，关闭命令行工具、线程 DNS、libpsl、SSH、IDN2、GSSAPI 和隐式内容压缩。默认使用系统 DNS，HTTP 截止时间不能打断其阻塞调用；可取消 SDK 配置见第 8 节。URL 的 IDNA 能力也服从所选后端，不暗中增加依赖。Utf8proc 固定为 2.12.0，两个组件的头文件和许可证都随 SDK 安装。
 
 启用时提供 `hx_c_platform::sqlite`、`::openssl`、`::curl`、`::utf8proc`、`::archive`、`::zlib`、`::lzma`、`::zstd`；`hx_c_platform::native` 汇总核心及已启用的底层目标。消费者可直接调用原生 SDK，同时使用便利接口。安装包从自己的前缀解析匹配依赖并导出原始头文件；Windows 运行时 DLL 放在 `bin`，Unix 保留共享库名称链和相对库目录的查找路径。同一进程不要混用不兼容的 SDK 版本。
 
@@ -159,4 +159,17 @@ Curl 固定到 `curl-8_22_0` 标签，该提交原始头文件报告 `8.22.0-DEV
 
 启用网络时，`HX_OS_ENABLE_CARES` 默认开启。未修改的 c-ares 1.34.8 源码随工程直接构建为 PIC 静态库，不需要额外 DNS DLL。初始化 `deps/c-ares`，或按上文选择 FetchContent。固定提交为 `c7a3138dcfe3bb0eaaf10c0c24c36dc66dc790ab`。设置 `-DHX_OS_ENABLE_CARES=OFF` 可保留系统 DNS 并移除这个后端；显式 resolver 入口此时返回 `NOT_SUPPORTED`。
 
-安装包含 c-ares 头文件、静态库、CMake 包及 MIT 许可证。直接调用原生 API 时链接 `hx_c_platform::cares`。适配层持有 c-ares 全局初始化的使用权；同时使用原生 API 的应用需要协调全局清理，不能在适配层 resolver 存活时清理 c-ares。该后端用于显式 resolver／TCP 拨号／TLS，不会改变单独构建的 libcurl DNS 后端，因此 HTTP 协程仍有已说明的原生 DNS 关闭限制。
+安装包含 c-ares 头文件、静态库、CMake 包及 MIT 许可证。直接调用原生 API 时链接 `hx_c_platform::cares`。适配层持有 c-ares 全局初始化的使用权；同时使用原生 API 的应用需要协调全局清理，不能在适配层 resolver 存活时清理 c-ares。该后端用于显式 resolver／TCP 拨号／TLS、loop 解析及协程解析。它不会改变单独构建的 libcurl DNS 后端。
+
+HTTP SDK 单独使用 `HX_DEPS_CURL_CARES` 开关，默认 **OFF**，保留系统 DNS。需要可取消 HTTP／HTTPS 时，在原有 SDK 目录启用它，再构建 curl 目标：
+
+```sh
+cmake -S tools/dependencies -B build-deps -DHX_DEPS_CURL_CARES=ON
+cmake --build build-deps --config Release --target hx_dep_build_curl
+```
+
+把 `build-deps` 替换成已有的 SDK 构建目录；Windows 在原来的 VS 开发者终端运行，配置必须与消费者 CRT 一致。重新构建本库和示例，使它们使用更新后的 SDK／运行库。这个配置复用 `deps/c-ares` 的固定版本，把 c-ares 静态链接到 libcurl 动态库，不增加 DNS DLL；分发时包含安装的 `cares-LICENSE.md`。第三方源码不修改。默认 submodule／可选 FetchContent 仍由 `HX_OS_DEPENDENCY_PROVIDER` 控制。
+
+`HX_OS_ENABLE_CARES` 控制本库 resolver；`HX_DEPS_CURL_CARES` 控制 libcurl SDK，两个开关彼此独立。HTTP 客户端显式调用 `hx_os_http_use_cancellable_dns`，协程服务调用 `hx_os_coro_http_use_cancellable_dns`，以确认实际加载的 SDK 支持该能力，避免仅凭头文件或构建目录名称判断。普通 SDK 返回 `NOT_SUPPORTED`，不会静默退回阻塞解析。旧的 HTTP 调用方式在两种 SDK 中都可使用，但启用 c-ares 的 SDK 按 c-ares 的规则解析；要保留系统解析规则，应选择默认 SDK，不能靠省略启用调用来切换同一个 libcurl 的编译后端。
+
+改回 `-DHX_DEPS_CURL_CARES=OFF` 并重新构建、部署 curl 即恢复系统 DNS 配置。跨编译沿用原有工具链参数；仅构建成功不代表 Android、ARM 或企业 VPN 环境已经运行验收。

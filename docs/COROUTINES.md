@@ -237,7 +237,7 @@ Each receive consumes one datagram. An empty datagram succeeds with zero bytes; 
 | Channels and coroutine sync objects | Shared 128-object limit; shared 16 MiB object/buffer/waiter/owning-box budget |
 | I/O | 1,024 stream wrappers; 16 MiB native loop request/byte budget; one dispatcher |
 | `max_io_handles=0` | CPU/channel runtime without I/O dispatcher or network initialization |
-| DNS | Existing bounded resolver pool, started on demand; native resolver calls are not forcibly interrupted |
+| DNS | Existing bounded pool; `resolve` keeps system DNS, `resolve_cancellable` cancels c-ares queries |
 | `cancel` | Cooperative flag plus wake/cancel of an outstanding wait; never kills a thread or forcibly unwinds a C++ stack |
 | `wait_until` | Native caller blocks, coroutine caller suspends; self-wait is `DEADLOCK`, cross-runtime coroutine wait is `NOT_SUPPORTED` |
 | `drain_until` | Reject new tasks, let accepted tasks finish; a later close can escalate to cancellation |
@@ -337,3 +337,5 @@ build/bin/hx_os_coroutine_http http://127.0.0.1:8080/hello.txt
 On Visual Studio use `build/bin/Release/hx_os_coroutine_http.exe`. With `hello.txt` containing `hello`, output is `HTTP 200` followed by `hello`. The program shows creation, `HX_OS_CORO_AWAIT`, response cleanup and closing the I/O service before the runtime. Inside a stackful task the operation is one `hx_os_coro_http_get(service, url, NULL, &response, &error)` call. C++ uses `hx::coro::Http(service).get(url, response)`.
 
 Stackless tasks keep arguments, buffers and deadlines in persistent state and repeat the pending operation after `WOULD_BLOCK`. TLS sends preserve cumulative partial bytes. Coroutine cancellation wakes a suspended call; unfinished HTTP background work retains its own copied data. Close HTTP from a native owner thread using `close_until`; timeout retains the service for retry, including a worker blocked in system DNS. Do not destroy the runtime first or assume HTTP cancellation undoes a server operation. See [HTTP transfers](HTTP_FILES.md) for ordinary streaming files and [TLS](TLS.md) for trust and profiles.
+
+Use `hx_os_coro_resolve_cancellable` when DNS network waits must also respond to cancellation. C++11 exposes `Addresses::resolveCancellable`; C++20 exposes `async::resolveCancellable`. Inputs are copied before the initial suspension, successful results belong to the caller, and native callbacks retire before resolution completes. Existing resolve retains system DNS. The [DNS example](NETWORK_OPTIONS.md#123-use-an-event-loop-or-coroutine) has a runnable `--coro` mode. Coroutine HTTP separately needs a c-ares-enabled libcurl SDK and `hx_os_coro_http_use_cancellable_dns` before submission; see [HTTP configuration](HTTP_FILES.md#4-cancel-even-when-dns-receives-no-reply). These are distinct build switches.

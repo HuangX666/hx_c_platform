@@ -110,7 +110,7 @@ hx_os_http_close(&http, NULL);
 
 JSON 入口会添加 `Content-Type: application/json`；动态字段建议用文档／codec 接口生成 JSON。HTTPS 同时验证证书和主机名，`ca_file` 可以明确指定信任的 CA 文件，不能关闭验证。Windows 可使用系统信任库。默认响应内容 16 MiB、响应头 64 KiB、等待 5 秒、不自动重定向、不使用环境代理。显式重定向有次数限制且不能从 HTTPS 降级；只允许 HTTP／HTTPS，不允许包含用户名的 URL。代理需显式配置。
 
-`OK` 表示收到完整响应，包括 HTTP 404／500，业务应检查 `status_code`。传输、证书、取消和超限失败都保持原响应，并保留 CURL 原生诊断。同一个客户端一次只接受一个请求，并发返回 `BUSY`，重入返回 `DEADLOCK`；不同客户端可在不同线程使用。截止时间和取消为协作式：当前 SDK 的阻塞 DNS 不能被中断，原生 TLS 和调用者回调也可能延迟返回。不自动启动线程，关闭前需要排除调用者，并协调宿主使用的 libcurl／OpenSSL 全局清理。C++ 使用 `hx::Http` 及 `Result<HttpResponse>`。
+`OK` 表示收到完整响应，包括 HTTP 404／500，业务应检查 `status_code`。传输、证书、取消和超限失败都保持原响应，并保留 CURL 原生诊断。同一个客户端一次只接受一个请求，并发返回 `BUSY`，重入返回 `DEADLOCK`；不同客户端可在不同线程使用。截止时间和取消为协作式：默认 SDK 的阻塞 DNS 不能被中断；需要可取消 DNS 时选择[可选 SDK 和显式启用入口](HTTP_FILES.zh-CN.md#4-连-dns-无响应也需要取消时)，原生 TLS 和调用者回调也可能延迟返回。不自动启动线程，关闭前需要排除调用者，并协调宿主使用的 libcurl／OpenSSL 全局清理。C++ 使用 `hx::Http` 及 `Result<HttpResponse>`。
 
 运行 `hx_os_http_json URL [trusted-ca.pem]` 访问自己的 JSON 服务。本地回归夹具也覆盖 JSON 上传、HTTP 错误状态、响应上限和可信／不可信 HTTPS，不依赖外部互联网服务。
 

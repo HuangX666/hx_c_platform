@@ -59,6 +59,32 @@ build/bin/hx_os_http_file upload http://your-server/upload firmware.bin
 
 协程场景先显式创建一个 `hx_os_coro_http`。默认使用两个独立的 I/O 线程、最多十六个已接纳请求，以及 64 MiB 的输入／响应容量预留；这些上限可以调整，不会为每个请求新建线程。`hx_os_coro_http_request` 在挂起前复制请求；常用 GET 有直接入口。C++ 有栈协程可以包含 `<hx/CoroutineNetwork.hpp>`，调用 `hx::coro::Http(service).get(url, response)`。
 
-完成、超时或取消会唤醒协程，不占用协程工作线程。若原生 DNS 仍未退出，只保留任务自己持有的缓冲区。必须持有 I/O service，直到 `hx_os_coro_http_close_until` 成功；关闭超时可重试。使用协程取消，或把外部取消 token 绑定到协程；复制的 HTTP options 要求 `cancel=NULL`。从普通 owner 线程关闭 HTTP service，再关闭协程运行时。这一层采用有界 I/O 池，不是 libcurl multi，也不承诺无限并发传输。
+完成、超时或取消会唤醒协程，不占用协程工作线程。若原生 DNS 仍未退出，只保留任务自己持有的缓冲区。必须持有 I/O service，直到 `hx_os_coro_http_close_until` 成功；关闭超时可重试。使用协程取消，或把外部取消 token 绑定到协程；复制的 HTTP options 要求 `cancel=NULL`。从普通 owner 线程关闭 HTTP service，再关闭协程运行时。这一层继续采用有界 I/O 池。启用可取消 DNS 后，每个工作线程通过 libcurl multi 驱动一条传输，在有界等待之间检查取消；不是让全部请求共用一个调度线程，也不承诺无限并发传输。
 
 每个已接收请求按配置的最大响应大小预留预算，不是只计算当前已经收到的字节。因此字节预算可能先于请求条数用完：默认每份响应上限 16 MiB，加上输入和响应头开销后，64 MiB 的服务可同时接收三份请求。小型 JSON 响应可以把 `options.max_body_bytes` 设为合适的值，例如 64 KiB；也可以显式提高服务预算。容器扩容峰值及 curl／TLS 原生分配另计。
+
+## 4. 连 DNS 无响应也需要取消时
+
+默认 SDK 继续使用系统 DNS，以保留系统解析兼容性。需要可取消 DNS 时，先按[依赖教程](DEPENDENCIES.zh-CN.md#8-可选的可取消-dns)在 SDK 构建中显式设置 `HX_DEPS_CURL_CARES=ON`，再在客户端创建成功后启用：
+
+```c
+hx_os_status status = hx_os_http_use_cancellable_dns(http, NULL, &error);
+if (status == HX_OS_OK)
+	status = hx_os_http_download_file(http, url, "firmware.bin",
+		0, NULL, &response, &error);
+```
+
+`NULL` 采用 c-ares 读取到的平台 DNS 配置；需要自己的服务器时可传 `"127.0.0.1:5353"` 等数字地址列表。库复制配置，只影响这个客户端。SDK 没有 c-ares 时，启用立即返回 `NOT_SUPPORTED`，不要忽略它再把请求当作可取消。重新配置成功会清空这个客户端的连接／DNS 缓存。
+
+配置适用于普通请求、JSON、流式上传／下载和重定向，HTTPS 证书、主机名校验及代理仍交给 libcurl。它不会修改系统 DNS，也不能替代企业 VPN 的全部解析规则。网络等待中最多每隔 50 ms 检查取消和截止时间，实际响应受调度影响；配置文件读取、文件 I/O 和业务回调仍可能阻塞，因此不是硬实时保证。远端代理自己解析的名称，不受本地 DNS 配置控制。
+
+协程 HTTP 服务创建成功后，在提交任务前调用 `hx_os_coro_http_use_cancellable_dns(service, NULL, &error)`。之后的所有请求沿用该配置；不要与提交、关闭或其他配置调用并发。已有任务时返回 `BUSY`。取消会让底层 DNS 查询停止等待，服务关闭仍沿用有截止时间、超时可重试的规则。C++ 对应普通客户端和 `hx::coro::Http` 的 `.useCancellableDns()`。
+
+已有示例无需额外目标：
+
+```sh
+./build/bin/hx_os_http_file download http://127.0.0.1:8080/hello.txt downloaded.txt --cancellable-dns
+./build/bin/hx_os_coroutine_http http://127.0.0.1:8080/hello.txt --cancellable-dns
+```
+
+先启动第 1 节的本地服务。文件示例输出 `HTTP 200` 并保存文件，协程示例输出 `HTTP 200` 及 `hello`。普通 SDK 加这个标志会报告 `not supported`；去掉标志保留原来的用法。数字地址演示验证接口接入，实际 DNS 取消需要使用域名及无响应 DNS 服务器验证。

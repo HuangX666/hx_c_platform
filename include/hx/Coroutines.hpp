@@ -926,6 +926,20 @@ public:
 		return value;
 	}
 
+	static Result<Addresses> resolveCancellable(const char *host,
+		uint16_t port, hx_os_deadline deadline,
+		const hx_os_resolver_options *options = NULL) noexcept
+	{
+		Addresses value;
+		hx_os_error error = {};
+		auto status = hx_os_coro_resolve_cancellable(host, port,
+			options, deadline, &value.m_addresses_, &error);
+
+		if (status != HX_OS_OK)
+			return Failure(status, error);
+		return value;
+	}
+
 private:
 	hx_os_address_list *m_addresses_;
 };

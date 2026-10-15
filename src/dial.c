@@ -135,6 +135,25 @@ static hx_os_status hx_os_dial_wait(hx_os_socket *const sockets[2],
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
 
+// Reserve time for later candidates instead of letting two black holes
+// consume the entire deadline. The last candidates keep the full remainder.
+static hx_os_deadline hx_os_dial_window(
+	hx_os_deadline deadline, size_t remaining)
+{
+	uint64_t now = hx_os_monotonic_ns();
+	uint64_t span = UINT64_C(2000000000);
+
+	if (deadline != HX_OS_DEADLINE_INFINITE) {
+		uint64_t share = deadline > now
+			? (deadline - now) / ((remaining + 1) / 2)
+			: 0;
+
+		if (share < span)
+			span = share;
+	}
+	return span < UINT64_MAX - now ? now + span : UINT64_MAX - 1;
+}
+
 static void hx_os_dial_order(
 	const hx_os_address *addresses, size_t count, size_t order[256])
 {
@@ -175,6 +194,7 @@ hx_os_status hx_os_i_tcp_dial_addresses_until(hx_os_network *network,
 	hx_os_status status;
 	hx_os_error last;
 	hx_os_deadline next_start = HX_OS_DEADLINE_NOW;
+	hx_os_deadline expires[2] = {0, 0};
 	size_t order[256], next = 0, i;
 	int winner = -1;
 
@@ -232,9 +252,15 @@ hx_os_status hx_os_i_tcp_dial_addresses_until(hx_os_network *network,
 				hx_os_i_socket_discard(&sockets[i]);
 				next_start = HX_OS_DEADLINE_NOW;
 			}
-			else
+			else {
+				expires[i] = hx_os_dial_window(deadline,
+					count - next + 1 +
+						(sockets[1 - i] != NULL));
 				next_start = hx_os_deadline_after_ms(
 					options->attempt_delay_ms);
+				if (next < count && expires[i] < next_start)
+					next_start = expires[i];
+			}
 		}
 		if (!sockets[0] && !sockets[1]) {
 			if (next == count) {
@@ -246,6 +272,10 @@ hx_os_status hx_os_i_tcp_dial_addresses_until(hx_os_network *network,
 		if (next < count && (!sockets[0] || !sockets[1]) &&
 			next_start < wait)
 			wait = next_start;
+		if (next < count)
+			for (i = 0; i < 2; ++i)
+				if (sockets[i] && expires[i] < wait)
+					wait = expires[i];
 		if (options->cancel || cancelled) {
 			hx_os_deadline check = hx_os_deadline_after_ms(50);
 
@@ -268,6 +298,13 @@ hx_os_status hx_os_i_tcp_dial_addresses_until(hx_os_network *network,
 				next_start = HX_OS_DEADLINE_NOW;
 			}
 		}
+		if (next < count)
+			for (i = 0; i < 2; ++i)
+				if (sockets[i] &&
+					hx_os_deadline_expired(expires[i])) {
+					hx_os_i_socket_discard(&sockets[i]);
+					next_start = HX_OS_DEADLINE_NOW;
+				}
 	}
 finished:
 	if (winner >= 0) {

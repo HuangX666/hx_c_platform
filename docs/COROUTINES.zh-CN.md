@@ -247,7 +247,7 @@ UDP JSON: {"type":"status","device_id":7}
 | channel 与协程同步对象 | 共用 128 个对象上限；对象、缓冲区、等待者和拥有值盒子合计最多 16 MiB |
 | I/O | 1,024 个 stream 包装对象；原生 loop 请求/字节预算 16 MiB；一个调度线程 |
 | `max_io_handles=0` | 仅使用计算/channel，不创建 I/O 线程，也不初始化网络 |
-| DNS | 按需启动已有有界解析线程池；不强行中断原生解析调用 |
+| DNS | 复用有界解析池；`resolve` 保留系统 DNS，`resolve_cancellable` 可以取消 c-ares 查询 |
 | `cancel` | 设置协作式取消标志，唤醒或取消当前等待；不强杀线程，不强行展开 C++ 栈 |
 | `wait_until` | 普通线程阻塞，协程挂起；等待自身返回 `DEADLOCK`，协程跨运行时等待返回 `NOT_SUPPORTED` |
 | `drain_until` | 拒绝新任务，允许已接收任务结束；随后 close 可以升级为取消 |
@@ -337,3 +337,5 @@ build/bin/hx_os_coroutine_http http://127.0.0.1:8080/hello.txt
 Visual Studio 使用 `build/bin/Release/hx_os_coroutine_http.exe`。假设 `hello.txt` 内容为 `hello`，输出为 `HTTP 200`，下一行显示 `hello`。程序展示创建服务、`HX_OS_CORO_AWAIT`、释放响应，以及先关闭 I/O 服务再关闭运行时的流程。有栈任务只需调用 `hx_os_coro_http_get(service, url, NULL, &response, &error)`；C++ 使用 `hx::coro::Http(service).get(url, response)`。
 
 无栈任务把参数、缓冲区和截止时间放进持久状态，收到 `WOULD_BLOCK` 后继续同一个待完成操作。TLS 发送保留累计完成的字节数。取消协程会唤醒等待，未结束的 HTTP 后台操作继续持有自己的数据副本。原生 owner 线程用 `close_until` 关闭 HTTP 服务；超时后保留对象供重试，包括阻塞在系统 DNS 中的工作线程。不要先销毁运行时，也不要把 HTTP 取消当作服务端操作撤销。普通流式文件操作见 [HTTP 传输](HTTP_FILES.zh-CN.md)，信任校验及 profile 见 [TLS](TLS.zh-CN.md)。
+
+需要让 DNS 网络等待也能取消时，用 `hx_os_coro_resolve_cancellable`，C++11 对应 `Addresses::resolveCancellable`，C++20 对应 `async::resolveCancellable`。参数在首次挂起前复制，成功结果由调用者拥有，原生回调退出后才结束该次解析。旧的 resolve 保留系统 DNS。[DNS 示例](NETWORK_OPTIONS.zh-CN.md#123-事件循环和协程里怎么用)给出可直接运行的 `--coro` 模式。协程 HTTP 则需另选 c-ares 版 libcurl SDK，并在服务提交前启用 `hx_os_coro_http_use_cancellable_dns`，见 [HTTP 配置](HTTP_FILES.zh-CN.md#4-连-dns-无响应也需要取消时)。两种解析机制不能混为同一个构建开关。

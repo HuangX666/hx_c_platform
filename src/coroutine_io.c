@@ -2,6 +2,7 @@
 
 #if HX_OS_ENABLE_COROUTINE_IO
 #include "loop_private.h"
+#include "resolver_private.h"
 
 #if defined(_MSC_VER)
 static __declspec(thread) int hx_os_coro_io_active;
@@ -32,6 +33,7 @@ struct hx_os_coro_io_job {
 	hx_os_coro_stream *second;
 	hx_os_request *request;
 	hx_os_address_list *addresses;
+	hx_os_resolver_options *resolver_options;
 	hx_os_operation operation;
 	hx_os_completion completion;
 	int kind;
@@ -325,6 +327,11 @@ static void hx_os_coro_io_start(
 		status = hx_os_loop_submit_pipe(state->loop, &operation,
 			hx_os_coro_io_completed, job, &job->request, error);
 	}
+	else if (job->resolver_options)
+		status = hx_os_loop_resolve(state->loop, job->operation.host,
+			job->operation.address.port, job->operation.protocol,
+			job->resolver_options, job->operation.deadline,
+			hx_os_coro_io_completed, job, &job->request, error);
 	else
 		status = hx_os_loop_submit(state->loop, &job->operation,
 			hx_os_coro_io_completed, job, &job->request, error);
@@ -593,20 +600,23 @@ void hx_os_i_coro_io_dispose_wait(hx_os_coro *coroutine)
 	hx_os_coro_stream_release(job->output);
 	hx_os_coro_stream_release(job->second);
 	hx_os_address_list_destroy(job->addresses);
+	hx_os_memory_free(job->resolver_options);
 	hx_os_memory_free(job);
 }
 
-hx_os_status hx_os_i_coro_io_call(hx_os_coro_stream *stream, int kind,
+static hx_os_status hx_os_coro_io_call(hx_os_coro_stream *stream, int kind,
 	const hx_os_operation *input, int backlog, int reuse,
 	hx_os_coro_stream **output, hx_os_coro_stream **second,
 	hx_os_address_list **addresses, hx_os_completion *completion,
-	hx_os_error *error)
+	const hx_os_resolver_options *resolver_options, hx_os_error *error)
 {
 	hx_os_coro *coroutine = hx_os_coro_current();
 
 	hx_os_coro_runtime *runtime;
 	hx_os_coro_io_job *job;
 	hx_os_status status;
+	size_t host_bytes = 0;
+	hx_os_error detail;
 
 	if (!coroutine)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
@@ -617,7 +627,8 @@ hx_os_status hx_os_i_coro_io_call(hx_os_coro_stream *stream, int kind,
 
 	if (hx_os_i_coro_wait_ready(coroutine, HX_OS_CO_WAIT_IO)) {
 		job = coroutine->io;
-		if (job->kind != kind || job->stream != stream)
+		if (job->kind != kind || job->stream != stream ||
+			!!job->resolver_options != !!resolver_options)
 			return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 
 		goto completed;
@@ -629,11 +640,35 @@ hx_os_status hx_os_i_coro_io_call(hx_os_coro_stream *stream, int kind,
 	if (stream && stream->runtime != runtime)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 
-	job = hx_os_i_zero(runtime->context, sizeof(*job));
+	if (resolver_options) {
+		if (!input->host || !*input->host)
+			return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+		while (host_bytes < 1024 && input->host[host_bytes])
+			++host_bytes;
+		if (host_bytes == 1024)
+			return hx_os_i_error(error, HX_OS_LIMIT, 0, 0);
+		++host_bytes;
+	}
+
+	job = hx_os_i_zero(runtime->context, sizeof(*job) + host_bytes);
 	if (!job)
 		return hx_os_i_error(error, HX_OS_NO_MEMORY, 0, 0);
 
+	if (resolver_options) {
+		job->resolver_options = hx_os_i_resolver_options_copy(
+			runtime->context, resolver_options, &detail);
+		if (!job->resolver_options) {
+			hx_os_memory_free(job);
+			if (error)
+				*error = detail;
+			return detail.status;
+		}
+	}
 	job->operation = *input;
+	if (host_bytes) {
+		memcpy(job + 1, input->host, host_bytes);
+		job->operation.host = (char *)(job + 1);
+	}
 	job->operation.send_mode = HX_OS_SEND_BORROW;
 	job->kind = kind;
 	job->backlog = backlog;
@@ -659,6 +694,7 @@ hx_os_status hx_os_i_coro_io_call(hx_os_coro_stream *stream, int kind,
 	(void)hx_os_mutex_unlock(runtime->mutex, NULL);
 	if (status != HX_OS_OK) {
 		hx_os_coro_stream_release(stream);
+		hx_os_memory_free(job->resolver_options);
 		hx_os_memory_free(job);
 
 		return status;
@@ -691,9 +727,52 @@ completed:
 
 	return hx_os_i_coro_consume(coroutine, error);
 }
+
+hx_os_status hx_os_i_coro_io_call(hx_os_coro_stream *stream, int kind,
+	const hx_os_operation *input, int backlog, int reuse,
+	hx_os_coro_stream **output, hx_os_coro_stream **second,
+	hx_os_address_list **addresses, hx_os_completion *completion,
+	hx_os_error *error)
+{
+	return hx_os_coro_io_call(stream, kind, input, backlog, reuse, output,
+		second, addresses, completion, NULL, error);
+}
+
+hx_os_status hx_os_coro_resolve_cancellable(const char *host, uint16_t port,
+	const hx_os_resolver_options *options, hx_os_deadline deadline,
+	hx_os_address_list **out, hx_os_error *error)
+{
+	const hx_os_resolver_options defaults = HX_OS_RESOLVER_OPTIONS_INIT;
+	hx_os_operation operation;
+
+	if (!out)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	*out = NULL;
+	hx_os_operation_init(&operation, HX_OS_OP_RESOLVE);
+	operation.host = host;
+	operation.address.port = port;
+	operation.protocol = HX_OS_TCP;
+	operation.deadline = deadline;
+
+	return hx_os_coro_io_call(NULL, HX_OS_OP_RESOLVE, &operation, 0, 0,
+		NULL, NULL, out, NULL, options ? options : &defaults, error);
+}
 #endif
 
 #if !HX_OS_ENABLE_COROUTINE_IO
+hx_os_status hx_os_coro_resolve_cancellable(const char *host, uint16_t port,
+	const hx_os_resolver_options *options, hx_os_deadline deadline,
+	hx_os_address_list **out, hx_os_error *error)
+{
+	(void)host;
+	(void)port;
+	(void)options;
+	(void)deadline;
+	if (out)
+		*out = NULL;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+}
+
 int hx_os_i_coro_io_inside(void)
 {
 	return 0;

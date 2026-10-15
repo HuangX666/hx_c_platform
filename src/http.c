@@ -2,12 +2,15 @@
 #include "hx_os_http.h"
 #include "hx_os_temp.h"
 #include "file_utils_private.h"
+#include "resolver_private.h"
 
 #if HX_OS_HAVE_HTTP
 #include <curl/curl.h>
 
 struct hx_os_http {
 	CURL *native;
+	CURLM *multi;
+	hx_string dns_servers;
 	hx_os_atomic owner;
 	hx_os_temp *pending_file;
 };
@@ -20,6 +23,7 @@ typedef struct hx_os_http_transfer {
 	hx_os_error *error;
 	const hx_os_http_stream_options *stream;
 	uint64_t downloaded, uploaded;
+	uint64_t progress_downloaded, progress_uploaded;
 } hx_os_http_transfer;
 
 static hx_os_status hx_os_http_enter(hx_os_http *http, hx_os_error *error)
@@ -133,15 +137,8 @@ static size_t hx_os_http_headers(
 		transfer->options->max_header_bytes, data, size, count);
 }
 
-static int hx_os_http_progress(void *user, curl_off_t download,
-	curl_off_t downloaded, curl_off_t upload, curl_off_t uploaded)
+static int hx_os_http_check(hx_os_http_transfer *transfer)
 {
-	hx_os_http_transfer *transfer = user;
-
-	(void)download;
-	(void)downloaded;
-	(void)upload;
-	(void)uploaded;
 	if (hx_os_cancel_requested(transfer->options->cancel))
 		transfer->status =
 			hx_os_i_error(transfer->error, HX_OS_CANCELLED, 0, 0);
@@ -151,9 +148,61 @@ static int hx_os_http_progress(void *user, curl_off_t download,
 	else if (transfer->status == HX_OS_OK && transfer->stream &&
 		transfer->stream->progress)
 		transfer->status = transfer->stream->progress(
-			transfer->stream->user, (uint64_t)downloaded,
-			(uint64_t)uploaded, transfer->error);
+			transfer->stream->user, transfer->progress_downloaded,
+			transfer->progress_uploaded, transfer->error);
 	return transfer->status != HX_OS_OK;
+}
+
+static int hx_os_http_progress(void *user, curl_off_t download,
+	curl_off_t downloaded, curl_off_t upload, curl_off_t uploaded)
+{
+	hx_os_http_transfer *transfer = user;
+
+	(void)download;
+	(void)upload;
+	transfer->progress_downloaded = (uint64_t)downloaded;
+	transfer->progress_uploaded = (uint64_t)uploaded;
+	return hx_os_http_check(transfer);
+}
+
+// One transfer on the calling thread; the multi handle retains its cache.
+static CURLcode hx_os_http_perform(
+	hx_os_http *http, hx_os_http_transfer *transfer)
+{
+	CURLMcode multi_code;
+	CURLcode code = CURLE_FAILED_INIT;
+	CURLMsg *message;
+	int running = 1, queued;
+
+	if (!http->multi)
+		return curl_easy_perform(http->native);
+	multi_code = curl_multi_add_handle(http->multi, http->native);
+	if (multi_code != CURLM_OK)
+		return multi_code == CURLM_OUT_OF_MEMORY ? CURLE_OUT_OF_MEMORY
+							 : CURLE_FAILED_INIT;
+	while (multi_code == CURLM_OK && running) {
+		uint32_t wait;
+
+		if (hx_os_http_check(transfer)) {
+			code = CURLE_ABORTED_BY_CALLBACK;
+			break;
+		}
+		multi_code = curl_multi_perform(http->multi, &running);
+		if (multi_code != CURLM_OK || !running)
+			break;
+		wait = hx_os_i_wait_ms(transfer->deadline);
+		multi_code = curl_multi_poll(http->multi, NULL, 0,
+			(int)(wait < 50 ? wait : 50), NULL);
+	}
+	while ((message = curl_multi_info_read(http->multi, &queued)) != NULL)
+		if (message->msg == CURLMSG_DONE)
+			code = message->data.result;
+	if (multi_code != CURLM_OK)
+		code = multi_code == CURLM_OUT_OF_MEMORY ? CURLE_OUT_OF_MEMORY
+							 : CURLE_FAILED_INIT;
+	// Remove outside callbacks, before borrowed buffers may be released.
+	(void)curl_multi_remove_handle(http->multi, http->native);
+	return code;
 }
 
 static hx_os_status hx_os_http_fail(CURLcode code, hx_os_error *error)
@@ -201,8 +250,11 @@ hx_os_status hx_os_http_create(
 	}
 	http->native = curl_easy_init();
 	http->pending_file = NULL;
+	http->multi = NULL;
+	hx_string_init(&http->dns_servers, context);
 	hx_os_atomic_store(&http->owner, 0, HX_OS_RELAXED);
 	if (!http->native) {
+		hx_string_destroy(&http->dns_servers);
 		hx_os_memory_free(http);
 		curl_global_cleanup();
 		return hx_os_i_error(error, HX_OS_NO_MEMORY, 0, 0);
@@ -213,6 +265,51 @@ hx_os_status hx_os_http_create(
 	(void)context;
 	if (out)
 		*out = NULL;
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
+}
+
+hx_os_status hx_os_http_use_cancellable_dns(
+	hx_os_http *http, const char *servers, hx_os_error *error)
+{
+#if HX_OS_HAVE_HTTP
+	hx_os_resolver_options options = HX_OS_RESOLVER_OPTIONS_INIT;
+	hx_os_status status;
+	CURLM *multi = NULL;
+	size_t bytes;
+
+	status = hx_os_http_enter(http, error);
+	if (status != HX_OS_OK)
+		return status;
+	if (!curl_version_info(CURLVERSION_NOW)->ares) {
+		status = hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+		goto finish;
+	}
+	options.servers = servers;
+	status = hx_os_i_resolver_options_check(&options, &bytes, error);
+	if (status != HX_OS_OK)
+		goto finish;
+	multi = curl_multi_init();
+	if (!multi) {
+		status = hx_os_i_error(error, HX_OS_NO_MEMORY, 0, 0);
+		goto finish;
+	}
+	status = hx_string_assign_cstr(
+		&http->dns_servers, servers ? servers : "", error);
+	if (status == HX_OS_OK) {
+		if (http->multi)
+			(void)curl_multi_cleanup(http->multi);
+		http->multi = multi;
+		multi = NULL;
+	}
+finish:
+	if (multi)
+		(void)curl_multi_cleanup(multi);
+	hx_os_atomic_store(&http->owner, 0, HX_OS_RELEASE);
+	return status;
+#else
+	(void)http;
+	(void)servers;
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 #endif
 }
@@ -349,6 +446,9 @@ static hx_os_status hx_os_http_request_impl(hx_os_http *http,
 			secure = 0;
 			break;
 		}
+	if (http->multi && http->dns_servers.size)
+		HX_OS_HTTP_SET(CURLOPT_DNS_SERVERS,
+			hx_string_c_str(&http->dns_servers));
 	HX_OS_HTTP_SET(CURLOPT_URL, url);
 	HX_OS_HTTP_SET(CURLOPT_PROTOCOLS_STR, "http,https");
 	HX_OS_HTTP_SET(
@@ -400,7 +500,7 @@ static hx_os_status hx_os_http_request_impl(hx_os_http *http,
 	}
 #undef HX_OS_HTTP_SET
 	if (code == CURLE_OK)
-		code = curl_easy_perform(http->native);
+		code = hx_os_http_perform(http, &transfer);
 	if (metrics) {
 		curl_off_t downloaded = 0, uploaded = 0;
 
@@ -762,6 +862,9 @@ hx_os_status hx_os_http_close(hx_os_http **http, hx_os_error *error)
 	}
 	*http = NULL;
 	curl_easy_cleanup(value->native);
+	if (value->multi)
+		(void)curl_multi_cleanup(value->multi);
+	hx_string_destroy(&value->dns_servers);
 	hx_os_memory_free(value);
 	curl_global_cleanup();
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);

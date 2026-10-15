@@ -60,6 +60,11 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_dial_options_init(
  * \details Candidates alternate address families, preserving each family's
  * original order. A failure starts the next candidate immediately; otherwise
  * attempt_delay_ms (0..60000) separates starts. All candidates share deadline.
+ * While untried addresses remain, a stalled candidate keeps its slot for at
+ * most 2 s, shortened to share a finite remaining budget across candidates.
+ * That window also caps the start delay. Ready candidates are checked before
+ * retirement. Once all addresses start, live candidates keep the remaining
+ * overall deadline. Slow candidates may be abandoned to let later ones run.
  * Inputs/cancel are borrowed for this call. No worker is started. Cancellation
  * is checked at most every 50 ms during connection waits, subject to native
  * scheduling. Failure leaves *out NULL and closes all unpublished candidates;

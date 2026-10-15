@@ -150,7 +150,7 @@ The separate `tools/sevenzip` helper accepts the same toolchain/ABI/sysroot argu
 
 ## 7. New SDK deployment details
 
-The fixed curl tag is `curl-8_22_0`; its upstream header reports `8.22.0-DEV`. The original version text is retained. Its build uses OpenSSL, with command-line tools, threaded DNS, libpsl, SSH, IDN2, GSSAPI and implicit content compression disabled. HTTP deadlines therefore cannot interrupt native blocking DNS. URL IDNA availability follows this selected backend; it does not silently add an IDNA dependency. Utf8proc is pinned at 2.12.0. Both licenses and headers are installed with the SDK.
+The fixed curl tag is `curl-8_22_0`; its upstream header reports `8.22.0-DEV`. The original version text is retained. Its build uses OpenSSL, with command-line tools, threaded DNS, libpsl, SSH, IDN2, GSSAPI and implicit content compression disabled. The default system DNS cannot be interrupted by HTTP deadlines; section 8 describes the opt-in cancellable SDK. URL IDNA availability follows this selected backend; it does not silently add an IDNA dependency. Utf8proc is pinned at 2.12.0. Both licenses and headers are installed with the SDK.
 
 Native CMake aliases include `hx_c_platform::sqlite`, `::openssl`, `::curl`, `::utf8proc`, `::archive`, `::zlib`, `::lzma` and `::zstd` when enabled. `hx_c_platform::native` collects enabled native targets with the core. A consumer can call these SDK APIs directly without replacing the convenience layer. Installed package configuration resolves matching dependencies from its own prefix, and exports the original native headers. Windows deploys runtime DLLs under `bin`; Unix installations retain shared-library name chains and origin-relative runtime lookup. Do not mix incompatible SDK versions in one process.
 
@@ -158,4 +158,17 @@ Native CMake aliases include `hx_c_platform::sqlite`, `::openssl`, `::curl`, `::
 
 `HX_OS_ENABLE_CARES` defaults ON when networking is enabled. Its unmodified c-ares 1.34.8 sources build directly with this project as a PIC static library; no separate DNS DLL is required. Initialize `deps/c-ares`, or select FetchContent as above. The fixed commit is `c7a3138dcfe3bb0eaaf10c0c24c36dc66dc790ab`. Set `-DHX_OS_ENABLE_CARES=OFF` to retain system DNS without this backend; explicit resolver entry points then return `NOT_SUPPORTED`.
 
-Installation includes the c-ares headers, static library, CMake package and MIT license. Link `hx_c_platform::cares` for direct native calls. The wrapper leases c-ares global initialization; applications using native APIs must coordinate global cleanup and must not tear down c-ares while a wrapper resolver is alive. This backend serves explicit resolver/TCP-dial/TLS calls; it does not change the separately built libcurl DNS backend. Coroutine HTTP therefore retains its documented native-DNS close limitation.
+Installation includes the c-ares headers, static library, CMake package and MIT license. Link `hx_c_platform::cares` for direct native calls. The wrapper leases c-ares global initialization; applications using native APIs must coordinate global cleanup and must not tear down c-ares while a wrapper resolver is alive. This backend serves explicit resolver/TCP-dial/TLS, loop and coroutine DNS calls. It does not change the separately built libcurl DNS backend.
+
+The HTTP SDK has a separate `HX_DEPS_CURL_CARES` switch, default **OFF**, preserving system DNS. To enable cancellable HTTP/HTTPS, reconfigure the existing SDK directory and build curl:
+
+```sh
+cmake -S tools/dependencies -B build-deps -DHX_DEPS_CURL_CARES=ON
+cmake --build build-deps --config Release --target hx_dep_build_curl
+```
+
+Replace `build-deps` with your existing SDK directory. On Windows use the original VS developer terminal and match the consumer CRT configuration. Rebuild the library/examples against the updated SDK/runtime. This configuration reuses the pinned `deps/c-ares` sources and links c-ares statically into shared libcurl, adding no DNS DLL. Distribute the installed `cares-LICENSE.md`. Third-party sources remain unchanged. `HX_OS_DEPENDENCY_PROVIDER` still selects default submodules or optional FetchContent.
+
+`HX_OS_ENABLE_CARES` controls the core resolver; `HX_DEPS_CURL_CARES` controls the libcurl SDK. They are independent. Explicitly call `hx_os_http_use_cancellable_dns` on the HTTP client or `hx_os_coro_http_use_cancellable_dns` on the coroutine service to check the actual loaded SDK, rather than assuming support from headers or directory names. The ordinary SDK returns `NOT_SUPPORTED` without a blocking fallback. Existing HTTP calling patterns work with either SDK, but a c-ares SDK follows c-ares resolution rules. Choose the default SDK for system resolution; omitting the enabling call does not switch one libcurl binary's compiled resolver backend.
+
+Reconfigure with `-DHX_DEPS_CURL_CARES=OFF`, rebuild and redeploy curl to restore the system DNS configuration. Cross builds retain their existing toolchain arguments; compilation alone does not establish Android, ARM or enterprise VPN runtime compatibility.

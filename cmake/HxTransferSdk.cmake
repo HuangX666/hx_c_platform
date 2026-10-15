@@ -12,6 +12,18 @@ endif()
 
 if(HX_OS_ENABLE_HTTP OR HX_OS_ENABLE_URL)
 	find_package(CURL 8.22 CONFIG REQUIRED)
+	# CURLConfig discovers its static DNS dependency even for shared curl.
+	# Keep installed consumers usable when the core resolver is disabled.
+	if(TARGET CURL::cares AND NOT HX_OS_HAVE_CARES)
+		find_package(c-ares 1.34.8 CONFIG REQUIRED)
+		hx_install_native_headers(c-ares::cares ares.h ares_build.h
+			ares_dns.h ares_dns_record.h ares_nameser.h
+			ares_version.h)
+		install(FILES "$<TARGET_FILE:c-ares::cares>"
+			DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+		install(DIRECTORY "${c-ares_DIR}/"
+			DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/c-ares")
+	endif()
 	add_library(hx_c_platform_curl INTERFACE)
 	add_library(hx_c_platform::curl ALIAS hx_c_platform_curl)
 	set_target_properties(hx_c_platform_curl PROPERTIES EXPORT_NAME curl)
@@ -22,6 +34,12 @@ if(HX_OS_ENABLE_HTTP OR HX_OS_ENABLE_URL)
 		DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/CURL")
 	set(HX_OS_HAVE_HTTP ${HX_OS_ENABLE_HTTP})
 	set(HX_OS_HAVE_URL ${HX_OS_ENABLE_URL})
+	set(hx_dns_license "${HX_OS_DEPENDENCY_PREFIX}/share/hx-dependencies")
+	string(APPEND hx_dns_license "/cares-LICENSE.md")
+	if(EXISTS "${hx_dns_license}")
+		install(FILES "${hx_dns_license}"
+			DESTINATION "${CMAKE_INSTALL_DATADIR}/hx-dependencies")
+	endif()
 	if(EXISTS "${PROJECT_SOURCE_DIR}/deps/curl/COPYING")
 		install(FILES "${PROJECT_SOURCE_DIR}/deps/curl/COPYING"
 			DESTINATION "${CMAKE_INSTALL_DATADIR}/hx-dependencies"

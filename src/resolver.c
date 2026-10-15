@@ -227,22 +227,12 @@ hx_os_status hx_os_resolver_options_init(
 	return HX_OS_OK;
 }
 
-hx_os_status hx_os_resolver_create(hx_os_context *context,
-	const hx_os_resolver_options *input, hx_os_resolver **out,
+hx_os_status hx_os_i_resolver_options_check(
+	const hx_os_resolver_options *options, size_t *server_bytes,
 	hx_os_error *error)
 {
-#if HX_OS_HAVE_CARES
-	const hx_os_resolver_options defaults = HX_OS_RESOLVER_OPTIONS_INIT;
-	const hx_os_resolver_options *options = input ? input : &defaults;
-	hx_os_resolver *resolver;
-	struct ares_options native;
-	hx_os_status status;
-	int code, initialized = 0;
-	size_t i, servers = 1;
+	size_t i = 0, servers = 1;
 
-	if (!out)
-		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
-	*out = NULL;
 	if (options->size < sizeof(*options) || options->version != 1 ||
 		options->timeout_ms < 250 || options->timeout_ms > 60000 ||
 		!options->tries || options->tries > 8 ||
@@ -260,6 +250,56 @@ hx_os_status hx_os_resolver_create(hx_os_context *context,
 			if (options->servers[i] == ',' && ++servers > 16)
 				return hx_os_i_error(error, HX_OS_LIMIT, 0, 0);
 		}
+	*server_bytes = options->servers ? i + 1 : 0;
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+}
+
+hx_os_resolver_options *hx_os_i_resolver_options_copy(hx_os_context *context,
+	const hx_os_resolver_options *input, hx_os_error *error)
+{
+	const hx_os_resolver_options defaults = HX_OS_RESOLVER_OPTIONS_INIT;
+	const hx_os_resolver_options *options = input ? input : &defaults;
+	hx_os_resolver_options *copy;
+	size_t bytes;
+
+	if (!hx_os_resolver_available()) {
+		(void)hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+		return NULL;
+	}
+	if (hx_os_i_resolver_options_check(options, &bytes, error) != HX_OS_OK)
+		return NULL;
+	copy = hx_os_i_alloc(context, sizeof(*copy) + bytes, 0);
+	if (!copy) {
+		(void)hx_os_i_error(error, HX_OS_NO_MEMORY, 0, 0);
+		return NULL;
+	}
+	*copy = *options;
+	if (bytes) {
+		copy->servers = (char *)(copy + 1);
+		memcpy((char *)copy->servers, options->servers, bytes);
+	}
+	return copy;
+}
+
+hx_os_status hx_os_resolver_create(hx_os_context *context,
+	const hx_os_resolver_options *input, hx_os_resolver **out,
+	hx_os_error *error)
+{
+#if HX_OS_HAVE_CARES
+	const hx_os_resolver_options defaults = HX_OS_RESOLVER_OPTIONS_INIT;
+	const hx_os_resolver_options *options = input ? input : &defaults;
+	hx_os_resolver *resolver;
+	struct ares_options native;
+	hx_os_status status;
+	int code, initialized = 0;
+	size_t server_bytes;
+
+	if (!out)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	*out = NULL;
+	status = hx_os_i_resolver_options_check(options, &server_bytes, error);
+	if (status != HX_OS_OK)
+		return status;
 	resolver = hx_os_i_zero(context, sizeof(*resolver));
 	if (!resolver)
 		return hx_os_i_error(error, HX_OS_NO_MEMORY, 0, 0);

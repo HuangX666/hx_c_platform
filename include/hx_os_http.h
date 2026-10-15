@@ -123,13 +123,25 @@ HX_OS_API const char *HX_OS_CALL hx_os_http_pending_file(
  * \details create balances native curl initialization; not from DllMain. One
  * request per client at a time (concurrent/reentrant requests return
  * BUSY/DEADLOCK). Different clients can run concurrently. No library-created
- * worker. The supplied SDK uses blocking DNS, so deadline/cancel cannot
- * interrupt DNS. Exclude close from all callers; host coordinates native global
- * cleanup.
+ * worker. The default SDK uses blocking system DNS. An opt-in c-ares SDK
+ * permits use_cancellable_dns below. Exclude close from all callers; the host
+ * coordinates native global cleanup.
  */
 HX_OS_API int HX_OS_CALL hx_os_http_available(void);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_http_create(
 	hx_os_context *context, hx_os_http **out, hx_os_error *error);
+/**
+ * \brief Require cancellable DNS for subsequent requests on this client.
+ * \details Requires a c-ares-enabled libcurl SDK; otherwise NOT_SUPPORTED.
+ * NULL servers uses its platform DNS configuration. Optional numeric server
+ * CSV (for example "127.0.0.1:5353") is copied; limit 4096 bytes/16 servers.
+ * Configure while idle. Success resets this client's transfer/DNS cache.
+ * All request variants share it. Cancel/deadline are checked within 50 ms of
+ * DNS/network waits, subject to scheduling; user callbacks/files can still
+ * block. This is not a hard deadline. System DNS compatibility is not implied.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_http_use_cancellable_dns(
+	hx_os_http *http, const char *servers, hx_os_error *error);
 HX_OS_API hx_os_status HX_OS_CALL hx_os_http_options_init(
 	hx_os_http_options *options, size_t capacity);
 HX_OS_API void HX_OS_CALL hx_os_http_response_init(

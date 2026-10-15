@@ -75,7 +75,8 @@ function(hx_link_crypto target)
 		install(DIRECTORY
 			"${HX_OS_DEPENDENCY_PREFIX}/share/hx-dependencies"
 			DESTINATION "${CMAKE_INSTALL_DATADIR}")
-	elseif(EXISTS "${PROJECT_SOURCE_DIR}/deps/openssl/LICENSE.txt")
+	endif()
+	if(EXISTS "${PROJECT_SOURCE_DIR}/deps/openssl/LICENSE.txt")
 		install(FILES "${PROJECT_SOURCE_DIR}/deps/openssl/LICENSE.txt"
 			DESTINATION "${CMAKE_INSTALL_DATADIR}/hx-dependencies"
 			RENAME OpenSSL-LICENSE.txt)

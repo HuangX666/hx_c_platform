@@ -480,6 +480,18 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_receive_from(
 	size_t capacity, hx_os_deadline deadline, size_t *completed,
 	hx_os_error *error);
 
+/**
+ * \brief Resolve TCP addresses with cancellable DNS on the runtime I/O pool.
+ * \details NULL options selects c-ares defaults. Host/options are copied before
+ * suspension. Cancellation/deadline stops DNS waiting; completion retires
+ * native callbacks before returning the list. Stackless callers repeat after
+ * WOULD_BLOCK. The caller destroys a successful list. No c-ares returns
+ * NOT_SUPPORTED; the existing resolve entry still uses system DNS.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_resolve_cancellable(
+	const char *host, uint16_t port, const hx_os_resolver_options *options,
+	hx_os_deadline deadline, hx_os_address_list **out, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_resolve(const char *host,
 	uint16_t port, hx_os_deadline deadline, hx_os_address_list **out,
 	hx_os_error *error);
