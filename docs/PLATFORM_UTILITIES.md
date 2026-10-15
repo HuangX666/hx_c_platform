@@ -209,6 +209,8 @@ C++11 Pipes::anonymous returns Result<pair<File, File>>. IoLoop and AsyncPipe pr
 
 ## Socket options and positioned file I/O
 
+For TCP keepalive timing, IPv6 dual-stack listening, broadcast, multicast membership and interface snapshots, follow [socket options and discovery](NETWORK_OPTIONS.md). It includes complete programs and explains how to choose the IPv4 or IPv6 interface index.
+
 NET_OPTIONS defaults to ON and requires NETWORK for its capability. Call hx_os_socket_set_nodelay, set_keepalive or set_reuseaddr directly with a boolean. These select the correct native levels/names internally. Address reuse stays opt-in: create and bind do not enable it. Native reuse semantics and keepalive scheduling remain platform-specific. Setters return BUSY once a socket belongs to a loop, even between requests. The borrowed `hx::SocketOptions` facade never closes a socket; it provides these setters and peerAddress().
 
 The raw option_set/get escape hatch uses target-native level/name/value layouts from the target SDK. Length is bytes, capped at INT_MAX; get returns the actual native length on success and does not implement two-phase sizing. Failure keeps the input length but the native buffer may have changed. In the tested Windows provider TCP_NODELAY returned one byte even with an int-sized buffer, so callers must inspect the returned length. C++ get<T> requires an exact size match and reports RANGE otherwise; it cannot infer arbitrary native option value types. Peer lookup preserves output on failure; an unconnected socket retains the native getpeername error. Serialize calls with socket use and exclude close.

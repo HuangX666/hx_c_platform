@@ -840,6 +840,7 @@ C 没有自动析构，所以字符串、文档、容器用完需调用对应释
 | 日期/文件名、翻译、分词、目录遍历 | [常用工具](COMMON_UTILITIES.zh-CN.md) |
 | 递归查找文件、在线程池里查询 | [文件查询](FILE_SEARCH.zh-CN.md) |
 | 网络、进程、管道、映射、系统指标 | [平台工具](PLATFORM_UTILITIES.zh-CN.md) |
+| 配置 Keepalive、选择组播网卡与查询 IP 地址 | [网络选项与设备发现](NETWORK_OPTIONS.zh-CN.md) |
 | 锁、事件、线程局部存储和资源生命周期 | [基础契约](CONTRACTS.zh-CN.md) |
 | 静态/共享安装后 find_package 接入 | [安装参考](REFERENCE.zh-CN.md#section-5) |
 | 目标平台的要求与限制 | [平台支持](PLATFORMS.zh-CN.md) |

@@ -67,7 +67,8 @@ option(HX_OS_ENABLE_THREAD_EX "Build thread options, names and semaphore" ON)
 
 option(HX_OS_ENABLE_PIPE "Build synchronous and asynchronous pipes" ON)
 
-option(HX_OS_ENABLE_NET_OPTIONS "Build socket options and peer queries" ON)
+option(HX_OS_ENABLE_NET_OPTIONS
+	"Build socket options, peer queries and IP interface snapshots" ON)
 
 option(HX_OS_ENABLE_POSITIONED_IO "Build position-independent file I/O" ON)
 
@@ -418,6 +419,7 @@ add_library(hx_c_platform
 	src/ring.c src/bitset.c src/cache.c src/algorithm.c
 	src/sysinfo.c src/library.c src/path.c src/env.c src/paths.c
 	src/thread_extra.c src/pipe.c src/file_at.c src/net_options.c
+	src/net_interfaces.c
 	src/file_info.c src/bom.c src/number.c src/config_serialize.c
 	src/config_build.c src/codec.c
 	src/timer.c src/util.c src/uuid.c src/vm.c src/file_extra.c
@@ -716,6 +718,20 @@ endif()
 
 if(HX_OS_ENABLE_NETWORK OR HX_OS_ENABLE_DUPLEX_PIPE)
 	target_sources(hx_c_platform PRIVATE src/socket_native.c)
+endif()
+
+if(HX_OS_ENABLE_NETWORK AND HX_OS_ENABLE_NET_OPTIONS)
+	if(WIN32)
+		target_sources(hx_c_platform PRIVATE
+			src/windows/net_interfaces_native.c)
+		target_link_libraries(hx_c_platform PRIVATE iphlpapi)
+	elseif(ANDROID)
+		target_sources(hx_c_platform PRIVATE
+			src/linux/net_interfaces_android.c)
+	else()
+		target_sources(hx_c_platform PRIVATE
+			src/posix/net_interfaces_native.c)
+	endif()
 endif()
 
 if(HX_OS_ENABLE_DUPLEX_PIPE)

@@ -298,6 +298,7 @@ For one-call text/file encryption, SHA-256, HMAC and signatures, see [cryptograp
 | Native IPC device control | [Independent IPC example](docs/IPC_BUSINESS.md) |
 | TCP order submission and receipts | [Independent TCP example](docs/TCP_BUSINESS.md) |
 | UDP samples and feedback | [Independent UDP example](docs/UDP_BUSINESS.md) |
+| Keepalive, IPv6 dual stack, broadcast, multicast and network interfaces | [Socket options and discovery](docs/NETWORK_OPTIONS.md) |
 | KCP reliable block transfer | [Independent KCP example](docs/KCP_BUSINESS.md) |
 | Verified TLS connections and threaded JSON send/receive | [TLS guide and runnable programs](docs/TLS.md) |
 | Pack/unpack files and directories, encrypted ZIP and optional encrypted 7z | [Archive guide and runnable program](docs/ARCHIVE.md) |

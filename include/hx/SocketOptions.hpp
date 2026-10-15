@@ -43,6 +43,82 @@ public:
 		return detail::Status(status, error);
 	}
 
+	Result<void> keepAlive(uint32_t idleSeconds, uint32_t intervalSeconds,
+		uint32_t probeCount = 0) const noexcept
+	{
+		hx_os_error error = {};
+		auto status = hx_os_socket_configure_keepalive(m_socket_,
+			idleSeconds, intervalSeconds, probeCount, &error);
+
+		return detail::Status(status, error);
+	}
+
+	Result<void> dualStack(bool enabled = true) const noexcept
+	{
+		hx_os_error error = {};
+		auto status = hx_os_socket_set_dual_stack(
+			m_socket_, enabled, &error);
+
+		return detail::Status(status, error);
+	}
+
+	Result<void> broadcast(bool enabled = true) const noexcept
+	{
+		hx_os_error error = {};
+		auto status = hx_os_socket_set_broadcast(
+			m_socket_, enabled, &error);
+
+		return detail::Status(status, error);
+	}
+
+	Result<void> joinMulticast(const hx_os_address &group,
+		uint32_t interfaceIndex = 0) const noexcept
+	{
+		hx_os_error error = {};
+		auto status = hx_os_socket_join_multicast(
+			m_socket_, &group, interfaceIndex, &error);
+
+		return detail::Status(status, error);
+	}
+
+	Result<void> leaveMulticast(const hx_os_address &group,
+		uint32_t interfaceIndex = 0) const noexcept
+	{
+		hx_os_error error = {};
+		auto status = hx_os_socket_leave_multicast(
+			m_socket_, &group, interfaceIndex, &error);
+
+		return detail::Status(status, error);
+	}
+
+	Result<void> multicastInterface(uint32_t interfaceIndex = 0) const
+		noexcept
+	{
+		hx_os_error error = {};
+		auto status = hx_os_socket_set_multicast_interface(
+			m_socket_, interfaceIndex, &error);
+
+		return detail::Status(status, error);
+	}
+
+	Result<void> multicastHops(uint32_t hops) const noexcept
+	{
+		hx_os_error error = {};
+		auto status = hx_os_socket_set_multicast_hops(
+			m_socket_, hops, &error);
+
+		return detail::Status(status, error);
+	}
+
+	Result<void> multicastLoopback(bool enabled = true) const noexcept
+	{
+		hx_os_error error = {};
+		auto status = hx_os_socket_set_multicast_loopback(
+			m_socket_, enabled, &error);
+
+		return detail::Status(status, error);
+	}
+
 	Result<hx_os_address> peerAddress() const noexcept
 	{
 		hx_os_address value = {};

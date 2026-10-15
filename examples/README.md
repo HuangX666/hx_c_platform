@@ -173,6 +173,8 @@ Restoration needs a backup from a previous successful save. The first save to a 
 
 ## 8. Bidirectional JSON: choose a protocol
 
+For IP interface selection and a small multicast discovery datagram, build `hx_os_network_interfaces` and `hx_os_multicast_discovery`. The [network options guide](../docs/NETWORK_OPTIONS.md) shows the two-terminal commands, JSON payload and expected output, alongside keepalive, dual-stack and broadcast setup.
+
 These programs include both endpoints and send/receive threads. Start locally, then adapt addresses and fields following the topic guide. Runners launch public programs, choose ports and check business results without private regression fixtures.
 
 | Need | Runner | Guide |

@@ -24,6 +24,7 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 	format
 	ipc_server ipc_client ipc_device_server ipc_device_client
 	tcp_order_server tcp_order_client udp_dashboard udp_sensor
+	network_interfaces multicast_discovery
 	kcp_transfer_server kcp_transfer_client)
 	add_executable(hx_os_${example} ${example}.c)
 	target_link_libraries(hx_os_${example} PRIVATE hx_c_platform)

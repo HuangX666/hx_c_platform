@@ -1868,7 +1868,7 @@ All new native/common modules default to ON; optional third-party encoding and p
 | `HX_OS_ENABLE_PATHS` | ON | Build special path queries |
 | `HX_OS_ENABLE_THREAD_EX` | ON | Thread options, semaphore, cancellation, WaitGroup and reader/writer lock |
 | `HX_OS_ENABLE_PIPE` | ON | Build synchronous and asynchronous pipes |
-| `HX_OS_ENABLE_NET_OPTIONS` | ON | Build socket options and peer queries |
+| `HX_OS_ENABLE_NET_OPTIONS` | ON | Socket options, multicast, peer queries and IP interface snapshots |
 | `HX_OS_ENABLE_POSITIONED_IO` | ON | Build position-independent file I/O |
 | `HX_OS_ENABLE_FILE_INFO` | ON | Build extended file and directory information |
 | `HX_OS_ENABLE_BOM` | ON | Build Unicode BOM helpers |

@@ -173,6 +173,8 @@ printf '0123456789' > demo.txt
 
 ## 8. 两端收发 JSON：按协议选完整业务
 
+选择 IP 网卡并发送一个小型组播发现报文时，构建 `hx_os_network_interfaces` 和 `hx_os_multicast_discovery`。[网络选项教程](../docs/NETWORK_OPTIONS.zh-CN.md)给出两个终端的命令、JSON 数据和预期输出，也说明 Keepalive、双栈与广播的配置方法。
+
 这些例子已经包含服务端、客户端和收发线程。先从同机演示开始，再按各专题说明修改地址和消息字段。运行器只启动公开示例、选择端口并检查业务结果，不需要回归测试文件。
 
 | 需求 | 运行器 | 读哪份说明 |

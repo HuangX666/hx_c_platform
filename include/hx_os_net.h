@@ -112,7 +112,87 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_set_nodelay(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_set_keepalive(
 	hx_os_socket *socket, int enabled, hx_os_error *error);
 
+/**
+ * \brief Enable TCP keepalive and configure idle/probe intervals in seconds.
+ *
+ * \details Both durations must be positive. probe_count=0 preserves the
+ * native count; a positive count requests that exact value. Windows 7/8.1
+ * support the durations but not an explicit count. Unsupported options return
+ * NOT_SUPPORTED with native details. Native value limits still apply.
+ * Updates are sequential: failure may leave earlier options changed.
+ * Keepalive detects transport failure, not whether the peer application is
+ * responsive, and does not establish a hard disconnection deadline.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_configure_keepalive(
+	hx_os_socket *socket, uint32_t idle_seconds, uint32_t interval_seconds,
+	uint32_t probe_count, hx_os_error *error);
+
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_set_reuseaddr(
+	hx_os_socket *socket, int enabled, hx_os_error *error);
+
+/**
+ * \brief Configure an IPv6 socket before bind/connect: nonzero enables IPv4.
+ *
+ * \details Zero restricts it to IPv6. Bind to :: to listen on both families.
+ * IPv4 peers retain their IPv4-mapped IPv6 representation. Outgoing IPv4
+ * destinations on this socket must also use IPv4-mapped IPv6 addresses.
+ * No global IPv6 policy is changed and no second socket is created.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_set_dual_stack(
+	hx_os_socket *socket, int enabled, hx_os_error *error);
+
+/**
+ * \brief Permit IPv4 UDP broadcast transmission; nonzero enables.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_set_broadcast(
+	hx_os_socket *socket, int enabled, hx_os_error *error);
+
+/**
+ * \brief Join/leave an any-source UDP multicast group on one interface.
+ *
+ * \details group must match the socket family and contain a multicast
+ * address; its port is ignored. The interface index is in host byte order,
+ * from a matching-family interface query. Zero requests native selection.
+ * For IPv6, a nonzero group.scope_id supplies a missing index; conflicting
+ * explicit values are invalid. IPv6 link-local groups normally need an
+ * explicit index. Leave with the same group and interface used to join.
+ * Duplicate joins and missing memberships keep native error semantics.
+ * Closing the socket releases its memberships. Joining does not bind a port,
+ * select the outgoing interface, or enable address reuse. Setters require
+ * owner exclusion and return BUSY after loop attachment, as option_set does.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_join_multicast(
+	hx_os_socket *socket, const hx_os_address *group,
+	uint32_t interface_index, hx_os_error *error);
+
+HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_leave_multicast(
+	hx_os_socket *socket, const hx_os_address *group,
+	uint32_t interface_index, hx_os_error *error);
+
+/**
+ * \brief Choose the outgoing UDP multicast interface; zero restores default.
+ *
+ * \details Does not change memberships or the unicast routing table. Use the
+ * matching-family index. On macOS IPv4, the interface's current first IPv4
+ * address is selected; reapply after address changes.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_set_multicast_interface(
+	hx_os_socket *socket, uint32_t interface_index, hx_os_error *error);
+
+/**
+ * \brief Set outgoing multicast TTL/hop limit in [0, 255]; zero stays local.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_set_multicast_hops(
+	hx_os_socket *socket, uint32_t hops, hx_os_error *error);
+
+/**
+ * \brief Configure native UDP multicast loopback; nonzero enables.
+ *
+ * \warning Windows IPv4 applies this to local multicast reception; POSIX
+ * applies it to sending. Configure both endpoints for portable local tests.
+ * This is a native policy, not a delivery guarantee or packet filter.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_set_multicast_loopback(
 	hx_os_socket *socket, int enabled, hx_os_error *error);
 
 /**

@@ -209,6 +209,8 @@ C++ Pipes::anonymous 返回 Result<pair<File, File>>，IoLoop 和 AsyncPipe 保�
 
 ## 套接字选项与定位文件 I/O
 
+配置 TCP Keepalive 时间、IPv6 双栈监听、广播、组播成员关系和网卡快照，请看[网络选项与设备发现](NETWORK_OPTIONS.zh-CN.md)。该教程提供完整程序，并说明怎样选择 IPv4 或 IPv6 网卡索引。
+
 NET_OPTIONS 默认开启，能力位同时依赖 NETWORK。直接调用 hx_os_socket_set_nodelay、set_keepalive、set_reuseaddr，库内部选择原生层级和名称。地址复用保持显式开启，create/bind 不改变默认值。原生地址复用行为和 keepalive 时间安排仍遵守各系统契约。套接字一旦附属 loop，setter 即报 BUSY，即使当前无请求也不能设置。`hx::SocketOptions` 是借用外观，提供这些设置和 peerAddress()，不关闭对象。
 
 原始 option_set/get 使用目标 SDK 的 level/name/值布局，属于平台扩展入口。长度以字节计，最大 INT_MAX；get 成功才更新实际长度，不提供两段式容量查询。失败保留输入长度，但原生缓冲区内容可能已变。本机 Windows 提供者的 TCP_NODELAY 在 int 大小缓冲区中返回 1 字节，调用方应检查实际长度。C++ get<T> 要求原生结果大小与类型完全匹配，否则报 RANGE，不推测任意原生选项的类型。对端查询失败保留输出，未连接时保留 getpeername 原生错误。与套接字操作串行并排除并发关闭。

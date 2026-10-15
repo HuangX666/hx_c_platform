@@ -1860,7 +1860,7 @@ int main(void)
 | `HX_OS_ENABLE_PATHS` | ON | 用户、共享、临时与模块路径 |
 | `HX_OS_ENABLE_THREAD_EX` | ON | 线程选项、信号量、取消、WaitGroup 和读写锁 |
 | `HX_OS_ENABLE_PIPE` | ON | 同步管道及配合 LOOP 的异步管道 |
-| `HX_OS_ENABLE_NET_OPTIONS` | ON | 套接字选项与对端查询 |
+| `HX_OS_ENABLE_NET_OPTIONS` | ON | 套接字选项、组播、对端查询与 IP 网卡快照 |
 | `HX_OS_ENABLE_POSITIONED_IO` | ON | 保持文件位置不变的读写 |
 | `HX_OS_ENABLE_FILE_INFO` | ON | 扩展文件与目录信息 |
 | `HX_OS_ENABLE_BOM` | ON | Unicode BOM 检测与生成 |

@@ -840,6 +840,7 @@ The starter project keeps the modules used in these examples enabled. JSON needs
 | Dates/filenames, translations, lexing and directory visits | [Common utilities](COMMON_UTILITIES.md) |
 | Find files recursively and run a search in a pool | [File search](FILE_SEARCH.md) |
 | Network, processes, pipes, mappings and metrics | [Platform utilities](PLATFORM_UTILITIES.md) |
+| Configure keepalive, select a multicast interface and list IP addresses | [Socket options and discovery](NETWORK_OPTIONS.md) |
 | Locks, events, thread-local storage and resource lifetimes | [Core contracts](CONTRACTS.md) |
 | Installed static/shared find_package integration | [Installation reference](REFERENCE.md#section-5) |
 | Platform requirements and limits | [Platform support](PLATFORMS.md) |
