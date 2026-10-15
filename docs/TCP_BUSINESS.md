@@ -114,6 +114,12 @@ These helpers are private to the examples; business I/O remains raw TCP without 
 
 A short mutex serializes nonblocking socket calls; retries sleep 1 ms outside it. Exactly one thread writes complete frames and one reads them. Main joins before destroying mutex, socket and network. Documents and temporary strings are released after use. Mid-frame timeout/disconnect fails the connection instead of reinterpreting leftovers. This finite example is not a throughput benchmark.
 
+### Files to copy into your own project
+
+Copy this page's client/server sources and their companion headers: `tcp_business.h`, `network_demo.h` and `business_json.h`. Each source with main needs a separate executable target; do not combine both mains. Link each target to `hx_c_platform::hx_c_platform`; see the [installed-package project](USAGE.md#installed-project). Helpers such as `json_field` and `json_encode` belong to these example headers, not to the public hx_os.h API.
+
+The Python runner only starts the local peers and checks their results. Your C programs do not require Python. Try the manual commands in separate terminals before changing fields and business handlers, retaining creation, thread completion and close ordering.
+
 ## 5. Run the business example
 
 ```sh

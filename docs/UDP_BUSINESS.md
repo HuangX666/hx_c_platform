@@ -108,6 +108,12 @@ Default-enabled `CONFIG`, `CONFIG_SERIALIZE` and `SETTINGS` provide built-in par
 
 Short mutexes serialize nonblocking socket calls; retry sleeps occur outside locks. Main joins before cleanup. Real devices that reuse sequence numbers after restarting need application session IDs in their JSON protocol; address binding is not authentication.
 
+### Files to copy into your own project
+
+Copy this page's client/server sources and their companion headers: `udp_business.h`, `network_demo.h` and `business_json.h`. Each source with main needs a separate executable target; do not combine both mains. Link each target to `hx_c_platform::hx_c_platform`; see the [installed-package project](USAGE.md#installed-project). Helpers such as `json_field` and `json_encode` belong to these example headers, not to the public hx_os.h API.
+
+The Python runner only starts the local peers and checks their results. Your C programs do not require Python. Try the manual commands in separate terminals before changing fields and business handlers, retaining creation, thread completion and close ordering.
+
 ## 6. Run the business example
 
 ```sh

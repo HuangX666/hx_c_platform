@@ -17,7 +17,7 @@ cmake -S . -B build -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build --config Release --target hx_os_binary_stream
 ```
 
-If your existing configuration is Debug, change both the build option and executable path to Debug. Do not share Windows/WSL build directories. C++ examples require the configured C++ compiler; C++20 examples additionally need coroutine support and the corresponding option.
+If your existing configuration is Debug, change both the build option and executable path to Debug. Do not share Windows/WSL build directories. With examples enabled, CMake finds a C++ compiler automatically and adds the C++20 example only if its `<coroutine>` probe succeeds; no separate switch is needed. Without a C++ compiler, only the C examples are generated.
 
 Run inside that build directory so generated demo files remain there. Windows Visual Studio:
 
@@ -184,6 +184,18 @@ These programs include both endpoints and send/receive threads. Start locally, t
 | Threaded sending and receiving on one TLS connection | run_tls_business.py | [TLS flow and certificates](../docs/TLS.md) |
 
 Run scripts from the library checkout, for example `python examples/run_tcp_business.py --bin-dir build/bin/Release`. Linux uses `python3` and `build/bin`. Build the two endpoints listed in each guide first. TLS also needs a certificate, key and trusted CA. Supply a real HTTP service URL; example addresses do not provide a service.
+
+**Choose the API layer first.** Use IPC when the library should manage device/request IDs, sessions and message queues. Use the independent TCP, UDP or TLS examples when integrating an existing wire protocol. Adding JSON to a socket does not implement HXIP.
+
+| Example | What the peer must send |
+| --- | --- |
+| IPC device control | HXIP v1 frames with JSON bodies; see the IPC protocol guide |
+| TCP orders | Two-byte big-endian body length, then UTF-8 JSON |
+| UDP samples | One UTF-8 JSON document per datagram, with no length prefix |
+| KCP blocks | One complete message-mode KCP message containing JSON; drive KCP continuously |
+| TLS readings | Four-byte big-endian body length, then UTF-8 JSON inside TLS |
+
+Python only replaces opening two terminals manually; it does not enter the business processes. For `Build the example first`, build the guide's two targets and check that the Windows Debug/Release path matches the configuration. `Listening:` means ready to accept; final success messages from both peers demonstrate the completed workflow. To move a C example into your own project, copy the companion headers listed in its guide along with main.
 
 The serial example uses 115200 baud, eight data bits, one stop bit and no parity. It sends `{"request":42}` plus newline and expects one response line. Connect a compatible device or virtual serial pair first; starting the program alone does not establish communication. Shared memory, desktop sleep inhibition and Windows GPU queries have their own platform/permission requirements.
 

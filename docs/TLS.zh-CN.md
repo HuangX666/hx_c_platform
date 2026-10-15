@@ -6,52 +6,110 @@
 
 ## 1. 构建并运行完整示例
 
-这里的 TLS 指传输层安全协议。线程局部存储仍使用 `hx_os_tls_key`。本模块实现 TCP 上的标准 TLS 1.2／1.3，对端可以使用 Python、Go、Java 或其他标准 TLS 实现。
+本例让一个发送线程和一个接收线程共用 TLS 连接：客户端发送三条温度读数，服务端回复三条确认，并对第二条高温数据主动发送告警。你会看到业务数据、匹配编号和主动通知，而不是只看到“连接成功”。
 
-先准备[依赖 SDK](DEPENDENCIES.zh-CN.md#4-构建依赖)。`HX_OS_ENABLE_TLS` 默认开启，依赖 CRYPTO、NETWORK、LOOP 和 FILE_UTILS。关闭任何必要模块后，`hx_os_tls_available()` 返回 0，TLS 操作明确返回 `HX_OS_NOT_SUPPORTED`。仅仅启用模块不会在程序加载时启动线程。
+这里的 TLS 是 TCP 上的传输层安全协议；线程局部存储使用另一组 `hx_os_tls_key` 接口。对端可以使用其他语言的标准 TLS 1.2／1.3 实现，并遵守本例的消息帧格式。
+
+### 1.1 复用已有构建目录
+
+先按[依赖指南](DEPENDENCIES.zh-CN.md#4-构建依赖)准备 SDK。`HX_OS_ENABLE_TLS` 依赖 CRYPTO、NETWORK、LOOP、FILE_UTILS；本例的 JSON 还需要 CONFIG、CONFIG_SERIALIZE、SETTINGS。这些模块默认开启。如果沿用首页的精简配置，需先给该构建配置好 `HX_OS_DEPENDENCY_PREFIX`，并显式重新开启 CRYPTO 和 TLS；仅初始化子模块不能替代 SDK 构建。
+
+关闭必要模块后，`hx_os_tls_available()` 返回 0，操作返回 `HX_OS_NOT_SUPPORTED`。仅启用模块不会在程序加载时启动线程，创建连接或监听器时才创建所需资源。
+
+下文全部在库源码根目录执行。`build` 是已有的构建目录，Windows 和 WSL 各用各自的目录。Debug 构建将 Release 同时替换为 Debug；无需新建 TLS 构建目录。
+
+首次为精简配置接入 SDK 时，把这三个参数加在下一条 `cmake -S` 命令后面，或在 cmake-gui 中填写同名配置；之后不用每次重复：
+
+| 参数 | 填什么 |
+| --- | --- |
+| `-DHX_OS_DEPENDENCY_PREFIX=...` | 已编译 SDK 的 prefix 绝对路径，例如 `E:/sdk/hx/prefix`，不是 deps 源码路径 |
+| `-DHX_OS_ENABLE_CRYPTO=ON` | 开启 OpenSSL 支持 |
+| `-DHX_OS_ENABLE_TLS=ON` | 开启 TLS 连接接口 |
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-  -DHX_OS_DEPENDENCY_PREFIX=/absolute/path/to/build-deps/prefix \
-  -DHX_OS_BUILD_EXAMPLES=ON
-cmake --build build --config Release --target hx_os_tls_json_server \
-  hx_os_tls_json_client --parallel 4
+cmake -S . -B build -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build build --config Release --target hx_os_tls_json_server
+cmake --build build --config Release --target hx_os_tls_json_client
 ```
 
-已有证书时，把以下三个路径改为自己的文件后运行；证书 SAN 需包含 `localhost`。运行器自动选择空闲端口，启动独立收发程序并核对 JSON 回复，不依赖私有回归程序，也不修改你的证书文件。
+### 1.2 准备本机演示证书
+
+下面用 OpenSSL 命令行生成一天有效的自签名证书；文件放进已有 build 目录，不写入系统信任库。`openssl` 需在 PATH 中，或替换为 SDK 内的实际可执行文件，例如 PowerShell 的 `& .\build-deps\prefix\bin\openssl.exe`。已经有证书时跳过生成，用自己的证书、私钥和 CA 路径运行第 1.3 节。以下文件名专供演示，重新生成会覆盖同名文件。
+
+Windows PowerShell（反引号续行，不能在反引号后加空格）：
+
+```powershell
+openssl req -x509 -newkey rsa:2048 -nodes -days 1 `
+    -subj /CN=localhost `
+    -addext subjectAltName=DNS:localhost,IP:127.0.0.1 `
+    -keyout build/demo-key.pem -out build/demo-cert.pem
+```
+
+Linux / WSL:
 
 ```sh
-python examples/run_tls_business.py --bin-dir build/bin --certificate \
-  server-cert.pem --private-key server-key.pem --ca ca.pem
+openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+  -subj /CN=localhost \
+  -addext subjectAltName=DNS:localhost,IP:127.0.0.1 \
+  -keyout build/demo-key.pem -out build/demo-cert.pem
 ```
 
-Visual Studio 将 `--bin-dir` 改为 `build/bin/Release`。本机演示没有证书时，可用已安装的 OpenSSL 命令行生成一天有效的自签名演示证书：
+### 1.3 启动两端并核对结果
+
+仍在库源码根目录运行，不要 cd 到证书目录。运行器自动选择空闲端口、启动服务端、等待监听就绪，再启动客户端；Python 只用于运行器，两个 C 程序本身不依赖它。
+
+Windows Visual Studio：
+
+```powershell
+python examples/run_tls_business.py --bin-dir build/bin/Release `
+    --certificate build/demo-cert.pem --private-key build/demo-key.pem `
+    --ca build/demo-cert.pem
+```
+
+Linux / WSL:
 
 ```sh
-openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=localhost \
-  -addext subjectAltName=DNS:localhost,IP:127.0.0.1 -keyout demo-key.pem \
-  -out demo-cert.pem
-python examples/run_tls_business.py --bin-dir build/bin --certificate \
-  demo-cert.pem --private-key demo-key.pem --ca demo-cert.pem
+python3 examples/run_tls_business.py --bin-dir build/bin \
+  --certificate build/demo-cert.pem --private-key build/demo-key.pem \
+  --ca build/demo-cert.pem
 ```
 
-该命令用于本机演示；它会写入指定文件，请在空的演示目录中生成并使用实际路径。演示结束后可删除这两个文件。生产环境使用自己的证书和密钥管理方式，客户端仍执行证书与主机名验证。
-
-[C 客户端](../examples/tls_json_client.c)在同一条连接上启动一个发送线程和一个接收线程，发送三条温度读数。[C 服务端](../examples/tls_json_server.c)返回三条确认，并针对第二条高温读数额外发送一条告警。每条 JSON 带请求 `id`，读数还带 UTF-8 `device` 字段。成功输出包含：
+成功输出中包含以下两行，`[TLS receive]` 行展示实际 JSON。三条读数是 20、81、22，设备名是 `温度传感器🌐`：
 
 ```text
 TLS CLIENT PASS: 3 JSON readings, 3 replies, 1 alarm
 TLS SERVER PASS: 3 JSON readings processed
 ```
 
-已有自己的证书和私钥时，可以分别启动：
+要观察两个窗口中的收发，可以不用 Python。Windows 在终端一运行：
 
-```sh
-hx_os_tls_json_server 39004 server-cert.pem server-key.pem
-hx_os_tls_json_client 39004 ca.pem
+```powershell
+.\build\bin\Release\hx_os_tls_json_server.exe 39004 `
+    build/demo-cert.pem build/demo-key.pem
 ```
 
-示例证书的 Subject Alternative Name 必须包含 `localhost`。客户端连接 `127.0.0.1`，显式验证 `localhost`。C 接口接收 UTF-8 路径；Windows 宿主仍需负责把自己的命令行参数转换成 UTF-8。
+等它输出 `Listening:`，在终端二运行：
+
+```powershell
+.\build\bin\Release\hx_os_tls_json_client.exe 39004 build/demo-cert.pem
+```
+
+Linux／WSL 两个终端对应的命令为：
+
+```sh
+./build/bin/hx_os_tls_json_server 39004 build/demo-cert.pem build/demo-key.pem
+./build/bin/hx_os_tls_json_client 39004 build/demo-cert.pem
+```
+
+客户端连接 127.0.0.1，验证证书里的 localhost；自签名证书同时作为本次连接显式信任的 CA。证书验证失败时检查 CA 路径、SAN、有效期和本机时间，不要关闭验证。提示缺少 DLL 时检查所选配置的 bin 目录及匹配 SDK 的运行库，见[安装包部署](USAGE.zh-CN.md#installed-project)。
+
+### 1.4 改成自己的业务
+
+完整源码是 [tls_json_client.c](../examples/tls_json_client.c) 和 [tls_json_server.c](../examples/tls_json_server.c)。复制到自己的工程时还需要同目录的 tls_json.h、network_demo.h、business_json.h；每个程序分别作为一个 executable。它们链接同一个 C 库，不需要把 SDK 的内部初始化搬进业务代码。
+
+先替换温度字段和告警处理，保留线程退出与关闭顺序。TLS 加密的是字节流，**不会自动识别 JSON 边界**；本例 tls_json.h 使用“4 字节大端正文字节数 + UTF-8 JSON”，对端也必须这样处理。它与 TCP 订单例子的 2 字节长度帧、IPC 的 HXIP 协议不同；不能只改端口就互通。
+
+C 接口接收 UTF-8 路径；Windows 应用若接收非 ASCII 命令行路径，仍需将自己的原生命令行转为 UTF-8。本页证书文件名为 ASCII。生产环境使用正式的证书和密钥管理方式；演示文件用完可以删除。
 
 ## 2. C 和 C++ 怎样直接调用
 

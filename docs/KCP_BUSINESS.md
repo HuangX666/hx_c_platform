@@ -100,6 +100,12 @@ One peer per process run uses fixed `conv=7301`, with no discovery, authenticati
 
 After the final result, the client drives 500 ms more for trailing ACK retransmission, within a 10-second overall deadline. Unlimited loss cannot guarantee successful shutdown. Checking no duplicate application in this run does not promise exactly-once across restarts. See the fuller [IPC session protocol](IPC.md), which this example does not depend on.
 
+### Files to copy into your own project
+
+Copy this page's client/server sources and their companion headers: `kcp_business.h`, `network_demo.h` and `business_json.h`. Each source with main needs a separate executable target; do not combine both mains. Link each target to `hx_c_platform::hx_c_platform`; see the [installed-package project](USAGE.md#installed-project). Helpers such as `json_field` and `json_encode` belong to these example headers, not to the public hx_os.h API.
+
+The Python runner only starts the local peers and checks their results. Your C programs do not require Python. Try the manual commands in separate terminals before changing fields and business handlers, retaining creation, thread completion and close ordering.
+
 ## 6. Run the business example
 
 ```sh

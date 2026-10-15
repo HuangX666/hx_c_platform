@@ -2,15 +2,39 @@
 
 [简体中文](COROUTINES.zh-CN.md) · [README](../README.md)
 
-**Start with a complete program.** Use the coroutine runtime for many tasks waiting on channels, timers or coroutine I/O while sharing worker threads.
+**Let a background task calculate 42, then receive it on the main thread.** Start with the complete C++11 program [go.cpp](../examples/go.cpp), then try the C99 and C++20 forms. Coroutines suit many tasks waiting on channels, timers or coroutine I/O; an ordinary blocking SDK call still occupies its worker.
 
-Open [go.cpp](../examples/go.cpp). Create Runtime → select it with Scope → go submits a task → channel sends 42 → waitUntil → receive → shutdownUntil.
+Run from the library checkout root after the [example setup](../examples/README.md#run). Replace `build` with your existing build directory. For Debug, change both the build configuration and the executable path from Release to Debug.
 
-Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_go`. This program needs no arguments or input files.
+```sh
+cmake --build build --config Release --target hx_os_go
+```
 
-**Expected result:** It prints `Answer: 42`. Learn lifetime handling with this C++11 program before the C state-machine or C++20 forms below. Ordinary blocking SDK calls still occupy a worker.
+Windows with Visual Studio:
 
-Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#cpp-project).
+```powershell
+.\build\bin\Release\hx_os_go.exe
+```
+
+Linux / WSL:
+
+```sh
+./build/bin/hx_os_go
+```
+
+No files, arguments or manually started thread are needed. Success prints `Answer: 42` and exits. The program performs these steps:
+
+| Step | Purpose |
+| --- | --- |
+| `Runtime::create(owner)` | Create the runtime and its managed workers; the application need not start scheduler threads |
+| `Scope::enter(runtime)` | Select where the current main thread submits subsequent `go` tasks |
+| `co_chan<int> answers(1)` | Reserve one integer slot so the task can store 42 before it is received |
+| `go ...` | Submit an ordinary lambda; the runtime owns and reclaims the task |
+| `waitUntil(...)` | Wait on the main thread and check submission/execution errors |
+| `receive(NOW)` | Take the integer already in the channel, then print it |
+| `shutdownUntil(...)` | Close the runtime and wait for its own threads to exit |
+
+The short snippets explain individual steps. For your first copy, use the complete go.cpp as `main.cpp` and link it with the [minimal C++ project](USAGE.md#cpp-project). Section 8 lists three other complete examples.
 
 ## 1. Choose a calling style
 
@@ -48,6 +72,8 @@ auto answer = answers.receive(HX_OS_DEADLINE_NOW);
 ```
 
 This excerpt belongs in a function returning `Result<void>`. `go` submits a task, the runtime retains it through cleanup, and the task sends 42 to a buffered channel. No per-task handle or task group is required. `done` checks completion and the runtime's stored task errors; check `answer` before reading `answer.value()`. The complete program prints `Answer: 42` and demonstrates creation and explicit shutdown.
+
+The capacity `1` matters: the main thread waits before receiving, so the task needs one slot to send and finish. With capacity `0`, sending needs a receiver while the main thread is waiting for the sender to finish. Run a concurrent receiver, or receive on the main thread before waiting; do not change only the capacity.
 
 `Scope` selects an existing runtime; it does not create workers or a global singleton. Bindings nest in LIFO order and must close on their creating native thread. They retain the runtime but do not stop it. Never move a scope to another thread or destroy outer bindings first. Inside a coroutine, `go` automatically uses that coroutine's runtime. With no scope/current coroutine, submission returns an error, and there is no runtime in which to retain it; do not discard that result.
 
@@ -207,6 +233,21 @@ Tasks remain pinned to one worker. Child tasks submitted from a coroutine inheri
 Module byte budgets count their direct backing storage. User callbacks, nested value allocations, C++ frames/results and native worker stacks have separate costs and lifetimes. Fixed stack exhaustion is an OS fault, not a recoverable status. Stack reservations are not resident-memory measurements. Shutdown includes worker TLS cleanup and native thread joining. Android API 21 supports finite join: the Bionic adapter observes the kernel-cleared thread ID through `pthread_gettid_np` before final reclamation, including TLS cleanup. A timeout preserves the thread for retry. This is a monotonic deadline, not forced cancellation or a hard real-time bound. Coordinate caller-created submitting threads and exclude in-flight API calls before destroying the owner; library close does not join those threads. Retained tasks/channels/streams can retain context allocations after close, so release them before context destruction. Before plugin unload, release every handle, frame, result and callback table that depends on its code, even after runtime close. Cycles in user-owned values require user cleanup; there is no tracing collector.
 
 ## 8. Build, trim and verify
+
+Choose one target; building all four is unnecessary. None needs arguments or input files:
+
+| Target | Complete source | Result |
+| --- | --- | --- |
+| `hx_os_go` | [go.cpp](../examples/go.cpp) | C++11 channel returns `Answer: 42` |
+| `hx_os_cpp_coroutine` | [coroutine.cpp](../examples/coroutine.cpp) | C++11 Task returns `Answer: 42` |
+| `hx_os_coroutine` | [coroutine.c](../examples/coroutine.c) | C99 prints `Count: 1`, `Count: 2`, `Count: 3` in order |
+| `hx_os_cpp_coroutine20` | [coroutine20.cpp](../examples/coroutine20.cpp) | C++20 returns `Answer: 42` after co_await |
+
+For example, run `cmake --build build --config Release --target hx_os_coroutine`, then `.\build\bin\Release\hx_os_coroutine.exe` on Windows or `./build/bin/hx_os_coroutine` on Linux. Stay in the library checkout root.
+
+With examples enabled, CMake finds a C++ compiler and probes `<coroutine>`. It creates `hx_os_cpp_coroutine20` only when that probe succeeds; there is no separate C++20 example switch to enable. If the target is missing, inspect the configuration's C++ compiler and `HX_OS_HAVE_CPP20_COROUTINES` result instead of forcing the internal variable. C99 and C++11 examples do not require C++20.
+
+In your installed-package project, create an executable first, then select one matching link target:
 
 ```cmake
 find_package(hx_c_platform CONFIG REQUIRED)

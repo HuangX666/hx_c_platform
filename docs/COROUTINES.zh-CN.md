@@ -2,15 +2,39 @@
 
 [English](COROUTINES.md) · [README](../README.zh-CN.md)
 
-**先运行一个完整例子。** 有很多任务需要等待 channel、定时或协程 I/O，又希望共享少量工作线程时，可以用协程运行时。
+**先让一个后台任务算出 42，再在主线程拿到它。** 本页先用 C++11 的完整程序 [go.cpp](../examples/go.cpp) 跑通这件事，再说明 C99 和 C++20 的写法。协程适合大量等待 channel、定时或协程 I/O 的任务；普通阻塞 SDK 调用仍会占住工作线程。
 
-打开 [go.cpp](../examples/go.cpp)。创建 Runtime → Scope 选择运行时 → go 提交任务 → channel 传 42 → waitUntil → receive → shutdownUntil。
+从库源码根目录执行。先完成一次[示例配置](../examples/README.zh-CN.md#run)，把下方 `build` 换成现有构建目录；Debug 构建需同时把命令和运行路径中的 Release 换成 Debug。
 
-按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_go`。此例无命令行参数、无需输入文件。
+```sh
+cmake --build build --config Release --target hx_os_go
+```
 
-**会得到什么：**输出 `Answer: 42`。先用这个 C++11 完整程序理解生命周期，再看后面的 C 状态机和 C++20 写法。普通阻塞 SDK 调用仍会占住工作线程。
+Windows Visual Studio：
 
-下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#cpp-project)把完整源码作为自己的 main。
+```powershell
+.\build\bin\Release\hx_os_go.exe
+```
+
+Linux／WSL：
+
+```sh
+./build/bin/hx_os_go
+```
+
+无需文件、参数或另开线程，成功输出 `Answer: 42` 并退出。程序内部依次做这些事：
+
+| 步骤 | 为什么需要 |
+| --- | --- |
+| `Runtime::create(owner)` | 创建运行时及它管理的工作线程；业务不用自己启动调度线程 |
+| `Scope::enter(runtime)` | 告诉当前主线程，接下来的 `go` 提交到哪个运行时 |
+| `co_chan<int> answers(1)` | 留一个整数缓冲槽，让任务可以先写入 42 |
+| `go ...` | 提交普通 lambda；运行时持有并回收任务 |
+| `waitUntil(...)` | 主线程等任务结束，并检查提交／执行错误 |
+| `receive(NOW)` | 取出已经放好的整数，然后打印 |
+| `shutdownUntil(...)` | 关闭并等待运行时自己的线程退出 |
+
+短片段解释单个步骤；第一次复制时使用完整 go.cpp 作为自己的 `main.cpp`，按[最小 C++ 工程](USAGE.zh-CN.md#cpp-project)链接库。第 8 节列出另外三种完整示例的构建目标。
 
 ## 1. 先选择一种写法
 
@@ -48,6 +72,8 @@ auto answer = answers.receive(HX_OS_DEADLINE_NOW);
 ```
 
 这段放在返回 `Result<void>` 的函数里。`go` 提交任务，运行时持有它直到清理完成；任务向有一个缓冲槽的 channel 发送 42。无需为每个任务保存句柄，也不用先建任务组。`done` 检查完成情况及运行时保留的任务错误；检查 `answer` 后再读取 `answer.value()`。完整程序输出 `Answer: 42`，并展示创建与显式关闭。
+
+这里的缓冲容量 `1` 有实际作用：主线程先 wait、后 receive，任务仍能先放入一个值再结束。若改成容量 `0`，发送必须等接收者，主线程却在等发送任务结束，这种顺序就会互相等待。无缓冲 channel 应让另一任务同时接收，或让主线程先 receive 再 wait；不能只改数字。
 
 `Scope` 选中一个已有运行时，不会创建线程或全局单例。作用域可以嵌套，必须在创建它的宿主线程上按后进先出顺序关闭；它持有运行时引用，但不负责停止运行时。不能把 scope 移到其他线程，或先销毁外层 scope。在协程内部调用 `go` 时，自动沿用该协程的运行时。既没有 scope 也不在协程内时，提交会返回错误，此时也没有运行时可以保存它，不能忽略返回值。
 
@@ -207,6 +233,21 @@ flowchart LR
 容量预算计算的是相应模块的直接存储，用户回调的分配、值内部的分配、C++ 帧/结果及原生工作线程栈各有自己的生命周期和占用。固定栈溢出是操作系统故障，不能转换成普通错误返回；栈预留量也不等于物理内存驻留量。关闭包括工作线程 TLS 清理和原生 join。Android API 21 已支持有限时间 join：Bionic 适配通过 `pthread_gettid_np` 观察内核清零的线程标识，再完成原生资源回收，等待范围包含 TLS 清理。超时保留线程对象，可以重试；这提供单调截止时间，不代表强制取消或硬实时保证。宿主还需要协调自行创建的提交线程，并在销毁 owner 前排除正在进行的 API 调用；库不会替宿主 join 这些线程。关闭之后仍保留的任务/channel/stream 句柄可能继续占有 context 分配，应先释放这些句柄，再销毁 context。插件卸载前，还必须释放依赖插件代码的句柄、帧、结果和回调表；即使运行时已经关闭，也不能忽略这些对象。用户值中构成的引用环也需要用户自行解除。
 
 ## 8. 构建、裁剪和验证
+
+先选择一个目标，不必全部构建。以下程序都不需要参数或输入文件：
+
+| 目标 | 完整源码 | 运行结果 |
+| --- | --- | --- |
+| `hx_os_go` | [go.cpp](../examples/go.cpp) | C++11，channel 传回 `Answer: 42` |
+| `hx_os_cpp_coroutine` | [coroutine.cpp](../examples/coroutine.cpp) | C++11，Task 返回 `Answer: 42` |
+| `hx_os_coroutine` | [coroutine.c](../examples/coroutine.c) | C99，依次输出 `Count: 1`、`Count: 2`、`Count: 3` |
+| `hx_os_cpp_coroutine20` | [coroutine20.cpp](../examples/coroutine20.cpp) | C++20，co_await 后返回 `Answer: 42` |
+
+例如 `cmake --build build --config Release --target hx_os_coroutine`，再运行 Windows 的 `.\build\bin\Release\hx_os_coroutine.exe` 或 Linux 的 `./build/bin/hx_os_coroutine`。仍在库源码根目录操作。
+
+启用 examples 后，CMake 会查找 C++ 编译器并检测 `<coroutine>`。检测通过才生成 `hx_os_cpp_coroutine20`，没有需要手动打开的 C++20 示例开关。若提示目标不存在，查看配置阶段的 C++ 编译器和 `HX_OS_HAVE_CPP20_COROUTINES` 检测结果；不要把内部检测变量强设为成功。C99 与 C++11 示例不要求 C++20。
+
+在自己的安装包工程中，先创建相应 executable，再选择一个链接目标：
 
 ```cmake
 find_package(hx_c_platform CONFIG REQUIRED)

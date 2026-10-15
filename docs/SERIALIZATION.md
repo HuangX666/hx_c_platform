@@ -130,7 +130,7 @@ For a `payload` that can contain this:
 
 Use `HX_CODEC_NODE(payload)`, or explicitly map an existing `const hx_os_config_node *payload` as `HX_OS_CODEC_NODE`. It retains the entire subtree. `hx_os_config_pointer(payload, "/items/3/children/1", &node)` locates the nested number. Nodes borrow the decoded owner. Encoding a NODE borrows a live document and copies its subtree. XML NODE fields require XML element subtrees; other formats must also represent the supplied subtree.
 
-For document-only construction, [nested_document.c](../examples/nested_document.c) describes a mixed array with `hx_os_config_value`, copies it with `hx_os_config_create`, then writes JSON with `hx_os_config_serialize`. Descriptor names, strings and numeric text are borrowed only until create returns. Numeric descriptions use complete JSON number text to avoid a double conversion that could round a large integer.
+For document-only construction, [nested_document.c](../examples/nested_document.c) describes a mixed array with `hx_os_config_value`, copies it with `hx_os_config_create`, writes JSON with `hx_os_config_serialize`, then parses it again and reads the nested value 2.5. Descriptor names, strings and numeric text are borrowed only until create returns. Numeric descriptions use complete JSON number text to avoid a double conversion that could round a large integer.
 
 ### 4.1 Choosing field macros
 
@@ -236,23 +236,60 @@ File APIs are `hx_os_config_load/save` and `hx_os_codec_load/save`, with matchin
 
 ## 8. Build and run the examples
 
-From the project root:
+Run every command below from the library checkout root after the [example setup](../examples/README.md#run). Replace `build` with your existing directory and Release with Debug when appropriate. Build only the selected targets; no separate serialization build directory is needed:
 
 ```sh
-cmake -S . -B build-serialization -DHX_OS_BUILD_EXAMPLES=ON
-cmake --build build-serialization --config Release --parallel 4
+cmake --build build --config Release --target hx_os_codec_macros
+cmake --build build --config Release --target hx_os_serialization
+cmake --build build --config Release --target hx_os_nested_document
+cmake --build build --config Release --target hx_os_cpp_serialization
 ```
 
-Windows executables are in `build-serialization/bin/Release`; a single-configuration Linux build uses `build-serialization/bin`:
+Windows Visual Studio:
 
 ```powershell
-./build-serialization/bin/Release/hx_os_codec_macros.exe
-./build-serialization/bin/Release/hx_os_serialization.exe json
-./build-serialization/bin/Release/hx_os_serialization.exe xml
-./build-serialization/bin/Release/hx_os_nested_document.exe
-./build-serialization/bin/Release/hx_os_cpp_serialization.exe
+.\build\bin\Release\hx_os_codec_macros.exe
+.\build\bin\Release\hx_os_serialization.exe json
+.\build\bin\Release\hx_os_serialization.exe xml
+.\build\bin\Release\hx_os_nested_document.exe
+.\build\bin\Release\hx_os_cpp_serialization.exe
 ```
 
-`hx_os_serialization` also accepts `yaml` and `toml`. It encodes and decodes before printing only the encoded document to stdout. The device contains an array, so selecting ini/env/properties fails explicitly; use the flat connection structure from section 3 for those formats.
+Linux / WSL:
 
-The C/C++ examples above run independently. See [platform support](PLATFORMS.md) for target boundaries.
+```sh
+./build/bin/hx_os_codec_macros
+./build/bin/hx_os_serialization json
+./build/bin/hx_os_serialization xml
+./build/bin/hx_os_nested_document
+./build/bin/hx_os_cpp_serialization
+```
+
+All input is embedded in the source; no JSON file is required. The first two C examples encode then decode. The C++ example reads JSON and writes XML.
+
+| Program | Expected result |
+| --- | --- |
+| `hx_os_codec_macros` | Section 3's JSON and `port = 8080` |
+| `hx_os_serialization json` | JSON with name, two samples, range and enabled; stderr prints `Decoded: samples=2 enabled=true` |
+| `hx_os_serialization xml` | The same device as `<device>...<samples><item>...` XML, with the same decode message |
+| `hx_os_nested_document` | `{"items":[1,"文字",null,{"children":[true,2.5]}]}`; stderr prints `items[3].children[1] = 2.5` |
+| `hx_os_cpp_serialization` | `<device>...</device>` XML for sensor with one sample |
+
+`hx_os_serialization` also accepts lowercase `yaml` and `toml`. Stdout contains only the document; decode feedback goes to stderr so the document can be redirected to a file. This device has an array, so `ini`, `env` and `properties` return `HX_OS_UNREPRESENTABLE`: the target format cannot represent this structure. To try those formats, replace the format constant in both encode and decode calls in codec_macros.c, using its flat connection structure.
+
+### 8.1 Move an example into your own project
+
+Use the [C project](USAGE.md#c-project), [C++ project](USAGE.md#cpp-project) or [installed-package setup](USAGE.md#installed-project) for your chosen language, selecting one main at a time:
+
+| Task | Files to copy |
+| --- | --- |
+| Minimal C field mapping | codec_macros.c as main.c |
+| Nested C structures | serialization.c as main.c, plus serialization_schema.h alongside it |
+| C++ JSON to XML | serialization.cpp as main.cpp, plus serialization_schema.h alongside it |
+| Mixed JSON with a variable shape | nested_document.c as main.c |
+
+The macros and mapping header are source code; no generator is needed. Change schema fields and source values together, then adapt the result handling. Renaming only the JSON field leaves the old mapping in place. In the short snippets, device, device_schema and sample come from the companion header; copying just a call does not declare them.
+
+`nested_document` serializes its tree, parses the text as an independent document and reads 2.5 at `/items/3/children/1`; array indices start at zero. This demonstrates both preserving mixed types and selecting a nested value. Check node kinds before getters for variable input; field mapping does not guess an arbitrary JSON shape.
+
+For `not supported`, check CONFIG, CONFIG_SERIALIZE and CODEC. For garbled Chinese text, check the terminal's UTF-8 settings; Windows PowerShell users can run `chcp 65001` before launching the example. Do not change document encoding to fix terminal display. See [platform support](PLATFORMS.md) for target limitations.

@@ -100,6 +100,12 @@ json_field fields[] = {
 
 客户端收到最终结果后继续驱动 500 毫秒以便重发末尾 ACK，总会话期限为 10 秒。无限丢包时不保证正常结束。当前会话中无重复应用的检查不构成跨重启 exactly-once 承诺；更完整的 HXIP 会话见 [IPC 协议](IPC.zh-CN.md)，本例不依赖它。
 
+### 放进自己的工程时要复制什么
+
+复制本页服务端／客户端源码和同目录的 `kcp_business.h`、`network_demo.h`、`business_json.h`。两个带 main 的源文件分别建立 executable，不要放进同一个可执行目标。每个目标链接 `hx_c_platform::hx_c_platform`；安装包接入见[最小工程](USAGE.zh-CN.md#installed-project)。`json_field`、`json_encode` 等是这些头文件中的示例辅助代码，不是只包含 hx_os.h 就会出现的公共接口。
+
+Python 运行器仅方便本机启动两端和查看结果。自己的 C 程序无需 Python；先用本页的手动命令在两个终端分别运行，再替换消息字段和业务处理。保留创建、收发线程退出及关闭顺序。
+
 ## 6. 运行业务示例
 
 ```sh

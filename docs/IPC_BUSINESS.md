@@ -128,6 +128,12 @@ hx_string_destroy(&request);
 
 Although general configuration getters accept numeric strings, this example explicitly checks JSON types: integer `250` is accepted; `"250"`, booleans and missing fields are not integers. Invalid syntax, duplicate keys and non-object roots never reach device operations. Payloads are capped at 1023 bytes, parsing depth at 8, nodes at 64 and parsing memory at 64 KiB.
 
+### Files to copy into your own project
+
+Copy this page's client/server sources and their companion headers: `ipc_demo.h` and `business_json.h`. Each source with main needs a separate executable target; do not combine both mains. Link each target to `hx_c_platform::hx_c_platform`; see the [installed-package project](USAGE.md#installed-project). Helpers such as `json_field` and `json_encode` belong to these example headers, not to the public hx_os.h API.
+
+The Python runner only starts the local peers and checks their results. Your C programs do not require Python. Try the manual commands in separate terminals before changing fields and business handlers, retaining creation, thread completion and close ordering.
+
 ## 6. Ownership and running the example
 
 ```sh

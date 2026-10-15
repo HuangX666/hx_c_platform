@@ -4,8 +4,12 @@
 
 int main()
 {
-	if (!hx_os_codec_available())
-		return 0;
+	if (!hx_os_codec_available()) {
+		std::fputs("Codec is unavailable. Enable CONFIG, "
+			   "CONFIG_SERIALIZE and CODEC.\n", stderr);
+
+		return 1;
+	}
 
 	hx::Codec<device> codec(device_schema);
 

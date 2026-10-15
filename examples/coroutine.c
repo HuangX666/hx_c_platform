@@ -37,23 +37,33 @@ int main(void)
 	counter_state state = {0, 0};
 	hx_os_deadline deadline;
 
-	if (!(hx_os_capabilities() & HX_OS_CAP_COROUTINES))
-		return 0;
+	if (!(hx_os_capabilities() & HX_OS_CAP_COROUTINES)) {
+		fputs("Coroutines are unavailable.\n", stderr);
+
+		return 1;
+	}
 
 	status = hx_os_coro_runtime_create(NULL, NULL, &runtime, NULL);
-	if (status != HX_OS_OK)
+	if (status != HX_OS_OK) {
+		fprintf(stderr, "Create runtime: %s\n",
+			hx_os_status_name(status));
+
 		return 1;
+	}
 
 	status = hx_os_coro_go(runtime, HX_OS_CORO_STACKLESS, count, &state,
 		NULL, &task, NULL);
 	if (status == HX_OS_OK)
 		status = hx_os_coro_wait_until(
 			task, hx_os_deadline_after_ms(2000), &result, NULL);
+	if (status != HX_OS_OK || result.status != HX_OS_OK)
+		fprintf(stderr, "Task: %s\n", hx_os_status_name(
+			status != HX_OS_OK ? status : result.status));
 
 	hx_os_coro_release(task);
-	// The host chooses its shutdown budget. Android API 21 lacks timed
-	// join; this finite demo explicitly chooses to join its cooperative
-	// workers.
+
+	// The host chooses its shutdown budget. If timed join is unavailable,
+	// this finite demo explicitly joins its cooperative workers.
 	deadline = hx_os_capabilities() & HX_OS_CAP_TIMED_JOIN
 		? hx_os_deadline_after_ms(2000)
 		: HX_OS_DEADLINE_INFINITE;

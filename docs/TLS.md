@@ -6,52 +6,110 @@ Reuse the [configured example directory](../examples/README.md#run), replacing b
 
 ## 1. Build and run the complete example
 
-TLS here means Transport Layer Security. Thread-local storage still uses `hx_os_tls_key`. This module implements standard TLS 1.2/1.3 over TCP, so the other endpoint can use Python, Go, Java or another standard TLS implementation.
+One sending thread and one receiving thread share a TLS connection. The client sends three temperature readings; the server returns three acknowledgements and pushes an alarm for the second, hot reading. You see business data, matching IDs and a notification, beyond just establishing a connection.
 
-Prepare the [dependency SDK](DEPENDENCIES.md#4-build-the-native-dependency-stack). `HX_OS_ENABLE_TLS` defaults to ON and requires CRYPTO, NETWORK, LOOP and FILE_UTILS. Disabling a prerequisite makes `hx_os_tls_available()` return 0 and the TLS operations return `HX_OS_NOT_SUPPORTED`. It does not start a thread at program load.
+TLS means Transport Layer Security over TCP; thread-local storage uses the separate `hx_os_tls_key` APIs. A peer in another language can use standard TLS 1.2/1.3 while following this example's message framing.
+
+### 1.1 Reuse an existing build directory
+
+Prepare the SDK using the [dependency guide](DEPENDENCIES.md#4-build-the-native-dependency-stack). `HX_OS_ENABLE_TLS` requires CRYPTO, NETWORK, LOOP and FILE_UTILS; this example's JSON also needs CONFIG, CONFIG_SERIALIZE and SETTINGS. These default to ON. If you used the trimmed homepage setup, configure its `HX_OS_DEPENDENCY_PREFIX` and explicitly re-enable CRYPTO and TLS first. Initializing submodules does not build the SDK.
+
+When a prerequisite is disabled, `hx_os_tls_available()` returns 0 and operations return `HX_OS_NOT_SUPPORTED`. Enabling a module starts no threads at program load; resources are created when opening a connection or listener.
+
+Run everything below from the library checkout root. `build` means an existing directory; Windows and WSL use separate directories. For Debug, replace Release in both commands and paths. No TLS-specific build directory is needed.
+
+When adding the SDK to a trimmed configuration for the first time, append these three arguments to the following `cmake -S` command or set the same entries in cmake-gui. They remain in the cache afterward:
+
+| Argument | Value |
+| --- | --- |
+| `-DHX_OS_DEPENDENCY_PREFIX=...` | Absolute path to the built SDK prefix, such as `E:/sdk/hx/prefix`, not the deps source directory |
+| `-DHX_OS_ENABLE_CRYPTO=ON` | Enable OpenSSL support |
+| `-DHX_OS_ENABLE_TLS=ON` | Enable the TLS connection API |
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-  -DHX_OS_DEPENDENCY_PREFIX=/absolute/path/to/build-deps/prefix \
-  -DHX_OS_BUILD_EXAMPLES=ON
-cmake --build build --config Release --target hx_os_tls_json_server \
-  hx_os_tls_json_client --parallel 4
+cmake -S . -B build -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build build --config Release --target hx_os_tls_json_server
+cmake --build build --config Release --target hx_os_tls_json_client
 ```
 
-With existing certificates, replace the three paths below; the certificate SAN must contain `localhost`. The runner chooses an available port, launches both programs and checks the JSON replies. It needs no private regression executable and leaves your certificate files unchanged.
+### 1.2 Prepare a local demo certificate
+
+The OpenSSL CLI creates a self-signed certificate valid for one day. Files stay in the existing build directory; nothing is added to the system trust store. Put `openssl` on PATH or use the actual SDK executable, such as `& .\build-deps\prefix\bin\openssl.exe` in PowerShell. If you already have credentials, skip generation and pass your certificate, key and CA paths in section 1.3. These filenames are for the demo; regeneration overwrites files with the same names.
+
+Windows PowerShell (backtick continuation, with no trailing spaces):
+
+```powershell
+openssl req -x509 -newkey rsa:2048 -nodes -days 1 `
+    -subj /CN=localhost `
+    -addext subjectAltName=DNS:localhost,IP:127.0.0.1 `
+    -keyout build/demo-key.pem -out build/demo-cert.pem
+```
+
+Linux / WSL:
 
 ```sh
-python examples/run_tls_business.py --bin-dir build/bin --certificate \
-  server-cert.pem --private-key server-key.pem --ca ca.pem
+openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+  -subj /CN=localhost \
+  -addext subjectAltName=DNS:localhost,IP:127.0.0.1 \
+  -keyout build/demo-key.pem -out build/demo-cert.pem
 ```
 
-For Visual Studio, use `--bin-dir build/bin/Release`. To try the local demo without existing certificates, use an installed OpenSSL command-line tool to create a one-day self-signed demo certificate:
+### 1.3 Start both peers and check the result
+
+Stay in the library checkout root; do not cd into the certificate directory. The runner selects an available port, starts the server, waits for its listening address and then starts the client. Python is only needed by the runner, not by the two C programs.
+
+Windows with Visual Studio:
+
+```powershell
+python examples/run_tls_business.py --bin-dir build/bin/Release `
+    --certificate build/demo-cert.pem --private-key build/demo-key.pem `
+    --ca build/demo-cert.pem
+```
+
+Linux / WSL:
 
 ```sh
-openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=localhost \
-  -addext subjectAltName=DNS:localhost,IP:127.0.0.1 -keyout demo-key.pem \
-  -out demo-cert.pem
-python examples/run_tls_business.py --bin-dir build/bin --certificate \
-  demo-cert.pem --private-key demo-key.pem --ca demo-cert.pem
+python3 examples/run_tls_business.py --bin-dir build/bin \
+  --certificate build/demo-cert.pem --private-key build/demo-key.pem \
+  --ca build/demo-cert.pem
 ```
 
-Generate these files in an empty demo directory to avoid overwriting existing credentials, then pass their paths. Remove them after the demo. Use your own certificate/key management in production; certificate and hostname checks stay enabled.
-
-The [C client](../examples/tls_json_client.c) starts one sending thread and one receiving thread on the same connection. It sends three temperature readings. The [C server](../examples/tls_json_server.c) returns three acknowledgements and an additional alarm for the second reading. Each JSON carries its request `id`; the readings also carry a UTF-8 `device` value. The output includes:
+Success includes both lines below; `[TLS receive]` lines show the JSON. The three readings are 20, 81 and 22, with the device name `温度传感器🌐`:
 
 ```text
 TLS CLIENT PASS: 3 JSON readings, 3 replies, 1 alarm
 TLS SERVER PASS: 3 JSON readings processed
 ```
 
-With your own certificate and key, the programs can be launched separately:
+To observe both terminals without Python, start this in Windows terminal one:
 
-```sh
-hx_os_tls_json_server 39004 server-cert.pem server-key.pem
-hx_os_tls_json_client 39004 ca.pem
+```powershell
+.\build\bin\Release\hx_os_tls_json_server.exe 39004 `
+    build/demo-cert.pem build/demo-key.pem
 ```
 
-The demo certificate must contain `localhost` in its Subject Alternative Name. The client connects to `127.0.0.1` and explicitly verifies `localhost`. Supply UTF-8 paths at the C API boundary; command-line argument conversion remains the host application's responsibility on Windows.
+Wait for `Listening:`, then run in terminal two:
+
+```powershell
+.\build\bin\Release\hx_os_tls_json_client.exe 39004 build/demo-cert.pem
+```
+
+The corresponding commands, in separate Linux / WSL terminals, are:
+
+```sh
+./build/bin/hx_os_tls_json_server 39004 build/demo-cert.pem build/demo-key.pem
+./build/bin/hx_os_tls_json_client 39004 build/demo-cert.pem
+```
+
+The client connects to 127.0.0.1 and verifies localhost. The self-signed certificate is also the CA explicitly trusted for this connection. On verification failure, check CA paths, SAN, validity and local time; keep verification enabled. For a missing DLL, check the selected configuration's bin directory and matching SDK runtimes; see [installed-package deployment](USAGE.md#installed-project).
+
+### 1.4 Adapt the business code
+
+The complete sources are [tls_json_client.c](../examples/tls_json_client.c) and [tls_json_server.c](../examples/tls_json_server.c). Also copy tls_json.h, network_demo.h and business_json.h from the same directory into your own project. Build each program as a separate executable linked to the C library; no SDK initialization needs to move into business code.
+
+Change the temperature fields and alarm handler first, retaining thread completion and close ordering. TLS encrypts a byte stream; **it does not identify JSON boundaries**. This example's tls_json.h uses a four-byte big-endian body length followed by UTF-8 JSON; the peer must do the same. It differs from the TCP order demo's two-byte prefix and IPC's HXIP protocol. Changing only a port does not make the demos interoperable.
+
+The C API receives UTF-8 paths. A Windows application's non-ASCII native command line still needs conversion to UTF-8; the demo filenames here use ASCII. Use production certificate/key management in real deployments and remove the demo credentials when finished.
 
 ## 2. Direct C and C++ calls
 

@@ -291,10 +291,25 @@ For KCP, HELLO/WELCOME are ordinary outer HXIP UDP frames. After exchanging sess
 
 Advanced users can drive [hx_os_kcp](../include/hx_os_kcp.h) directly with packets, time and an output callback; that engine creates no socket or worker thread. Ordinary IPC consumers select `kcp://` and need no update loop of their own.
 
-## 9. Run the examples
+## 9. Run the complete device workflow
+
+Section 2 builds the minimal echo programs. The JSON workflow needs two different targets, using the same build directory:
 
 ```sh
+cmake --build build --config Release --target hx_os_ipc_device_server
+cmake --build build --config Release --target hx_os_ipc_device_client
+```
+
+Windows Visual Studio:
+
+```powershell
 python examples/run_ipc_business.py --bin-dir build/bin/Release
 ```
 
-This starts separate server/client processes for JSON device commands and notifications. See the earlier sections for the cross-language protocol and manual two-terminal usage. Regressions remain private to the maintainer; dated target results are in the validation records.
+Linux / WSL:
+
+```sh
+python3 examples/run_ipc_business.py --bin-dir build/bin
+```
+
+Run from the library checkout root; change both configuration and executable path for Debug. The runner starts two processes and checks commands and notifications for two devices. Success prints `PASS ipc_business_local`. Python only launches and checks the demo; the C library does not require it. See the [IPC business guide](IPC_BUSINESS.md) for the workflow, manual two-terminal commands and files to copy, and [platform support](PLATFORMS.md) for target limitations.

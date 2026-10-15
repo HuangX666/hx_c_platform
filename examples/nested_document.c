@@ -22,8 +22,11 @@ int main(void)
 	hx_os_config_value root = {
 		{NULL, 0}, {NULL, 0}, &array, NULL, 1, 0, HX_OS_CONFIG_OBJECT};
 	hx_os_config_document *document = NULL;
+	hx_os_config_document *parsed = NULL;
+	const hx_os_config_node *value = NULL;
 	hx_os_config_error error;
 	hx_string text = HX_STRING_INIT;
+	double number = 0.0;
 	hx_os_status status =
 		hx_os_config_create(NULL, &root, NULL, &document, &error);
 
@@ -31,11 +34,24 @@ int main(void)
 		status = hx_os_config_serialize(
 			document, HX_OS_CONFIG_JSON, &text, NULL, NULL);
 
+	// Read the generated text as a new document, then select one value.
 	if (status == HX_OS_OK)
+		status = hx_os_config_parse(NULL, HX_OS_CONFIG_JSON, text.data,
+			text.size, NULL, &parsed, &error);
+	if (status == HX_OS_OK)
+		status = hx_os_config_pointer(hx_os_config_root(parsed),
+			"/items/3/children/1", &value);
+	if (status == HX_OS_OK)
+		status = hx_os_config_get_double(value, &number);
+
+	if (status == HX_OS_OK) {
 		puts(hx_string_c_str(&text));
+		fprintf(stderr, "items[3].children[1] = %.1f\n", number);
+	}
 	else
 		fprintf(stderr, "%s\n", hx_os_status_name(status));
 
+	hx_os_config_release(parsed);
 	hx_os_config_release(document);
 	hx_string_destroy(&text);
 

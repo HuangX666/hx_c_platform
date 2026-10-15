@@ -17,7 +17,7 @@ cmake -S . -B build -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build --config Release --target hx_os_binary_stream
 ```
 
-如果现有配置使用 Debug，把构建和运行路径里的 Release 一起换成 Debug。不要混用 Windows 与 WSL 的构建目录。C++ 示例需要配置时启用 C++ 编译器；C++20 示例还需要支持协程的工具链和相应选项。
+如果现有配置使用 Debug，把构建和运行路径里的 Release 一起换成 Debug。不要混用 Windows 与 WSL 的构建目录。启用 examples 后，CMake 自动查找 C++ 编译器；检测到 C++20 的 `<coroutine>` 支持后才添加相应示例，不需要另开一个开关。缺少 C++ 编译器时只生成 C 示例。
 
 进入这个构建目录运行，让演示生成的文件留在构建目录内。Windows Visual Studio：
 
@@ -184,6 +184,18 @@ printf '0123456789' > demo.txt
 | 同一 TLS 连接分线程收发 JSON | run_tls_business.py | [TLS 业务及证书准备](../docs/TLS.zh-CN.md) |
 
 运行脚本时回到库源码根目录。例如 `python examples/run_tcp_business.py --bin-dir build/bin/Release`；Linux 用 `python3` 和 `build/bin`。按专题先构建对应两端目标。TLS 还需证书、私钥与受信 CA；HTTP 的 URL 需要换成真实服务，示例地址不会替你提供服务。
+
+**先选对接口层。** 想让库处理设备／请求编号、会话和消息队列时，读 IPC 教程；想接现有 TCP、UDP 或 TLS 协议时，读对应的独立业务示例。不是给任意 socket 加上 JSON 就自动获得 IPC 协议。
+
+| 示例 | 对端需要发送什么 |
+| --- | --- |
+| IPC 设备控制 | HXIP v1 消息帧，正文为 JSON，见 IPC 协议说明 |
+| TCP 订单 | 2 字节大端正文字节数 + UTF-8 JSON |
+| UDP 采样 | 一个数据报包含一个 UTF-8 JSON，无长度前缀 |
+| KCP 数据块 | KCP 消息模式的一条完整消息包含 JSON，需持续驱动 KCP |
+| TLS 温度读数 | TLS 连接内的 4 字节大端正文字节数 + UTF-8 JSON |
+
+运行器中的 Python 只是代替手动开两个终端，不进入业务进程。若提示 `Build the example first`，先构建该教程列出的两个目标；Windows 检查 Debug／Release 子目录是否与构建一致。`Listening:` 只表示监听就绪，看到双方最终的成功信息才表示整套业务完成。需要把 C 示例放进自己的工程时，复制各专题列出的配套头文件，不能只复制 main。
 
 串口示例使用 115200、8 数据位、1 停止位、无校验，发送 `{"request":42}` 加换行，并等待对端的一行回复。必须先连接能理解该协议的设备或虚拟串口对，不能仅凭程序启动就认为设备通信成功。命名共享内存、桌面防睡眠、Windows GPU 查询也分别需要对应平台和权限，见各专题。
 

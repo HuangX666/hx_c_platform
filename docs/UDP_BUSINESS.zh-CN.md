@@ -108,6 +108,12 @@ json_field fields[] = {
 
 两个线程的非阻塞 socket 调用按既有契约在短互斥区内串行，重试休眠在锁外。主线程先 join 再释放资源。真实设备重启后如果复用序号，需要在自己的 JSON 协议中加入会话标识；地址绑定不是身份认证。
 
+### 放进自己的工程时要复制什么
+
+复制本页服务端／客户端源码和同目录的 `udp_business.h`、`network_demo.h`、`business_json.h`。两个带 main 的源文件分别建立 executable，不要放进同一个可执行目标。每个目标链接 `hx_c_platform::hx_c_platform`；安装包接入见[最小工程](USAGE.zh-CN.md#installed-project)。`json_field`、`json_encode` 等是这些头文件中的示例辅助代码，不是只包含 hx_os.h 就会出现的公共接口。
+
+Python 运行器仅方便本机启动两端和查看结果。自己的 C 程序无需 Python；先用本页的手动命令在两个终端分别运行，再替换消息字段和业务处理。保留创建、收发线程退出及关闭顺序。
+
 ## 6. 运行业务示例
 
 ```sh

@@ -25,8 +25,13 @@ int main(int argc, char **argv)
 			if (!strcmp(argv[1], hx_os_config_format_name(i)))
 				break;
 
-		if (i > HX_OS_CONFIG_PROPERTIES)
+		if (i > HX_OS_CONFIG_PROPERTIES) {
+			fputs("Usage: hx_os_serialization "
+			      "[json|yaml|xml|toml]\n",
+				stderr);
+
 			return 2;
+		}
 
 		format = i;
 	}
@@ -48,6 +53,8 @@ int main(int argc, char **argv)
 
 	result = hx_os_codec_data(decoded);
 	if (result->samples.count != 2 || !result->enabled) {
+		fputs("Decoded device differs from the input.\n", stderr);
+
 		hx_os_codec_release(decoded);
 		hx_string_destroy(&text);
 
@@ -57,6 +64,8 @@ int main(int argc, char **argv)
 	// All decoded strings and sample elements stay valid until release.
 	(void)fwrite(text.data, 1, text.size, stdout);
 	putchar('\n');
+	fprintf(stderr, "Decoded: samples=%zu enabled=%s\n",
+		result->samples.count, result->enabled ? "true" : "false");
 
 	hx_os_codec_release(decoded);
 	hx_string_destroy(&text);

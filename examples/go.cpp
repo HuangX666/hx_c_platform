@@ -31,18 +31,28 @@ static hx::Result<void> run(hx::coro::Runtime &runtime) noexcept
 
 int main()
 {
-	if (!(hx_os_capabilities() & HX_OS_CAP_STACKFUL_COROUTINES))
-		return 0;
+	if (!(hx_os_capabilities() & HX_OS_CAP_STACKFUL_COROUTINES)) {
+		std::fputs("Stackful coroutines are unavailable.\n", stderr);
+
+		return 1;
+	}
 
 	hx_os_coro_runtime *owner = NULL;
 
 	auto created = hx::coro::Runtime::create(owner);
-	if (!created)
+	if (!created) {
+		std::fprintf(stderr, "Create runtime: %s\n",
+			hx_os_status_name(created.status()));
+
 		return 1;
+	}
 
 	auto &runtime = created.value();
 
 	auto result = run(runtime);
+	if (!result)
+		std::fprintf(stderr, "Run task: %s\n",
+			hx_os_status_name(result.status()));
 
 	auto deadline = hx_os_capabilities() & HX_OS_CAP_TIMED_JOIN
 		? hx_os_deadline_after_ms(2000)

@@ -130,7 +130,7 @@ HX_CODEC_STRUCT(device,
 
 使用 `HX_CODEC_NODE(payload)`，或者将已有字段 `const hx_os_config_node *payload` 显式映射成 `HX_OS_CODEC_NODE`。它能保留整个子树，再用 `hx_os_config_pointer(payload, "/items/3/children/1", &node)` 查询里面的数值。这个指针仍借用解码结果。编码 NODE 时借用你提供的有效文档；库会复制子树。XML 的 NODE 字段要求 XML 元素子树；其他格式也必须能够表示该子树。
 
-纯文档用法见 [nested_document.c](../examples/nested_document.c)：先用 `hx_os_config_value` 描述混合数组，再 `hx_os_config_create` 一次复制成文档，最后 `hx_os_config_serialize` 写出 JSON。描述中的名字、字符串和数字文本只借用到 create 返回。数字描述使用完整的 JSON 数字文本，避免经过 double 损失大整数精度。
+纯文档用法见 [nested_document.c](../examples/nested_document.c)：先用 `hx_os_config_value` 描述混合数组，再 `hx_os_config_create` 一次复制成文档，用 `hx_os_config_serialize` 写出 JSON，最后重新解析并读取深层的 2.5。描述中的名字、字符串和数字文本只借用到 create 返回。数字描述使用完整的 JSON 数字文本，避免经过 double 损失大整数精度。
 
 ### 4.1 常用宏怎么选
 
@@ -236,23 +236,60 @@ C 对应调用 `hx_os_config_replace(source, target, &value, options, &out, &err
 
 ## 8. 直接构建和运行示例
 
-在项目根目录运行：
+以下命令都从库源码根目录执行。先完成[示例配置](../examples/README.zh-CN.md#run)，`build` 换成已有构建目录；Debug 构建需把 Release 同时改成 Debug。只编译要看的目标，不另建序列化专用目录：
 
 ```sh
-cmake -S . -B build-serialization -DHX_OS_BUILD_EXAMPLES=ON
-cmake --build build-serialization --config Release --parallel 4
+cmake --build build --config Release --target hx_os_codec_macros
+cmake --build build --config Release --target hx_os_serialization
+cmake --build build --config Release --target hx_os_nested_document
+cmake --build build --config Release --target hx_os_cpp_serialization
 ```
 
-Windows 程序在 `build-serialization/bin/Release`；单配置 Linux 构建在 `build-serialization/bin`。例如：
+Windows Visual Studio:
 
 ```powershell
-./build-serialization/bin/Release/hx_os_codec_macros.exe
-./build-serialization/bin/Release/hx_os_serialization.exe json
-./build-serialization/bin/Release/hx_os_serialization.exe xml
-./build-serialization/bin/Release/hx_os_nested_document.exe
-./build-serialization/bin/Release/hx_os_cpp_serialization.exe
+.\build\bin\Release\hx_os_codec_macros.exe
+.\build\bin\Release\hx_os_serialization.exe json
+.\build\bin\Release\hx_os_serialization.exe xml
+.\build\bin\Release\hx_os_nested_document.exe
+.\build\bin\Release\hx_os_cpp_serialization.exe
 ```
 
-`hx_os_serialization` 还接受 `yaml`、`toml`，先编码再解码检查，stdout 只打印编码结果。嵌套设备包含数组，改用 `ini/env/properties` 会明确失败；用第 3 节的扁平连接结构体即可测试这些格式。
+Linux / WSL:
 
-上述 C/C++ 示例可独立运行。 平台边界见[平台支持](PLATFORMS.zh-CN.md)。
+```sh
+./build/bin/hx_os_codec_macros
+./build/bin/hx_os_serialization json
+./build/bin/hx_os_serialization xml
+./build/bin/hx_os_nested_document
+./build/bin/hx_os_cpp_serialization
+```
+
+所有输入都写在源码里，不需要先准备 JSON 文件。前两个 C 示例都执行“编码 → 解码”，最后一个 C++ 示例执行“读入 JSON → 写出 XML”。
+
+| 程序 | 应看到什么 |
+| --- | --- |
+| `hx_os_codec_macros` | 第 3 节的 JSON 和 `port = 8080` |
+| `hx_os_serialization json` | 含 name、两条 samples、range 和 enabled 的 JSON；stderr 显示 `Decoded: samples=2 enabled=true` |
+| `hx_os_serialization xml` | 相同设备的 `<device>...<samples><item>...` XML；相同解码提示 |
+| `hx_os_nested_document` | `{"items":[1,"文字",null,{"children":[true,2.5]}]}`；stderr 显示 `items[3].children[1] = 2.5` |
+| `hx_os_cpp_serialization` | 一个名为 sensor、含一条采样的 `<device>...</device>` XML |
+
+`hx_os_serialization` 还接受小写的 `yaml`、`toml`；stdout 始终只打印文档，解码提示写到 stderr，便于把文档重定向保存。此设备包含数组，传 `ini`、`env` 或 `properties` 会返回 `HX_OS_UNREPRESENTABLE`，表示目标格式无法保存这个结构。要试这些格式，请在 codec_macros.c 中把 encode 和 decode 两处格式常量一起替换，使用扁平 connection 结构。
+
+### 8.1 把示例放进自己的工程
+
+按所选语言使用 [C 工程](USAGE.zh-CN.md#c-project)、[C++ 工程](USAGE.zh-CN.md#cpp-project)，或[安装包配置](USAGE.zh-CN.md#installed-project)，每次只选择一个 main：
+
+| 想做什么 | 需要复制 |
+| --- | --- |
+| 最简单的 C 字段映射 | codec_macros.c → main.c |
+| C 嵌套结构体 | serialization.c → main.c，serialization_schema.h 放同目录 |
+| C++ JSON 转 XML | serialization.cpp → main.cpp，serialization_schema.h 放同目录 |
+| 不固定结构的混合 JSON | nested_document.c → main.c |
+
+宏和映射头文件属于源码，无需生成工具。先改 schema 中的字段和 source 中的数据，再改接收结果后的业务处理；不要只改 JSON 字段名却保留旧映射。短片段里的 device、device_schema、sample 来自配套头文件，不能只复制一段调用就期望它们自动存在。
+
+`nested_document` 先生成文本，再 parse 为独立文档，使用路径 `/items/3/children/1` 读取 2.5；数组下标从 0 开始。这既展示了混合类型的保存，也展示了如何查到深层值。实际 JSON 中可能含多种类型时，先检查节点类型再取值，字段映射不是任意 JSON 的自动猜测器。
+
+遇到 `not supported`，检查 CONFIG、CONFIG_SERIALIZE、CODEC 是否开启；中文显示不正常时先检查终端 UTF-8 设置，Windows PowerShell 可在运行前执行 `chcp 65001`，不要通过改文档编码解决终端显示问题。平台限制见[平台支持](PLATFORMS.zh-CN.md)。

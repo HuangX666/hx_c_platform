@@ -291,10 +291,25 @@ KCP 模式的 HELLO/WELCOME 是普通外层 HXIP UDP 帧。双方确定会话值
 
 高级使用者可以单独调用 [hx_os_kcp](../include/hx_os_kcp.h)，自行提供完整包、时间和输出回调；该低层引擎不创建 socket 或线程。普通 IPC 用户使用 `kcp://` 即可，不需要自己写 update 循环。
 
-## 9. 运行示例
+## 9. 运行完整设备业务
+
+第 2 节构建的是最小回显程序；下面的 JSON 业务需要另两个目标，仍复用同一构建目录：
 
 ```sh
+cmake --build build --config Release --target hx_os_ipc_device_server
+cmake --build build --config Release --target hx_os_ipc_device_client
+```
+
+Windows Visual Studio:
+
+```powershell
 python examples/run_ipc_business.py --bin-dir build/bin/Release
 ```
 
-该入口启动独立服务端和客户端，使用 JSON 完成设备命令与通知。跨语言协议与双终端手动运行方式见前文；自动回归仅由维护者本机保留。平台要求与限制见[平台支持](PLATFORMS.zh-CN.md)。
+Linux / WSL:
+
+```sh
+python3 examples/run_ipc_business.py --bin-dir build/bin
+```
+
+命令都从库源码根目录执行，Debug 构建请同时替换配置和程序路径。运行器启动两个进程，完成两个设备的命令与通知，成功输出 `PASS ipc_business_local`；Python 仅用于启动和核对，不是 C 库运行依赖。完整业务、手动双终端运行以及文件复制清单见 [IPC 业务教程](IPC_BUSINESS.zh-CN.md)。平台限制见[平台支持](PLATFORMS.zh-CN.md)。

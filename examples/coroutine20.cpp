@@ -13,14 +13,21 @@ static hx::coro::Routine<int> answer()
 
 int main()
 {
-	if (!(hx_os_capabilities() & HX_OS_CAP_COROUTINES))
-		return 0;
+	if (!(hx_os_capabilities() & HX_OS_CAP_COROUTINES)) {
+		std::fputs("Coroutines are unavailable.\n", stderr);
+
+		return 1;
+	}
 
 	hx_os_coro_runtime *owner = NULL;
 
 	auto created = hx::coro::Runtime::create(owner);
-	if (!created)
+	if (!created) {
+		std::fprintf(stderr, "Create runtime: %s\n",
+			hx_os_status_name(created.status()));
+
 		return 1;
+	}
 
 	auto &runtime = created.value();
 
@@ -29,9 +36,14 @@ int main()
 	hx::Result<int> result{hx::Failure(HX_OS_INVALID)};
 	if (task)
 		result = task.value().getUntil(hx_os_deadline_after_ms(2000));
+	else
+		result = hx::Failure(task.error());
 
 	if (result)
 		std::printf("Answer: %d\n", result.value());
+	else
+		std::fprintf(stderr, "Task: %s\n",
+			hx_os_status_name(result.status()));
 
 	auto deadline = hx_os_capabilities() & HX_OS_CAP_TIMED_JOIN
 		? hx_os_deadline_after_ms(2000)
