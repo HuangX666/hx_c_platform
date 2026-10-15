@@ -66,7 +66,13 @@ sync 通过 fsync／FlushFileBuffers 请求持久化，本对象没有 stdio 缓
 
 网络实例平衡原生初始化／清理，并持有套接字和循环的生命周期。基础套接字为非阻塞、不可继承，直接操作由调用者串行化。 TCP 接收区分 EOF 和零长度请求。UDP 零长度数据报仍是数据；截断返回 LIMIT 和复制字节数，剩余部分已丢弃。 IPv6 scope_id 显式设置；parse/format 只处理地址字面量，端口和 scope 留在独立字段中。DNS 接收 ASCII/Punycode 主机名，最多返回 256 个不同地址。
 
+Windows 创建 socket 时指定 WSA_FLAG_NO_HANDLE_INHERIT。Linux／Android 在创建时设置 close-on-exec，并通过 accept4 同时设置 SOCK_CLOEXEC | SOCK_NONBLOCK；accept4 不可用时明确报错，不静默退回存在时间窗口的实现。POSIX 的 close-on-exec 表示执行 exec 时关闭，不会阻止 fork 暂时复制描述符。macOS 的创建／接受路径仍需单独调用 fcntl；如果要求隔离子进程继承，宿主需要协调并发创建 socket 与启动子进程的操作。
+
 直接 connect_until 超时后连接建立仍可能继续，可关闭套接字放弃。 send_until 报告已发送前缀，已交付的数据不会回滚。就绪是提示，之后的非阻塞操作仍可能返回 WOULD_BLOCK。
+
+客户端可能刚发起连接就退出。已知可恢复的 accept 错误返回 WOULD_BLOCK，并保留原生错误详情；循环的 ACCEPT 操作继续等待下一条连接，仍遵守原截止时间和取消请求。不会仅因一个待接入连接中止，就让整个 IPC／TLS 监听端点失败。监听器失效、资源耗尽等情况仍报告错误，不会把所有失败都无限重试。
+
+关闭 socket 后，要同时检查返回状态和所有者指针。Windows 原生关闭失败时，保留 socket、网络引用和原有循环归属，允许重试。例如非阻塞 socket 设置非零 SO_LINGER 后，关闭可能返回 WOULD_BLOCK；此时不能丢弃所有者，也不能销毁它依赖的 network／loop。POSIX close 只调用一次：即使报错，描述符也可能已经被消费并清空所有者，因此不能拿旧的原生描述符再次关闭。
 
 循环创建线程负责驱动、I/O 提交、附着套接字和销毁。该线程必须存活到循环销毁；原生线程 ID 可在退出后复用，不是全局唯一标识。 POST、请求取消／引用计数／等待可跨线程调用。每个套接字允许一个读方向和一个写方向请求同时存在； CONNECT 占用两者。不得混用直接 I/O 与待完成循环 I/O。套接字一直附着同一个循环，直到 close；繁忙套接字不能关闭。
 

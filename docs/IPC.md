@@ -131,6 +131,8 @@ flowchart LR
 
 Each explicitly created endpoint owns one I/O thread for its bounded set of peers. Linking the library starts nothing. Business work runs on the receiving application thread; the I/O worker runs no business callbacks.
 
+If a client disconnects while being accepted, known recoverable socket errors leave the listener running for other clients. Listener failures and resource exhaustion are still reported; see the [network contracts](CONTRACTS.md#networking-and-event-loops).
+
 These IPC waits **block an ordinary OS thread**. The library has coroutines, but IPC does not yet have coroutine-suspending adapters. Calling these synchronous methods inside a coroutine occupies its scheduler worker; that is not coroutine-aware asynchronous IPC. Qt applications should similarly perform these waits in business threads and use their existing delivery mechanism to update the UI.
 
 ## 4. A Python peer without the C library

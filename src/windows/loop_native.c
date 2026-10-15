@@ -111,6 +111,20 @@ static int hx_os_loop_accept(hx_os_request *request)
 	return result ? 0 : WSAGetLastError();
 }
 
+static int hx_os_loop_retry_accept(hx_os_request *request, int code)
+{
+	if (request->operation.kind != HX_OS_OP_ACCEPT ||
+		request->stop_status || !hx_os_i_socket_accept_retry(code))
+		return 0;
+
+	hx_os_i_socket_discard(&request->accepted);
+	request->started = 0;
+	// Retry immediate failures without spinning or completing the request.
+	request->accept_retry_after = hx_os_deadline_after_ms(1);
+
+	return 1;
+}
+
 static void hx_os_loop_start_native(hx_os_request *request)
 {
 	hx_os_operation *op = &request->operation;
@@ -123,6 +137,8 @@ static void hx_os_loop_start_native(hx_os_request *request)
 	request->native_done = 0;
 	request->native_error = 0;
 	request->native_bytes = 0;
+	request->native_cancelled = 0;
+	request->accept_retry_after = 0;
 	request->flags = 0;
 	request->started = 1;
 	buffer.buf = op->data ? (char *)op->data + request->completion.bytes
@@ -165,8 +181,10 @@ static void hx_os_loop_start_native(hx_os_request *request)
 		request->native_pending = 1;
 	else {
 		(void)hx_os_i_socket_error(&request->completion.error, code);
+		if (hx_os_loop_retry_accept(request, code))
+			return;
 
-		(void)hx_os_socket_close(&request->accepted, NULL);
+		hx_os_i_socket_discard(&request->accepted);
 		request->ready = 1;
 	}
 }
@@ -182,6 +200,10 @@ static void hx_os_loop_native_result(hx_os_request *request)
 
 		status = hx_os_i_win32(
 			&request->completion.error, request->native_error);
+		if (hx_os_loop_retry_accept(
+			    request, (int)request->native_error))
+			return;
+
 		if (request->native_error == ERROR_OPERATION_ABORTED)
 			status = HX_OS_CANCELLED;
 
@@ -207,6 +229,9 @@ static void hx_os_loop_native_result(hx_os_request *request)
 				&request->completion.peer);
 
 		(void)hx_os_i_socket_error(&request->completion.error, code);
+		if (code && hx_os_loop_retry_accept(request, code))
+			return;
+
 		request->ready = 1;
 	}
 	else if (op->kind == HX_OS_OP_CONNECT) {
@@ -243,7 +268,7 @@ static void hx_os_loop_native_result(hx_os_request *request)
 			&request->completion.peer);
 
 	if (request->ready && request->completion.error.status != HX_OS_OK)
-		(void)hx_os_socket_close(&request->accepted, NULL);
+		hx_os_i_socket_discard(&request->accepted);
 }
 
 void hx_os_i_loop_step(hx_os_request *request)
@@ -275,7 +300,9 @@ void hx_os_i_loop_step(hx_os_request *request)
 		return;
 	}
 
-	if (!request->started)
+	if (!request->started &&
+		(!request->accept_retry_after ||
+			hx_os_deadline_expired(request->accept_retry_after)))
 		hx_os_loop_start_native(request);
 }
 #else

@@ -86,9 +86,54 @@ hx_os_status hx_os_i_socket_error(hx_os_error *error, int code)
 #endif
 }
 
-void hx_os_i_socket_close(hx_os_i_socket socket)
+int hx_os_i_socket_accept_retry(int code)
 {
 #if defined(_WIN32)
+	return code == WSAECONNRESET || code == WSAECONNABORTED ||
+		code == WSAENOTCONN || code == ERROR_NETNAME_DELETED ||
+		code == ERROR_CONNECTION_ABORTED;
+#else
+	if (code == EINTR || code == ECONNABORTED || code == ECONNRESET)
+		return 1;
+#if defined(__linux__)
+	// Linux can return a pending connection's network error from accept.
+	return code == ENETDOWN || code == EPROTO || code == ENOPROTOOPT ||
+		code == EHOSTDOWN || code == ENONET || code == EHOSTUNREACH ||
+		code == ENETUNREACH || code == EOPNOTSUPP;
+#else
+	return 0;
+#endif
+#endif
+}
+
+hx_os_status hx_os_i_socket_close(
+	hx_os_i_socket *socket, hx_os_error *error)
+{
+#if defined(_WIN32)
+	if (closesocket(*socket))
+		return hx_os_i_socket_error(error, WSAGetLastError());
+
+	*socket = HX_OS_I_BAD_SOCKET;
+
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+#else
+	int code = close(*socket) ? errno : 0;
+
+	// Retrying close can close another thread's reused descriptor.
+	*socket = HX_OS_I_BAD_SOCKET;
+
+	return hx_os_i_socket_error(error, code);
+#endif
+}
+
+void hx_os_i_socket_discard_native(hx_os_i_socket socket)
+{
+#if defined(_WIN32)
+	struct linger disabled = {0, 0};
+
+	// An accepted socket may inherit linger before ownership is published.
+	(void)setsockopt(socket, SOL_SOCKET, SO_LINGER,
+		(const char *)&disabled, sizeof(disabled));
 	(void)closesocket(socket);
 #else
 	(void)close(socket);

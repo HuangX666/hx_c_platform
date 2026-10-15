@@ -709,7 +709,8 @@ hx_os_status hx_os_loop_destroy(hx_os_loop **loop, hx_os_error *error)
 #if !HX_OS_ENABLE_LOOP && HX_OS_ENABLE_NETWORK
 #include "net_private.h"
 
-hx_os_status hx_os_i_loop_detach(hx_os_socket *socket, hx_os_error *error)
+hx_os_status hx_os_i_loop_close_socket(
+	hx_os_socket *socket, hx_os_error *error)
 {
 	(void)socket;
 

@@ -122,6 +122,15 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_set_reuseaddr(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_peer_address(
 	hx_os_socket *socket, hx_os_address *address, hx_os_error *error);
 
+/**
+ * \brief Accept one connection without waiting.
+ *
+ * \returns WOULD_BLOCK for an empty backlog or a recoverable interrupted/
+ * aborted connection; native details distinguish these cases. Retry after
+ * readiness, subject to the caller's deadline. Listener/resource failures
+ * remain errors. The loop's ACCEPT request retries recoverable failures
+ * internally until it succeeds, is cancelled, or reaches its deadline.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_accept(hx_os_socket *listener,
 	hx_os_socket **out, hx_os_address *peer, hx_os_error *error);
 
@@ -171,6 +180,15 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_receive_from(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_shutdown(
 	hx_os_socket *socket, int direction, hx_os_error *error);
 
+/**
+ * \brief Close the socket and clear its owner pointer when consumed.
+ *
+ * \details Pending I/O returns BUSY. A Windows native close failure, including
+ * WOULD_BLOCK with nonzero linger, preserves the pointer, network reference
+ * and loop ownership for retry. POSIX close is attempted once and consumes
+ * the descriptor even on error; do not retry a saved native descriptor.
+ * A non-NULL owner still needs closing; a NULL owner has been consumed.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_socket_close(
 	hx_os_socket **socket, hx_os_error *error);
 

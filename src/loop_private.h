@@ -38,6 +38,7 @@ struct hx_os_request {
 	hx_os_status stop_status;
 #if defined(_WIN32)
 	OVERLAPPED overlapped;
+	hx_os_deadline accept_retry_after;
 	int native_pending;
 	int native_done;
 	int native_cancelled;

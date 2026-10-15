@@ -66,7 +66,13 @@ No library background thread is created by core functions or event-loop creation
 
 Network instances balance native startup/cleanup and retain sockets/loops. Basic sockets are nonblocking and noninheritable. Direct socket use is serialized by the caller. TCP receive distinguishes EOF from an empty requested buffer. UDP zero-length datagrams are data. Truncated datagrams report LIMIT plus the copied byte count; the remainder is discarded. IPv6 scope_id is explicit; parse/format handle the address literal, while port/scope remain separate fields. DNS takes ASCII/Punycode hostnames, with at most 256 distinct addresses.
 
+Windows creates sockets with WSA_FLAG_NO_HANDLE_INHERIT. Linux/Android set close-on-exec during socket creation and use accept4 with SOCK_CLOEXEC | SOCK_NONBLOCK; an unavailable accept4 reports an error instead of silently using a racy fallback. POSIX close-on-exec prevents retention across exec, not the temporary descriptor copy made by fork. On macOS, creation/acceptance still uses a separate fcntl step: the host must coordinate concurrent socket creation and child-process startup when inheritance isolation is required.
+
 Direct connect_until timeout leaves establishment in progress; close to abandon. send_until reports a sent prefix. Data already delivered is never rolled back. Readiness is a hint and subsequent nonblocking I/O may still return WOULD_BLOCK.
+
+A client can disconnect before the server accepts it. Known recoverable accept errors return WOULD_BLOCK with their native details; loop ACCEPT operations keep waiting for another connection, subject to the original deadline and cancellation. They do not fail the whole IPC/TLS listener merely because one incoming connection was aborted. Invalid listeners and resource exhaustion remain errors; the library does not retry every failure indefinitely.
+
+Always inspect the owner pointer after socket close. On Windows, a native close failure preserves the socket, its network reference and any loop attachment for retry. In particular, nonzero SO_LINGER on a nonblocking socket can make close return WOULD_BLOCK; do not discard the owner or destroy its network/loop. POSIX close is issued once: an error may still consume the descriptor and clear the owner, so do not retry the old native descriptor.
 
 The creating thread owns loop driving, I/O submission, attached sockets and destruction, and must stay alive until loop destruction. POST submission, request cancellation/reference operations and waiting are thread-safe. One read-side and one write-side request may coexist per socket; CONNECT occupies both. Do not mix direct I/O with pending loop I/O. A socket stays attached to one loop until close; closing a busy socket fails.
 

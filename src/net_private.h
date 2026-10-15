@@ -56,7 +56,14 @@ hx_os_status hx_os_i_socket_error(hx_os_error *error, int code);
 
 int hx_os_i_socket_last_error(void);
 
-void hx_os_i_socket_close(hx_os_i_socket socket);
+int hx_os_i_socket_accept_retry(int code);
+
+hx_os_status hx_os_i_socket_close(
+	hx_os_i_socket *socket, hx_os_error *error);
+
+// Only for unpublished sockets without pending I/O or a loop attachment.
+void hx_os_i_socket_discard_native(hx_os_i_socket socket);
+void hx_os_i_socket_discard(hx_os_socket **socket);
 
 hx_os_status hx_os_i_socket_configure(
 	hx_os_i_socket native, int nonblocking, hx_os_error *error);
@@ -81,6 +88,7 @@ int hx_os_i_address_native(const hx_os_address *address,
 int hx_os_i_address_public(
 	const struct sockaddr *native, hx_os_address *address);
 
-hx_os_status hx_os_i_loop_detach(hx_os_socket *socket, hx_os_error *error);
+hx_os_status hx_os_i_loop_close_socket(
+	hx_os_socket *socket, hx_os_error *error);
 
 #endif

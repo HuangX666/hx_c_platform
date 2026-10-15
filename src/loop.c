@@ -117,7 +117,9 @@ void hx_os_request_release(hx_os_request *request)
 	if (hx_os_atomic_fetch_add(&request->references, -1, HX_OS_ACQ_REL) !=
 		1)
 		return;
-	(void)hx_os_socket_close(&request->accepted, NULL);
+#if HX_OS_ENABLE_NETWORK
+	hx_os_i_socket_discard(&request->accepted);
+#endif
 	hx_os_address_list_destroy(request->addresses);
 	hx_os_memory_free(request->owned_data);
 	hx_os_memory_free(request->owned_host);
@@ -536,7 +538,9 @@ static void hx_os_loop_finish(hx_os_loop *loop, hx_os_request *request)
 			request->stop_status, request->completion.error.domain,
 			request->completion.error.native_code);
 
-		(void)hx_os_socket_close(&request->accepted, NULL);
+#if HX_OS_ENABLE_NETWORK
+		hx_os_i_socket_discard(&request->accepted);
+#endif
 		hx_os_address_list_destroy(request->addresses);
 		request->addresses = NULL;
 	}
@@ -623,6 +627,11 @@ static size_t hx_os_loop_pump(hx_os_loop *loop, hx_os_deadline *next)
 		}
 		else {
 			deadline = request->operation.deadline;
+#if defined(_WIN32)
+			if (request->accept_retry_after &&
+				request->accept_retry_after < deadline)
+				deadline = request->accept_retry_after;
+#endif
 			if (!request->stop_status && deadline < *next)
 				*next = deadline;
 
@@ -776,8 +785,10 @@ hx_os_status hx_os_loop_close_until(
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
 
-hx_os_status hx_os_i_loop_detach(hx_os_socket *socket, hx_os_error *error)
+hx_os_status hx_os_i_loop_close_socket(
+	hx_os_socket *socket, hx_os_error *error)
 {
+#if HX_OS_ENABLE_NETWORK
 	hx_os_loop *loop = socket->loop;
 	hx_os_socket **cursor;
 	hx_os_status status;
@@ -789,6 +800,10 @@ hx_os_status hx_os_i_loop_detach(hx_os_socket *socket, hx_os_error *error)
 	if (status != HX_OS_OK)
 		return status;
 
+	status = hx_os_i_socket_close(&socket->native, error);
+	if (socket->native != HX_OS_I_BAD_SOCKET)
+		return status;
+
 	for (cursor = &loop->sockets; *cursor; cursor = &(*cursor)->loop_next) {
 		if (*cursor == socket) {
 			*cursor = socket->loop_next;
@@ -797,7 +812,12 @@ hx_os_status hx_os_i_loop_detach(hx_os_socket *socket, hx_os_error *error)
 		}
 	}
 
-	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+	return status;
+#else
+	(void)socket;
+
+	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+#endif
 }
 
 hx_os_status hx_os_loop_destroy(hx_os_loop **loop, hx_os_error *error)

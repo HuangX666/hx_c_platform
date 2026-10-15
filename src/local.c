@@ -101,8 +101,8 @@ hx_os_status hx_os_local_socket_create(
 		if (!network)
 			return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 #if defined(_WIN32)
-		native = WSASocketW(
-			AF_UNIX, type, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+		native = WSASocketW(AF_UNIX, type, 0, NULL, 0,
+			WSA_FLAG_OVERLAPPED | WSA_FLAG_NO_HANDLE_INHERIT);
 #else
 #if defined(SOCK_CLOEXEC)
 		type |= SOCK_CLOEXEC;

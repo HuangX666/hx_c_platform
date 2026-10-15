@@ -199,6 +199,8 @@ Accepted send data may leave after a timeout. If a failed send contains only par
 
 Server `accept_until` announces each successfully handshaken peer once. IDs are opaque, local to that endpoint and never reused during its lifetime; clients use peer `0`. They are not on-wire device, request or cross-restart session identifiers. The example carries request/device fields in JSON. Accepted peers remain addressable until explicitly closed/aborted or the endpoint closes. Failed unannounced handshakes are reclaimed; a full live-peer table stops accepting. There is no automatic reconnect or idle timeout policy.
 
+An incoming client that aborts during socket acceptance does not stop the whole listener for known recoverable errors. The loop continues accepting within its cancellation/deadline contract. Invalid listeners and resource exhaustion still report failure; see [network contracts](CONTRACTS.md#networking-and-event-loops).
+
 ## 5. Verification, trust stores and deployment
 
 Certificate failures preserve the native OpenSSL error and the X.509 verification result in `error.cause_code`. Clients always verify the server chain and its DNS/IP Subject Alternative Name. DNS/Punycode names use SNI and disallow partial wildcards; numeric IPs use IP verification. No automatic IDNA conversion or Common Name fallback. `server_name` changes the identity being verified, not the address being connected to. Resolved addresses are tried sequentially on TCP failures within one connection/handshake deadline; certificate failures do not fall back to an unverified mode.

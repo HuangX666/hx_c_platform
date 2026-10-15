@@ -4,7 +4,8 @@ static hx_os_status hx_os_duplex_socket(SOCKET *out, hx_os_error *error)
 {
 	hx_os_status status;
 
-	*out = WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, NULL, 0, 0);
+	*out = WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, NULL, 0,
+		WSA_FLAG_NO_HANDLE_INHERIT);
 	if (*out == INVALID_SOCKET)
 		return hx_os_i_socket_error(error, WSAGetLastError());
 
@@ -103,7 +104,8 @@ hx_os_status hx_os_i_duplex_pair(hx_os_context *context,
 		accepted = accept(listener, (struct sockaddr *)&peer, &length);
 		if (accepted == INVALID_SOCKET) {
 			code = WSAGetLastError();
-			if (code == WSAEWOULDBLOCK) {
+			if (code == WSAEWOULDBLOCK ||
+				hx_os_i_socket_accept_retry(code)) {
 				if (hx_os_deadline_expired(deadline)) {
 					status = hx_os_i_error(
 						error, HX_OS_TIMEOUT, 0, 0);

@@ -265,7 +265,7 @@ hx_os_status hx_os_i_socket_wrap(hx_os_network *network, hx_os_i_socket native,
 
 	hx_os_status status = hx_os_i_socket_configure(native, 1, error);
 	if (status != HX_OS_OK) {
-		hx_os_i_socket_close(native);
+		hx_os_i_socket_discard_native(native);
 
 		return status;
 	}
@@ -275,7 +275,7 @@ hx_os_status hx_os_i_socket_wrap(hx_os_network *network, hx_os_i_socket native,
 #endif
 	socket = hx_os_i_zero(network->context, allocation);
 	if (!socket) {
-		hx_os_i_socket_close(native);
+		hx_os_i_socket_discard_native(native);
 
 		return hx_os_i_error(error, HX_OS_NO_MEMORY, 0, 0);
 	}
@@ -292,6 +292,20 @@ hx_os_status hx_os_i_socket_wrap(hx_os_network *network, hx_os_i_socket native,
 	*out = socket;
 
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+}
+
+void hx_os_i_socket_discard(hx_os_socket **socket)
+{
+	hx_os_network *network;
+
+	if (!*socket)
+		return;
+
+	network = (*socket)->network;
+	hx_os_i_socket_discard_native((*socket)->native);
+	hx_os_memory_free(*socket);
+	*socket = NULL;
+	(void)hx_os_atomic_fetch_add(&network->objects, -1, HX_OS_RELEASE);
 }
 
 hx_os_status hx_os_socket_create(hx_os_network *network, int family,
@@ -311,7 +325,7 @@ hx_os_status hx_os_socket_create(hx_os_network *network, int family,
 	type = protocol == HX_OS_TCP ? SOCK_STREAM : SOCK_DGRAM;
 #if defined(_WIN32)
 	native = WSASocketW(family == HX_OS_IPV4 ? AF_INET : AF_INET6, type, 0,
-		NULL, 0, WSA_FLAG_OVERLAPPED);
+		NULL, 0, WSA_FLAG_OVERLAPPED | WSA_FLAG_NO_HANDLE_INHERIT);
 #else
 #if defined(SOCK_CLOEXEC)
 	type |= SOCK_CLOEXEC;
@@ -383,9 +397,24 @@ hx_os_status hx_os_socket_accept(hx_os_socket *listener, hx_os_socket **out,
 	if (listener->family == HX_OS_LOCAL && peer)
 		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 
+#if defined(__linux__)
+	native = accept4(listener->native, (struct sockaddr *)&address,
+		&length, SOCK_CLOEXEC | SOCK_NONBLOCK);
+#else
 	native = accept(listener->native, (struct sockaddr *)&address, &length);
-	if (native == HX_OS_I_BAD_SOCKET)
-		return hx_os_i_socket_error(error, hx_os_i_socket_last_error());
+#endif
+	if (native == HX_OS_I_BAD_SOCKET) {
+		int code = hx_os_i_socket_last_error();
+		hx_os_status status = hx_os_i_socket_error(error, code);
+
+		if (hx_os_i_socket_accept_retry(code)) {
+			status = HX_OS_WOULD_BLOCK;
+			if (error)
+				error->status = status;
+		}
+
+		return status;
+	}
 
 	if (peer)
 		(void)hx_os_i_address_public((struct sockaddr *)&address, peer);
@@ -687,18 +716,18 @@ hx_os_status hx_os_socket_close(hx_os_socket **socket, hx_os_error *error)
 	if (hx_os_atomic_load(&(*socket)->pending, HX_OS_ACQUIRE))
 		return hx_os_i_error(error, HX_OS_BUSY, 0, 0);
 
-	if ((*socket)->loop) {
-		status = hx_os_i_loop_detach(*socket, error);
-		if (status != HX_OS_OK)
-			return status;
-	}
+	if ((*socket)->loop)
+		status = hx_os_i_loop_close_socket(*socket, error);
+	else
+		status = hx_os_i_socket_close(&(*socket)->native, error);
+	if ((*socket)->native != HX_OS_I_BAD_SOCKET)
+		return status;
 
 	network = (*socket)->network;
 
-	hx_os_i_socket_close((*socket)->native);
 	hx_os_memory_free(*socket);
 	*socket = NULL;
 	(void)hx_os_atomic_fetch_add(&network->objects, -1, HX_OS_RELEASE);
 
-	return hx_os_i_error(error, HX_OS_OK, 0, 0);
+	return status;
 }
