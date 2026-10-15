@@ -72,6 +72,8 @@ build-shared-linux/bin/hx_os_native_dependencies
 
 ## 4. 安装与发布
 
+只有编译好的 SDK 时，先按[安装包接入教程](INSTALL.zh-CN.md)跑通 C 或 C++ 的文件读取程序；其中包含完整 find_package 配置和 DLL／.so 运行路径命令，再按本页增加原生库调用。
+
 安装包带有所选 SDK 的头文件、CMake 导入文件和运行所需产物。Windows 动态库放在 `bin/`，Linux 放在 `lib/`。Windows 发布时把 DLL 放在程序旁边，或把这套安装包的 `bin/` 加入 PATH。Linux 保留共享库符号链接和本地运行库搜索路径。
 
 在自己的目标环境运行安装后的消费者示例，检查头文件、链接与运行库部署；桌面结果不能代替 Android、板卡或旧系统验收。发布底层 SDK 时保留[第三方许可说明](../THIRD_PARTY_NOTICES.zh-CN.md)。

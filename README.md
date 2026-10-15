@@ -69,7 +69,7 @@ cmake -S . -B build
 cmake --build build --config Release
 ```
 
-Run all commands below from the `hx_demo` directory. Select one complete program as `main.c` at a time; replace it and rebuild to try another task. For C++, save `main.cpp` and use the [complete C++ CMake setup](docs/USAGE.md#cpp-project). If you already have an `include/lib/bin` SDK, use the [installed-package setup](docs/USAGE.md#installed-project).
+Run all commands below from the `hx_demo` directory. Select one complete program as `main.c` at a time; replace it and rebuild to try another task. For C++, save `main.cpp` and use the [complete C++ CMake setup](docs/USAGE.md#cpp-project). If you already have an `include/lib/bin` SDK, use the [installed-package setup](docs/INSTALL.md).
 
 <a id="section-4"></a>
 

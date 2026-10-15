@@ -149,44 +149,9 @@ endif()
 
 ### 2.4 已经有 include／lib／bin 安装包
 
-如果你拿到的是编译好的 SDK，把整个包放到 `deps/hx_c_platform`，保持下面的目录关系；无需再克隆源码。
+把完整 SDK 放到业务项目的 `deps/hx_c_platform`，无需克隆本库源码。按[安装包独立接入教程](INSTALL.zh-CN.md)操作：其中提供可直接复制的 C99 和 C++11 完整 CMakeLists.txt、main、输入文件、Windows／Linux 运行命令，以及 cmake-gui／Visual Studio 的启动方法。
 
-```text
-deps/hx_c_platform/
-├── include/
-├── lib/
-│   └── cmake/hx_c_platform/
-└── bin/
-```
-
-C 程序使用以下 `CMakeLists.txt`，继续按第 2.2 节运行命令构建：
-
-```cmake
-cmake_minimum_required(VERSION 3.16)
-project(hx_demo LANGUAGES C)
-
-list(PREPEND CMAKE_PREFIX_PATH
-	"${CMAKE_CURRENT_SOURCE_DIR}/deps/hx_c_platform")
-find_package(hx_c_platform CONFIG REQUIRED)
-
-add_executable(hx_demo main.c)
-target_link_libraries(hx_demo PRIVATE hx_c_platform::hx_c_platform)
-set_target_properties(hx_demo PROPERTIES
-	C_STANDARD 99
-	C_STANDARD_REQUIRED YES
-	C_EXTENSIONS NO)
-```
-
-库和程序的架构／配置要匹配，例如都使用 x64 Release。CMake GUI 打开 `hx_demo` 作为源码目录，选择对应 Visual Studio 生成器和 x64，Configure／Generate 后可打开生成的 `.sln`。
-
-Windows 共享 SDK 的 DLL 放在 `bin`。在 PowerShell 中运行时，可以先把这一目录加入当前终端的 PATH：
-
-```powershell
-$env:PATH = "$PWD\deps\hx_c_platform\bin;$env:PATH"
-.\build\Release\hx_demo.exe
-```
-
-Linux 共享包可按[部署说明](NATIVE_DEPENDENCIES.zh-CN.md#4-安装与发布)设置库搜索路径。C++ 安装包接入同样使用 find_package；把项目语言、源文件、目标和异常选项换成第 2.3 节的 C++ 设置。
+保留 lib/cmake 中本库和依赖的包配置，以及 bin 或 lib 中匹配的运行库。教程用 find_package 导入已编译库；不要对安装包调用 add_subdirectory，也不需要打开源码示例构建开关。仅复制头文件和主库、删掉包配置或依赖，不能保证链接和运行成功。
 
 ### 2.5 看懂示例中的几种写法
 

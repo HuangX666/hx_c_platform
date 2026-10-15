@@ -72,6 +72,8 @@ Use the shipped headers, import libraries and runtime as one set. Do not mix a d
 
 ## 4. Installation and deployment
 
+With only a prebuilt SDK, start with the [installed-package guide](INSTALL.md) to run the C or C++ file reader. It includes complete find_package configuration and DLL/.so runtime path commands; then add native calls as described here.
+
 The installation includes the selected SDK headers, CMake imports and required artifacts. Shared runtimes use `bin/` on Windows and `lib/` on Linux. Deploy Windows DLLs alongside the executable or put that installation's `bin/` on PATH. Linux library symlink chains and local runtime search paths are retained.
 
 Use the installed consumer example to check header discovery, linking and runtime deployment on your target; desktop results do not establish Android, board or older-system support. Preserve the [third-party notices](../THIRD_PARTY_NOTICES.md) when redistributing the native SDK.

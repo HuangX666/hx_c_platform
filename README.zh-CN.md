@@ -69,7 +69,7 @@ cmake -S . -B build
 cmake --build build --config Release
 ```
 
-后面的运行命令都从 `hx_demo` 目录执行。每次只选择一个完整程序作为 `main.c`；换一个例子后重新构建即可。C++ 程序保存为 `main.cpp`，使用[教程中的 C++ CMake 配置](docs/USAGE.zh-CN.md#cpp-project)。已有 `include/lib/bin` 安装包时，可直接采用[安装包接入方式](docs/USAGE.zh-CN.md#installed-project)。
+后面的运行命令都从 `hx_demo` 目录执行。每次只选择一个完整程序作为 `main.c`；换一个例子后重新构建即可。C++ 程序保存为 `main.cpp`，使用[教程中的 C++ CMake 配置](docs/USAGE.zh-CN.md#cpp-project)。已有 `include/lib/bin` 安装包时，可直接采用[安装包接入方式](docs/INSTALL.zh-CN.md)。
 
 <a id="section-4"></a>
 

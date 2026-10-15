@@ -149,44 +149,9 @@ endif()
 
 ### 2.4 Use an existing include/lib/bin SDK
 
-If you have a compiled SDK, place the whole package in `deps/hx_c_platform` with this layout; no source clone is needed.
+Place the complete SDK in your application's `deps/hx_c_platform`; no library source checkout is required. Follow the [standalone SDK guide](INSTALL.md) for complete C99 and C++11 CMakeLists.txt files, mains, input, Windows/Linux commands and cmake-gui/Visual Studio launch steps.
 
-```text
-deps/hx_c_platform/
-├── include/
-├── lib/
-│   └── cmake/hx_c_platform/
-└── bin/
-```
-
-Use this `CMakeLists.txt` for a C program and the build commands from section 2.2:
-
-```cmake
-cmake_minimum_required(VERSION 3.16)
-project(hx_demo LANGUAGES C)
-
-list(PREPEND CMAKE_PREFIX_PATH
-	"${CMAKE_CURRENT_SOURCE_DIR}/deps/hx_c_platform")
-find_package(hx_c_platform CONFIG REQUIRED)
-
-add_executable(hx_demo main.c)
-target_link_libraries(hx_demo PRIVATE hx_c_platform::hx_c_platform)
-set_target_properties(hx_demo PROPERTIES
-	C_STANDARD 99
-	C_STANDARD_REQUIRED YES
-	C_EXTENSIONS NO)
-```
-
-Match library/application architecture and configuration, for example x64 Release. In CMake GUI, select `hx_demo` as the source directory and the matching Visual Studio generator and x64 architecture. Configure/Generate, then open the generated `.sln`.
-
-A Windows shared SDK places DLLs in `bin`. For a PowerShell run, add it to the current terminal's PATH:
-
-```powershell
-$env:PATH = "$PWD\deps\hx_c_platform\bin;$env:PATH"
-.\build\Release\hx_demo.exe
-```
-
-For a Linux shared package, follow the [runtime deployment guide](NATIVE_DEPENDENCIES.md#4-installation-and-deployment). C++ installed consumers also use find_package; select the language, source, target and exception options from section 2.3.
+Preserve the core and dependency metadata under lib/cmake and matching runtimes under bin or lib. Use find_package to import the prebuilt library, without add_subdirectory or source-example build switches. Selecting only headers and the main library while omitting metadata or dependencies is not a complete link/runtime setup.
 
 ### 2.5 Read the recurring notation
 

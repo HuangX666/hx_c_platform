@@ -4,7 +4,7 @@
 
 Programs are organized by task and show inputs, calls, results and cleanup; their guides identify supporting headers and plugin sources. Pick the closest task, read and run it, then substitute your data and processing. These are public usage examples and do not require private maintainer regressions.
 
-The installed SDK includes these public sources and guides in `share/doc/hx_c_platform/examples`. When reading an installed package, use the [installed consumer setup](../docs/USAGE.md#installed-project), copying the selected source and its local headers. The target-build commands below apply to a full source checkout.
+The installed SDK includes these public sources and guides in `share/doc/hx_c_platform/examples`. When reading an installed package, use the [installed consumer setup](../docs/INSTALL.md), copying the selected source and its local headers. The target-build commands below apply to a full source checkout.
 
 <a id="run"></a>
 
