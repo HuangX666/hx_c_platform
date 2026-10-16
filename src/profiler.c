@@ -306,19 +306,6 @@ static hx_os_status hx_os_profiler_thread(hx_os_profiler *profiler,
 	return HX_OS_OK;
 }
 
-static unsigned hx_os_profiler_hash(
-	hx_os_profile_record *parent, const char *name, size_t bytes)
-{
-	uint32_t hash =
-		UINT32_C(2166136261) ^ (parent ? parent->identifier : 0);
-	size_t i;
-
-	for (i = 0; i < bytes; ++i)
-		hash = (hash ^ (unsigned char)name[i]) * UINT32_C(16777619);
-
-	return (unsigned)(hash & 63);
-}
-
 static hx_os_profile_record *hx_os_profiler_find(hx_os_profiler *profiler,
 	hx_os_profile_record *parent, unsigned bucket, const char *name,
 	size_t bytes)
@@ -334,11 +321,10 @@ static hx_os_profile_record *hx_os_profiler_find(hx_os_profiler *profiler,
 }
 
 static hx_os_status hx_os_profiler_record(hx_os_profiler *profiler,
-	hx_os_profile_record *parent, const char *name, size_t bytes,
-	hx_os_profile_record **out, int *locked, hx_os_error *error)
+	hx_os_profile_record *parent, unsigned bucket, const char *name,
+	size_t bytes, hx_os_profile_record **out, int *locked,
+	hx_os_error *error)
 {
-	unsigned bucket = hx_os_profiler_hash(parent, name, bytes);
-
 	hx_os_profile_record *record, *candidate;
 	hx_os_status status = HX_OS_OK;
 	size_t allocation = sizeof(*candidate) + bytes + 1;
@@ -423,8 +409,9 @@ static hx_os_status hx_os_profiler_enter(hx_os_profiler *profiler,
 	hx_os_profile_guard guard;
 	hx_os_profile_thread *thread = NULL;
 	hx_os_profile_frame *frames;
-	hx_os_profile_record *record = NULL;
+	hx_os_profile_record *record = NULL, *parent = NULL;
 	uint64_t now;
+	uint32_t hash = UINT32_C(2166136261);
 	size_t bytes = 0, invalid;
 	int created = 0, locked = 0;
 	hx_os_status status =
@@ -438,8 +425,17 @@ static hx_os_status hx_os_profiler_enter(hx_os_profiler *profiler,
 		goto done;
 	}
 
-	while (bytes <= profiler->options.max_name_bytes && name[bytes])
+	thread = hx_os_profiler_context_get(profiler);
+	if (thread && thread->depth) {
+		frames = (hx_os_profile_frame *)(thread + 1);
+		parent = frames[thread->depth - 1].record;
+		hash ^= parent->identifier;
+	}
+
+	while (bytes <= profiler->options.max_name_bytes && name[bytes]) {
+		hash = (hash ^ (unsigned char)name[bytes]) * UINT32_C(16777619);
 		++bytes;
+	}
 
 	if (bytes > profiler->options.max_name_bytes) {
 		status = HX_OS_LIMIT;
@@ -450,7 +446,6 @@ static hx_os_status hx_os_profiler_enter(hx_os_profiler *profiler,
 	if (status != HX_OS_OK)
 		goto done;
 
-	thread = hx_os_profiler_context_get(profiler);
 	if ((root && thread && thread->depth) ||
 		(!root && (!thread || !thread->depth))) {
 		status = root ? HX_OS_BUSY : HX_OS_INVALID;
@@ -470,9 +465,8 @@ static hx_os_status hx_os_profiler_enter(hx_os_profiler *profiler,
 
 	frames = (hx_os_profile_frame *)(thread + 1);
 
-	status = hx_os_profiler_record(profiler,
-		thread->depth ? frames[thread->depth - 1].record : NULL, name,
-		bytes, &record, &locked, error);
+	status = hx_os_profiler_record(profiler, parent, (unsigned)(hash & 63),
+		name, bytes, &record, &locked, error);
 	if (status == HX_OS_OK)
 		status = hx_os_monotonic_read(&now, error);
 
