@@ -74,17 +74,23 @@ hx_os_status hx_os_i_profiler_begin(hx_os_profiler *profiler,
 	return hx_os_i_error(error, status, 0, 0);
 }
 
-void hx_os_i_profiler_end(hx_os_profile_guard *guard)
+// Finish the operation and release its held mutex after all cleanup is done.
+static void hx_os_profiler_end_locked(hx_os_profile_guard *guard)
 {
 	hx_os_profiler *profiler = guard->profiler;
 
-	(void)hx_os_mutex_lock(profiler->mutex, NULL);
 	--profiler->operations;
 	if (profiler->closing && !profiler->operations)
 		hx_os_condition_notify_all(profiler->condition);
 
 	(void)hx_os_mutex_unlock(profiler->mutex, NULL);
 	hx_os_profile_current = guard->previous;
+}
+
+void hx_os_i_profiler_end(hx_os_profile_guard *guard)
+{
+	(void)hx_os_mutex_lock(guard->profiler->mutex, NULL);
+	hx_os_profiler_end_locked(guard);
 }
 
 static uint64_t hx_os_profiler_sum(
@@ -329,7 +335,7 @@ static hx_os_profile_record *hx_os_profiler_find(hx_os_profiler *profiler,
 
 static hx_os_status hx_os_profiler_record(hx_os_profiler *profiler,
 	hx_os_profile_record *parent, const char *name, size_t bytes,
-	hx_os_profile_record **out, hx_os_error *error)
+	hx_os_profile_record **out, int *locked, hx_os_error *error)
 {
 	unsigned bucket = hx_os_profiler_hash(parent, name, bytes);
 
@@ -340,6 +346,7 @@ static hx_os_status hx_os_profiler_record(hx_os_profiler *profiler,
 		!!(profiler->features & HX_OS_PROFILER_HISTOGRAM_INCLUSIVE) +
 		!!(profiler->features & HX_OS_PROFILER_HISTOGRAM_EXCLUSIVE);
 
+	*locked = 0;
 	(void)hx_os_mutex_lock(profiler->mutex, NULL);
 	record = hx_os_profiler_find(profiler, parent, bucket, name, bytes);
 	if (profiler->closing)
@@ -351,15 +358,17 @@ static hx_os_status hx_os_profiler_record(hx_os_profiler *profiler,
 	else if (!record)
 		++profiler->pending_records;
 
-	(void)hx_os_mutex_unlock(profiler->mutex, NULL);
-	if (status != HX_OS_OK)
-		return hx_os_i_error(error, status, 0, 0);
-
-	if (record) {
+	if (status == HX_OS_OK && record) {
+		// Commit the frame and finish the call under this same lock.
 		*out = record;
+		*locked = 1;
 
 		return HX_OS_OK;
 	}
+
+	(void)hx_os_mutex_unlock(profiler->mutex, NULL);
+	if (status != HX_OS_OK)
+		return hx_os_i_error(error, status, 0, 0);
 
 	if (histograms)
 		allocation = hx_os_profile_bins_offset(bytes) +
@@ -417,7 +426,7 @@ static hx_os_status hx_os_profiler_enter(hx_os_profiler *profiler,
 	hx_os_profile_record *record = NULL;
 	uint64_t now;
 	size_t bytes = 0, invalid;
-	int created = 0;
+	int created = 0, locked = 0;
 	hx_os_status status =
 		hx_os_i_profiler_begin(profiler, &guard, 0, error);
 
@@ -463,7 +472,7 @@ static hx_os_status hx_os_profiler_enter(hx_os_profiler *profiler,
 
 	status = hx_os_profiler_record(profiler,
 		thread->depth ? frames[thread->depth - 1].record : NULL, name,
-		bytes, &record, error);
+		bytes, &record, &locked, error);
 	if (status == HX_OS_OK)
 		status = hx_os_monotonic_read(&now, error);
 
@@ -475,10 +484,18 @@ static hx_os_status hx_os_profiler_enter(hx_os_profiler *profiler,
 	}
 
 native_done:
-	if (status != HX_OS_OK && created)
+	if (status != HX_OS_OK && created) {
+		if (locked) {
+			(void)hx_os_mutex_unlock(profiler->mutex, NULL);
+			locked = 0;
+		}
 		hx_os_profiler_context_clear(profiler);
+	}
 
-	hx_os_i_profiler_end(&guard);
+	if (locked)
+		hx_os_profiler_end_locked(&guard);
+	else
+		hx_os_i_profiler_end(&guard);
 
 	return status;
 
@@ -601,10 +618,14 @@ hx_os_status hx_os_profiler_leave(hx_os_profiler *profiler, hx_os_error *error)
 		detach = profiler->closing && !thread->depth;
 	}
 
-	(void)hx_os_mutex_unlock(profiler->mutex, NULL);
-	if (detach)
-		hx_os_profiler_context_clear(profiler);
+	if (!detach) {
+		hx_os_profiler_end_locked(&guard);
 
+		return status;
+	}
+
+	(void)hx_os_mutex_unlock(profiler->mutex, NULL);
+	hx_os_profiler_context_clear(profiler);
 	hx_os_i_profiler_end(&guard);
 
 	return status;
