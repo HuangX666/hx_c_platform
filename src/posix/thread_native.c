@@ -29,7 +29,9 @@ hx_os_status hx_os_i_mutex_init(hx_os_mutex *mutex, hx_os_error *error)
 
 hx_os_status hx_os_mutex_lock(hx_os_mutex *mutex, hx_os_error *error)
 {
-	return hx_os_i_errno(error, pthread_mutex_lock(&mutex->native));
+	int result = pthread_mutex_lock(&mutex->native);
+
+	return !result && !error ? HX_OS_OK : hx_os_i_errno(error, result);
 }
 
 hx_os_status hx_os_mutex_try_lock(hx_os_mutex *mutex, hx_os_error *error)
@@ -39,7 +41,9 @@ hx_os_status hx_os_mutex_try_lock(hx_os_mutex *mutex, hx_os_error *error)
 
 hx_os_status hx_os_mutex_unlock(hx_os_mutex *mutex, hx_os_error *error)
 {
-	return hx_os_i_errno(error, pthread_mutex_unlock(&mutex->native));
+	int result = pthread_mutex_unlock(&mutex->native);
+
+	return !result && !error ? HX_OS_OK : hx_os_i_errno(error, result);
 }
 
 void hx_os_mutex_destroy(hx_os_mutex *mutex)
