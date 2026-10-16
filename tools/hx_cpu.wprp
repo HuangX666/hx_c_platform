@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<WindowsPerformanceRecorder Version="1.0">
+	<Profiles>
+		<!-- Long recordings overwrite older samples. -->
+		<SystemCollector Id="HxSystem" Name="hx CPU collector">
+			<BufferSize Value="64"/>
+			<Buffers Value="256"/>
+		</SystemCollector>
+		<SystemProvider Id="HxCpuProvider">
+			<Keywords>
+				<Keyword Value="ProcessThread"/>
+				<Keyword Value="Loader"/>
+				<Keyword Value="SampledProfile"/>
+			</Keywords>
+			<Stacks>
+				<Stack Value="SampledProfile"/>
+			</Stacks>
+		</SystemProvider>
+		<Profile Id="HxCpu.Light.Memory" Name="HxCpu"
+			Description="Explicit CPU sampling with a 16 MiB ring"
+			LoggingMode="Memory" DetailLevel="Light">
+			<Collectors>
+				<SystemCollectorId Value="HxSystem">
+					<SystemProviderId
+						Value="HxCpuProvider"/>
+				</SystemCollectorId>
+			</Collectors>
+		</Profile>
+	</Profiles>
+</WindowsPerformanceRecorder>

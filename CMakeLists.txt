@@ -13,6 +13,8 @@ option(BUILD_SHARED_LIBS "Build shared library" OFF)
 option(HX_OS_BUILD_TESTS "Build local maintainer tests (not distributed)" OFF)
 option(HX_OS_BUILD_EXAMPLES "Build standalone C examples" OFF)
 option(HX_OS_BUILD_BENCHMARKS "Build development microbenchmarks" OFF)
+option(HX_OS_DEVELOPER_ANALYSIS
+	"Add private symbols and frame pointers for explicit analysis" OFF)
 option(HX_OS_TEST_FORMAT_SYNTAX "Test optional host format generator" OFF)
 mark_as_advanced(HX_OS_BUILD_TESTS HX_OS_TEST_FORMAT_SYNTAX)
 
@@ -996,6 +998,11 @@ install(TARGETS hx_c_platform EXPORT hx_c_platformTargets
 install(TARGETS hx_c_platform_cpp EXPORT hx_c_platformTargets)
 install(TARGETS hx_c_platform_native EXPORT hx_c_platformTargets)
 install(TARGETS hx_c_platform_cpp20 EXPORT hx_c_platformTargets)
+if(MSVC AND HX_OS_DEVELOPER_ANALYSIS AND BUILD_SHARED_LIBS)
+	install(FILES "$<TARGET_PDB_FILE:hx_c_platform>"
+		DESTINATION ${CMAKE_INSTALL_BINDIR} OPTIONAL)
+endif()
+
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(FILES README.md README.zh-CN.md THIRD_PARTY_NOTICES.md
 	THIRD_PARTY_NOTICES.zh-CN.md DESTINATION ${CMAKE_INSTALL_DOCDIR})
@@ -1007,6 +1014,8 @@ install(DIRECTORY examples/ DESTINATION ${CMAKE_INSTALL_DOCDIR}/examples
 	PATTERN "*.py" PATTERN "*.md" PATTERN "*.hxconf"
 	PATTERN "__pycache__" EXCLUDE)
 install(DIRECTORY licenses/ DESTINATION ${CMAKE_INSTALL_DOCDIR}/licenses)
+install(FILES tools/hx_analyze.py tools/hx_cpu.wprp
+	DESTINATION ${CMAKE_INSTALL_DOCDIR}/tools)
 install(EXPORT hx_c_platformTargets NAMESPACE hx_c_platform::
 	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/hx_c_platform)
 configure_package_config_file(cmake/hx_c_platformConfig.cmake.in

@@ -2,6 +2,8 @@
 
 [简体中文](PROFILER.zh-CN.md) · [README](../README.md)
 
+For automatic CPU sampling, invalid-access/leak checks and heap reports, see [optional developer analysis](ANALYSIS.md). It complements manually marked intervals and stays off in ordinary builds.
+
 **Start with a complete program.** Record repeated intervals and inspect a snapshot to understand timing distributions of collection or parsing work.
 
 Open [profile_statistics.c](../examples/profile_statistics.c). Create with histogram support → record 12 read_sensor intervals → create snapshot → close profiler → read means/percentiles → release snapshot.

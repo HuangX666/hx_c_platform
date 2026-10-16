@@ -6,6 +6,8 @@
 
 Choose further tasks from the [runnable example directory](examples/README.md), which lists use cases, build targets, inputs and expected results.
 
+Investigate CPU hotspots and memory problems with the [optional perf, Valgrind and WPR/WPA workflow](docs/ANALYSIS.md). Detailed analysis stays off by default.
+
 <a id="section-1"></a>
 
 ## 1. What this library is for

@@ -2,6 +2,8 @@
 
 [English](PROFILER.md) · [README](../README.zh-CN.md)
 
+需要自动 CPU 采样、非法访问／泄漏检查或堆报告时，查看[可选开发分析](ANALYSIS.zh-CN.md)。它与人工区间计时配合使用，普通构建默认关闭。
+
 **先运行一个完整例子。** 要比较采集、解析等业务步骤的耗时分布时，用区间 profiler 记录多次调用，再取快照查看统计。
 
 打开 [profile_statistics.c](../examples/profile_statistics.c)。创建并开启直方图 → 为 read_sensor 记录 12 次区间 → 创建快照 → 关闭 profiler → 从独立快照读取均值和分位数 → release。

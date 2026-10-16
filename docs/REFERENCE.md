@@ -1851,6 +1851,7 @@ All new native/common modules default to ON; optional third-party encoding and p
 | `HX_OS_ENABLE_REGEX` | ON | Self-developed bounded UTF-8 regex |
 | `HX_OS_BUILD_EXAMPLES` | OFF | Build standalone C examples |
 | `HX_OS_BUILD_BENCHMARKS` | OFF | Build development microbenchmarks |
+| `HX_OS_DEVELOPER_ANALYSIS` | OFF | Private symbols/frame pointers for [explicit analysis](ANALYSIS.md); no automatic recording |
 | `HX_OS_ENABLE_NETWORK` | ON | Build native networking |
 | `HX_OS_ENABLE_CARES` | ON | Explicit cancellable DNS backend; requires NETWORK |
 | `HX_OS_ENABLE_LOOP` | ON | Build asynchronous event loop |

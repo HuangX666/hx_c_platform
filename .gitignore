@@ -16,6 +16,7 @@
 /cmake_install.cmake
 /CTestTestfile.cmake
 /Testing/
+hx-analysis/
 .vs/
 .idea/
 *.user

@@ -1843,6 +1843,7 @@ int main(void)
 | `HX_OS_ENABLE_REGEX` | ON | 自研有预算的 UTF-8 正则 |
 | `HX_OS_BUILD_EXAMPLES` | OFF | C 示例；存在 C++ 编译器时增加 C++ 示例 |
 | `HX_OS_BUILD_BENCHMARKS` | OFF | 开发用性能基准 |
+| `HX_OS_DEVELOPER_ANALYSIS` | OFF | [显式分析](ANALYSIS.zh-CN.md)所需的私有符号／帧指针；不自动采集 |
 | `HX_OS_ENABLE_NETWORK` | ON | 原生套接字与网络生命周期 |
 | `HX_OS_ENABLE_CARES` | ON | 显式可取消 DNS 后端，依赖 NETWORK |
 | `HX_OS_ENABLE_LOOP` | ON | 有界异步请求、轮询和完成回调 |
