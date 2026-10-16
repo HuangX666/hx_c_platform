@@ -58,57 +58,6 @@ static void hx_tls_marker_complete(hx_tls_peer *peer)
 	hx_tls_i_unlock(tls);
 }
 
-static void HX_OS_CALL hx_tls_connected(
-	hx_os_request *request, const hx_os_completion *completion, void *user)
-{
-	hx_tls_peer *peer = user;
-
-	peer->connecting = NULL;
-	if (completion->error.status != HX_OS_OK) {
-		hx_os_tls *tls = peer->owner;
-
-		if (completion->error.status != HX_OS_TIMEOUT &&
-			tls->address_index <
-				hx_os_address_list_count(tls->addresses))
-			peer->retry_connect = 1;
-		else
-			hx_tls_i_peer_fail(peer, &completion->error);
-	}
-	else
-		peer->connected = 1;
-	hx_os_request_release(request);
-}
-
-static void hx_tls_connect_next(hx_tls_peer *peer)
-{
-	hx_os_tls *tls = peer->owner;
-	const hx_os_address *address =
-		hx_os_address_list_get(tls->addresses, tls->address_index++);
-	hx_os_operation operation;
-	hx_os_error error;
-	hx_os_status status = hx_os_socket_close(&peer->socket, &error);
-
-	peer->retry_connect = 0;
-	if (status == HX_OS_OK)
-		status = hx_os_socket_create(tls->network, address->family,
-			HX_OS_TCP, &peer->socket, &error);
-	if (status == HX_OS_OK && (tls->options.flags & HX_OS_TLS_NODELAY))
-		status = hx_os_socket_set_nodelay(peer->socket, 1, &error);
-	if (status == HX_OS_OK) {
-		hx_os_operation_init(&operation, HX_OS_OP_CONNECT);
-		operation.socket = peer->socket;
-		operation.address = *address;
-		operation.deadline = peer->handshake;
-		hx_tls_i_lock(tls);
-		peer->info.address = *address;
-		hx_tls_i_unlock(tls);
-		status = hx_os_loop_submit(tls->loop, &operation,
-			hx_tls_connected, peer, &peer->connecting, &error);
-	}
-	if (status != HX_OS_OK)
-		hx_tls_i_peer_fail(peer, &error);
-}
-
 static void HX_OS_CALL hx_tls_read_done(
 	hx_os_request *request, const hx_os_completion *completion, void *user)
 {
@@ -388,9 +337,7 @@ static void hx_tls_retire(hx_tls_peer *peer)
 		hx_os_request_cancel(peer->reading);
 	if (peer->writing)
 		hx_os_request_cancel(peer->writing);
-	if (peer->connecting)
-		hx_os_request_cancel(peer->connecting);
-	if (peer->reading || peer->writing || peer->connecting)
+	if (peer->reading || peer->writing)
 		return;
 	if (hx_os_socket_close(&peer->socket, &error) != HX_OS_OK) {
 		hx_tls_i_peer_fail(peer, &error);
@@ -434,10 +381,6 @@ static int hx_tls_pump(hx_tls_peer *peer, hx_os_deadline *deadline)
 	}
 	if (!ready && peer->handshake < *deadline)
 		*deadline = peer->handshake;
-	if (peer->retry_connect)
-		hx_tls_connect_next(peer);
-	if (!peer->connected)
-		return 0;
 	if (!ready) {
 		size_t before = BIO_ctrl_pending(peer->bio);
 		int result;
@@ -520,10 +463,7 @@ static hx_tls_peer *hx_tls_new_peer(hx_os_tls *tls, hx_os_socket *socket,
 	}
 	if (status == HX_OS_OK)
 		status = hx_tls_i_ssl(peer, error);
-	if (status == HX_OS_OK && !socket)
-		status = hx_os_socket_create(tls->network, address->family,
-			HX_OS_TCP, &peer->socket, error);
-	if (status == HX_OS_OK && !tls->extended &&
+	if (status == HX_OS_OK && tls->server && !tls->extended &&
 		(tls->options.flags & HX_OS_TLS_NODELAY))
 		status = hx_os_socket_set_nodelay(peer->socket, 1, error);
 	if (status == HX_OS_OK && tls->extended && tls->server) {
@@ -533,21 +473,6 @@ static hx_tls_peer *hx_tls_new_peer(hx_os_tls *tls, hx_os_socket *socket,
 		options.dual_stack = -1;
 		status = hx_os_socket_apply_tcp_options(
 			peer->socket, &options, error);
-	}
-	if (status == HX_OS_OK) {
-		if (socket)
-			peer->connected = 1;
-		else {
-			hx_os_operation operation;
-
-			hx_os_operation_init(&operation, HX_OS_OP_CONNECT);
-			operation.socket = peer->socket;
-			operation.address = *address;
-			operation.deadline = peer->handshake;
-			status = hx_os_loop_submit(tls->loop, &operation,
-				hx_tls_connected, peer, &peer->connecting,
-				error);
-		}
 	}
 	if (status != HX_OS_OK)
 		hx_tls_i_peer_fail(peer, error);
@@ -600,8 +525,13 @@ static hx_os_status hx_tls_dial(
 
 	for (i = 0; i < count && i < 256; ++i)
 		addresses[i] = *hx_os_address_list_get(tls->addresses, i);
-	options.socket = tls->tcp_options;
-	options.attempt_delay_ms = tls->attempt_delay_ms;
+	if (tls->extended) {
+		options.socket = tls->tcp_options;
+		options.attempt_delay_ms = tls->attempt_delay_ms;
+	}
+	else if (tls->options.flags & HX_OS_TLS_NODELAY)
+		options.socket.nodelay = 1;
+
 	status = hx_os_i_tcp_dial_addresses_until(tls->network, addresses,
 		count, &options, deadline, hx_tls_connect_cancelled, tls,
 		&socket, error);
@@ -664,18 +594,12 @@ static hx_os_status hx_tls_startup(hx_os_tls *tls, hx_os_error *error)
 		else
 			status = hx_os_resolve(tls->network, tls->host,
 				tls->port, HX_OS_TCP, &tls->addresses, error);
-		if (status == HX_OS_OK && tls->extended)
-			return hx_tls_dial(tls, deadline, error);
 		if (status == HX_OS_OK) {
-			const hx_os_address *first =
-				hx_os_address_list_get(tls->addresses, 0);
-
-			tls->address_index = 1;
-			if (!first)
-				status = hx_os_i_error(
-					error, HX_OS_NOT_FOUND, 0, 0);
-			else if (!hx_tls_new_peer(tls, NULL, first, error))
-				status = error->status;
+			// Keep the original post-DNS budget.
+			if (!tls->extended)
+				deadline = hx_os_deadline_after_ms(
+					tls->options.handshake_timeout_ms);
+			return hx_tls_dial(tls, deadline, error);
 		}
 		return status;
 	}

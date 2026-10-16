@@ -28,11 +28,14 @@ def main():
     parser.add_argument("--certificate", required=True, type=Path)
     parser.add_argument("--private-key", required=True, type=Path)
     parser.add_argument("--ca", required=True, type=Path)
+    parser.add_argument("--basic", action="store_true",
+                        help="use the original TLS connect API")
     args = parser.parse_args()
     run_pair(args.bin_dir, "tls_json_server", "tls_json_client", "0",
              verify, server_args=(str(args.certificate.resolve()),
                                   str(args.private_key.resolve())),
-             client_args=(str(args.ca.resolve()),))
+             client_args=(str(args.ca.resolve()),) +
+                         (("--basic",) if args.basic else ()))
 
 
 if __name__ == "__main__":

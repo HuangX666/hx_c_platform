@@ -29,7 +29,7 @@ typedef struct hx_tls_peer {
 	SSL *ssl;
 	SSL_SESSION *pending_session;
 	BIO *bio;
-	hx_os_request *reading, *writing, *connecting;
+	hx_os_request *reading, *writing;
 	unsigned char *buffers;
 	hx_tls_ring rx, tx;
 	hx_tls_marker markers[HX_TLS_MARKERS];
@@ -40,8 +40,7 @@ typedef struct hx_tls_peer {
 	uint64_t accepted, encoded, flushed, produced, sent;
 	size_t wire_bytes, wire_offset, tx_bytes;
 	size_t marker_head, marker_count, users;
-	int connected, retry_connect, ready, announced, retired, release,
-		closing;
+	int ready, announced, retired, release, closing;
 	int sender, receiver, terminal, tcp_eof;
 } hx_tls_peer;
 
@@ -73,7 +72,7 @@ struct hx_os_tls {
 	hx_os_address local;
 	hx_os_error error;
 	uint64_t next_id, cancelled;
-	size_t users, address_index;
+	size_t users;
 	uint16_t port;
 	int server, ready, closing, close_caller;
 	int extended, pinned, require_alpn, resolve_async;

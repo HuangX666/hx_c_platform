@@ -160,6 +160,13 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_tls_options_init(
  * IPv4/IPv6; port=0 selects an ephemeral port. Reuse-address is enabled only by
  * the explicit flag.
  *
+ * Client APIs share the bounded TCP dialer: alternate IPv4/IPv6, at most two
+ * candidates, 250 ms between starts by default. Stalled candidates yield their
+ * slots while untried addresses remain; see hx_os_dial.h. Original APIs keep
+ * system DNS and start handshake_timeout_ms after resolution, shared by TCP
+ * attempts and TLS handshake. Extended APIs include DNS in that budget.
+ * A connect_until/wait_ready deadline limits that wait, not worker lifetime.
+ *
  * Each explicitly created endpoint owns one I/O thread and a bounded loop. A
  * server shares that thread across max_peers connections; a client has one
  * peer. queue_capacity bounds each peer's plaintext receive/send queues.

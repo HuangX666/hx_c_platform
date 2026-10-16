@@ -58,22 +58,27 @@ int main(int argc, char **argv)
 	telemetry_job sender = {&session, 0}, receiver = {&session, 0};
 	hx_os_thread *send_thread = NULL, *receive_thread = NULL;
 	hx_os_status status;
-	int ok;
+	int ok, basic = argc == 4 && !strcmp(argv[3], "--basic");
 
-	if (argc != 3) {
-		fputs("Usage: tls_json_client PORT CA_PEM\n", stderr);
+	if (argc != 3 && !basic) {
+		fputs("Usage: tls_json_client PORT CA_PEM [--basic]\n", stderr);
 
 		return 2;
 	}
 	options.base.ca_file = argv[2];
 	options.base.server_name = "localhost";
+	options.base.flags = HX_OS_TLS_NODELAY;
 	options.socket.nodelay = 1;
 	options.socket.keepalive = 1;
 	options.socket.keepalive_idle_seconds = 30;
 	options.socket.keepalive_interval_seconds = 5;
-	status = hx_os_tls_connect_ex_until(NULL, "127.0.0.1",
-		net_demo_port(argv[1]), &options, hx_os_deadline_after_ms(5000),
-		&owner, &error);
+	if (basic)
+		status = hx_os_tls_connect("localhost", net_demo_port(argv[1]),
+			&options.base, &owner, &error);
+	else
+		status = hx_os_tls_connect_ex_until(NULL, "localhost",
+			net_demo_port(argv[1]), &options,
+			hx_os_deadline_after_ms(5000), &owner, &error);
 	ok = net_demo_check(status, &error, "verified TLS connect");
 	session.tls = owner;
 	session.deadline = hx_os_deadline_after_ms(10000);

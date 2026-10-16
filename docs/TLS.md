@@ -101,7 +101,15 @@ The corresponding commands, in separate Linux / WSL terminals, are:
 ./build/bin/hx_os_tls_json_client 39004 build/demo-cert.pem
 ```
 
-The client connects to 127.0.0.1 and verifies localhost. The self-signed certificate is also the CA explicitly trusted for this connection. On verification failure, check CA paths, SAN, validity and local time; keep verification enabled. For a missing DLL, check the selected configuration's bin directory and matching SDK runtimes; see [installed-package deployment](USAGE.md#installed-project).
+The client resolves and connects to localhost; the server listens on 127.0.0.1. Both TLS connection APIs try alternative addresses and verify localhost. The self-signed certificate is also the CA explicitly trusted for this connection. On verification failure, check CA paths, SAN, validity and local time; keep verification enabled. For a missing DLL, check the selected configuration's bin directory and matching SDK runtimes; see [installed-package deployment](USAGE.md#installed-project).
+
+To use the original, simpler `hx_os_tls_connect` API, append `--basic` to the runner command above or to the client command in terminal two. For example:
+
+```sh
+./build/bin/hx_os_tls_json_client 39004 build/demo-cert.pem --basic
+```
+
+Windows uses the same arguments after `build/bin/Release/hx_os_tls_json_client.exe`. Start a fresh server for each run. Both modes print the same JSON and PASS messages: `--basic` uses the ordinary options, while the default extended mode also enables Keepalive. No extra example target is needed.
 
 ### 1.4 Adapt the business code
 
@@ -133,6 +141,10 @@ hx_os_status status = hx_os_tls_connect(
 ```
 
 Use `hx_os_tls_start_connect` or `start_listen` to return after the worker has been created. `wait_ready_until` waits separately. The `connect_until` and `listen_until` combinations accept one monotonic deadline; the simple shortcuts wait up to five seconds. Startup errors before worker creation leave `*out=NULL`; later startup failures retain the owner. Native DNS, certificate processing and file access are not forcibly interruptible.
+
+Ordinary C calls and C++ `Tls::connect()` now use the same multi-address dialer as the extended API. IPv4/IPv6 candidates alternate, normally starting 250 ms apart, with at most two pending connections. While untried addresses remain, a stalled candidate releases its slot after at most two seconds, shortened when the remaining budget is smaller. The first successful TCP connection proceeds to certificate-verified TLS; the other candidates are closed. This is connection establishment, not automatic reconnection after later I/O failure.
+
+The original API keeps system DNS and its existing timing: `handshake_timeout_ms` starts after DNS and covers all TCP candidates plus the TLS handshake. Extended clients start that budget before DNS. The deadline passed to `connect_until` or `wait_ready_until` only limits the caller's wait; it does not destroy or automatically cancel the endpoint. After a wait timeout, keep a non-NULL owner and wait again, close it, or explicitly abort it. Use the extended resolver option when DNS itself must be cancellable.
 
 The exception-free [C++11 facade](../include/hx/Tls.hpp) borrows a durable owner, as the IPC facade does:
 
@@ -203,7 +215,7 @@ An incoming client that aborts during socket acceptance does not stop the whole 
 
 ## 5. Verification, trust stores and deployment
 
-Certificate failures preserve the native OpenSSL error and the X.509 verification result in `error.cause_code`. Clients always verify the server chain and its DNS/IP Subject Alternative Name. DNS/Punycode names use SNI and disallow partial wildcards; numeric IPs use IP verification. No automatic IDNA conversion or Common Name fallback. `server_name` changes the identity being verified, not the address being connected to. The original connection entry points try resolved addresses sequentially. The extended entry points in section 7 stagger IPv4/IPv6 candidates within one connection/handshake budget; certificate failures never fall back to an unverified mode.
+Certificate failures preserve the native OpenSSL error and the X.509 verification result in `error.cause_code`. Clients always verify the server chain and its DNS/IP Subject Alternative Name. DNS/Punycode names use SNI and disallow partial wildcards; numeric IPs use IP verification. No automatic IDNA conversion or Common Name fallback. `server_name` changes the identity being verified, not the address being connected to. All client entry points share the bounded multi-address dialer described in section 2; certificate failures remain terminal and never disable verification.
 
 A supplied `ca_file` replaces default trust. Servers require certificate-chain and private-key PEM paths. Clients can supply both for mutual TLS; servers enforce client certificates only with `HX_OS_TLS_REQUIRE_CLIENT_CERTIFICATE`. The chain file is bounded to 1 MiB/64 entries, CA bundle to 4 MiB/4096 entries, key to 64 KiB and UTF-8 password to 1024 bytes. An encrypted PEM key uses the supplied password; there is no interactive password prompt. Relative paths are captured against the current working directory during creation; files must stay stable through startup. UTF-8 Windows paths are opened by hx, then parsed from memory. Temporary private-key bytes are wiped on every owned-buffer cleanup path.
 
@@ -252,7 +264,7 @@ Check `status` before exchanging data. As with the original TLS API, a non-NULL 
 | `socket.dual_stack = 1` | Apply to an IPv6 listener bound to `::` before bind; accepted IPv4 peers keep mapped IPv6 addresses. No implicit second listener is created. |
 | `socket.send_buffer_bytes`, `receive_buffer_bytes` | Zero preserves native buffers. Positive values request native capacity, which the OS may adjust. This does not change TLS plaintext queue capacity. |
 | `attempt_delay_ms` | Start the next connection candidate after this delay, default 250 ms. At most two candidates connect concurrently; errors accelerate the next attempt. |
-| `base.handshake_timeout_ms` | One budget for DNS completion, connection candidates and TLS handshake in extended clients. Native DNS/file work may exceed the budget; it cannot be forcibly interrupted. |
+| `base.handshake_timeout_ms` | Extended clients share this budget across DNS, TCP candidates and TLS handshake. Ordinary `hx_os_tls_options.handshake_timeout_ms` retains its post-DNS start and covers TCP plus TLS. Native DNS/file work cannot be forcibly interrupted. |
 
 The same connection scheduler is available without TLS through `hx_os_tcp_dial_until()` and `hx_os_tcp_dial_addresses_until()` in [hx_os_dial.h](../include/hx_os_dial.h). The latter avoids DNS by accepting an address array. Both close losing, unpublished sockets; a successful socket belongs to the caller and must outlive neither its network lease nor its explicit close. Cancellation never leaves a hidden background dialer.
 

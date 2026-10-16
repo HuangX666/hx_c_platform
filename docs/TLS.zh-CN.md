@@ -101,7 +101,15 @@ Linux／WSL 两个终端对应的命令为：
 ./build/bin/hx_os_tls_json_client 39004 build/demo-cert.pem
 ```
 
-客户端连接 127.0.0.1，验证证书里的 localhost；自签名证书同时作为本次连接显式信任的 CA。证书验证失败时检查 CA 路径、SAN、有效期和本机时间，不要关闭验证。提示缺少 DLL 时检查所选配置的 bin 目录及匹配 SDK 的运行库，见[安装包部署](USAGE.zh-CN.md#installed-project)。
+客户端解析并连接 localhost，服务端监听 127.0.0.1。普通和扩展 TLS 入口都会尝试候选地址并验证 localhost 身份。自签名证书同时作为本次连接显式信任的 CA。证书验证失败时检查 CA 路径、SAN、有效期和本机时间，不要关闭验证。提示缺少 DLL 时检查所选配置的 bin 目录及匹配 SDK 的运行库，见[安装包部署](USAGE.zh-CN.md#installed-project)。
+
+想使用原来的简洁入口 `hx_os_tls_connect`，在上面的运行脚本命令或第二个终端的客户端命令末尾追加 `--basic`。例如：
+
+```sh
+./build/bin/hx_os_tls_json_client 39004 build/demo-cert.pem --basic
+```
+
+Windows 将程序路径换为 `build/bin/Release/hx_os_tls_json_client.exe`，参数相同。每次运行都重新启动服务端。两种模式输出相同的 JSON 和 PASS 提示：`--basic` 使用普通选项，默认扩展模式还开启 Keepalive，不需要增加示例构建目标。
 
 ### 1.4 改成自己的业务
 
@@ -133,6 +141,10 @@ hx_os_status status = hx_os_tls_connect(
 ```
 
 希望创建工作线程后立即返回时，用 `hx_os_tls_start_connect`／`start_listen`，随后通过 `wait_ready_until` 等待。`connect_until`／`listen_until` 封装这两个步骤，接收单调时钟截止时间；简单入口默认等待五秒。工作线程创建前的失败保持 `*out=NULL`，接受启动后的失败则保留对象。原生 DNS、证书处理和文件访问无法被强制打断。
+
+普通 C 入口和 C++ `Tls::connect()` 现在与扩展入口使用同一个多地址拨号器。IPv4／IPv6 候选交替尝试，默认相隔 250 ms 开始，最多同时保留两个连接。在还有地址未尝试时，停滞候选最多占用位置两秒；剩余预算较短时会缩短等待。第一个 TCP 连接成功后继续验证证书和 TLS 握手，其余候选关闭。这是建立连接时的地址选择，不是后续收发失败后的自动重连。
+
+旧入口保留系统 DNS 及原来的计时起点：`handshake_timeout_ms` 在 DNS 返回后开始，供全部 TCP 候选和 TLS 握手共用；扩展入口则在 DNS 前开始这份预算。传给 `connect_until` 或 `wait_ready_until` 的截止时间只限制调用者本次等待，不会销毁或自动取消对象。等待超时后，仍非空的所有者必须保留，可以继续等待、关闭或显式中止。DNS 本身也需要可取消时，使用扩展入口的 resolver 选项。
 
 不使用异常的 [C++11 包装](../include/hx/Tls.hpp)与 IPC 包装一样，借用由宿主持有的指针：
 
@@ -203,7 +215,7 @@ TLS 提供字节流，一次读取不保证对应一条 JSON。示例的[小型�
 
 ## 5. 证书验证、信任来源与发布
 
-证书失败保留原生 OpenSSL 错误，并通过 `error.cause_code` 保留 X.509 验证结果。客户端始终验证服务端证书链及 DNS／IP Subject Alternative Name。DNS／Punycode 名称使用 SNI，并拒绝部分通配符；数字 IP 使用 IP 验证。不自动做 IDNA 转换，也不回退到 Common Name。`server_name` 改变被验证的身份，不改变实际连接地址。原有连接入口仍顺序尝试解析得到的地址；第 7 节的扩展入口在同一个连接／握手预算内错峰尝试 IPv4／IPv6 地址。证书失败不会回退到不验证模式。
+证书失败保留原生 OpenSSL 错误，并通过 `error.cause_code` 保留 X.509 验证结果。客户端始终验证服务端证书链及 DNS／IP Subject Alternative Name。DNS／Punycode 名称使用 SNI，并拒绝部分通配符；数字 IP 使用 IP 验证。不自动做 IDNA 转换，也不回退到 Common Name。`server_name` 改变被验证的身份，不改变实际连接地址。所有客户端入口共用第 2 节介绍的有界多地址拨号器；证书失败仍终止连接，不会关闭验证继续尝试。
 
 提供 `ca_file` 时替换默认信任来源。服务端必须给出证书链和私钥 PEM 路径；客户端也可同时提供二者用于双向认证。服务端只有显式选择 `HX_OS_TLS_REQUIRE_CLIENT_CERTIFICATE` 才强制验证客户端证书。证书链上限为 1 MiB／64 项，CA 包为 4 MiB／4096 项，私钥为 64 KiB，UTF-8 密码为 1024 字节。加密 PEM 使用传入密码，不弹出交互式密码输入。相对路径在创建时根据当前工作目录固定，文件内容需要保持稳定直到启动完成。Windows 路径通过 hx 的 UTF-8 文件接口打开，再从内存解析；私钥临时缓冲的自有清理路径会擦除内容。
 
@@ -252,7 +264,7 @@ hx_os_status status = hx_os_tls_connect_ex_until(NULL,
 | `socket.dual_stack = 1` | 在 IPv6 监听器绑定 `::` 前配置双栈；接入的 IPv4 对端保留映射后的 IPv6 地址，不隐式创建第二个监听器。 |
 | `socket.send_buffer_bytes`、`receive_buffer_bytes` | 零保留系统缓冲，正数请求容量，操作系统可以调整实际值；这不会改变 TLS 明文队列的容量。 |
 | `attempt_delay_ms` | 默认 250 ms 后启动下一个地址候选，最多同时连接两个；候选失败时立即推进，不等待整个间隔。 |
-| `base.handshake_timeout_ms` | 扩展客户端的 DNS 完成、地址连接和 TLS 握手共用一个预算。原生 DNS／文件工作可能超过预算，不能强制打断。 |
+| `base.handshake_timeout_ms` | 扩展客户端的 DNS、TCP 候选和 TLS 握手共用此预算。普通 `hx_os_tls_options.handshake_timeout_ms` 保留 DNS 后开始的计时方式，覆盖 TCP 和 TLS。原生 DNS／文件工作不能强制打断。 |
 
 不使用 TLS 时，也能直接使用 [hx_os_dial.h](../include/hx_os_dial.h) 中的 `hx_os_tcp_dial_until()` 和 `hx_os_tcp_dial_addresses_until()`。后者接收地址数组，不执行 DNS。两者都会关闭没有胜出的未发布 socket；成功返回的 socket 由调用者持有，关闭前应保持对应 network 有效。取消后不会遗留隐藏的后台连接任务。
 
