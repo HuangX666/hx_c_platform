@@ -83,7 +83,7 @@ Snapshots expose immutable `hx_os_profiler_entry` records. There is no need to p
 | `mean_exclusive_ns`, `deviation_exclusive_ns` | Corresponding exclusive statistics |
 | `flags` | 1: saturated counters; 2: clock error |
 
-Means and standard deviations are approximate doubles. Empty statistics are zero. Welford's update maintains variance without retaining samples; the square root is calculated when capturing a snapshot, outside the recording lock. Treat flagged entries as diagnostics, not exact measurements.
+Means and standard deviations are approximate doubles. Empty statistics are zero. Individual duration samples are not retained; snapshots contain aggregate statistics. Treat flagged entries as diagnostics, not exact measurements.
 
 For example, after recording work with an initialized `hx::Profiler profiler`, this C++11 reporting block prints each path's mean and optional P95. Include `<hx/Profiler.hpp>` and `<cstdio>`:
 
@@ -133,21 +133,21 @@ Query failures preserve the output structure. No query synthesizes a percentile 
 
 ## 5. Memory, concurrency and shutdown
 
-Each enabled histogram adds exactly 2,016 bytes per distinct recorded path, plus at most seven bytes of alignment padding before the histogram area. Both channels add 4,032 bytes. The copied snapshot includes the enabled histogram data too. Defaults allow 1,024 paths; lowering `max_records` is useful on embedded devices. Basic statistics always add 64 bytes to each private record compared with the previous implementation. Names and thread timing stacks have their existing separate limits.
+Each enabled histogram adds exactly 2,016 bytes per distinct recorded path, plus at most seven bytes of alignment padding before the histogram area. Both channels add 4,032 bytes. The copied snapshot includes the enabled histogram data too. Defaults allow 1,024 paths; lowering `max_records` is useful on embedded devices. Names and thread timing stacks have their existing separate limits.
 
 The existing options layout is preserved. `max_output_bytes` also limits each new owned snapshot, including its allocation header/alignment allowance. Old TSV output retains its original formatted-output limit. Default options allow 4 MiB; creating both histograms with null options selects 8 MiB. Explicit options keep exactly the budget supplied. A capture that exceeds the budget fails with `HX_OS_LIMIT`; it does not silently omit paths or histograms. Applications must also bound the number of simultaneously retained snapshots.
 
-After warmup, repeating an existing path with a retained thread or coroutine context needs no new context allocation. The normal entry/leave pair takes four lock/unlock pairs on the profiler's mutex: two on entry and two on exit. Entry combines finding the existing record, starting its frame and finishing the active call under one lock; exit combines updating statistics and finishing the active call. First use, new paths and cleanup can need additional lock acquisitions. These counts describe the current implementation, not an API guarantee.
+After warmup, repeating an existing path with a retained thread or coroutine context needs no new context allocation. First use and new paths can allocate memory.
 
-The lock still protects shared statistics and coordinates shutdown; recording is not lock-free. Allocation/free callbacks and context cleanup run outside that lock, and the active call remains registered until its cleanup finishes. Existing reentry checks remain in place. Exit reads the end timestamp before waiting for the statistics-update lock, so that wait is not added to the completed interval.
+The profiler synchronizes shared statistics across threads; recording is not lock-free. Allocation/free callbacks and context cleanup run outside the statistics lock; reentry restrictions still apply. Exit reads the end timestamp before waiting for the statistics-update lock, so that wait is not added to the completed interval.
 
-An entry reuses the thread or coroutine context already obtained by that call. It counts name bytes and computes the path hash in one bounded scan, then validates UTF-8 before looking up the record. Paths still match by parent and name contents, so dynamically generated names work without retaining a lookup token. This requires no path cache or additional allocation; shared statistics retain the same synchronization and lock count.
+Paths match by parent and name contents, so dynamically generated UTF-8 names can be passed directly without retaining a lookup token.
 
-Prefer timing a meaningful operation, such as parsing one message, instead of wrapping every character or atomic increment. The cost of entering and leaving a very short interval can be comparable to the work itself. Concurrent writers still share the statistics lock; reducing name scanning does not remove that contention, and the benefit depends on names and workload. Use the [optional analysis workflow](ANALYSIS.md) for automatic CPU sampling without marking each small operation.
+Prefer timing a meaningful operation, such as parsing one message, instead of wrapping every character or atomic increment. The cost of entering and leaving a very short interval can be comparable to the work itself. Concurrent recording can add lock contention; measure with a representative application workload. Use the [optional analysis workflow](ANALYSIS.md) for automatic CPU sampling without marking each small operation.
 
-Error details remain optional. On POSIX, successful internal mutex calls skip error mapping when no error object was requested; native failures still use the normal mapping. Applications should continue checking `hx_os_status` and pass an error object when they need native diagnostics. Supplying one preserves the existing rules for filling success and error fields. This fast path adds no allocation and does not change mutex, snapshot or close semantics.
+Check the returned `hx_os_status`; pass an error object when you need native diagnostics.
 
-A capture allocates outside the profiler lock, then copies statistics and bins consistently under the lock. Copying names and calculating deviations happen after unlocking. Capture work grows with the number of paths and bins, so capture periodically rather than on every timed operation. Concurrent path growth retries at most eight times, then returns `HX_OS_BUSY`. The snapshot records a monotonic observation timestamp. Caller output becomes null on capture failure.
+A snapshot captures statistics and histogram data consistently. Capture work grows with the number of paths and bins, so capture periodically rather than on every timed operation. Concurrent path growth retries at most eight times, then returns `HX_OS_BUSY`; retry later. The snapshot records a monotonic observation timestamp. Caller output becomes null on capture failure.
 
 Default snapshot allocation is independent of the profiler's allocator, allowing the original context to close once its resources are released. `snapshot_create_with_context` selects a separate allocator explicitly; that context reports busy while the snapshot is retained. Entry pointers and names borrow the snapshot until its last release. Concurrent readers hold their own references, published through normal synchronization. All snapshots and profiler/TLS state must be gone before unloading the implementing library.
 
