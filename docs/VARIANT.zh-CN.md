@@ -461,6 +461,6 @@ ctest --test-dir build-variant -C Release --output-on-failure
 
 variant 与 cpp_variant 测试覆盖类型切换、精确类型、UTF-8/NUL、别名输入、跨翻译单元描述符、深复制、移动/交换、过度对齐、只构造类型、原生错误传播、分配失败保持旧值、结构体析构次数及 context 回收。容器测试覆盖增长后的结构体地址、pop 接管及失败复制清理；禁用模块的测试检查不支持和输出保持。C++ 测试编译时拒绝开启异常的配置。
 
-公共头 C99/C++11 独立编译，示例作为 CTest 运行，安装后 C/C++ 消费者通过 find_package 构建运行。Android 测试集合包含 variant/cpp_variant，最低 API 与实际运行环境分别记录。ASan、UBSan、泄漏检测和 32/64 位布局结果见[验证记录](VALIDATION.zh-CN.md)，不把交叉编译当作板卡运行。
+本库和业务工程应使用兼容的 C99／C++11 工具链与 ABI 设置。Android 最低构建 API 和实际运行 API 属于不同约束，模拟器或交叉编译结果不能代替板卡验收。详见[平台概览](REFERENCE.zh-CN.md#section-2)。
 
 portable_baseline 增加整数 set/get 和普通结构体 set/get 的时间观察值，不设性能通过阈值、不与 std::variant 推导速度比。性能测试命令见[Android 基准](ANDROID.zh-CN.md)和[构建参考](REFERENCE.zh-CN.md#section-30)。macOS、Win7、Android 5.0、真实 ARM 板卡和其他 libc 仍需对应环境验证。

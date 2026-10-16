@@ -132,4 +132,4 @@ ctest --test-dir build-net -C Release -R "^ipc_business_local$" --output-on-fail
 
 The case checks 14 device replies, the final `bye`, and two notifications by parsed JSON fields, independent of key order. JSON examples require default-enabled `CONFIG`, `CONFIG_SERIALIZE` and `SETTINGS`; disabling required modules omits the business test.
 
-Waits use ordinary threads, not the Qt UI thread or a coroutine-suspending adapter. See the source for the CLI join-failure exit and retryable close policy, and [validation](VALIDATION.md) for platform evidence.
+Waits use ordinary threads, not the Qt UI thread or a coroutine-suspending adapter. See the source for the CLI join-failure exit and retryable close policy.

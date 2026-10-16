@@ -284,4 +284,4 @@ Native host builds with Python include `ipc`, `kcp` and `ipc_examples`. Add `-V`
 - `kcp`: deliberate packet loss, duplication/reordering, duplex delivery, 32-bit clock rollover, message/queue limits and fixed allocation budgets.
 - `ipc_examples`: actual separate C server and C/C++ clients, independent Python TCP/Unix framing, split headers, coalesced frames, oversized/incomplete bodies and stale UDP sessions.
 
-Commands are not evidence of passing tests. See the current [validation record](VALIDATION.md) for Windows, WSL, Android, sanitizer and installed-consumer results. macOS, Win7 and embedded boards remain pending where no target run is recorded.
+Run the examples on the intended operating system and transport. A host build or emulator run does not establish native target support. macOS, Win7 and embedded boards require their own runtime validation; see the [platform overview](REFERENCE.md#section-2).

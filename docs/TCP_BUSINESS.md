@@ -128,4 +128,4 @@ python examples/run_tcp_business.py --json-errors --bin-dir build-net/bin/Releas
 
 Python uses its standard `json` module and UTF-8, not HXIP. Invalid field types/ranges receive `rejected`; invalid order objects receive `{"type":"error","ok":false,"reason":"invalid_json_request"}`. Each run still verifies the preceding two orders total 11500 cents, unchanged by invalid input.
 
-Raw TCP does not supply cross-restart sessions or retry deduplication; this example covers the current connection. See [validation](VALIDATION.md), and the separate [IPC](IPC_BUSINESS.md), [UDP](UDP_BUSINESS.md) and [KCP](KCP_BUSINESS.md) workflows.
+Raw TCP does not supply cross-restart sessions or retry deduplication; this example covers the current connection. See the separate [IPC](IPC_BUSINESS.md), [UDP](UDP_BUSINESS.md) and [KCP](KCP_BUSINESS.md) workflows.

@@ -101,4 +101,4 @@ else()
 endif()
 ~~~
 
-C++ contract tests reject compilation if compiler exception macros remain enabled. Public headers compile independently in C++11. Runtime tests cover native errors, partial results, cancellation, admission/close races, over-aligned values, allocation failures, context retention and callback retirement. Exact environments and unverified platforms are recorded in [VALIDATION.md](VALIDATION.md).
+Build consuming C++ code with exceptions disabled and the required C++11 baseline. Check error handling, cancellation and shutdown with your application's ownership rules. See the [platform overview](REFERENCE.md#section-2) for target baselines and limitations.

@@ -157,7 +157,7 @@ HX_CODEC_STRUCT_NAMED(connection_options, "connection",
 
 只需用实际 SDK 正常交叉编译。宏展开产生标准 C99/C++11 声明，`sizeof`、`offsetof` 由 ARM 等目标编译器计算，不包含宿主机生成的数值偏移。Windows/x86 上构建 ARM 程序时，板子不需要 Python、Clang 或其他生成工具。没有额外运行时注册和初始化；编解码仍调用同一份 codec 实现。
 
-使用正确的 sysroot、libc、浮点 ABI、头文件及对齐配置；它们是普通 C/C++ 工程的兼容要求。不能把某套 glibc 交叉编译结果推广到所有 musl、旧 SDK 或板卡。新宏的 ARMv7/AArch64 编译和 QEMU 证据见[验证记录](VALIDATION.zh-CN.md)，QEMU 通过不等于板卡实测。
+使用正确的 sysroot、libc、浮点 ABI、头文件及对齐配置；它们是普通 C/C++ 工程的兼容要求。不能把某套 glibc 交叉编译结果推广到所有 musl、旧 SDK 或板卡，QEMU 通过也不等于板卡实测。
 
 ## 5. C++11：直接取结果，不使用异常
 
@@ -240,4 +240,4 @@ Windows 程序在 `build-serialization/bin/Release`；单配置 Linux 构建在 
 
 `hx_os_serialization` 还接受 `yaml`、`toml`，先编码再解码检查，stdout 只打印编码结果。嵌套设备包含数组，改用 `ini/env/properties` 会明确失败；用第 3 节的扁平连接结构体即可测试这些格式。
 
-`test_config_tree.c` 检查混合类型、空集合、嵌套 32/64/128 层、修改后的新旧文档、Unicode 和超限拒绝；`test_codec.c` 检查全部格式、宽度范围、数组、XML 属性、文件保存与逐次分配失败清理；`test_cpp_codec.cpp` 在关闭异常的 C++11 配置下验证便利层。`test_serialization_interop.py` 使用 Python 标准 JSON/XML/TOML 读取器和已安装时的 PyYAML，并对共享库执行 101 组固定种子的混合数据测试。TOML 需要 Python 3.11+；缺少可选解析器会明确标为跳过。具体运行结果见 [验证记录](VALIDATION.zh-CN.md)。
+`test_config_tree.c` 检查混合类型、空集合、嵌套 32/64/128 层、修改后的新旧文档、Unicode 和超限拒绝；`test_codec.c` 检查全部格式、宽度范围、数组、XML 属性、文件保存与逐次分配失败清理；`test_cpp_codec.cpp` 在关闭异常的 C++11 配置下验证便利层。`test_serialization_interop.py` 使用 Python 标准 JSON/XML/TOML 读取器和已安装时的 PyYAML，并对共享库执行 101 组固定种子的混合数据测试。TOML 需要 Python 3.11+；缺少可选解析器会明确标为跳过。

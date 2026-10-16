@@ -730,4 +730,4 @@ C 没有自动析构，所以字符串、文档、容器用完需调用对应释
 | 网络、进程、管道、映射、系统指标 | [平台工具](PLATFORM_UTILITIES.zh-CN.md) |
 | 锁、事件、线程局部存储和资源生命周期 | [基础契约](CONTRACTS.zh-CN.md) |
 | 静态/共享安装后 find_package 接入 | [安装参考](REFERENCE.zh-CN.md#section-5) |
-| 目标平台已验证到什么程度 | [验证记录](VALIDATION.zh-CN.md) |
+| 目标平台与限制 | [平台概览](REFERENCE.zh-CN.md#section-2) |

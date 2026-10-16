@@ -730,4 +730,4 @@ Tutorials use default modules. JSON needs CONFIG; containers need CONTAINERS; va
 | Network, processes, pipes, mappings and metrics | [Platform utilities](PLATFORM_UTILITIES.md) |
 | Locks, events, thread-local storage and resource lifetimes | [Core contracts](CONTRACTS.md) |
 | Installed static/shared find_package integration | [Installation reference](REFERENCE.md#section-5) |
-| Exact target validation status | [Validation records](VALIDATION.md) |
+| Target platforms and limitations | [Platform overview](REFERENCE.md#section-2) |

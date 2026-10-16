@@ -132,4 +132,4 @@ ctest --test-dir build-net -C Release -R "^ipc_business_local$" --output-on-fail
 
 `ipc_business_local` 检查两个设备的 14 条业务回复、最终 `bye` 和两条主动通知，按 JSON 字段比较而不是比较序列化文本顺序。JSON 示例需要默认开启的 `CONFIG`、`CONFIG_SERIALIZE` 和 `SETTINGS`；关闭所需模块时不注册该业务测试。
 
-本例使用普通线程等待，不要放在 Qt UI 线程，也不声称具有协程挂起适配。CLI join 失败出口与可重试关闭边界见源码。目标平台证据见[验证记录](VALIDATION.zh-CN.md)。
+本例使用普通线程等待，不要放在 Qt UI 线程，也不声称具有协程挂起适配。CLI join 失败出口与可重试关闭边界见源码。

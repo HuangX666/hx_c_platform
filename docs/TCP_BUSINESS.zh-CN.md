@@ -128,4 +128,4 @@ python examples/run_tcp_business.py --json-errors --bin-dir build-net/bin/Releas
 
 Python 用标准 `json` 模块和 UTF-8 编解码，不实现 HXIP。错误类型/范围返回 `rejected`；无法作为有效订单对象解析时返回 `{"type":"error","ok":false,"reason":"invalid_json_request"}`。每轮仍检查之前两单合计 11500 分，错误输入不改变有效订单统计。
 
-原始 TCP 不自动提供跨重启会话或业务重试去重；本例覆盖当前连接。测试结果见[验证记录](VALIDATION.zh-CN.md)，其他独立业务见 [IPC](IPC_BUSINESS.zh-CN.md)、[UDP](UDP_BUSINESS.zh-CN.md)、[KCP](KCP_BUSINESS.zh-CN.md)。
+原始 TCP 不自动提供跨重启会话或业务重试去重；本例覆盖当前连接。其他独立业务见 [IPC](IPC_BUSINESS.zh-CN.md)、[UDP](UDP_BUSINESS.zh-CN.md)、[KCP](KCP_BUSINESS.zh-CN.md)。

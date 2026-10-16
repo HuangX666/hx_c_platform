@@ -111,4 +111,4 @@ Short mutexes serialize nonblocking socket calls; retry sleeps occur outside loc
 ctest --test-dir build-net -C Release -R "^udp_business_" --output-on-failure
 ```
 
-`udp_business_samples` and `udp_business_gaps` validate JSON samples, latest state, feedback and thread completion. Disabling required JSON modules omits these cases. See [KCP](KCP_BUSINESS.md) or [TCP](TCP_BUSINESS.md) for reliable workflows and [validation](VALIDATION.md) for target evidence.
+`udp_business_samples` and `udp_business_gaps` validate JSON samples, latest state, feedback and thread completion. Disabling required JSON modules omits these cases. See [KCP](KCP_BUSINESS.md) or [TCP](TCP_BUSINESS.md) for reliable workflows.

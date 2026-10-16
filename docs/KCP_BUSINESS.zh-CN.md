@@ -103,4 +103,4 @@ json_field fields[] = {
 ctest --test-dir build-net -C Release -R "^kcp_business_" --output-on-failure
 ```
 
-`kcp_business_transfer` 与 `kcp_business_loss` 检查实际 JSON 块、处理总值、确认与资源回收。KCP 底层乱序、重复、容量和时间回绕仍由 [test_kcp.c](../tests/test_kcp.c) 覆盖。JSON 模块关闭时不注册业务用例；目标结果见[验证记录](VALIDATION.zh-CN.md)。
+`kcp_business_transfer` 与 `kcp_business_loss` 检查实际 JSON 块、处理总值、确认与资源回收。KCP 底层乱序、重复、容量和时间回绕仍由 [test_kcp.c](../tests/test_kcp.c) 覆盖。JSON 模块关闭时不注册业务用例。

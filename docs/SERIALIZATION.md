@@ -157,7 +157,7 @@ Existing public structures keep their declarations and use HX_OS_CODEC_FIELD, HX
 
 Build normally with the actual SDK. Macro expansion emits standard C99/C++11 declarations; the ARM or other target compiler evaluates sizeof/offsetof rather than importing host-calculated offsets. Building an ARM program on a Windows/x86 host requires no Python, Clang analyzer or generation tool on the board. There is no extra runtime registration/initialization; encoding and decoding reuse the existing codec.
 
-Use the correct sysroot, libc, floating-point ABI, headers and alignment settings, as in an ordinary C/C++ build. A glibc cross-build does not establish support for every musl toolchain, older SDK or physical board. [Validation records](VALIDATION.md) distinguish ARMv7/AArch64 cross-builds and QEMU execution from real board testing.
+Use the correct sysroot, libc, floating-point ABI, headers and alignment settings, as in an ordinary C/C++ build. A glibc cross-build does not establish support for every musl toolchain, older SDK or physical board. QEMU execution does not replace real board testing.
 
 ## 5. C++11 without exceptions
 
@@ -240,4 +240,4 @@ Windows executables are in `build-serialization/bin/Release`; a single-configura
 
 `hx_os_serialization` also accepts `yaml` and `toml`. It encodes and decodes before printing only the encoded document to stdout. The device contains an array, so selecting ini/env/properties fails explicitly; use the flat connection structure from section 3 for those formats.
 
-`test_config_tree.c` covers mixed types, empty collections, 32/64/128 levels, source/replacement lifetime, Unicode and limit failures. `test_codec.c` covers all formats, scalar widths, arrays, XML attributes, file persistence and allocation failure cleanup. `test_cpp_codec.cpp` validates the facade under C++11 with exceptions disabled. `test_serialization_interop.py` uses Python JSON/XML/TOML readers and already-installed PyYAML, plus 101 seeded mixed-data cases against shared builds. TOML requires Python 3.11+; unavailable optional readers report a skip. Actual run evidence is in [validation records](VALIDATION.md).
+`test_config_tree.c` covers mixed types, empty collections, 32/64/128 levels, source/replacement lifetime, Unicode and limit failures. `test_codec.c` covers all formats, scalar widths, arrays, XML attributes, file persistence and allocation failure cleanup. `test_cpp_codec.cpp` validates the facade under C++11 with exceptions disabled. `test_serialization_interop.py` uses Python JSON/XML/TOML readers and already-installed PyYAML, plus 101 seeded mixed-data cases against shared builds. TOML requires Python 3.11+; unavailable optional readers report a skip.

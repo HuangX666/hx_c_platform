@@ -71,7 +71,7 @@
 
 C 核心需要编译成库，**不是 header-only**；只有可选 C++ 便利层是仅头文件。已验证 C++11，不宣称 C++14/17/20 矩阵通过。CMake 最低基线为 **3.16**。编译器、CRT 和 SDK 的兼容性需要与操作系统 API 兼容性分别确认，尤其是 Win7 部署，不能因接口保留兼容就宣称当前工具链生成的所有二进制都能直接运行。
 
-徽章记录截至 **2026-10-03** 的本地证据：Windows 91 项、Linux 93 项 CTest，数字表示测试条目，不是断言数量；Linux 多两项原生随机源故障测试。 GitHub Actions 已配置，未宣称远程 CI 已通过。Android 的十四项集合不等于桌面全部测试。具体配置与限制见[验证记录](VALIDATION.zh-CN.md)。
+交叉编译和模拟运行不能代替原生目标验收。操作系统、架构、SDK 和部署权限需要分别核对。
 
 <a id="section-3"></a>
 
@@ -839,7 +839,7 @@ int main(void)
 }
 ```
 
-repeat 在一个间隔后首次调用，错过多个周期时合并，回调返回 EOF 可正常停止。不能抢占正在执行的回调。精细等待默认自旋窗口为 200 us，`_ex` 允许 0..10 ms， 0 退回普通睡眠；精细等待不接受 INFINITE。不改变系统全局计时器精度，不创建隐藏线程，也不保证硬实时。兼容 Win7 的 tick 时钟会限制短等待，QPC 只用于约束自旋预算而不改变时钟语义。目标实测见[审查报告](BUG_MEMORY_LEAK_AUDIT.zh-CN.md)。
+repeat 在一个间隔后首次调用，错过多个周期时合并，回调返回 EOF 可正常停止。不能抢占正在执行的回调。精细等待默认自旋窗口为 200 us，`_ex` 允许 0..10 ms， 0 退回普通睡眠；精细等待不接受 INFINITE。不改变系统全局计时器精度，不创建隐藏线程，也不保证硬实时。兼容 Win7 的 tick 时钟会限制短等待，QPC 只用于约束自旋预算而不改变时钟语义。
 
 <a id="section-14"></a>
 
@@ -1752,13 +1752,13 @@ TSan 在另一个目录配置 `HX_OS_SANITIZER=thread`，不与 ASan 混用。�
 | ARM Linux | ARMv7/AArch64 交叉编译及 QEMU 兼容集合 |
 | Android | API 21/28、两种 ARM ABI 和最小配置 |
 
-工作流见 [build.yml](../.github/workflows/build.yml)。配置存在不等于远程已运行通过。本次全量 CTest 为 Windows 91/91、WSL Linux 93/93，递归查询相关 ASan/UBSan/LSan 为 3/3，C++ 工具测试也通过 TSan。此前全量 sanitizer 与 1,001 轮生命周期审查对应各自记录的版本，该次审查在每轮清理后观测到追踪存活字节为零。详见[验证记录](VALIDATION.zh-CN.md)。
+工作流见 [build.yml](../.github/workflows/build.yml)。配置存在不等于远程已运行通过，单次执行日志和审查报告继续保留在本地。
 
 ### 30.3 测量实际成本
 
 设置 `HX_OS_BUILD_BENCHMARKS=ON` 构建开发基准，记录吞吐、延迟、分配、锁、系统调用、争用以及目标配置。对象大小和对齐会影响数组与高频分配，但对象变小本身不是运行变快的证据。
 
-[性能与内存审查](BUG_MEMORY_LEAK_AUDIT.zh-CN.md)记录了重复前缀搜索、大容量命名过程扫描、MSVC 宽位除法回退的优化空间。C 任务分配四个 context 块，报告基线中的 C++ 整数结果任务为五个。这些是该基线的成本，不能替代新版 C++ Result 便利层的性能测量。 hx_c_log 的锁定原版五倍、单线程不回退门槛，需要真正接入后再验证。
+hx_c_log 的锁定原版五倍、单线程不回退门槛，需要真正接入后再验证。
 
 <a id="section-31"></a>
 
@@ -1788,8 +1788,7 @@ TSan 在另一个目录配置 `HX_OS_SANITIZER=thread`，不与 ASan 混用。�
 | 区间 profiler | [平台工具中的 profiler 契约](PLATFORM_UTILITIES.zh-CN.md) |
 | 原子操作与内存序 | [ATOMICS.zh-CN.md](ATOMICS.zh-CN.md) |
 | Android 基线 | [ANDROID.zh-CN.md](ANDROID.zh-CN.md) |
-| 验证与待测目标 | [VALIDATION.zh-CN.md](VALIDATION.zh-CN.md) |
-| 性能与内存 | [BUG_MEMORY_LEAK_AUDIT.zh-CN.md](BUG_MEMORY_LEAK_AUDIT.zh-CN.md) |
+| 目标平台与限制 | [平台概览](#section-2) |
 | OBS 风格批次实现记录 | [OBS_COMPLETION.zh-CN.md](OBS_COMPLETION.zh-CN.md) |
 | 后续消费者迁移 | [MIGRATION.zh-CN.md](MIGRATION.zh-CN.md) |
 | 可编译示例 | [examples/](../examples) |
@@ -1804,6 +1803,5 @@ TSan 在另一个目录配置 `HX_OS_SANITIZER=thread`，不与 ASan 混用。�
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%2091%2F91%20Linux%2093%2F93-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

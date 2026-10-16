@@ -71,7 +71,7 @@ The library builds, tests, installs and runs independently of hx_c_log. It does 
 
 The C core is a compiled library, **not header-only**. Only the optional C++ facade is header-only. C++11 is verified; a C++14/17/20 matrix is not claimed. CMake **3.16** is the baseline; compiler/SDK support must be checked separately from operating system API compatibility, especially for a Win7 deployment.
 
-Badges describe local evidence through **2026-10-03**: 91 Windows and 93 Linux CTest entries, not individual assertions. Linux adds two native RNG failure tests. GitHub Actions is configured; no remote CI pass is claimed. Android's fourteen-suite subset is not the entire desktop suite. See [validation](VALIDATION.md).
+Cross-builds and emulator runs do not establish native target acceptance. Check the operating system, architecture, SDK and deployment permissions separately.
 
 <a id="section-3"></a>
 
@@ -839,7 +839,7 @@ int main(void)
 }
 ```
 
-`repeat` starts after one interval, coalesces missed periods and lets EOF stop successfully. Callbacks cannot be preempted. Precise wait defaults to a 200 us spin window; `_ex` accepts 0..10 ms, with zero using ordinary sleep. INFINITE is invalid for precise wait. There are no global timer-resolution changes, hidden threads or hard-real-time guarantees. The Win7-compatible tick clock can limit short waits; QPC bounds spinning without changing clock semantics. Target measurements are in the [audit](BUG_MEMORY_LEAK_AUDIT.md).
+`repeat` starts after one interval, coalesces missed periods and lets EOF stop successfully. Callbacks cannot be preempted. Precise wait defaults to a 200 us spin window; `_ex` accepts 0..10 ms, with zero using ordinary sleep. INFINITE is invalid for precise wait. There are no global timer-resolution changes, hidden threads or hard-real-time guarantees. The Win7-compatible tick clock can limit short waits; QPC bounds spinning without changing clock semantics.
 
 <a id="section-14"></a>
 
@@ -1752,13 +1752,13 @@ Use a different directory with `HX_OS_SANITIZER=thread` for TSan; do not combine
 | ARM Linux | ARMv7/AArch64 cross-build and QEMU-compatible subset |
 | Android | API 21/28 two-ARM-ABI matrix and minimal builds |
 
-The workflow file is [build.yml](../.github/workflows/build.yml). Configuration does not mean a remote job has passed. Current full CTest results are Windows 91/91 and WSL Linux 93/93. The recursive search change passed three affected ASan/UBSan/LSan tests and the C++ utility suite under TSan. Earlier full sanitizer runs and the 1,001-round lifecycle audit belong to their recorded versions; the audit observed zero tracked live bytes after cleanup. See [validation](VALIDATION.md).
+The workflow file is [build.yml](../.github/workflows/build.yml). Configuration does not mean a remote job has passed. Keep individual execution logs and audit reports local.
 
 ### 30.3 Measure actual cost
 
 Enable `HX_OS_BUILD_BENCHMARKS=ON` for development benchmarks. Record throughput/latency, allocations, locks, system calls, contention and target configuration. Object size/alignment matters for arrays and frequently allocated objects, but a smaller object is not itself runtime speed evidence.
 
-The [performance and memory audit](BUG_MEMORY_LEAK_AUDIT.md) identifies repeated-prefix search, large-capacity procedure scans and the MSVC wide division fallback as optimization candidates. C tasks allocate four context blocks, and the measured C++ integer-result case five. These are costs at the audit's stated baseline, not fresh measurements of the migrated C++ Result facade. hx_c_log's locked five-times baseline and no-single-thread-regression targets await actual integration.
+hx_c_log's locked five-times baseline and no-single-thread-regression targets await actual integration.
 
 <a id="section-31"></a>
 
@@ -1788,8 +1788,7 @@ Future work includes native target validation and measured improvements. hx_c_lo
 | Interval profiling | [Profiler contracts](PLATFORM_UTILITIES.md#bounded-interval-profiler-batch-23c) |
 | Atomics and ordering | [ATOMICS.md](ATOMICS.md) |
 | Android baseline | [ANDROID.md](ANDROID.md) |
-| Validation and pending targets | [VALIDATION.md](VALIDATION.md) |
-| Performance and memory | [BUG_MEMORY_LEAK_AUDIT.md](BUG_MEMORY_LEAK_AUDIT.md) |
+| Target platforms and limitations | [Platform overview](#section-2) |
 | Implemented OBS-inspired batches | [OBS_COMPLETION.md](OBS_COMPLETION.md) |
 | Future consumer migration | [MIGRATION.md](MIGRATION.md) |
 | Buildable examples | [examples/](../examples) |
@@ -1804,6 +1803,5 @@ Future work includes native target validation and measured improvements. hx_c_lo
 [linux-badge]: https://img.shields.io/badge/Linux-GCC%20%7C%20Clang-yellow?logo=linux
 [macos-badge]: https://img.shields.io/badge/macOS-pending-lightgrey?logo=apple
 [windows-badge]: https://img.shields.io/badge/Windows-MSVC-blue
-[tests-badge]: https://img.shields.io/badge/tests-Win%2091%2F91%20Linux%2093%2F93-brightgreen
 [embedded-badge]: https://img.shields.io/badge/embedded%20Linux-target%20pending-lightgrey
 [android-badge]: https://img.shields.io/badge/Android-API%2021%20ARM%20builds-blue?logo=android

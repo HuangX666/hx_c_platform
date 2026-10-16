@@ -111,4 +111,4 @@ json_field fields[] = {
 ctest --test-dir build-net -C Release -R "^udp_business_" --output-on-failure
 ```
 
-`udp_business_samples` 和 `udp_business_gaps` 检查两个设备的 JSON 样本、最新状态、双向反馈和线程结束。所需 JSON 模块关闭时不注册这些业务用例。可靠业务另见 [KCP](KCP_BUSINESS.zh-CN.md) 或 [TCP](TCP_BUSINESS.zh-CN.md)；目标证据见[验证记录](VALIDATION.zh-CN.md)。
+`udp_business_samples` 和 `udp_business_gaps` 检查两个设备的 JSON 样本、最新状态、双向反馈和线程结束。所需 JSON 模块关闭时不注册这些业务用例。可靠业务另见 [KCP](KCP_BUSINESS.zh-CN.md) 或 [TCP](TCP_BUSINESS.zh-CN.md)。

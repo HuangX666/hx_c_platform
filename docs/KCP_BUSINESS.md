@@ -103,4 +103,4 @@ After the final result, the client drives 500 ms more for trailing ACK retransmi
 ctest --test-dir build-net -C Release -R "^kcp_business_" --output-on-failure
 ```
 
-`kcp_business_transfer` and `kcp_business_loss` check actual JSON blocks, totals, confirmations and cleanup. Engine reordering, duplication, capacity and clock rollover remain in [test_kcp.c](../tests/test_kcp.c). Disabling required JSON modules omits these business cases. See [validation](VALIDATION.md).
+`kcp_business_transfer` and `kcp_business_loss` check actual JSON blocks, totals, confirmations and cleanup. Engine reordering, duplication, capacity and clock rollover remain in [test_kcp.c](../tests/test_kcp.c). Disabling required JSON modules omits these business cases.

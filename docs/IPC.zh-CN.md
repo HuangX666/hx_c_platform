@@ -284,4 +284,4 @@ ctest --test-dir build-ipc -C Release -R "ipc|kcp" --output-on-failure
 - `kcp`：有意丢包、重复和乱序、双向传送、32 位时间回绕、消息/队列限制、固定分配预算。
 - `ipc_examples`：实际启动独立服务端和 C/C++ 客户端；独立 Python TCP/Unix 对端；拆开的头、合并的帧、超长和未完成正文，以及旧 UDP 会话流量。
 
-测试命令与通过结果是两回事。Windows、WSL、Android、sanitizer 和安装消费的本次证据见[验证记录](VALIDATION.zh-CN.md)；macOS、Win7 和嵌入式板卡没有本次目标运行证据时仍标记待验证。
+应在实际部署的操作系统和通信方式下运行示例。宿主构建或模拟器运行不能代替原生目标验证；macOS、Win7 和嵌入式板卡需要各自的运行环境，详见[平台概览](REFERENCE.zh-CN.md#section-2)。

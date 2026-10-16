@@ -35,4 +35,4 @@ Every completed batch requires Windows MSVC x64 and WSL Linux full CTest, releva
 
 The baseline preserves pre-existing whitespace, including vendor licenses. Build products, dependency caches and install outputs are excluded from Git.
 
-All implementation batches are complete. Final static/shared installation, 576-symbol export checks and old-header/new-library ABI probes passed on Windows and WSL. See [the final matrix](VALIDATION.md) for the full sanitizer, Clang, x86 and CMake 3.16 results, partial QEMU runs and native target limits. This is not a claim of macOS/Win7/embedded-board acceptance or hx_c_log speedup.
+All implementation batches are complete. Platform baselines and remaining target limitations are described in the [platform overview](REFERENCE.md#section-2). Implementation does not establish macOS/Win7/embedded-board acceptance or hx_c_log speedup.

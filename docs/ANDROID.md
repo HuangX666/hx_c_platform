@@ -70,12 +70,6 @@ For a focused communication run, append `--suite ipc --suite kcp --suite lifecyc
 
 For serialization only, append `--suite config_tree --suite codec --suite cpp_codec`. See the [serialization tutorial](SERIALIZATION.md).
 
-## Serialization verification (2026-10-04)
-
-Commit `8de8da1`: minimum-API-21 full shared builds for x86_64 and arm64-v8a each passed config_tree, codec and cpp_codec on Qt_Android_34, plus one portable benchmark execution. The actual OS was Android 14 / API 34 on x86_64; ARM64 used libndk_translation. A temporary read-only, no-snapshot, headless emulator was closed afterward without wiping or saving user data.
-
-Reports are build-android-emulator/report.json and build-android/report.json. Each ABI directory retains run-hx_os_test_config_tree.log, run-hx_os_test_codec.log and run-hx_os_test_cpp_codec.log. ARMv7 cross-compilation passed but runtime remains pending because this emulator lacks that ABI. API 21 OS execution, physical ARM hardware, APK sandbox execution and performance acceptance remain unverified. The other 28 suites were not rerun in this follow-up.
-
 ## Platform boundaries
 
 | Facility | Current behavior |
@@ -95,55 +89,14 @@ Reports are build-android-emulator/report.json and build-android/report.json. Ea
 
 Module bits describe compiled families, not every platform extension. API 21 binaries remain process-disabled on newer devices; build with the higher minimum API for that feature. No JNI/Java dependency, APK, manifest permissions, asset API or UI automation is supplied. Consumers own those. Standalone validation uses c++_static; consumers retain their NDK STL policy.
 
-## IPC and bounded native join verification (2026-10-03)
+## Runtime limits
 
-The API 21 ARM64 shared configuration runs twenty-eight suites and the portable benchmark through ARM translation on the existing API 34 x86_64 emulator. TCP, ordinary UDP and KCP cover complete messages, duplex/concurrent requests, restart, bounds and closure. This emulator's SELinux policy denies shell creation of pathname Unix sockets (`sock_file create`, EACCES); that subcase is explicitly skipped, with reasons retained in report `test_notes` and logs. System security settings were not relaxed, and Unix socket runtime support was not claimed. Validate that transport inside an appropriately permitted APK/target environment.
+Minimum API 21 is a build target, not proof of execution on Android 5.0. API 21 runtime, ARMv7 execution, physical ARM hardware and APK sandbox behavior still need matching target environments. Emulator translation does not establish native ARM performance.
 
-Bounded Android join uses Bionic's public API to observe the kernel-cleared TID before reclaiming an owned, joinable thread. [Bionic's join implementation](https://android.googlesource.com/platform/bionic/+/master/libc/bionic/pthread_join.cpp) also waits for that clearing before final reclamation. The `lifecycle` suite specifically covers a returned thread function whose TLS destructor is still blocked. Compiling for API 21 does not prove execution on Android 5.0 hardware; ARMv7 still requires a target run. The finite-join restrictions below are historical and are superseded by this section for current behavior.
+Unix-domain sockets require suitable UID and SELinux permissions. A shell-based run may receive `EACCES` even when another transport works; validate Unix sockets inside the intended application environment.
 
-## Containers and coroutine verification (2026-10-03, historical)
+A returned thread function does not mean its TLS destructors have finished. Finite join includes thread-exit cleanup and preserves the owned thread on timeout for retry; the library does not silently change a finite wait to an infinite wait.
 
-NDK r28c builds the full shared library at minimum API 21 for arm64-v8a, armeabi-v7a and x86_64, including self-developed stackful adapters, the C99 state machine, C++11 go and optional C++20 layer. The API 34 Qt_Android_34 emulator passes twenty suites plus the portable benchmark for native x86_64 and translated ARM64. ARMv7 runtime is explicitly skipped because it is absent from the emulator ABI list. Reports are build-android/report.json and build-android-emulator/report.json.
+Shared example/test executables use executable-relative RUNPATH where supported. RUNPATH requires API 24 or newer; older native systems use `LD_LIBRARY_PATH`. See the [Android linker documentation](https://android.googlesource.com/platform/bionic/+/refs/heads/android15-tests-release/android-changes-for-ndk-developers.md).
 
-New checks include RB/AVL invariants, duplicate keys, algorithms, channel/select, cancellation, prepare/close cleanup, floating-point state, profiler isolation, TCP/DNS/pipes and C++20 frame cleanup. The runtime retains the finite-native-join restriction: controlled tests explicitly choose infinite final join after arranging cooperative exit. The library never silently turns finite close into infinite close. API 21 runtime, ARMv7 execution and physical ARM boards remain unverified. Earlier minimal/static/API 28 records are historical, not reruns of this addition. See [validation and local measurements](VALIDATION.md).
-
-## Recursive search verification (2026-10-03)
-
-API 21 ARM64/ARMv7 full and minimal shared configurations all build, including C99/C++11 headers. Each ARM64 configuration passes fourteen suites and the portable benchmark on the API 34 x86_64 emulator through native-bridge translation. ARMv7 runtime is explicitly skipped for an incompatible ABI. file_search adds depth/width, Unicode, first-match, callback, link, allocation and disabled-module checks; cpp_utilities also exercises search in the existing pool. These results do not establish Android 5.0 runtime, physical ARM performance or app sandbox behavior. See [validation](VALIDATION.md).
-
-## Variant verification (2026-10-03)
-
-At the variant stage, the selected subset contained thirteen suites, adding variant/cpp_variant; the portable benchmark added integer and custom-structure set/get timing observations. API 21 ARM64/ARMv7 full and minimal shared builds included the module, disabled-module tests and standalone C99/C++11 headers. Runtime and pending targets are recorded separately in [VALIDATION.md](VALIDATION.md). Prior records below describe their original revisions and selected subsets.
-
-## Common-call verification (2026-10-01)
-
-NDK r28c / Clang 19 builds API 21 arm64-v8a and armeabi-v7a, each in full/minimal shared configurations, including standalone C99/C++11 headers and the direct-call example. Both ARM64 configurations pass all 11 selected suites plus the benchmark on Qt_Android_34 / emulator-5580 (API 34, native x86_64, ARM64 native-bridge translation). ARMv7 runtime is explicitly skipped because the emulator advertises only x86_64 and arm64-v8a. The convenience suite checks retained strings during concurrent mutation/after close, allocation-failure cleanup, immediate update semantics, Unicode directory visits and module-off behavior. No Android 5.0 runtime or physical ARM timing claim follows; API 28/static/x86_64 configurations below remain earlier evidence.
-
-## Result migration verification (2026-10-01)
-
-API 21 arm64-v8a and armeabi-v7a full/minimal shared configurations compile. Both ARM64 configurations pass 10/10 suites on the existing API 34 x86_64 emulator through native-bridge translation. ARMv7 is absent from its ABI list and is explicitly skipped at runtime. All C++ tests disable exceptions. Finite join reports the capability limit; controlled tests explicitly choose an infinite final join. The table below preserves the earlier eight-suite baseline; other API/link configurations were not rerun for this migration.
-
-## Earlier baseline evidence
-
-2026-10-01, Windows build host, NDK r28c / Clang 19.0.1:
-
-| Configuration | Cross-build | Target execution |
-| --- | --- | --- |
-| API 21 arm64-v8a, shared/default modules | Passed | Android 14 translated, 8/8 |
-| API 21 armeabi-v7a, shared/default modules | Passed | Pending device |
-| API 28 arm64-v8a, shared/default modules | Passed | Android 14 translated, 8/8 |
-| API 28 armeabi-v7a, shared/default modules | Passed | Pending device |
-| API 21 x86_64, shared/default modules | Passed | Android 14 native ISA, 8/8 |
-| API 28 x86_64, shared/default modules | Passed | Android 14 native ISA, 8/8 |
-| API 21 arm64-v8a, static/default modules | Passed | Android 14 translated, 8/8 |
-| API 21 arm64-v8a, shared/minimal modules | Passed | Android 14 translated, 8/8 |
-
-See [validation](VALIDATION.md) for minimal/static and host results. The existing Qt_Android_34 AVD was booted as emulator-5580: API 34, native x86_64, with libndk_translation. Each of the six executed configurations passes the earlier eight-suite Android subset and runs the benchmark once. Minimal verifies disabled-feature behavior. These eight suites are not the entire desktop CTest collection.
-
-ARM64 shared execution initially could not locate the library through LD_LIBRARY_PATH. Executable-relative RUNPATH fixed both shared configurations and minimal. RUNPATH is supported since API 24; see the [Android linker documentation](https://android.googlesource.com/platform/bionic/+/refs/heads/android15-tests-release/android-changes-for-ndk-developers.md). ARM64 results include translation/virtualization and are not hardware performance evidence. The AVD offers no ARMv7 ABI, so deployment explicitly skips it. Building with minimum API 21 is not an Android 5.0 runtime test. Old OS releases, ARMv7, physical ARM and application sandbox permissions still require matching environments.
-
-Reports: build-android-emulator/report.json, build-android/report.json, build-android/report-minimal.json and build-android-static/report.json; run-*.log files under each configuration contain actual program output. CI contains the pinned-NDK matrix and API 21 minimal builds; no remote run is claimed.
-
-## 2026-10-03 additions
-
-The host-only automatic C syntax generator is tested separately on Windows/MSVC and WSL/GCC, including installed consumers. Android target tests exercise the generated-independent C99 engine and exception-free C++ wrappers. A cross build of the core does not validate arbitrary generated application sources against a particular Android sysroot. The current coroutine/format additions and actual ABI/runtime evidence are recorded in [validation](VALIDATION.md).
+The optional automatic C syntax generator runs on the build host. Cross-compiling the core does not validate generated application sources against every Android sysroot; compile those sources with the application's target toolchain.
