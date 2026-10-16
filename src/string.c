@@ -156,12 +156,14 @@ hx_os_status hx_string_replace(hx_string *string, size_t offset, size_t bytes,
 
 	status = hx_string_reserve(string, size, error);
 	if (status == HX_OS_OK) {
-		memmove(string->data + offset + text.size,
-			string->data + offset + bytes,
-			string->size - offset - bytes + 1);
+		if (offset + bytes < string->size)
+			memmove(string->data + offset + text.size,
+				string->data + offset + bytes,
+				string->size - offset - bytes);
 		if (text.size)
 			memcpy(string->data + offset, input, text.size);
 
+		string->data[size] = 0;
 		string->size = size;
 	}
 

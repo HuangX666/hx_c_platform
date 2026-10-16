@@ -36,6 +36,8 @@ Buildable examples: [direct_calls.cpp](../examples/direct_calls.cpp), [settings.
 
 ## Strings and encoding
 
+For repeated text assembly, keep one `hx_string`: `hx_string_clear()` clears its contents while retaining capacity, and `hx_string_destroy()` releases it. Reserve an expected size once when useful. If the byte length is already known, pass a `hx_string_view` to `hx_string_append()`; `hx_string_append_cstr()` remains convenient for NUL-terminated input but calculates its length. Appending at the end avoids moving the existing suffix. Both forms still validate UTF-8, preserve the string on failure and support input borrowed from the string itself, including when growth is needed. A view can contain embedded NUL bytes; inspect its size or use `fwrite()` rather than `puts()` for such data.
+
 ~~~c
 hx_string text = HX_STRING_INIT;
 hx_string_parts *parts = NULL;

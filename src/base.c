@@ -50,10 +50,10 @@ hx_os_status hx_os_i_errno(hx_os_error *error, int code)
 {
 	hx_os_status status = HX_OS_IO_ERROR;
 
+	if (!code)
+		return hx_os_i_error(error, HX_OS_OK, HX_OS_ERROR_ERRNO, 0);
+
 	switch (code) {
-	case 0:
-		status = HX_OS_OK;
-		break;
 	case ENOMEM:
 		status = HX_OS_NO_MEMORY;
 		break;

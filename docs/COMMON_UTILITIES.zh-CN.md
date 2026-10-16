@@ -36,6 +36,8 @@
 
 ## 字符串与编码
 
+反复拼接文字时，可以复用同一个 `hx_string`：`hx_string_clear()` 清空内容但保留容量，`hx_string_destroy()` 才释放缓冲；知道大致长度时，可先 reserve 一次。已有字节长度就用 `hx_string_view` 配合 `hx_string_append()`；只有以 NUL 结尾的字符串时，直接用 `hx_string_append_cstr()`，它会先计算长度。尾部追加会省去已有尾部的搬移。两种写法仍会校验 UTF-8、在失败时保留原字符串，并支持借用字符串自身的内容，即使需要扩容也可以。view 可以包含内嵌 NUL；处理这种数据时应查看字节长度或使用 `fwrite()`，不能用 `puts()` 判断全部内容。
+
 ~~~c
 hx_string text = HX_STRING_INIT;
 hx_string_parts *parts = NULL;

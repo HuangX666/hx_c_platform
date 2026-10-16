@@ -251,17 +251,10 @@ static hx_os_status hx_os_profiler_context_set(hx_os_profiler *profiler,
 static hx_os_status hx_os_profiler_thread(hx_os_profiler *profiler,
 	hx_os_profile_thread **out, int *created, hx_os_error *error)
 {
-	hx_os_profile_thread *thread = hx_os_profiler_context_get(profiler);
-
+	hx_os_profile_thread *thread;
 	hx_os_status status;
 
 	*created = 0;
-	if (thread) {
-		*out = thread;
-
-		return HX_OS_OK;
-	}
-
 	(void)hx_os_mutex_lock(profiler->mutex, NULL);
 	if (profiler->closing)
 		status = HX_OS_CLOSED;
@@ -460,7 +453,9 @@ static hx_os_status hx_os_profiler_enter(hx_os_profiler *profiler,
 		goto done;
 	}
 
-	status = hx_os_profiler_thread(profiler, &thread, &created, error);
+	if (!thread)
+		status = hx_os_profiler_thread(
+			profiler, &thread, &created, error);
 	if (status != HX_OS_OK)
 		goto native_done;
 
