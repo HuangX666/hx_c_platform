@@ -143,6 +143,8 @@ POSIX creation uses 0600/0700; Windows inherits parent ACLs. These objects do no
 
 ## 6. Serial byte I/O
 
+A failed open returns no serial owner and preserves the native error. Windows captures the device-open error before releasing temporary path storage, so injected allocator callbacks cannot replace that diagnostic.
+
 `hx_os_serial_open(NULL, "COM3", NULL, &serial, error)` or a POSIX device path opens and configures a serial endpoint. Defaults: 115200 baud, eight data bits, one stop bit, no parity or hardware flow control. Optional settings support 5–8 data bits, one/two stop bits, odd/even parity and RTS/CTS. Unsupported POSIX baud constants or hardware features fail explicitly. Coordinate other applications using the device; Windows opens it exclusively.
 
 Use `read_until` and `write_until` with a monotonic deadline and optional cancellation token. Short transfers are valid; retry only the untransferred suffix. One reader and one writer may run concurrently, with each direction serialized. Windows cancellation waits for native I/O retirement before returning borrowed buffers; driver behavior can exceed the deadline. There is no worker, implicit message framing or background queue. `discard` explicitly drops native pending bytes; close does not silently drain device output. Exclude all I/O callers before close. C++ uses `hx::Serial` and progress-bearing `Result<size_t>`.

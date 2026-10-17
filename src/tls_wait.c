@@ -428,6 +428,9 @@ static hx_os_status hx_tls_close(hx_os_tls **owner, hx_os_deadline deadline,
 	hx_tls_i_wake(tls);
 	hx_tls_i_unlock(tls);
 	status = hx_os_thread_join_until(tls->worker, deadline, NULL, error);
+	if (status == HX_OS_OK)
+		status = hx_os_thread_destroy(&tls->worker, error);
+
 	if (status != HX_OS_OK) {
 		hx_tls_i_lock(tls);
 		tls->close_caller = 0;
@@ -435,7 +438,6 @@ static hx_os_status hx_tls_close(hx_os_tls **owner, hx_os_deadline deadline,
 
 		return status;
 	}
-	(void)hx_os_thread_destroy(&tls->worker, NULL);
 	saved = tls->error;
 	*owner = NULL;
 	hx_tls_i_guard(tls);

@@ -280,7 +280,8 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_tls_cancel_waits(
  * Stop new application calls before endpoint destruction. In-flight calls wake
  * and retire; one close caller at a time. Native errors can be returned with
  * *tls=NULL when retirement has completed; a live owner means retry is
- * required. Allocator user state/runtime code must survive that owner.
+ * required, including when the worker exited but its handle cleanup failed.
+ * Allocator user state/runtime code must survive that owner.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_tls_peer_close_until(hx_os_tls *tls,
 	uint64_t peer, hx_os_deadline deadline, hx_os_error *error);

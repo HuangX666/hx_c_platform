@@ -613,6 +613,12 @@ int main()
 		std::fprintf(
 			stderr, "%s\n", hx_os_status_name(created.status()));
 
+		auto closed = hx::ThreadPool(owner).shutdownUntil(
+			hx_os_deadline_after_ms(2000));
+		if (!closed)
+			std::fputs("Cleanup pending; keep owner to retry.\n",
+				stderr);
+
 		return 1;
 	}
 

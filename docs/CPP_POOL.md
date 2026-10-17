@@ -24,6 +24,10 @@ The [complete example](../examples/thread_pool.cpp) checks creation, submission,
 
 `closeUntil()` permanently rejects new submissions. DRAIN runs accepted queued tasks; CANCEL_PENDING skips queued work without forcibly interrupting work already running. Both wait for cleanup and native thread exit. Closing from a worker in the same pool returns DEADLOCK. Concurrent close or in-progress preparation can return BUSY. No reaper thread or forced termination is introduced.
 
+Worker exit and worker-handle cleanup are separate steps. If `destroy()` or `shutdownUntil()` reports a native cleanup error, keep the same non-NULL owner and retry after handling the error. Already released handles are skipped; tasks and their cleanup callbacks are not executed again. The C `hx_os_thread_pool_destroy()` and `hx_os_thread_pool_shutdown()` entries follow the same rule.
+
+Creation can also retain a closing owner if partial worker startup fails and rollback cannot finish. Check `owner` even when `create()` / `withThreads()` returns a failed Result. Use `hx::ThreadPool(owner).shutdownUntil(deadline)` to retry cleanup; do not submit work. The creation error is preserved. See [shared lifetime rules](CONTRACTS.md#shared-rules).
+
 ## Wait for work without closing the pool
 
 `pool.waitUntil(deadline)` waits for tasks already accepted when this call captures its boundary under the pool mutex. Later submissions do not extend this wait. `pool.waitIdleUntil(deadline)` waits until no accepted tasks remain; continuing submissions can delay it. `waitFor(milliseconds)` and `waitIdleFor(milliseconds)` accept relative durations. Both modes include delayed tasks and task cleanup, leave the pool open, and return TIMEOUT when their monotonic deadline expires. Zero duration polls.

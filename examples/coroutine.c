@@ -47,6 +47,16 @@ int main(void)
 	if (status != HX_OS_OK) {
 		fprintf(stderr, "Create runtime: %s\n",
 			hx_os_status_name(status));
+		if (runtime) {
+			closed = hx_os_coro_runtime_close_until(runtime,
+				hx_os_deadline_after_ms(2000), NULL);
+			if (closed == HX_OS_OK)
+				(void)hx_os_coro_runtime_destroy(
+					&runtime, NULL);
+			else
+				fputs("Cleanup pending; keep owner to retry.\n",
+					stderr);
+		}
 
 		return 1;
 	}

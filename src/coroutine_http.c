@@ -197,7 +197,8 @@ hx_os_status hx_os_coro_http_create(hx_os_coro_runtime *runtime, size_t threads,
 	options.queue_capacity = service->maximum;
 	status = hx_os_thread_pool_create(
 		runtime->context, &options, &service->pool, error);
-	if (status == HX_OS_OK) {
+	if (service->pool) {
+		service->closing = status != HX_OS_OK;
 		hx_os_i_coro_runtime_retain(runtime);
 		hx_string_init(&service->dns_servers, runtime->context);
 		*out = service;

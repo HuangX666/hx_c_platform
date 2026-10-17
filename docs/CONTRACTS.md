@@ -14,6 +14,17 @@ A status is not a Boolean. OK means the stated operation completed; EOF, NEED_IN
 
 Unless explicitly stated otherwise, pointer inputs are borrowed for the call, output objects have one owner, and destruction requires external exclusion of new users. A failed constructor publishes no object. Never release an object with free(), another library instance or another pool. NULL cleanup is accepted where documented; a disabled constructor returns NOT_SUPPORTED.
 
+Worker-backed constructors have one explicit exception: pool, coroutine runtime, directory watch and coroutine HTTP service creation may fail with a non-NULL owner when rollback also fails. The error still describes creation. This owner is already closing and must not accept business work. Keep it and its allocation context alive, then retry the corresponding cleanup below. Ordinary creation failure still returns NULL; no hidden reaper or forced thread termination is used.
+
+| Retained owner | Existing cleanup entry |
+| --- | --- |
+| Thread pool | `hx_os_thread_pool_shutdown()` |
+| Coroutine runtime | `hx_os_coro_runtime_close_until()`, then `hx_os_coro_runtime_destroy()` after successful close |
+| Directory watch | `hx_os_watch_close_until()` |
+| Coroutine HTTP service | `hx_os_coro_http_close_until()`, before releasing its runtime |
+
+Check ownership even when creation reports failure. A failed watch creation never transfers callback/cleanup ownership, including when a native owner remains. C++ factories return a failed `Result` while preserving the caller's owner variable for the same cleanup; do not call `value()` on that failed result.
+
 Pure status/capability/time/Unicode/atomic functions need no initialization. A NULL context uses an immutable malloc/free policy. Explicit contexts copy allocator callbacks and borrow user state. They cannot change allocator. Create one per consumer when allocator lifetimes differ. Strings retain even an empty context; allocated objects also keep it busy. Context destruction returns BUSY until all allocations and leases retire. It does not race safely with a new allocation: exclude admission before destruction.
 
 Allocator callbacks require fundamental alignment, thread safety and cross-thread freeing. Sizes are size_t; reject checked conversions from wider consumer sizes. The wrapper supplies higher power-of-two alignment and stores the originating allocator. Callback code/user data remain loaded until every allocation is freed and context destruction succeeds. Native APIs and iconv may allocate internally using their own allocators; the context controls this library's allocations, not all OS/backend memory.
@@ -83,6 +94,8 @@ Callbacks can submit new work or close idle sockets. Recursive driving/closing a
 run_until drains to idle; poll_until performs a batch and may wait for work. A run/wait deadline does not cancel requests. An operation deadline requests cancellation and may retire later. IOCP cancellation waits for the native completion packet before freeing OVERLAPPED/buffers. POSIX readiness removal does not undo a connection attempt. Close a socket after failed/cancelled CONNECT. DNS may remain inside getaddrinfo until the native resolver finishes; deadline/close can time out without freeing its job or adding replacement threads.
 
 Close stops new admission, requests cancellation and drives retirement. It can invoke callbacks and retains everything live on timeout. Close attached sockets after their requests retire, then destroy the closed loop. Completed request handles can outlive the loop. There is no fixed two-second library shutdown policy.
+
+On Windows, failure to post an IOCP wake is reported with its native error instead of permanently suppressing future wakes. Native waits check for this failure at intervals of at most 250 ms; normal posts still wake immediately, and internal checks do not create public timeouts. This is not a hard response-time guarantee. A poll error does not release accepted requests or their buffers: continue driving them or call close. If closing the internal DNS worker pool fails, the loop stays owned and unfinished; retry `hx_os_loop_close_until()` before destruction.
 
 ## Linking and unloading
 

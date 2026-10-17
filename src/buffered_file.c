@@ -165,7 +165,6 @@ hx_os_status hx_os_file_writer_options_init(
 
 static void hx_os_writer_free(hx_os_file_writer *writer)
 {
-	hx_os_thread_destroy(&writer->thread, NULL);
 	hx_os_condition_destroy(writer->condition);
 	hx_os_mutex_destroy(writer->mutex);
 	hx_os_memory_free(writer->queue);
@@ -498,6 +497,8 @@ static hx_os_status hx_os_writer_close(hx_os_file_writer **owner,
 	if (status == HX_OS_OK)
 		status = hx_os_thread_join_until(
 			writer->thread, deadline, NULL, error);
+	if (status == HX_OS_OK)
+		status = hx_os_thread_destroy(&writer->thread, error);
 	if (status != HX_OS_OK) {
 		hx_os_mutex_lock(writer->mutex, NULL);
 		writer->close_claim = 0;

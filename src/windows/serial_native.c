@@ -27,9 +27,10 @@ hx_os_status hx_os_i_serial_open(hx_os_context *context, const char *device,
 		return error ? error->status : HX_OS_NO_MEMORY;
 	handle = CreateFileW(wide, GENERIC_READ | GENERIC_WRITE, 0, NULL,
 		OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
+	code = handle == INVALID_HANDLE_VALUE ? GetLastError() : ERROR_SUCCESS;
 	hx_os_memory_free(wide);
 	if (handle == INVALID_HANDLE_VALUE)
-		return hx_os_i_win32(error, GetLastError());
+		return hx_os_i_win32(error, code);
 	memset(&settings, 0, sizeof(settings));
 	settings.DCBlength = sizeof(settings);
 	if (!GetCommState(handle, &settings))

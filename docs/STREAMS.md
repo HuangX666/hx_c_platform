@@ -96,6 +96,8 @@ The default queue is 1 MiB and the worker's maximum write request is 64 KiB. `op
 
 A write or flush error is latched and stops further acceptance. `pending()` reports the error and remaining bytes. After fixing the cause, `retry()` resumes only the unwritten suffix. It does not replay a successful prefix. A native close failure consumes the sink; it cannot be retried.
 
+If the worker has exited but its thread handle cannot be released, close/abort reports that cleanup error and retains the writer. Retry with the same owner. The sink is not closed again; its saved close result is returned once thread cleanup completes, at which point the owner is consumed.
+
 `close_until()` stops acceptance, drains, flushes user buffers and closes. Timeout or a write/flush error retains the same pointer. The host can retry on a later shutdown attempt. `abort_until()` explicitly discards the remaining queue after the current native operation returns. It cannot terminate a hung syscall or third-party callback. Both take monotonic deadlines, including NOW and INFINITE. Final close/abort requires exclusion of all other public calls, including calls waiting to enter. For multiple producers, call `stop()` first to stop acceptance and wake them, join/quiesce those producers, then close. `stop()` retains the object and is safe alongside writes/flushes. Worker callbacks receive DEADLOCK if they try to wait on their own writer.
 
 The C++ facade follows the thread-pool ownership model:

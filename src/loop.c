@@ -857,7 +857,9 @@ hx_os_status hx_os_loop_close_until(
 		if (status != HX_OS_OK)
 			return status;
 
-		(void)hx_os_thread_pool_destroy(&loop->dns_pool, NULL);
+		status = hx_os_thread_pool_destroy(&loop->dns_pool, error);
+		if (status != HX_OS_OK)
+			return status;
 	}
 
 	loop->closed = 1;

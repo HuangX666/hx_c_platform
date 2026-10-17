@@ -17,6 +17,9 @@ typedef struct hx_os_coro_http hx_os_coro_http;
  * allocations and container growth peaks are additional. This is an admission
  * budget, not an RSS cap. Creation starts the pool, not individual calls.
  * The service retains runtime until close. No process-global service is used.
+ * If failed pool creation also fails cleanup, *out retains a closing service.
+ * Retry close_until on that owner; no requests are accepted. Other failures
+ * leave *out NULL. The returned error still describes creation.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_http_create(
 	hx_os_coro_runtime *runtime, size_t threads, size_t max_requests,

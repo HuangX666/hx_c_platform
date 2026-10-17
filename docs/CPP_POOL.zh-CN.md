@@ -24,6 +24,10 @@
 
 `closeUntil()` 开始后永久拒绝新提交。DRAIN 执行已接收的排队任务；CANCEL_PENDING 跳过排队任务，不强制打断正在运行的工作。两者均等待清理与原生线程退出。工作线程关闭自己的池返回 DEADLOCK，并发关闭或仍在准备的提交可能返回 BUSY，不引入后台回收线程或强制终止。
 
+工作线程退出和释放线程句柄是两个步骤。如果 `destroy()` 或 `shutdownUntil()` 返回原生清理错误，保留同一个非空 owner，处理错误后重试。已经释放的句柄会跳过，不会重新执行任务或任务清理回调。C 接口 `hx_os_thread_pool_destroy()`、`hx_os_thread_pool_shutdown()` 遵循相同规则。
+
+如果部分工作线程启动失败，而且回滚清理没有完成，创建也可能保留一个处于关闭状态的 owner。即使 `create()`／`withThreads()` 返回失败的 Result，也要检查 `owner`；用 `hx::ThreadPool(owner).shutdownUntil(deadline)` 重试清理，不能继续提交任务。创建错误会保留，具体规则见[通用生命周期约定](CONTRACTS.zh-CN.md)。
+
 ## 等任务完成，线程池继续使用
 
 `pool.waitUntil(deadline)` 等待本次调用在池互斥锁内确定边界时已经接受的任务，后来提交的任务不延长本次等待。`pool.waitIdleUntil(deadline)` 等待池中没有尚未完成的任务，等待期间继续提交可能延长等待。`waitFor(milliseconds)` 和 `waitIdleFor(milliseconds)` 接受相对时长。这两种等待都包含延迟任务和任务清理，不关闭池；到达单调截止时间返回 TIMEOUT，零时长表示立即查询。

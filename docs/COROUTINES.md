@@ -89,11 +89,16 @@ Create a runtime explicitly:
 hx_os_coro_runtime *owner = NULL;
 
 auto created = hx::coro::Runtime::create(owner);
-if (!created)
-	return 1;
+if (!created) {
+	auto closed = hx::coro::Runtime(owner).shutdownUntil(
+		hx_os_deadline_after_ms(2000));
+	return closed ? 1 : 2;
+}
 
 auto &runtime = created.value();
 ```
+
+In this snippet, return code 1 means creation failed and cleanup completed; 2 means cleanup is still pending. A long-running host must keep owner and retry instead of discarding it.
 
 The C pointer is the durable owner; `Runtime` is a borrowed facade and never waits in its destructor. Finish with `runtime.shutdownUntil(deadline)`. On `TIMEOUT`, `BUSY` or `NOT_SUPPORTED`, retain the owner and retry according to the host's policy. Runtime close does not replace checking task errors. Borrowed captures must outlive task execution and cleanup, and plugins/context cannot be unloaded while dependent work remains.
 
@@ -245,6 +250,8 @@ Each receive consumes one datagram. An empty datagram succeeds with zero bytes; 
 | `destroy` | Requires successful close; `BUSY` preserves the owner otherwise |
 
 Lazy native stack creation may fail after admission; wait/get reports that failure. Callback self/current pointers are borrowed; retain before taking ownership. An accepted task's cleanup runs once, including cancellation before its first instruction. Completion includes cleanup. Scheduler cleanup and I/O dispatcher callbacks get DEADLOCK when waiting for unfinished tasks; runtime close from scheduler/dispatcher threads also returns DEADLOCK. Timeouts leave objects and background storage valid for retry. No operation promises a hard real-time deadline. A coroutine that never yields can prevent close from completing. The owner is not a shared mutable global allocator/configuration.
+
+Runtime creation can fail with a non-NULL owner if worker/I/O rollback cannot finish. This runtime is closing and accepts no tasks. Retry `close_until`, then destroy after successful close; preserve its context until then. A failed C++ factory Result leaves the caller's owner variable available: construct `hx::coro::Runtime(owner)` solely to call `shutdownUntil(deadline)`. Coroutine HTTP service creation follows the same rule if its pool rollback fails; close the service before the runtime. See [shared lifetime rules](CONTRACTS.md#shared-rules).
 
 Tasks remain pinned to one worker. Child tasks submitted from a coroutine inherit that worker; native-thread submissions use round robin. There is no work stealing or automatic load migration. Thread-local storage is not coroutine-local storage: POSIX TLS is shared by tasks on the worker, while Windows FLS follows native fibers. Use `Local<T>` or the C local-key API for portable coroutine-local values, or keep state in user data/the frame. Never hold a native mutex across a coroutine suspension. Library signal/profiler/hash reentry state is switched explicitly. Profiler interval stacks are also isolated per coroutine, so interleaving is not mistaken for nesting. Up to 64 local slots, shared by profiler instances and application coroutine-local keys, may be associated with one coroutine; exit frees caches and aborts unfinished intervals, while max_threads still bounds all profiling contexts. Close a profiler from the native host after its tasks finish; its close API remains synchronous. This does not make arbitrary third-party TLS-based APIs coroutine-safe.
 

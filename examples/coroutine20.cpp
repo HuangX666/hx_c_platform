@@ -25,6 +25,11 @@ int main()
 	if (!created) {
 		std::fprintf(stderr, "Create runtime: %s\n",
 			hx_os_status_name(created.status()));
+		auto closed = hx::coro::Runtime(owner).shutdownUntil(
+			hx_os_deadline_after_ms(2000));
+		if (!closed)
+			std::fputs("Cleanup pending; keep owner to retry.\n",
+				stderr);
 
 		return 1;
 	}

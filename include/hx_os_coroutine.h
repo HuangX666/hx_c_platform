@@ -64,6 +64,12 @@ typedef struct hx_os_coro_options {
 HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_options_init(
 	hx_os_coro_options *options, size_t capacity);
 
+/**
+ * \brief Failure normally leaves *out NULL.
+ * \details If worker/I/O rollback fails, *out retains a closing runtime solely
+ * for close_until followed by destroy. No tasks are admitted. The returned
+ * error describes creation; keep the context alive until cleanup completes.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_coro_runtime_create(
 	hx_os_context *context, const hx_os_coro_options *options,
 	hx_os_coro_runtime **out, hx_os_error *error);

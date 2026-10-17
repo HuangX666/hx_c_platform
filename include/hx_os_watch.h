@@ -64,6 +64,9 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_watch_options_init(
  * OVERFLOW means rescan; ERROR is terminal. Callbacks run outside locks on this
  * object's worker. Linux recursion pins directory fds through /proc/self/fd.
  * Missing procfs, ambiguous aliases and 9p filesystems report NOT_SUPPORTED.
+ * Failure normally leaves *out NULL. A rollback join/release failure retains
+ * *out solely for close_until retry, with no callbacks or cleanup transfer.
+ * The returned error describes creation; retain the context until closed.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_watch_create(hx_os_context *context,
 	const char *path, int recursive, hx_os_watch_fn function, void *user,

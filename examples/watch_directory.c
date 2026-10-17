@@ -54,8 +54,13 @@ static int hx_example_main(int argc, const char *const *argv)
 		NULL, path, 1, changed, NULL, &watch, &error);
 	if (status != HX_OS_OK) {
 		fprintf(stderr, "Watch: %s\n", hx_os_status_name(status));
+		hx_os_status closed = hx_os_watch_close_until(
+			&watch, hx_os_deadline_after_ms(2000), NULL);
+		if (closed != HX_OS_OK)
+			fputs("Cleanup pending; keep owner to retry.\n",
+				stderr);
 
-		if (argc == 1)
+		if (argc == 1 && !watch)
 			(void)hx_os_directory_remove(owned_path, NULL);
 
 		return 1;

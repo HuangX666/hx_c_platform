@@ -23,9 +23,18 @@ void hx_os_i_loop_wake(hx_os_loop *loop)
 {
 	int64_t expected = 0;
 
-	if (hx_os_atomic_compare_exchange(&loop->wake_pending, &expected, 1,
+	if (!hx_os_atomic_compare_exchange(&loop->wake_pending, &expected, 1,
 		    HX_OS_ACQ_REL, HX_OS_RELAXED))
-		(void)PostQueuedCompletionStatus(loop->port, 0, 0, NULL);
+		return;
+
+	if (!PostQueuedCompletionStatus(loop->port, 0, 0, NULL)) {
+		DWORD code = GetLastError();
+
+		expected = 0;
+		(void)hx_os_atomic_compare_exchange(&loop->wake_error,
+			&expected, (int64_t)code, HX_OS_ACQ_REL, HX_OS_RELAXED);
+		hx_os_atomic_store(&loop->wake_pending, 0, HX_OS_RELEASE);
+	}
 }
 
 hx_os_status hx_os_i_loop_attach(
@@ -324,34 +333,53 @@ void hx_os_i_loop_step(hx_os_request *request)
 hx_os_status hx_os_i_loop_wait(
 	hx_os_loop *loop, hx_os_deadline deadline, hx_os_error *error)
 {
-	DWORD bytes;
-	ULONG_PTR key;
-	OVERLAPPED *overlapped = NULL;
+	for (;;) {
+		DWORD bytes, code, timeout = hx_os_i_wait_ms(deadline);
+		ULONG_PTR key;
+		OVERLAPPED *overlapped = NULL;
+		BOOL result;
 
-	BOOL result = GetQueuedCompletionStatus(loop->port, &bytes, &key,
-		&overlapped, hx_os_i_wait_ms(deadline));
+		// A failed post cannot wake an already sleeping owner. Check
+		// periodically without exposing an artificial poll timeout.
+		if (hx_os_atomic_load(&loop->wake_error, HX_OS_ACQUIRE))
+			timeout = 0;
+		else if (timeout > 250)
+			timeout = 250;
 
-	DWORD code = result ? 0 : GetLastError();
-	if (overlapped) {
-		hx_os_request *request = (hx_os_request *)((char *)overlapped -
-			offsetof(hx_os_request, overlapped));
+		result = GetQueuedCompletionStatus(
+			loop->port, &bytes, &key, &overlapped, timeout);
+		code = result ? 0 : GetLastError();
+		if (overlapped) {
+			hx_os_request *request =
+				(hx_os_request *)((char *)overlapped -
+					offsetof(hx_os_request, overlapped));
 
-		request->native_pending = 0;
-		request->native_done = 1;
-		request->native_bytes = bytes;
-		request->native_error = code;
+			request->native_pending = 0;
+			request->native_done = 1;
+			request->native_bytes = bytes;
+			request->native_error = code;
 
-		return HX_OS_OK;
+			return HX_OS_OK;
+		}
+
+		if (result) {
+			hx_os_atomic_store(
+				&loop->wake_pending, 0, HX_OS_RELEASE);
+
+			return HX_OS_OK;
+		}
+
+		if (code != WAIT_TIMEOUT)
+			return hx_os_i_win32(error, code);
+
+		// Retire queued I/O before reporting a wake failure, including
+		// when cancellation itself repeatedly fails to post a wake.
+		code = (DWORD)hx_os_atomic_exchange(
+			&loop->wake_error, 0, HX_OS_ACQ_REL);
+		if (code)
+			return hx_os_i_win32(error, code);
+
+		if (hx_os_deadline_expired(deadline))
+			return HX_OS_TIMEOUT;
 	}
-
-	if (result) {
-		hx_os_atomic_store(&loop->wake_pending, 0, HX_OS_RELEASE);
-
-		return HX_OS_OK;
-	}
-
-	if (code == WAIT_TIMEOUT)
-		return HX_OS_TIMEOUT;
-
-	return hx_os_i_win32(error, code);
 }

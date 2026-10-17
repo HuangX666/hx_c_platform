@@ -33,6 +33,8 @@ Documentation and examples under share are not needed to compile this program. K
 
 No git clone, git submodule, add_subdirectory or source dependency builder is required. CMake obtains include directories, library locations and transitive dependencies from the package.
 
+An optional consumer can use `find_package(hx_c_platform CONFIG QUIET)` and check `hx_c_platform_FOUND` before linking. Missing required SDK dependencies make that optional lookup fail without turning it into a REQUIRED lookup. Use `REQUIRED` when the application cannot operate without this package. Package lookup keeps the caller's `CMAKE_PREFIX_PATH` and OpenSSL static/shared preference unchanged on both success and nonfatal failure.
+
 ## 2. C99: two complete files
 
 Save this as CMakeLists.txt inside hx_demo:

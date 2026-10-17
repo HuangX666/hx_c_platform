@@ -33,6 +33,8 @@ hx_demo/
 
 不需要 git clone、git submodule、add_subdirectory，也不需要运行库源码里的依赖构建器。CMake 从包中取得头文件路径、库路径和传递依赖。
 
+如果应用只是可选使用本库，可以调用 `find_package(hx_c_platform CONFIG QUIET)`，检查 `hx_c_platform_FOUND` 后再链接。SDK 依赖缺失时，这种可选查找会返回未找到，不会被内部强制变成 REQUIRED；应用必须依赖本库时再使用 `REQUIRED`。无论找到包还是发生非致命查找失败，都不会改变调用者的 `CMAKE_PREFIX_PATH` 和 OpenSSL 静态／动态偏好。
+
 ## 2. C99：复制两个文件即可构建
 
 在 hx_demo 中保存以下完整 CMakeLists.txt：

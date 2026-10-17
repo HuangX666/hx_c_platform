@@ -215,18 +215,16 @@ hx_os_status hx_os_thread_pool_create(hx_os_context *context,
 		// No user task is admitted before create returns. These workers
 		// can only be in our condition wait, so rollback can join them.
 		if (pool->thread_count) {
-			(void)hx_os_mutex_lock(pool->mutex, NULL);
-			pool->closing = 1;
-			hx_os_condition_notify_all(pool->condition);
-			(void)hx_os_mutex_unlock(pool->mutex, NULL);
+			hx_os_status closed = hx_os_thread_pool_close_until(
+				pool, HX_OS_POOL_CANCEL_PENDING,
+				HX_OS_DEADLINE_INFINITE, NULL);
 
-			for (i = 0; i < pool->thread_count; ++i) {
-				(void)hx_os_thread_join_until(pool->threads[i],
-					HX_OS_DEADLINE_INFINITE, NULL, NULL);
+			if (closed == HX_OS_OK)
+				closed = hx_os_thread_pool_destroy(&pool, NULL);
+			if (closed != HX_OS_OK)
+				*out = pool;
 
-				(void)hx_os_thread_destroy(
-					&pool->threads[i], NULL);
-			}
+			return status;
 		}
 
 		hx_os_condition_destroy(pool->completion);
@@ -635,6 +633,9 @@ hx_os_status hx_os_thread_pool_close_until(hx_os_thread_pool *pool, int mode,
 	(void)hx_os_mutex_unlock(pool->mutex, NULL);
 
 	for (i = 0; i < pool->thread_count; ++i) {
+		if (!pool->threads[i])
+			continue;
+
 		status = hx_os_thread_join_until(
 			pool->threads[i], deadline, NULL, error);
 		if (status != HX_OS_OK)
@@ -661,6 +662,7 @@ hx_os_status hx_os_thread_pool_destroy(
 	hx_os_thread_pool **pool, hx_os_error *error)
 {
 	hx_os_thread_pool *value;
+	hx_os_status status;
 	size_t i;
 
 	if (!pool)
@@ -680,8 +682,11 @@ hx_os_status hx_os_thread_pool_destroy(
 
 	(void)hx_os_mutex_unlock(value->mutex, NULL);
 
-	for (i = 0; i < value->thread_count; ++i)
-		(void)hx_os_thread_destroy(&value->threads[i], NULL);
+	for (i = 0; i < value->thread_count; ++i) {
+		status = hx_os_thread_destroy(&value->threads[i], error);
+		if (status != HX_OS_OK)
+			return status;
+	}
 
 	hx_os_condition_destroy(value->completion);
 	hx_os_condition_destroy(value->condition);

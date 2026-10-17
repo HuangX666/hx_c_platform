@@ -233,6 +233,8 @@ OpenSSL remains dynamically linked by default. The build and install now include
 
 Stop new application calls before endpoint destruction. In-flight calls wake and retire; one close caller is allowed. `peer_close_until`/`peer_abort_until` apply the same rules to one server peer. Keep the allocator, its user data and loaded code alive while the endpoint remains owned.
 
+An exited worker may still have a native handle that could not be released. Endpoint close/abort reports that cleanup error and retains the same non-NULL owner; retry close/abort to finish releasing it. Do not free the owner yourself or interpret thread exit alone as completed endpoint cleanup.
+
 See [platform support](PLATFORMS.md) for target build/deployment requirements and limits. Public examples are independent of private maintainer regressions.
 
 

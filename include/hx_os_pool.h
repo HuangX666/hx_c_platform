@@ -31,6 +31,12 @@ enum { HX_OS_POOL_DRAIN, HX_OS_POOL_CANCEL_PENDING };
 HX_OS_API void HX_OS_CALL hx_os_thread_pool_options_init(
 	hx_os_thread_pool_options *options);
 
+/**
+ * \brief Create workers without admitting tasks until return.
+ * \details Failure normally leaves *out NULL. If rollback cannot join/release
+ * a worker, *out retains a closing pool solely for shutdown/destroy retry.
+ * The returned error describes creation; keep the context alive until cleanup.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_create(
 	hx_os_context *context, const hx_os_thread_pool_options *options,
 	hx_os_thread_pool **out, hx_os_error *error);
@@ -156,6 +162,11 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_close_until(
 	hx_os_thread_pool *pool, int mode, hx_os_deadline deadline,
 	hx_os_error *error);
 
+/**
+ * \brief Destroy a joined pool; native cleanup failure retains *pool for retry.
+ * \details A retry skips worker handles already released. Exclude concurrent
+ * calls during destruction, including when retrying a partially freed pool.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_thread_pool_destroy(
 	hx_os_thread_pool **pool, hx_os_error *error);
 

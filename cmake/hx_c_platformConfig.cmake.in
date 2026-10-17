@@ -1,53 +1,57 @@
 @PACKAGE_INIT@
 include(CMakeFindDependencyMacro)
 
-set(hx_c_platform_saved_prefix "${CMAKE_PREFIX_PATH}")
-list(PREPEND CMAKE_PREFIX_PATH "${PACKAGE_PREFIX_DIR}")
-
-find_dependency(Threads)
-if(@HX_OS_HAVE_CARES@)
-	find_dependency(c-ares 1.34.8 CONFIG)
-endif()
-
-if(@HX_OS_HAVE_OPENSSL@)
-	# Function scope keeps the consumer's preference variables intact.
-	function(hx_c_platform_find_crypto)
-		set(OPENSSL_USE_STATIC_LIBS @HX_OS_OPENSSL_STATIC@)
-		find_package(OpenSSL 3.5 CONFIG REQUIRED)
-	endfunction()
-	hx_c_platform_find_crypto()
-endif()
-if(@HX_OS_HAVE_HTTP@ OR @HX_OS_HAVE_URL@)
-	find_dependency(CURL 8.22 CONFIG)
-endif()
-if(@HX_OS_HAVE_UNICODE@)
-	find_dependency(utf8proc 2.12 CONFIG)
-endif()
-
-if(@HX_OS_HAVE_ARCHIVE@)
-	find_dependency(LibArchive 3.8)
-	if(NOT TARGET LibArchive::LibArchive)
-		add_library(LibArchive::LibArchive UNKNOWN IMPORTED)
-		set_target_properties(LibArchive::LibArchive PROPERTIES
-			IMPORTED_LOCATION "${LibArchive_LIBRARY}"
-			INTERFACE_INCLUDE_DIRECTORIES
-				"${LibArchive_INCLUDE_DIRS}")
+function(hx_c_platform_find_dependencies)
+	# Scope search hints even when find_dependency returns early.
+	list(PREPEND CMAKE_PREFIX_PATH "${PACKAGE_PREFIX_DIR}")
+	find_dependency(Threads)
+	if(@HX_OS_HAVE_CARES@)
+		find_dependency(c-ares 1.34.8 CONFIG)
 	endif()
-endif()
-if(@HX_OS_HAVE_ARCHIVE@ OR @HX_OS_HAVE_COMPRESSION@)
-	find_dependency(ZLIB CONFIG COMPONENTS static)
-	find_dependency(liblzma CONFIG)
-	find_dependency(zstd CONFIG)
-endif()
 
-if(@HX_OS_ICONV_SYSTEM@)
-	find_dependency(Iconv)
+	if(@HX_OS_HAVE_OPENSSL@)
+		set(OPENSSL_USE_STATIC_LIBS @HX_OS_OPENSSL_STATIC@)
+		find_dependency(OpenSSL 3.5 CONFIG)
+	endif()
+	if(@HX_OS_HAVE_HTTP@ OR @HX_OS_HAVE_URL@)
+		find_dependency(CURL 8.22 CONFIG)
+	endif()
+	if(@HX_OS_HAVE_UNICODE@)
+		find_dependency(utf8proc 2.12 CONFIG)
+	endif()
+
+	if(@HX_OS_HAVE_ARCHIVE@)
+		find_dependency(LibArchive 3.8)
+		if(NOT TARGET LibArchive::LibArchive)
+			add_library(LibArchive::LibArchive UNKNOWN IMPORTED)
+			set_target_properties(LibArchive::LibArchive PROPERTIES
+				IMPORTED_LOCATION "${LibArchive_LIBRARY}"
+				INTERFACE_INCLUDE_DIRECTORIES
+					"${LibArchive_INCLUDE_DIRS}")
+		endif()
+	endif()
+	if(@HX_OS_HAVE_ARCHIVE@ OR @HX_OS_HAVE_COMPRESSION@)
+		find_dependency(ZLIB CONFIG COMPONENTS static)
+		find_dependency(liblzma CONFIG)
+		find_dependency(zstd CONFIG)
+	endif()
+
+	if(@HX_OS_ICONV_SYSTEM@)
+		find_dependency(Iconv)
+	endif()
+	set(hx_c_platform_FOUND TRUE PARENT_SCOPE)
+endfunction()
+
+set(hx_c_platform_FOUND FALSE)
+hx_c_platform_find_dependencies()
+if(NOT hx_c_platform_FOUND)
+	set(hx_c_platform_NOT_FOUND_MESSAGE
+		"Required dependencies are missing; install the matching SDK.")
+	return()
 endif()
+unset(hx_c_platform_NOT_FOUND_MESSAGE)
 
 include("${CMAKE_CURRENT_LIST_DIR}/hx_c_platformTargets.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/HxFormat.cmake")
-
-set(CMAKE_PREFIX_PATH "${hx_c_platform_saved_prefix}")
-unset(hx_c_platform_saved_prefix)
 
 check_required_components(hx_c_platform)

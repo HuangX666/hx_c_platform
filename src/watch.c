@@ -276,13 +276,13 @@ hx_os_status hx_os_watch_create_with_options(hx_os_context *context,
 		if (watch->thread) {
 			hx_os_watch_stop(watch);
 			hx_os_event_set(watch->gate);
-			(void)hx_os_thread_join_until(watch->thread,
-				HX_OS_DEADLINE_INFINITE, NULL, NULL);
-
-			(void)hx_os_thread_destroy(&watch->thread, NULL);
+			(void)hx_os_watch_close_until(
+				&watch, HX_OS_DEADLINE_INFINITE, NULL);
+			*out = watch;
 		}
+		else
+			hx_os_watch_dispose(watch);
 
-		hx_os_watch_dispose(watch);
 		if (error)
 			*error = native;
 

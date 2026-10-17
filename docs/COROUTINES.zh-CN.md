@@ -89,11 +89,16 @@ auto answer = answers.receive(HX_OS_DEADLINE_NOW);
 hx_os_coro_runtime *owner = NULL;
 
 auto created = hx::coro::Runtime::create(owner);
-if (!created)
-	return 1;
+if (!created) {
+	auto closed = hx::coro::Runtime(owner).shutdownUntil(
+		hx_os_deadline_after_ms(2000));
+	return closed ? 1 : 2;
+}
 
 auto &runtime = created.value();
 ```
+
+这段代码中，返回 1 表示创建失败且清理已完成，返回 2 表示清理仍未完成。长期运行的宿主应保留 owner 并安排重试，不能丢弃它。
 
 C 指针 `owner` 是需要保留的所有者；`Runtime` 是借用它的操作入口，析构不等待。最后调用 `runtime.shutdownUntil(截止时间)`；返回 `TIMEOUT`、`BUSY` 或 `NOT_SUPPORTED` 时保留 owner，由宿主决定何时重试。关闭运行时不能替代检查任务错误。借用的捕获对象必须活到执行及清理结束，仍有工作依赖插件或 context 时不能卸载、销毁它们。
 
@@ -255,6 +260,8 @@ UDP JSON: {"type":"status","device_id":7}
 | `destroy` | 必须先关闭成功；否则返回 `BUSY` 并保留 owner |
 
 有栈的原生栈在首次调度时创建；接收任务后仍可能出现原生栈分配或平台能力失败，这类错误通过任务结果返回。回调的 self/current 指针是借用，需要拥有独立引用时先 retain。任务一旦被接收，其 cleanup 最终执行一次，包括还没开始执行就被取消的情况。任务完成状态包含 cleanup 已结束。清理回调和 I/O 调度线程等待未完成任务时返回 DEADLOCK；在调度线程内关闭运行时同样返回 DEADLOCK。超时保留对象和后台存储，允许重试；不承诺硬实时。一个始终不让出的协程，可能让 close 一直无法完成。运行时的配置和分配器不会变成影响其他消费者的可变全局设置。
+
+创建 runtime 时，如果工作线程或 I/O 的回滚清理也失败，会返回失败状态并保留非空 owner。这个 runtime 已关闭任务入口，只能重试 `close_until`，成功后再 destroy；期间保留 context。C++ 工厂返回失败 Result 时，传入的 owner 变量仍可用于清理：临时构造 `hx::coro::Runtime(owner)`，仅调用 `shutdownUntil(deadline)`。协程 HTTP 服务内部线程池回滚失败时也遵守这个规则，先关闭 service，再关闭 runtime。详见[通用生命周期约定](CONTRACTS.zh-CN.md)。
 
 协程固定在一个工作线程上；协程内提交的子任务默认继承当前工作线程，普通线程提交的任务轮流分配。没有工作窃取或自动迁移。线程局部存储不等于协程局部存储：POSIX TLS 在同一工作线程的任务间共享，Windows FLS 跟随原生 fiber。可移植协程局部值可使用 `Local<T>`／C local-key 接口，或使用 user 数据、编译器帧，不要拿着原生互斥锁跨越协程挂起。本库会切换 signal/profiler/hash 的重入状态，profiler 的计时栈另按协程隔离，避免交替执行被误记为相互嵌套。每个协程最多 64 个局部槽，由 profiler 与应用局部键共用；结束时释放缓存并标记未结束区间为 aborted，max_threads 继续约束计时上下文总数。从宿主线程在任务结束后关闭 profiler；其关闭接口仍是同步接口。这不会自动让任意依赖 TLS 的第三方 API 适合协程。
 

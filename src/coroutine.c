@@ -1105,6 +1105,26 @@ static void *hx_os_coro_worker_main(void *user)
 	return NULL;
 }
 
+static hx_os_status hx_os_coro_join_workers(hx_os_coro_runtime *runtime,
+	hx_os_deadline deadline, hx_os_error *error)
+{
+	size_t i;
+	hx_os_status status;
+
+	for (i = 0; i < runtime->worker_count; ++i) {
+		if (!runtime->workers[i].thread)
+			continue;
+		status = hx_os_thread_join_until(
+			runtime->workers[i].thread, deadline, NULL, error);
+		if (status == HX_OS_OK)
+			status = hx_os_thread_destroy(
+				&runtime->workers[i].thread, error);
+		if (status != HX_OS_OK)
+			return status;
+	}
+	return hx_os_i_coro_io_close(runtime, deadline, error);
+}
+
 hx_os_status hx_os_coro_runtime_create(hx_os_context *context,
 	const hx_os_coro_options *input, hx_os_coro_runtime **out,
 	hx_os_error *error)
@@ -1181,22 +1201,13 @@ hx_os_status hx_os_coro_runtime_create(hx_os_context *context,
 			runtime->closing = 2;
 			if (runtime->condition)
 				hx_os_condition_notify_all(runtime->condition);
-
 			(void)hx_os_mutex_unlock(runtime->mutex, NULL);
 		}
-
-		for (i = 0; i < runtime->worker_count; ++i) {
-			(void)hx_os_thread_join_until(
-				runtime->workers[i].thread,
-				HX_OS_DEADLINE_INFINITE, NULL, NULL);
-
-			(void)hx_os_thread_destroy(
-				&runtime->workers[i].thread, NULL);
-		}
-
-		(void)hx_os_i_coro_io_close(
-			runtime, HX_OS_DEADLINE_INFINITE, NULL);
-		hx_os_i_coro_runtime_release(runtime);
+		if (hx_os_coro_join_workers(
+			    runtime, HX_OS_DEADLINE_INFINITE, NULL) != HX_OS_OK)
+			*out = runtime;
+		else
+			hx_os_i_coro_runtime_release(runtime);
 		if (error && error->status == HX_OS_OK)
 			(void)hx_os_i_error(error, status, 0, 0);
 
@@ -1420,7 +1431,6 @@ static hx_os_status hx_os_coro_close(hx_os_coro_runtime *runtime, int mode,
 	hx_os_deadline deadline, hx_os_error *error)
 {
 	hx_os_status status = HX_OS_OK;
-	size_t i;
 
 	if (!runtime)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
@@ -1467,23 +1477,7 @@ static hx_os_status hx_os_coro_close(hx_os_coro_runtime *runtime, int mode,
 
 	(void)hx_os_mutex_unlock(runtime->mutex, NULL);
 	if (status == HX_OS_OK)
-		for (i = 0; i < runtime->worker_count; ++i) {
-			if (!runtime->workers[i].thread)
-				continue;
-
-			status = hx_os_thread_join_until(
-				runtime->workers[i].thread, deadline, NULL,
-				error);
-			if (status == HX_OS_OK)
-				status = hx_os_thread_destroy(
-					&runtime->workers[i].thread, error);
-
-			if (status != HX_OS_OK)
-				break;
-		}
-
-	if (status == HX_OS_OK)
-		status = hx_os_i_coro_io_close(runtime, deadline, error);
+		status = hx_os_coro_join_workers(runtime, deadline, error);
 
 	(void)hx_os_mutex_lock(runtime->mutex, NULL);
 	runtime->joining = 0;

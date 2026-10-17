@@ -119,9 +119,11 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_file_writer_stop(
  * sink.
  *
  * \details A write/flush error or timeout retains *writer for retry/abort. A
- * native close error consumes *writer after the worker has exited. No implicit
- * persistence request. Abort explicitly discards remaining bytes once any
- * native operation returns; it does not cancel/kill a blocked native call. Both
+ * sink close error consumes *writer after the worker has been reclaimed.
+ * A worker join/release error retains *writer for retry without closing the
+ * sink twice. No implicit persistence request. Abort explicitly discards
+ * remaining bytes after the current native operation returns; it cannot cancel
+ * or kill a blocked native call. Both
  * accept NOW/INFINITE and can be retried on the same owner. Final close/abort
  * requires external exclusion of all other public calls, including calls
  * waiting to enter; stop() can wake producers beforehand. Sink callbacks cannot

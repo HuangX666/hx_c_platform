@@ -118,7 +118,9 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_loop_resolve(hx_os_loop *loop,
 /**
  * \brief Poll performs one batch.
  *
- * \details run drains until idle. Neither starts a thread.
+ * \details run drains until idle. Neither starts a thread. A Windows wake-post
+ * failure can return a native error without retiring accepted requests;
+ * preserve their buffers and continue polling or close the loop.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_loop_poll_until(
 	hx_os_loop *loop, hx_os_deadline deadline, hx_os_error *error);
@@ -160,7 +162,8 @@ HX_OS_API hx_os_address_list *HX_OS_CALL hx_os_request_take_addresses(
  *
  * \details Timeout retains all live objects and can be retried. Close may
  * invoke callbacks. Close all attached sockets after their requests retire,
- * then destroy loop.
+ * then destroy loop. Failure to destroy the internal DNS pool also retains
+ * the loop for a subsequent close attempt.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_loop_close_until(
 	hx_os_loop *loop, hx_os_deadline deadline, hx_os_error *error);

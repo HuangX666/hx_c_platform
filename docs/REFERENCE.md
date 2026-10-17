@@ -1102,10 +1102,9 @@ int main(void)
 	options.queue_capacity = 128;
 
 	status = hx_os_thread_pool_create(NULL, &options, &pool, NULL);
-	if (status != HX_OS_OK)
-		return 1;
-
-	status = hx_os_thread_pool_submit(pool, work, NULL, NULL, &task, NULL);
+	if (status == HX_OS_OK)
+		status = hx_os_thread_pool_submit(
+			pool, work, NULL, NULL, &task, NULL);
 	if (status == HX_OS_OK)
 		status = hx_os_task_wait_until(task,
 			hx_os_deadline_after_ms(2000), &result, NULL);
@@ -1165,6 +1164,11 @@ int main()
 	if (!created) {
 		std::fprintf(
 			stderr, "%s\n", hx_os_status_name(created.status()));
+		auto closed = hx::ThreadPool(owner).shutdownUntil(
+			hx_os_deadline_after_ms(2000));
+		if (!closed)
+			std::fputs("Cleanup pending; keep owner to retry.\n",
+				stderr);
 
 		return 1;
 	}

@@ -75,6 +75,7 @@ struct hx_os_loop {
 	int closed;
 #if defined(_WIN32)
 	HANDLE port;
+	hx_os_atomic wake_error;
 #else
 	int port;
 	int wake_read;

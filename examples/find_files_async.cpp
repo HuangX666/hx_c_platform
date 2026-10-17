@@ -42,8 +42,14 @@ static int hx_example_main(int argc, const char *const *argv)
 	hx_os_thread_pool *owner = NULL;
 
 	auto created = hx::ThreadPool::withThreads(owner, 1, 4);
-	if (!created)
+	if (!created) {
+		auto closed = hx::ThreadPool(owner).shutdownUntil(
+			hx_os_deadline_after_ms(2000));
+		if (!closed)
+			std::fputs("Cleanup pending; keep owner to retry.\n",
+				stderr);
 		return 1;
+	}
 
 	auto &pool = created.value();
 
