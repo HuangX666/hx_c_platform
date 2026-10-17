@@ -465,7 +465,8 @@ static hx_os_status hx_os_http_request_impl(hx_os_http *http,
 #endif
 	if (options->ca_file)
 		HX_OS_HTTP_SET(CURLOPT_CAINFO, options->ca_file);
-	HX_OS_HTTP_SET(CURLOPT_FOLLOWLOCATION, options->redirects ? 1L : 0L);
+	HX_OS_HTTP_SET(CURLOPT_FOLLOWLOCATION,
+		options->redirects ? CURLFOLLOW_OBEYCODE : 0L);
 	HX_OS_HTTP_SET(CURLOPT_MAXREDIRS, (long)options->redirects);
 	HX_OS_HTTP_SET(CURLOPT_TIMEOUT_MS, timeout);
 	HX_OS_HTTP_SET(
@@ -482,6 +483,11 @@ static hx_os_status hx_os_http_request_impl(hx_os_http *http,
 		HX_OS_HTTP_SET(CURLOPT_POSTFIELDS, body.data ? body.data : "");
 		HX_OS_HTTP_SET(
 			CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t)body.size);
+		// POSTFIELDS also backs PUT/PATCH bodies. Preserve those on
+		// 301/302; only actual POST requests switch to GET there.
+		if (strcmp(method, "POST"))
+			HX_OS_HTTP_SET(CURLOPT_POSTREDIR,
+				CURL_REDIR_POST_301 | CURL_REDIR_POST_302);
 	}
 	HX_OS_HTTP_SET(CURLOPT_CUSTOMREQUEST, method);
 	HX_OS_HTTP_SET(CURLOPT_NOBODY, !strcmp(method, "HEAD") ? 1L : 0L);
@@ -677,6 +683,7 @@ hx_os_status hx_os_http_download_file(hx_os_http *http, const char *url,
 	if (status != HX_OS_OK) {
 		hx_os_atomic_store(&http->owner, 0, HX_OS_RELEASE);
 		hx_string_destroy(&full_path);
+		hx_string_destroy(&parent);
 		return status;
 	}
 	destination = hx_string_c_str(&full_path);

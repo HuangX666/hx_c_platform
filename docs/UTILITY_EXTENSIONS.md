@@ -110,6 +110,25 @@ hx_os_http_close(&http, NULL);
 
 The JSON helper adds `Content-Type: application/json`; create JSON through the document/codec API for dynamic values. HTTPS verifies certificates and hostname; `ca_file` adds an explicitly trusted CA file, without disabling verification. Windows can use its native trust store. Default response limits are 16 MiB body and 64 KiB headers, with a 5-second timeout, no redirect and no environment proxy. Explicit redirects are bounded and cannot downgrade HTTPS. Only HTTP/HTTPS schemes are permitted; credential-bearing URLs are rejected. A proxy can be supplied explicitly.
 
+To follow up to three redirects in the example above, initialize these options and pass `&options` instead of `NULL` to `hx_os_http_post_json`:
+
+```c
+hx_os_http_options options = HX_OS_HTTP_OPTIONS_INIT;
+options.redirects = 3;
+```
+
+For file downloads, set the stream options' `request.redirects` field. The default zero returns the first response, including HTTP 3xx, without following it.
+
+| Redirect response | Next request when following is enabled |
+| --- | --- |
+| 301 / 302 | POST becomes GET with no body; other methods, including PUT/PATCH, keep their method and body |
+| 303 | GET with no body; HEAD remains HEAD |
+| 307 / 308 | Same method and body |
+
+For example, a JSON POST followed by 303 retrieves the result with GET; 307 resends that JSON using POST. Streaming uploads reject redirects because their input cannot be automatically rewound.
+
+If you initialize a response with `hx_os_http_response_init(&response, context)`, keep that context alive until the response is destroyed. Close clients that also use the context before destroying it. Use the same cleanup order after an error, including an invalid download path.
+
 `OK` means a completed exchange, including HTTP 404/500: inspect `status_code`. Transport, certificate, cancellation and size-limit failures preserve the old response and report native CURL diagnostics. One client admits one request; concurrent calls return `BUSY`, self-reentry `DEADLOCK`. Different clients can run on separate threads. Deadlines/cancellation are cooperative: the default SDK's blocking DNS cannot be interrupted; use the [opt-in SDK and explicit DNS entry](HTTP_FILES.md#4-cancel-even-when-dns-receives-no-reply) when cancellation is needed, and caller callbacks/native TLS can delay return. No hidden worker is started. Exclude close from active callers and coordinate native libcurl/OpenSSL global cleanup across consumers. C++ uses `hx::Http` and `Result<HttpResponse>`.
 
 Run `hx_os_http_json URL [trusted-ca.pem]` against your HTTP/HTTPS JSON endpoint. Local regression fixtures also exercise JSON upload, HTTP error status, response limits and trusted/untrusted HTTPS without external Internet services.

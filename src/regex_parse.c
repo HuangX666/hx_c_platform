@@ -171,8 +171,13 @@ static uint32_t hx_os_rx_reference(
 			else
 				number =
 					parser->regex->group_count - number + 1;
-		else if (positive)
-			number += parser->regex->group_count;
+		else if (positive) {
+			if (number > UINT32_MAX - parser->regex->group_count)
+				hx_os_rx_fail(parser, HX_OS_RANGE,
+					HX_OS_RX_BAD_REFERENCE);
+			else
+				number += parser->regex->group_count;
+		}
 		if (closing && !hx_os_rx_take(parser, closing))
 			hx_os_rx_fail(
 				parser, HX_OS_SYNTAX, HX_OS_RX_BAD_REFERENCE);

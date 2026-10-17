@@ -149,7 +149,7 @@ hx_os_status hx_os_regex_capture_index(const hx_os_regex *regex,
 
 	if (!HX_OS_ENABLE_REGEX)
 		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
-	if (!regex || !name || !index)
+	if (!regex || !name || !*name || !index)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 	bytes = strlen(name);
 	for (i = 1; i <= regex->group_count; ++i)

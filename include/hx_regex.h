@@ -92,6 +92,12 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_regex_compile(hx_os_context *context,
 	hx_os_regex **out, hx_os_error *error);
 HX_OS_API void HX_OS_CALL hx_os_regex_destroy(hx_os_regex **regex);
 HX_OS_API size_t HX_OS_CALL hx_os_regex_capture_count(const hx_os_regex *regex);
+
+/**
+ * \brief Resolve a nonempty name; unnamed groups are not searched.
+ * \returns INVALID for an empty/NULL name, NOT_FOUND for an unknown name.
+ * \note Failure preserves *index.
+ */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_regex_capture_index(
 	const hx_os_regex *regex, const char *name, size_t *index,
 	hx_os_error *error);

@@ -157,6 +157,9 @@ HX_OS_API void HX_OS_CALL hx_os_http_response_destroy(
  * headers 64 KiB, timeout 5 s, redirects disabled, proxy disabled. Native
  * codec/TLS allocations are additional. Redirects never downgrade HTTPS. No
  * credential-bearing URLs, automatic cookies or arbitrary file schemes.
+ * When enabled, 301/302 turn POST into GET; other methods keep their bodies.
+ * 303 uses GET without a body, except HEAD stays HEAD. 307/308 preserve method
+ * and body. Streaming uploads reject redirects because they cannot rewind.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_http_request(hx_os_http *http,
 	const char *method, const char *url, hx_os_bytes_view body,

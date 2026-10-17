@@ -59,7 +59,9 @@ Request: 42
 Door_01: #42
 ```
 
-`hx_os_regex_compile` owns an immutable compiled object. `find` returns byte spans borrowing the original subject; keep its storage alive and unchanged. Capture 0 is the whole match. Absent groups have offset SIZE_MAX. `capture_index` resolves names to indices. Destroy the compiled object after all callers finish.
+`hx_os_regex_compile` owns an immutable compiled object. `find` returns byte spans borrowing the original subject; keep its storage alive and unchanged. Capture 0 is the whole match. Absent groups have offset SIZE_MAX. Destroy the compiled object after all callers finish.
+
+`hx_os_regex_capture_index` resolves a nonempty capture name to an index. An empty or NULL name returns `INVALID`; an unknown name returns `NOT_FOUND`. Both leave the output index unchanged. Use numeric indices directly for unnamed groups; an empty string does not select them.
 
 C++ convenience:
 
@@ -110,6 +112,8 @@ This is not a claim of full PCRE2 compatibility. Unicode script/script-extension
 
 Compile defaults: pattern 32 KiB, instructions plus character-class/range data 4 MiB, nesting 64, counted repetition 1000, lookbehind 255 code points, at most 64 captures. Compile options can raise the permitted counted repetition up to 65,535 and lookbehind to 1024. Temporary parser storage, capacity overhead and allocator metadata are additional.
 
+An overflowing numeric group reference, including relative-index arithmetic, fails compilation with `RANGE`. A reference to a nonexistent group returns `SYNTAX`. Neither produces a compiled object.
+
 Compilation has a fixed 4,194,304-work-unit ceiling across AST construction, caseless range expansion, width analysis and instruction generation. Exceeding it returns LIMIT and no compiled object. Group widths are cached, so repeated subroutine references do not cause exponential lookbehind analysis. Runtime max_steps does not change this compile ceiling.
 
 Execution defaults: 10 million VM steps, retained backtracking storage 8 MiB, subject/result 16 MiB, recursion/scope depth 64, at most 65,536 delivered results. Stack growth can briefly retain old and new allocations; current captures and scope snapshots are additional bounded scratch. Simple literal/class/dot repetitions share a compact repeat state rather than allocating one frame per character.
@@ -130,6 +134,7 @@ Use options only when needed. Budgets cover one whole find/replace/split operati
 | OK | Completed; find produced a match, full_match produced true/false |
 | NOT_FOUND | Completed find with no match; output unchanged |
 | SYNTAX / NOT_SUPPORTED | Invalid syntax or an unavailable dialect/provider feature |
+| RANGE | Numeric overflow, including relative group references |
 | LIMIT | Computation, depth, input, result or memory budget exhausted; not a no-match |
 | TIMEOUT / CANCELLED | Operation stopped before a conclusion |
 | NO_MEMORY | Allocation failed |
