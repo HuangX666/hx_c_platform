@@ -404,7 +404,7 @@ hx_os_status hx_ipc_i_kcp_output(
 	status = hx_os_socket_send_to(peer->endpoint->listener, &peer->address,
 		wire, HX_IPC_I_HEADER + bytes, &written, error);
 	if (status == HX_OS_WOULD_BLOCK)
-		status = hx_ipc_i_queue(peer, &header, packet,
+		status = hx_ipc_i_queue(peer->endpoint, peer, &header, packet,
 			hx_os_deadline_after_ms(5000), 1, error);
 
 	return status;

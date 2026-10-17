@@ -74,8 +74,8 @@ void hx_ipc_i_control(hx_ipc_connection *peer, int kind, uint64_t id,
 	header.status = status;
 	header.source = peer->id;
 	header.destination = kind == HX_IPC_I_HELLO ? 0 : peer->remote;
-	if (hx_ipc_i_queue(peer, &header, NULL, hx_os_deadline_after_ms(5000),
-		    1, &error) != HX_OS_OK)
+	if (hx_ipc_i_queue(peer->endpoint, peer, &header, NULL,
+		    hx_os_deadline_after_ms(5000), 1, &error) != HX_OS_OK)
 		hx_ipc_i_peer_failed(peer, error.status, &error);
 }
 

@@ -205,6 +205,8 @@ Sends copy their bodies, so input storage may be changed or freed after return. 
 
 Once a connection object exists, a failed or timed-out `connect` may leave a non-null owner. Continue with `wait_connected_until` or close it; do not discard the pointer. Reconnection does not restore old requests.
 
+Sending may overlap automatic reconnection. A call already targeting the old session cannot be reassigned to a new session when an internal connection slot is reused; it completes or reports its failure for the original session. After reconnecting, obtain the current peer or use `peer=0` for a new client call. Decide whether to repeat business operations using their own IDs and idempotency rules.
+
 The host must stop new calls before closing. Existing waits may overlap close: they are awakened with cancellation/closure and their storage stays alive until they return. Serialize close through one owner; do not mutate that owner pointer concurrently.
 
 ```c
@@ -218,6 +220,8 @@ if (status == HX_OS_TIMEOUT) {
 ```
 
 Success nulls the pointer. Timeout preserves it for further close attempts, not for new business operations. Close drains necessary protocol acknowledgements within its budget, cancels native I/O and waits for buffers to retire. It does not wait for the peer's business code, kill/detach workers or exit the host process. `NOW` starts cancellation immediately. Close is not a flush promising delivery of all unfinished business messages.
+
+If native worker cleanup reports an error, close also retains the owner and returns that error. Call close again to retry cleanup, keeping the owner and its allocator alive until it succeeds.
 
 `hx::Ipc` borrows a durable host-owned `hx_ipc *`. Its destructor does not silently wait or discard an unfinished endpoint; the example joins business threads before calling `closeUntil`. This module neither launches/restarts SDK helper processes nor cancels a blocking third-party SDK function in another process. It handles communication; the host chooses isolation and device recovery policies.
 

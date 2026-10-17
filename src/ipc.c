@@ -153,16 +153,16 @@ void hx_ipc_i_frame_free(hx_ipc *endpoint, hx_ipc_frame *frame)
 	hx_os_memory_free(frame);
 }
 
-hx_os_status hx_ipc_i_queue(hx_ipc_connection *peer,
+hx_os_status hx_ipc_i_queue(hx_ipc *endpoint, hx_ipc_connection *peer,
 	const hx_ipc_header *header, const void *data, hx_os_deadline deadline,
 	int control, hx_os_error *error)
 {
-	hx_ipc *endpoint = peer->endpoint;
 	hx_ipc_frame *frame;
 	size_t bytes = HX_IPC_I_HEADER + (size_t)header->bytes;
 	hx_os_status status = HX_OS_OK;
 	uint64_t identity;
 
+	// The I/O worker can reuse this slot before we acquire the lock.
 	hx_ipc_i_lock(endpoint);
 	identity = peer->id;
 	if ((endpoint->closing && !control) || hx_ipc_i_aborting(endpoint) ||
@@ -851,7 +851,8 @@ static hx_os_status hx_ipc_call(hx_ipc *endpoint, hx_ipc_peer identity,
 		return hx_os_i_error(error, status, 0, 0);
 	}
 
-	status = hx_ipc_i_queue(peer, &header, data, deadline, 0, error);
+	status = hx_ipc_i_queue(
+		endpoint, peer, &header, data, deadline, 0, error);
 	hx_ipc_i_lock(endpoint);
 
 	while (status == HX_OS_OK && !waiter.done && !endpoint->closing)
@@ -1157,8 +1158,13 @@ hx_os_status hx_ipc_close_until(
 	}
 
 	status = hx_os_thread_destroy(&endpoint->thread, error);
-	if (status != HX_OS_OK)
+	if (status != HX_OS_OK) {
+		hx_ipc_i_lock(endpoint);
+		endpoint->close_running = 0;
+		hx_ipc_i_unlock(endpoint);
+
 		return status;
+	}
 
 	hx_ipc_i_dispose(endpoint);
 	*owner = NULL;

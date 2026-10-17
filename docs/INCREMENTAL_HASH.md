@@ -43,4 +43,6 @@ SHA-256 and SHA-512 are supported. HMAC creation copies a key of at most 64 KiB 
 
 The object retains its engine. Externally serialize operations and destruction. finish computes lowercase hexadecimal, seals only after successful output assignment, and can be retried after an output allocation failure. Repeated finish returns the same result; updating a sealed state returns CLOSED. reset starts a new computation with the same algorithm/key. A native update failure poisons that computation until reset.
 
+Creation reserves the error-state storage needed by `destroy` and the C++ `CryptoDigest` destructor. An allocation failure during cleanup therefore cannot prevent release of the digest and its engine reference. The caller's queued OpenSSL error codes and order are restored; restoring auxiliary error text follows OpenSSL's best-effort behavior and can omit text when native allocations fail. Keep destruction outside active crypto allocator/native callbacks; a rejected reentrant C destruction retains its owner for a later retry.
+
 Objects and native providers follow the existing [crypto lifetime](CRYPTO.md) rules. Native OpenSSL storage is outside the injected allocator's accounting. Direct EVP calls through [hx_c_platform::openssl](NATIVE_DEPENDENCIES.md) remain available. CRYPTO=OFF returns NOT_SUPPORTED for these operations.

@@ -100,6 +100,21 @@ hx_os_status hx_os_i_crypto_enter(hx_os_crypto *crypto, hx_os_context *context,
 	return status;
 }
 
+hx_os_status hx_os_i_crypto_enter_cleanup(hx_os_crypto *crypto,
+	ERR_STATE *reserved, hx_os_crypto_scope *scope, hx_os_error *error)
+{
+	if (hx_os_crypto_active)
+		return hx_os_i_error(error, HX_OS_DEADLOCK, 0, 0);
+
+	hx_os_crypto_active = 1;
+	OSSL_ERR_STATE_save(reserved);
+	hx_os_crypto_retain(crypto);
+	scope->crypto = crypto;
+	scope->saved_errors = reserved;
+
+	return HX_OS_OK;
+}
+
 void hx_os_i_crypto_leave(hx_os_crypto_scope *scope)
 {
 	// Native per-context TLS must retire on each participating thread

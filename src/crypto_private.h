@@ -49,6 +49,9 @@ typedef struct hx_os_crypto_scope {
 
 hx_os_status hx_os_i_crypto_enter(hx_os_crypto *crypto, hx_os_context *context,
 	hx_os_crypto_scope *scope, hx_os_error *error);
+// On success, leave consumes the reserved error state.
+hx_os_status hx_os_i_crypto_enter_cleanup(hx_os_crypto *crypto,
+	ERR_STATE *reserved, hx_os_crypto_scope *scope, hx_os_error *error);
 void hx_os_i_crypto_leave(hx_os_crypto_scope *scope);
 hx_os_status hx_os_i_crypto_fail(hx_os_error *error, hx_os_status status);
 

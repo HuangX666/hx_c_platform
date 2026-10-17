@@ -8,6 +8,7 @@ struct hx_os_crypto_digest_state {
 	hx_os_crypto *crypto;
 	EVP_MD_CTX *digest, *digest_start;
 	EVP_MAC_CTX *mac, *mac_start;
+	ERR_STATE *cleanup_errors;
 	uint64_t total;
 	unsigned char result[64];
 	size_t bytes;
@@ -71,6 +72,12 @@ static hx_os_status hx_os_digest_new(hx_os_crypto *crypto, unsigned algorithm,
 				state->digest, state->digest_start) != 1)
 			status = hx_os_i_crypto_fail(error, HX_OS_IO_ERROR);
 		EVP_MD_free(method);
+	}
+	if (status == HX_OS_OK) {
+		// Reserve error storage so allocation cannot block cleanup.
+		state->cleanup_errors = OSSL_ERR_STATE_new();
+		if (!state->cleanup_errors)
+			status = hx_os_i_error(error, HX_OS_NO_MEMORY, 0, 0);
 	}
 	if (status != HX_OS_OK) {
 		EVP_MD_CTX_free(state->digest);
@@ -286,7 +293,8 @@ hx_os_status hx_os_crypto_digest_destroy(
 	value = *state;
 	if (!value)
 		return hx_os_i_error(error, HX_OS_OK, 0, 0);
-	status = hx_os_i_crypto_enter(value->crypto, NULL, &scope, error);
+	status = hx_os_i_crypto_enter_cleanup(
+		value->crypto, value->cleanup_errors, &scope, error);
 	if (status != HX_OS_OK)
 		return status;
 	EVP_MD_CTX_free(value->digest);

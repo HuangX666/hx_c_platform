@@ -43,4 +43,6 @@ hx_string_destroy(&hex);
 
 对象持有 engine，操作与销毁由调用者串行化。finish 输出小写十六进制，仅在输出赋值成功后封存状态；输出分配失败可以重试。重复 finish 返回同一结果，封存后 update 返回 CLOSED。reset 保留算法和密钥，开始新一轮计算。原生 update 失败会让当前计算失效，reset 后才能继续。
 
+创建时会预留 `destroy` 和 C++ `CryptoDigest` 析构所需的错误状态保存空间，清理时的分配失败不会阻止释放摘要及其 engine 引用。调用线程原有的 OpenSSL 错误码和顺序会恢复；附加错误文本遵循 OpenSSL 的尽力恢复行为，原生内存分配失败时可能缺失。销毁仍须在活跃的加密分配器／原生回调之外执行；C 销毁入口拒绝重入时保留 owner，退出回调后可以重试。
+
 遵守现有[加密生命周期](CRYPTO.zh-CN.md)约定。OpenSSL 自身存储不计入本库分配器；仍可通过 [hx_c_platform::openssl](NATIVE_DEPENDENCIES.zh-CN.md) 直接调用 EVP。关闭 CRYPTO 后，这些操作明确返回 NOT_SUPPORTED。

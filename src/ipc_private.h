@@ -204,7 +204,7 @@ void hx_ipc_i_encode(unsigned char *wire, const hx_ipc_header *header);
 
 int hx_ipc_i_decode(const unsigned char *wire, hx_ipc_header *header);
 
-hx_os_status hx_ipc_i_queue(hx_ipc_connection *peer,
+hx_os_status hx_ipc_i_queue(hx_ipc *endpoint, hx_ipc_connection *peer,
 	const hx_ipc_header *header, const void *data, hx_os_deadline deadline,
 	int control, hx_os_error *error);
 
