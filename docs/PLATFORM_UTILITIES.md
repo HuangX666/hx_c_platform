@@ -357,6 +357,8 @@ Process operations require exclusion on each object. NOW polls once; finite/infi
 
 `hx_os_process_capture_run` performs spawn plus concurrent stdout/stderr collection on a private owner-thread loop. Child stdin is EOF. No worker thread is started. Default retained output is limited to 1 MiB per stream, raw bytes. Both pipes, the loop and initial reads are prepared before spawn. Once a child is accepted, even TIMEOUT, LIMIT or I/O failure returns an owned session. Wait and close can be retried on that session. Complete success requires both stream EOFs and child exit; descendants retaining write handles may delay EOF.
 
+If startup fails and rollback also fails, `run` preserves the original error and returns a non-NULL session for cleanup only. On that session, `wait`, `view`, `text`, `raise_limit` and `discard` return `HX_OS_CLOSED`; call `close_until` on the creator thread to retry cleanup without waiting for a child that never started. Ordinary startup failure still returns NULL. After a normal close has finished waiting and started releasing resources, a release failure also leaves a cleanup-only session. Keep the owner and its context until close succeeds. A timeout or output limit during normal waiting still permits reading retained output and continuing capture.
+
 At the exact output bound, LIMIT pauses that stream even if EOF might follow. The caller can raise_limit or explicitly discard future output while continuing to drain. A previously accepted read still commits its retained prefix. Discard after an I/O error closes that retired failed stream, which can expose a broken pipe to the child. There is no silent truncation. Borrowed byte views last until the next wait/close. Text conversion defaults to strict UTF-8, preserves BOM, uses the output string's context and is transactional. An incomplete character in a timeout snapshot may fail conversion. Legacy encodings still require the existing optional codec backend; built-in ISO-8859-1/Unicode conversions remain independent of it.
 
 The session uses two request slots, a 32 KiB in-flight byte budget, geometrically grown retained buffers and optional 16 KiB discard scratch per stream. Limits bound retained output, not all heap/native memory: buffer growth temporarily holds old+new storage; request objects, allocator metadata, spawn snapshots and native resources add overhead. Each read currently uses the existing request allocation/mutex/event machinery. No new locks, indirect calls, allocations or system calls were added to existing file/thread/pool hot paths. Synchronous pipe creation now records its actual read/write direction for spawn validation.
@@ -384,12 +386,12 @@ if (status == HX_OS_OK) {
 	// Use output, then destroy it.
 	hx_string_destroy(&output);
 }
-/**
- * \brief Non-NULL capture remains owned on timeout/limit/error.
- *
- * \details Continue waiting, raise limits or explicitly discard as needed, then
- * check close_until.
- */
+// Close even after failure; keep a non-NULL capture for another close attempt.
+hx_os_status closed = hx_os_process_capture_close_until(
+	&capture, hx_os_deadline_after_ms(2000), NULL);
+if (closed != HX_OS_OK && capture)
+	fprintf(stderr, "Close pending: %s\n", hx_os_status_name(closed));
+// Keep capture in application state. Handle limits or retry cleanup later.
 ```
 
 See [capture_process.c](../examples/capture_process.c) for an executable example with an explicit retry/discard policy, and the public process header for all ownership/error contracts. Native macOS, Windows 7 and embedded targets remain pending validation.

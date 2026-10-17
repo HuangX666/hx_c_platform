@@ -63,15 +63,16 @@ hx_os_status hx_os_i_shm_native_remap(
 		return hx_os_i_errno(error, errno);
 	if (info.st_size < 0 || (uint64_t)info.st_size != bytes)
 		return hx_os_i_error(error, HX_OS_SYNTAX, 0, 0);
+	// This view is private to open; no caller can still borrow it.
+	if (munmap(memory->mapping, memory->mapped_bytes))
+		return hx_os_i_errno(error, errno);
+
+	memory->mapping = NULL;
+	memory->mapped_bytes = 0;
 	mapping = mmap(NULL, bytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	if (mapping == MAP_FAILED)
 		return hx_os_i_errno(error, errno);
-	if (munmap(memory->mapping, memory->mapped_bytes)) {
-		int code = errno;
 
-		(void)munmap(mapping, bytes);
-		return hx_os_i_errno(error, code);
-	}
 	memory->mapping = mapping;
 	memory->mapped_bytes = bytes;
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
@@ -80,14 +81,23 @@ hx_os_status hx_os_i_shm_native_remap(
 hx_os_status hx_os_i_shm_native_close(
 	hx_os_shared_memory *memory, hx_os_error *error)
 {
-	if (!memory->mapping)
-		return hx_os_i_error(error, HX_OS_OK, 0, 0);
-	if (munmap(memory->mapping, memory->mapped_bytes))
-		return hx_os_i_errno(error, errno);
-	memory->mapping = NULL;
-	return close((int)memory->native)
-		? hx_os_i_errno(error, errno)
-		: hx_os_i_error(error, HX_OS_OK, 0, 0);
+	if (memory->mapping) {
+		if (munmap(memory->mapping, memory->mapped_bytes))
+			return hx_os_i_errno(error, errno);
+
+		memory->mapping = NULL;
+		memory->mapped_bytes = 0;
+	}
+
+	if (memory->native != -1) {
+		int fd = (int)memory->native;
+
+		memory->native = -1;
+		if (close(fd))
+			return hx_os_i_errno(error, errno);
+	}
+
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
 
 hx_os_status hx_os_i_shm_native_unlink(const char *name, hx_os_error *error)

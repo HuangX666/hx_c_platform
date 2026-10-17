@@ -161,6 +161,8 @@ The first 64 bytes are library metadata: ready is a native aligned 32-bit atomic
 
 POSIX names persist until explicit unlink; live views survive unlink. Windows native mappings vanish after the last handle closes and do not support explicit unlink. File-backed names persist until removed; deletion follows native filesystem rules. Close requires exclusion of all view users and retains the owner after an unmap failure. External truncation can fault a mapping; coordinate backing-file size and header writes. Stale incomplete regions are reported, never automatically overwritten. Shared memory is not a security boundary against a participant that can mutate it.
 
+Always inspect the output owner after create/open, even on failure. Normally it is NULL; if rollback cannot unmap, it remains non-NULL for explicit `hx_os_shared_memory_close` retries. The error still describes the failed create/open, while `data` returns NULL and `size` returns zero: never read or write this residual mapping. Do not open again into the same variable until cleanup has consumed it. Keep its allocation context alive. The C++ `SharedMemory` facade preserves the same caller-owned pointer when its `Result` fails. Close can consume the owner while reporting a native handle-close error, so check both status and owner before retrying.
+
 Run `hx_os_shared_memory` for native mapping, or `hx_os_shared_memory .` for file-backed mapping. The program starts a bounded child process which reads published JSON using a release/acquire application flag. C++ `hx::SharedMemory` borrows a durable owner for explicit close. Other languages must implement the same metadata and application synchronization rules.
 
 ## 8. Modules and direct SDK calls

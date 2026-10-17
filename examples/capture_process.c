@@ -6,7 +6,7 @@ static int hx_example_main(int argc, const char *const *argv)
 	hx_os_process_result result;
 	hx_os_error error;
 	hx_os_status status;
-	int stream;
+	int stream, exit_code = 1;
 
 	if (argc < 2) {
 		fprintf(stderr,
@@ -28,10 +28,13 @@ static int hx_example_main(int argc, const char *const *argv)
 	// output after a limit/error. An application can instead raise limits
 	// or keep the session for a later UI/event-loop action.
 	while (status != HX_OS_OK) {
-		fprintf(stderr, "Capture: %s; continuing to wait.\n",
+		fprintf(stderr, "Capture: %s\n",
 			hx_os_status_name(status));
 		if (status != HX_OS_TIMEOUT) {
-			(void)hx_os_process_capture_discard(capture, 0);
+			if (hx_os_process_capture_discard(capture, 0) ==
+				HX_OS_CLOSED)
+				goto close_capture;
+
 			(void)hx_os_process_capture_discard(capture, 1);
 		}
 
@@ -52,10 +55,19 @@ static int hx_example_main(int argc, const char *const *argv)
 			(void)fwrite(data, 1, bytes, stream ? stderr : stdout);
 	}
 
+	exit_code = result.signal_number || result.exit_code ? 1 : 0;
+
+close_capture:
 	status = hx_os_process_capture_close_until(
 		&capture, hx_os_deadline_after_ms(2000), &error);
+	// Retry the same owner, including failed-start rollback resources.
+	if (status != HX_OS_OK && capture)
+		status = hx_os_process_capture_close_until(
+			&capture, hx_os_deadline_after_ms(2000), &error);
 
-	return status == HX_OS_OK && !result.signal_number && !result.exit_code
-		? 0
-		: 1;
+	if (capture)
+		fputs("Cleanup pending; a long-lived host must keep the owner "
+		      "and retry close.\n", stderr);
+
+	return status == HX_OS_OK ? exit_code : 1;
 }

@@ -22,6 +22,7 @@ struct hx_os_process_capture {
 	hx_os_loop *loop;
 	uint64_t owner;
 	hx_os_capture_stream streams[2];
+	int closing;
 };
 #define HX_OS_I_CAPTURE_CHUNK 16384u
 
@@ -155,6 +156,8 @@ static hx_os_status hx_os_capture_release(hx_os_process_capture *capture,
 	int i;
 	hx_os_status status;
 
+	capture->closing = 1;
+
 	for (i = 0; i < 2; ++i) {
 		hx_os_capture_stream *stream = &capture->streams[i];
 
@@ -269,8 +272,9 @@ hx_os_status hx_os_process_capture_run_with_options(hx_os_context *context,
 	(void)hx_os_file_close(&spawn.standard_output, NULL);
 	(void)hx_os_file_close(&spawn.standard_error, NULL);
 	if (status != HX_OS_OK) {
-		(void)hx_os_capture_release(
-			capture, HX_OS_DEADLINE_INFINITE, NULL);
+		if (hx_os_capture_release(capture, HX_OS_DEADLINE_INFINITE,
+			    NULL) != HX_OS_OK)
+			*out = capture;
 
 		return status;
 	}
@@ -316,6 +320,9 @@ hx_os_status hx_os_process_capture_wait_until(hx_os_process_capture *capture,
 
 	if (!capture || capture->owner != hx_os_thread_id())
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+
+	if (capture->closing)
+		return hx_os_i_error(error, HX_OS_CLOSED, 0, 0);
 
 	for (;;) {
 		hx_os_process_result process_result;
@@ -390,6 +397,10 @@ hx_os_status hx_os_process_capture_view(hx_os_process_capture *capture,
 	if (!capture || capture->owner != hx_os_thread_id() || stream < 0 ||
 		stream > 1 || !data || !bytes)
 		return HX_OS_INVALID;
+
+	if (capture->closing)
+		return HX_OS_CLOSED;
+
 	*data = capture->streams[stream].data;
 	*bytes = capture->streams[stream].bytes;
 
@@ -404,8 +415,11 @@ hx_os_status hx_os_process_capture_text_encoded(hx_os_process_capture *capture,
 	hx_os_status status =
 		hx_os_process_capture_view(capture, stream, &data, &bytes);
 
-	if (status != HX_OS_OK || !out)
+	if (!out)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+
+	if (status != HX_OS_OK)
+		return hx_os_i_error(error, status, 0, 0);
 
 	return hx_string_assign_encoded(out, encoding, data, bytes, error);
 }
@@ -423,6 +437,10 @@ hx_os_status hx_os_process_capture_raise_limit(
 	if (!capture || capture->owner != hx_os_thread_id() || stream < 0 ||
 		stream > 1 || limit < capture->streams[stream].limit)
 		return HX_OS_INVALID;
+
+	if (capture->closing)
+		return HX_OS_CLOSED;
+
 	capture->streams[stream].limit = limit;
 
 	return HX_OS_OK;
@@ -434,6 +452,10 @@ hx_os_status hx_os_process_capture_discard(
 	if (!capture || capture->owner != hx_os_thread_id() || stream < 0 ||
 		stream > 1)
 		return HX_OS_INVALID;
+
+	if (capture->closing)
+		return HX_OS_CLOSED;
+
 	// An accepted read still commits its retained prefix. Subsequent
 	// reads use scratch storage. No buffer moves while native I/O runs.
 	capture->streams[stream].discard = 1;
@@ -454,10 +476,15 @@ hx_os_status hx_os_process_capture_close_until(hx_os_process_capture **capture,
 	if (!*capture)
 		return hx_os_i_error(error, HX_OS_OK, 0, 0);
 
-	status = hx_os_process_capture_wait_until(
-		*capture, deadline, NULL, error);
-	if (status != HX_OS_OK)
-		return status;
+	if ((*capture)->owner != hx_os_thread_id())
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+
+	if (!(*capture)->closing) {
+		status = hx_os_process_capture_wait_until(
+			*capture, deadline, NULL, error);
+		if (status != HX_OS_OK)
+			return status;
+	}
 
 	status = hx_os_capture_release(*capture, deadline, error);
 	if (status == HX_OS_OK)

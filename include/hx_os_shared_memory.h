@@ -21,6 +21,9 @@ typedef struct hx_os_shared_memory hx_os_shared_memory;
  * zero-initialized payload. Metadata is published before returning create, not
  * application data. Users must synchronize their payload and keep the
  * header/backing size immutable.
+ * \note Create/open normally return NULL on failure. If rollback cannot unmap,
+ * out retains a cleanup-only owner and the original operation error. Keep its
+ * context alive and retry close; data returns NULL and size returns zero.
  */
 HX_OS_API int HX_OS_CALL hx_os_shared_memory_available(void);
 HX_OS_API int HX_OS_CALL hx_os_shared_memory_native_available(void);
@@ -64,6 +67,8 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_shared_memory_unlink_at(
  *
  * \details Failed unmap retains owner; after successful unmap native
  * descriptor-close errors may consume owner. Never implies disk sync.
+ * Also accepts cleanup-only owners from failed create/open; inspect the owner
+ * after a close error and retry only while it is non-NULL.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_shared_memory_close(
 	hx_os_shared_memory **memory, hx_os_error *error);

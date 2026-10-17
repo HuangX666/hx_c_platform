@@ -56,17 +56,19 @@ hx_os_status hx_os_i_shm_native_open(hx_os_shared_memory *memory,
 hx_os_status hx_os_i_shm_native_remap(
 	hx_os_shared_memory *memory, size_t bytes, hx_os_error *error)
 {
-	void *mapping = MapViewOfFile(
-		(HANDLE)memory->native, FILE_MAP_ALL_ACCESS, 0, 0, bytes);
+	void *mapping;
 
+	// This view is private to open; no caller can still borrow it.
+	if (!UnmapViewOfFile(memory->mapping))
+		return hx_os_i_win32(error, GetLastError());
+
+	memory->mapping = NULL;
+	memory->mapped_bytes = 0;
+	mapping = MapViewOfFile(
+		(HANDLE)memory->native, FILE_MAP_ALL_ACCESS, 0, 0, bytes);
 	if (!mapping)
 		return hx_os_i_win32(error, GetLastError());
-	if (!UnmapViewOfFile(memory->mapping)) {
-		DWORD code = GetLastError();
 
-		UnmapViewOfFile(mapping);
-		return hx_os_i_win32(error, code);
-	}
 	memory->mapping = mapping;
 	memory->mapped_bytes = bytes;
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
@@ -75,14 +77,23 @@ hx_os_status hx_os_i_shm_native_remap(
 hx_os_status hx_os_i_shm_native_close(
 	hx_os_shared_memory *memory, hx_os_error *error)
 {
-	if (!memory->mapping)
-		return hx_os_i_error(error, HX_OS_OK, 0, 0);
-	if (!UnmapViewOfFile(memory->mapping))
-		return hx_os_i_win32(error, GetLastError());
-	memory->mapping = NULL;
-	return CloseHandle((HANDLE)memory->native)
-		? hx_os_i_error(error, HX_OS_OK, 0, 0)
-		: hx_os_i_win32(error, GetLastError());
+	if (memory->mapping) {
+		if (!UnmapViewOfFile(memory->mapping))
+			return hx_os_i_win32(error, GetLastError());
+
+		memory->mapping = NULL;
+		memory->mapped_bytes = 0;
+	}
+
+	if (memory->native != -1) {
+		HANDLE handle = (HANDLE)memory->native;
+
+		memory->native = -1;
+		if (!CloseHandle(handle))
+			return hx_os_i_win32(error, GetLastError());
+	}
+
+	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 }
 
 hx_os_status hx_os_i_shm_native_unlink(const char *name, hx_os_error *error)

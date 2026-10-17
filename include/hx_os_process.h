@@ -104,7 +104,10 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_process_capture_options_init(
  * \details Child stdin is EOF; no input streaming or background thread. The
  * creator thread owns the session, including wait/view/text/close. Requires
  * PROCESS, PIPE and LOOP. Accepted spawn always returns an owned session,
- * including TIMEOUT/LIMIT/I/O failure; creation failure returns NULL. Default
+ * including TIMEOUT/LIMIT/I/O failure. Ordinary creation failure returns NULL.
+ * If rollback also fails, out retains a cleanup-only session: wait/view/text/
+ * raise_limit/discard return CLOSED. Keep its context alive and retry close on
+ * the creator thread. The original creation error is preserved. Default
  * limit is 1 MiB per stream. Reaching the limit pauses that stream and reports
  * LIMIT, even when EOF may immediately follow. No bytes are silently dropped.
  * raise_limit resumes; discard explicitly drains future bytes without retaining
@@ -156,6 +159,9 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_process_capture_discard(
  * \details Same LIMIT/error/timeout retention as wait. Descendants inheriting
  * streams can delay EOF. After an I/O error, explicit discard also closes that
  * failed stream; the child can observe a broken pipe. No forced termination.
+ * Once resource release begins, the session becomes cleanup-only. A failed
+ * release retains the owner; retry close to finish without resuming capture.
+ * Failed-creation owners skip process/EOF waiting and release resources only.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_process_capture_close_until(
 	hx_os_process_capture **capture, hx_os_deadline deadline,

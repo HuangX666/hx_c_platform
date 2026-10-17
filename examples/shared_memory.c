@@ -7,6 +7,20 @@ typedef struct shared_payload {
 	char json[124];
 } shared_payload;
 
+static hx_os_status close_memory(hx_os_shared_memory **memory)
+{
+	hx_os_status status = hx_os_shared_memory_close(memory, NULL);
+
+	if (*memory)
+		status = hx_os_shared_memory_close(memory, NULL);
+
+	if (*memory)
+		fputs("Unmap pending; a long-lived host must keep the owner "
+		      "and retry close.\n", stderr);
+
+	return status;
+}
+
 static int read_message(const char *name, const char *directory)
 {
 	hx_os_shared_memory *memory = NULL;
@@ -19,13 +33,13 @@ static int read_message(const char *name, const char *directory)
 
 	if (status != HX_OS_OK ||
 		hx_os_shared_memory_size(memory) != sizeof(*payload)) {
-		(void)hx_os_shared_memory_close(&memory, NULL);
+		(void)close_memory(&memory);
 		return 1;
 	}
 	payload = hx_os_shared_memory_data(memory);
 	while (!hx_os_atomic32_load(&payload->ready, HX_OS_ACQUIRE)) {
 		if (hx_os_deadline_expired(deadline)) {
-			(void)hx_os_shared_memory_close(&memory, NULL);
+			(void)close_memory(&memory);
 			return 1;
 		}
 		(void)hx_os_sleep_until(hx_os_deadline_after_ms(1), NULL);
@@ -33,7 +47,7 @@ static int read_message(const char *name, const char *directory)
 	printf("Child received: %.*s\n", (int)sizeof(payload->json),
 		payload->json);
 	hx_os_atomic32_store(&payload->ready, 2, HX_OS_RELEASE);
-	return hx_os_shared_memory_close(&memory, NULL) == HX_OS_OK ? 0 : 1;
+	return close_memory(&memory) == HX_OS_OK ? 0 : 1;
 }
 
 static int write_message(const char *name, const char *directory)
@@ -47,8 +61,11 @@ static int write_message(const char *name, const char *directory)
 		: hx_os_shared_memory_create(
 			  NULL, name, sizeof(*payload), &memory, NULL);
 
-	if (status != HX_OS_OK)
+	if (status != HX_OS_OK) {
+		(void)close_memory(&memory);
+
 		return 1;
+	}
 	payload = hx_os_shared_memory_data(memory);
 	(void)snprintf(payload->json, sizeof(payload->json),
 		"{\"device\":\"door-1\",\"request\":42}");
@@ -62,7 +79,10 @@ static int write_message(const char *name, const char *directory)
 		}
 		(void)hx_os_sleep_until(hx_os_deadline_after_ms(1), NULL);
 	}
-	(void)hx_os_shared_memory_close(&memory, NULL);
+	hx_os_status closed = close_memory(&memory);
+	if (closed != HX_OS_OK)
+		return 1;
+
 	for (;;) {
 		hx_os_status removed = directory
 			? hx_os_shared_memory_unlink_at(directory, name, NULL)
@@ -133,8 +153,11 @@ int main(int argc, char **argv)
 	if (child)
 		(void)hx_os_process_close_until(
 			&child, hx_os_deadline_after_ms(5000), NULL);
-	(void)hx_os_shared_memory_close(&memory, NULL);
-	if (created) {
+	hx_os_status closed = close_memory(&memory);
+	if (status == HX_OS_OK)
+		status = closed;
+
+	if (created && !memory) {
 		hx_os_status removed = directory
 			? hx_os_shared_memory_unlink_at(
 				  directory, hx_string_c_str(&name), NULL)

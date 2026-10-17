@@ -87,7 +87,6 @@ static hx_os_status hx_os_shm_file_open(hx_os_shared_memory *memory,
 static hx_os_status hx_os_shm_remap(
 	hx_os_shared_memory *memory, size_t bytes, hx_os_error *error)
 {
-	hx_os_file_map *map = NULL;
 	hx_os_status status;
 	uint64_t size;
 
@@ -96,20 +95,24 @@ static hx_os_status hx_os_shm_remap(
 	status = hx_os_file_size(memory->file, &size, error);
 	if (status == HX_OS_OK && size != bytes)
 		status = hx_os_i_error(error, HX_OS_SYNTAX, 0, 0);
-	if (status == HX_OS_OK)
-		status = hx_os_file_map_create(memory->context, memory->file, 0,
-			bytes, HX_OS_MAP_SHARED_WRITE, &map, error);
 	if (status != HX_OS_OK)
 		return status;
+
+	// The owner is not published yet; retire the header before remapping.
 	status = hx_os_file_map_destroy(&memory->file_map, error);
-	if (status != HX_OS_OK) {
-		(void)hx_os_file_map_destroy(&map, NULL);
-		if (!memory->file_map)
-			memory->mapping = NULL;
-		return status;
+	if (!memory->file_map) {
+		memory->mapping = NULL;
+		memory->mapped_bytes = 0;
 	}
-	memory->file_map = map;
-	memory->mapping = hx_os_file_map_write_view(map);
+	if (status != HX_OS_OK)
+		return status;
+
+	status = hx_os_file_map_create(memory->context, memory->file, 0, bytes,
+		HX_OS_MAP_SHARED_WRITE, &memory->file_map, error);
+	if (status != HX_OS_OK)
+		return status;
+
+	memory->mapping = hx_os_file_map_write_view(memory->file_map);
 	memory->mapped_bytes = bytes;
 	return HX_OS_OK;
 }
@@ -138,6 +141,7 @@ static hx_os_status hx_os_shm_open(hx_os_context *context,
 	if (!memory)
 		return hx_os_i_error(error, HX_OS_NO_MEMORY, 0, 0);
 	memory->context = context;
+	memory->native = -1;
 	status = directory
 		? hx_os_shm_file_open(
 			  memory, directory, name, bytes, create, error)
@@ -183,6 +187,7 @@ static hx_os_status hx_os_shm_open(hx_os_context *context,
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 failed:
 	(void)hx_os_shared_memory_close(&memory, NULL);
+	*out = memory;
 	return status;
 }
 
@@ -219,8 +224,9 @@ hx_os_status hx_os_shared_memory_open_at(hx_os_context *context,
 
 void *hx_os_shared_memory_data(hx_os_shared_memory *memory)
 {
-	return memory && memory->mapping ? (unsigned char *)memory->mapping + 64
-					 : NULL;
+	return memory && memory->bytes && memory->mapping
+		? (unsigned char *)memory->mapping + 64
+		: NULL;
 }
 
 size_t hx_os_shared_memory_size(const hx_os_shared_memory *memory)

@@ -1394,7 +1394,7 @@ hx_os_status app_capture_finish(hx_os_process_capture **session,
 }
 ```
 
-After start, inspect both status and session. Creation failure leaves it NULL; TIMEOUT, LIMIT or an I/O failure can retain a live session. Retry wait on that same object. The default bound is **1 MiB per stream**; explicitly raise the bound or request discard when needed. The library never silently drops captured bytes or kills the child to make close succeed.
+After start, inspect both status and session. Ordinary creation failure leaves it NULL; TIMEOUT, LIMIT or an I/O failure after successful spawn retains a live session. Retry wait on that same object. If startup rollback also fails, the non-NULL session is for cleanup only: wait/finish and output access report `HX_OS_CLOSED`. Call `hx_os_process_capture_close_until(session, deadline, error)` directly and retain the owner/context if cleanup fails; do not repeatedly call finish on a cleanup-only session. The default bound is **1 MiB per stream**; explicitly raise the bound or request discard when needed. The library never silently drops captured bytes or kills the child to make close succeed.
 
 Text access defaults to strict UTF-8; raw views preserve bytes and `_encoded` access converts a selected encoding. A timeout can split a character, so text conversion can fail until more bytes arrive. Close waits for process exit and both pipe EOFs; descendants inheriting streams can delay EOF. Keep the session even if text conversion fails, then handle/close it explicitly. See [capture_process.c](../examples/capture_process.c) for a runnable CLI policy.
 

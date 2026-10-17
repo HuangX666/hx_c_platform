@@ -161,6 +161,8 @@ Android 没有原生 `shm_open`，需使用 `create_at/open_at(directory, name, 
 
 POSIX 名称保留到显式 unlink，现存映射仍可使用；Windows 原生对象在最后一个句柄关闭时消失，不支持显式 unlink。文件映射的名称保留到删除，删除服从系统规则。关闭前排除所有访问者，取消映射失败保留对象。外部截断可能让访问触发系统故障，因此需要协调文件大小和头写入。未完成的遗留对象会明确报告，不自动覆盖；可修改共享区的参与者之间也没有安全隔离。
 
+创建／打开即使报错，也要检查输出 owner。普通失败为 NULL；如果回滚无法解除映射，会保留非空对象，供调用 `hx_os_shared_memory_close` 显式重试。错误信息仍说明创建／打开失败的原因，而 `data` 返回 NULL、`size` 返回零，不可读写这个残留对象。清理消耗 owner 前，不要用同一个变量再次打开；它的分配器 context 也要继续保留。C++ `SharedMemory` 在返回失败 `Result` 时同样保留调用者的 owner。关闭也可能在消耗 owner 后报告原生句柄关闭错误，因此重试前同时检查状态和 owner。
+
 运行 `hx_os_shared_memory` 使用原生映射，或 `hx_os_shared_memory .` 使用文件映射。程序启动有界等待的子进程，借助业务 release／acquire 标志读取 JSON。C++ `hx::SharedMemory` 借用可显式关闭的持久句柄。其他语言需遵守相同元数据及业务同步协议。
 
 ## 8. 模块及底层调用

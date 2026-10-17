@@ -14,7 +14,7 @@ A status is not a Boolean. OK means the stated operation completed; EOF, NEED_IN
 
 Unless explicitly stated otherwise, pointer inputs are borrowed for the call, output objects have one owner, and destruction requires external exclusion of new users. A failed constructor publishes no object. Never release an object with free(), another library instance or another pool. NULL cleanup is accepted where documented; a disabled constructor returns NOT_SUPPORTED.
 
-Worker-backed constructors have one explicit exception: pool, coroutine runtime, directory watch and coroutine HTTP service creation may fail with a non-NULL owner when rollback also fails. The error still describes creation. This owner is already closing and must not accept business work. Keep it and its allocation context alive, then retry the corresponding cleanup below. Ordinary creation failure still returns NULL; no hidden reaper or forced thread termination is used.
+The constructors listed below have one explicit exception: creation/open may fail with a non-NULL owner when rollback also fails. The error still describes creation. This owner is only for cleanup and must not accept business work. Keep it and its allocation context alive, then retry the corresponding cleanup below. Ordinary creation failure still returns NULL; no hidden reaper or forced thread termination is used.
 
 | Retained owner | Existing cleanup entry |
 | --- | --- |
@@ -22,6 +22,8 @@ Worker-backed constructors have one explicit exception: pool, coroutine runtime,
 | Coroutine runtime | `hx_os_coro_runtime_close_until()`, then `hx_os_coro_runtime_destroy()` after successful close |
 | Directory watch | `hx_os_watch_close_until()` |
 | Coroutine HTTP service | `hx_os_coro_http_close_until()`, before releasing its runtime |
+| Process output capture | `hx_os_process_capture_close_until()`, on its creator thread |
+| Shared memory | `hx_os_shared_memory_close()`; data is NULL and size is zero until open/create succeeds |
 
 Check ownership even when creation reports failure. A failed watch creation never transfers callback/cleanup ownership, including when a native owner remains. C++ factories return a failed `Result` while preserving the caller's owner variable for the same cleanup; do not call `value()` on that failed result.
 

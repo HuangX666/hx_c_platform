@@ -1386,7 +1386,7 @@ hx_os_status app_capture_finish(hx_os_process_capture **session,
 }
 ```
 
-start 后同时检查状态和 session。创建失败时为 NULL；TIMEOUT、LIMIT 或 I/O 失败可能仍有存活会话，应在同一个对象上继续 wait。默认上限为 **每路 1 MiB**，需要时显式提高上限或选择 discard；库不会静默丢弃输出，也不靠杀子进程完成 close。
+start 后同时检查状态和 session。普通创建失败时为 NULL；启动成功后的 TIMEOUT、LIMIT 或 I/O 失败会保留存活会话，应在同一个对象上继续 wait。如果启动回滚也失败，保留的非空会话只供清理，wait／finish 及输出读取会返回 `HX_OS_CLOSED`。直接调用 `hx_os_process_capture_close_until(session, deadline, error)`；清理失败时继续保留 owner 和 context，不要对只供清理的对象反复调用 finish。默认上限为 **每路 1 MiB**，需要时显式提高上限或选择 discard；库不会静默丢弃输出，也不靠杀子进程完成 close。
 
 文本入口默认严格 UTF-8，原始视图保留字节，`_encoded` 入口按选定编码转换。超时可能停在字符中间，更多字节到达之前文本转换可能失败。close 等待进程退出以及两路 EOF；继承管道的后代进程也可能延迟 EOF。即使文本转换失败也要保留会话，再显式处理和关闭。完整命令行策略见 [capture_process.c](../examples/capture_process.c)。
 
