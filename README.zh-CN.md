@@ -347,6 +347,7 @@ C++ 自动按参数类型选择格式化方式。自定义结构体和更多占�
 | 运行时符号检查、字符串读取与嵌套分组跳过 | [解析辅助](docs/PARSING.zh-CN.md) |
 | 运行时常量、条件分支与有界配置文件包含 | [预处理](docs/PREPROCESSING.zh-CN.md) |
 | Windows DLL 版本、窗口标题与显示器／GPU 识别 | [Windows 工具](docs/WINDOWS_UTILITIES.zh-CN.md) |
+| 明确为客户 EXE 配置 Windows 崩溃现场保存 | [WER LocalDumps](docs/LOCAL_DUMPS.zh-CN.md) |
 | 借用原生文件、套接字、线程与进程对象 | [原生对象互操作](docs/NATIVE_INTEROP.zh-CN.md) |
 | 通过已有 Linux 桌面服务申请作用域防睡眠 | [Linux 桌面](docs/LINUX_DESKTOP.zh-CN.md) |
 | 网络、进程、管道、监听、映射及系统信息 | [平台工具](docs/PLATFORM_UTILITIES.zh-CN.md) |

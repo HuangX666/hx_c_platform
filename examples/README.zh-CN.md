@@ -149,6 +149,7 @@ printf '0123456789' > demo.txt
 | [给 JSON 加长度帧再读取](../docs/FRAMES.zh-CN.md) | [framed_messages.c](framed_messages.c) · `hx_os_framed_messages` | `{"device":"door-1","request":42}` |
 | [后台写出三条 JSONL 记录](../docs/STREAMS.zh-CN.md) | [buffered_file.c](buffered_file.c) · `hx_os_buffered_file` | samples.jsonl; Saved 3 device readings |
 | [查询系统版本和进程 CPU 采样](../docs/PLATFORM_UTILITIES.zh-CN.md) | [system_info.c](system_info.c) · `hx_os_system_info` | 系统名称、Process CPU |
+| [明确配置 Windows 崩溃现场保存](../docs/LOCAL_DUMPS.zh-CN.md) | [local_dumps.c](local_dumps.c) · `hx_os_local_dumps` | 无参数只显示帮助；query 只读；enable/remove 需要明确授权 |
 | [测量一次短等待的真实耗时](../docs/CONTROL.zh-CN.md) | [high_resolution_time.c](high_resolution_time.c) · `hx_os_high_resolution_time` | 请求等待 20 ms；实际耗时随环境变化 |
 | [为一段工作申请防睡眠](../docs/LINUX_DESKTOP.zh-CN.md) | [sleep_inhibit.c](sleep_inhibit.c) · `hx_os_sleep_inhibit` | 申请／释放或明确不支持 |
 

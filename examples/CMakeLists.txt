@@ -8,7 +8,7 @@ foreach(example IN ITEMS hello async_timer configuration containers system_info
 	http_json http_file temporary_file serial_message shared_memory
 	encrypt_text archive_files tls_json_client tls_json_server
 	load_plugin text_file environment special_paths thread_options
-	windows_info
+	windows_info local_dumps
 	native_file
 	sleep_inhibit
 	binary_stream buffered_file config_edit

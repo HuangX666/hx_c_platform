@@ -57,7 +57,7 @@ TLS 连接、有界全双工队列及 JSON 业务程序见 [TLS 教程](TLS.zh-C
 | 线程、同步、有界线程池、异步 I/O | 任务依赖、业务调度、关闭决策 |
 | 原生错误、分配器、资源所有权 | 日志记录、诊断展示、恢复策略 |
 | 文件发布与时间戳机制 | 日志轮转、保留数量、格式与过滤 |
-| 区间 profiler 和原生系统查询 | 崩溃策略、LocalDumps 配置、日志历史环 |
+| 区间 profiler、原生查询及显式 LocalDumps 配置 | 崩溃恢复策略、客户现场文件处理、日志历史环 |
 
 基础库可以脱离 hx_c_log 独立构建、测试、安装和使用，不强制依赖 Qt、C++ 或 OBS 运行库。借鉴 OBS 的是统一接口、共用实现与构建选择平台实现的组织方式。 hx_c_log 接入仍属于后续工作；自研有栈和无栈协程见[协程教程](COROUTINES.zh-CN.md)。线程局部存储 **TLS** 与[网络加密 TLS](TLS.zh-CN.md) 是不同概念。
 
@@ -137,6 +137,7 @@ hx_c_platform/
 | `hx_os_signal.h`、`hx_os_procedure.h`、`hx_os_profiler.h` | 信号、命名过程与区间计时树 |
 | `hx_os_env.h`、`hx_os_paths.h`、`hx_os_posix.h` | 环境变量、常用目录与 POSIX 时钟换算 |
 | `hx_os_registry.h`、`hx_os_power.h`、`hx_os_obfuscate.h` | 注册表、作用域电源请求与字符串混淆 |
+| `hx_os_local_dumps.h` | 按 EXE 显式配置 Windows [WER LocalDumps](LOCAL_DUMPS.zh-CN.md)，不自动安装异常处理或收集现场 |
 
 <a id="section-4"></a>
 
@@ -1885,6 +1886,7 @@ int main(void)
 | `HX_OS_ENABLE_LOCAL_SOCKETS` | ON | 路径型本地流套接字 |
 | `HX_OS_ENABLE_DUPLEX_PIPE` | ON | 不依赖 NETWORK 的双向文件端点 |
 | `HX_OS_ENABLE_REGISTRY` | ON | Windows 注册表操作 |
+| `HX_OS_ENABLE_LOCAL_DUMPS` | ON | 编译 Windows WER 显式配置接口；未调用时不修改设置 |
 | `HX_OS_ENABLE_SLEEP_INHIBIT` | ON | 作用域防睡眠请求 |
 | `HX_OS_ENABLE_LINUX_DESKTOP` | ON | 可选的系统 sd-bus 桌面运行库 |
 | `HX_OS_ENABLE_PERFORMANCE_REQUEST` | ON | 原生性能活动请求 |
@@ -2018,7 +2020,7 @@ flowchart TD
 
 优先原生 API 与编译器内建；汇编用于有测量依据的局部优化，并保留受支持目标的正确回退。Apple 实现以 C 为主，仅可选性能请求适配使用 Objective-C/Foundation。 Linux 桌面防睡眠使用可选 D-Bus 服务；不支持的电源／性能操作返回 NOT_SUPPORTED。注册表是显式 Windows 扩展，系统无法提供时不承诺严格 CPU 亲和性。
 
-后续工作包括真实目标验证与有依据的性能改进。hx_c_log 迁移、崩溃策略框架、FreeRTOS/裸机适配均不是已经交付的功能。自有代码的发布许可证**尚未选定**，第三方许可独立适用，见 [THIRD_PARTY_NOTICES.zh-CN.md](../THIRD_PARTY_NOTICES.zh-CN.md)。
+后续工作包括真实目标验证与有依据的性能改进。hx_c_log 迁移、通用崩溃策略框架、FreeRTOS/裸机适配均不是已经交付的功能。现已单独提供按 EXE 显式配置 Windows [LocalDumps](LOCAL_DUMPS.zh-CN.md) 的接口，但不捕获异常或恢复已经损坏的进程。自有代码的发布许可证**尚未选定**，第三方许可独立适用，见 [THIRD_PARTY_NOTICES.zh-CN.md](../THIRD_PARTY_NOTICES.zh-CN.md)。
 
 <a id="section-32"></a>
 

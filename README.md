@@ -338,6 +338,7 @@ For one-call text/file encryption, SHA-256, HMAC and signatures, see [cryptograp
 | Runtime token checks, quoted strings and nested group skipping | [Parsing helpers](docs/PARSING.md) |
 | Runtime constants, conditions and bounded configuration includes | [Preprocessing](docs/PREPROCESSING.md) |
 | Windows DLL versions, window titles and monitor/GPU identification | [Windows utilities](docs/WINDOWS_UTILITIES.md) |
+| Explicit Windows crash-file configuration for a customer EXE | [WER LocalDumps](docs/LOCAL_DUMPS.md) |
 | Borrowing native file, socket, thread and process objects | [Native interoperability](docs/NATIVE_INTEROP.md) |
 | Scoped sleep requests through existing Linux desktop services | [Linux desktop](docs/LINUX_DESKTOP.md) |
 | Direct SQLite/OpenSSL/libcurl/archive SDK calls | [Native dependencies](docs/NATIVE_DEPENDENCIES.md) |

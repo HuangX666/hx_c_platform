@@ -4,6 +4,8 @@
 
 Use this workflow to find CPU hotspots, invalid memory access, leaks or heap peaks. The existing interval profiler remains unchanged. Detailed analysis is explicit: enabling symbols does not record anything, start threads or install tools.
 
+For customer Windows crashes, use the separate [WER LocalDumps configuration API](LOCAL_DUMPS.md) to request local crash files. It is not enabled by analysis symbols or WPR, and does not replace memory checking or hang diagnosis.
+
 ## 1. Choose a question
 
 | Question | Mode | Main result |

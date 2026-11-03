@@ -71,6 +71,7 @@
 #include "hx_os_process.h"
 #include "hx_os_local.h"
 #include "hx_os_registry.h"
+#include "hx_os_local_dumps.h"
 #include "hx_os_windows.h"
 #include "hx_os_native.h"
 #include "hx_os_power.h"

@@ -31,7 +31,7 @@ Audit differences before changing each adapter. Old event wait rejects an alread
 
 Never mix absolute deadlines from different epochs/clock semantics. Change clock construction and waiting together, or translate the remaining duration at the seam. Do not merely multiply an old millisecond timestamp by a million. No native file buffer is added here; hx_c_log retains its own buffering, ordered output and rotation/persistence policy.
 
-Date caches, locale-stable numeric formatting, console/system sinks, regex behavior, fork hooks, crash-handler installation, LocalDumps registry settings, history-ring export and termination policy stay in the consumer or a future explicit extension. Native stack capture and logger history are distinct. This version does not silently claim replacements for these operations.
+Date caches, locale-stable numeric formatting, console/system sinks, regex behavior, fork hooks, crash-handler installation, history-ring export and termination policy stay in the consumer or a future explicit extension. Per-EXE LocalDumps registry setup now has an [explicit optional interface](LOCAL_DUMPS.md); it is not automatically invoked by the library or logger, does not overwrite foreign settings, and does not implement crash handling or upload. Native stack capture and logger history are distinct. This version does not silently claim replacements for the remaining operations.
 
 ## Stages and acceptance gates
 

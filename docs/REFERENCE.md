@@ -57,7 +57,7 @@ Common calls handle their own composition: read a UTF-8 file into `hx_string`, g
 | Threads, synchronization, bounded task pools, async I/O | Job dependencies, application scheduling, shutdown decisions |
 | Native errors, allocators, resource ownership | Logging, diagnostics presentation, recovery policy |
 | File publication and timestamp mechanisms | Log rotation, retention, formatting and filtering |
-| Interval profiling and native system queries | Crash policy, LocalDumps setup and historical log rings |
+| Interval profiling, native queries and explicit LocalDumps configuration | Crash recovery policy, customer-file handling and historical log rings |
 
 The library builds, tests, installs and runs independently of hx_c_log. It does not require Qt, C++, or the OBS runtime. OBS informs the unified API, shared implementation and build-selected adapter organization. hx_c_log integration remains future work. Self-developed stackful and stackless coroutines are described in [the coroutine guide](COROUTINES.md). Thread-local storage **TLS** is separate from the optional [encrypted network TLS module](TLS.md).
 
@@ -137,6 +137,7 @@ hx_c_platform/
 | `hx_os_signal.h`, `hx_os_procedure.h`, `hx_os_profiler.h` | Signals, named procedures and interval trees |
 | `hx_os_env.h`, `hx_os_paths.h`, `hx_os_posix.h` | Environment, special directories and POSIX clock conversion |
 | `hx_os_registry.h`, `hx_os_power.h`, `hx_os_obfuscate.h` | Optional registry, scoped power requests and obfuscation |
+| `hx_os_local_dumps.h` | Explicit per-EXE Windows [WER LocalDumps configuration](LOCAL_DUMPS.md); no automatic handlers or collection |
 
 <a id="section-4"></a>
 
@@ -1893,6 +1894,7 @@ All new native/common modules default to ON; optional third-party encoding and p
 | `HX_OS_ENABLE_LOCAL_SOCKETS` | ON | Build pathname local stream sockets |
 | `HX_OS_ENABLE_DUPLEX_PIPE` | ON | Build synchronous duplex socket pairs |
 | `HX_OS_ENABLE_REGISTRY` | ON | Build Windows registry access |
+| `HX_OS_ENABLE_LOCAL_DUMPS` | ON | Build explicit Windows WER configuration; no settings changed until called |
 | `HX_OS_ENABLE_SLEEP_INHIBIT` | ON | Build native idle-sleep requests |
 | `HX_OS_ENABLE_LINUX_DESKTOP` | ON | Optional installed sd-bus desktop runtime |
 | `HX_OS_ENABLE_PERFORMANCE_REQUEST` | ON | Build native execution activities |
@@ -2026,7 +2028,7 @@ Comments default to English: use `//` for short notes and `/** ... */` for multi
 
 Native APIs and compiler builtins come first; assembly is reserved for measured local improvements with correct supported-target fallbacks. Most Apple code remains C; the optional Apple performance request adapter alone uses Objective-C/Foundation. Linux desktop sleep inhibition uses optional D-Bus services; unsupported power/performance operations return NOT_SUPPORTED. Registry access is an explicit Windows extension. Strict affinity is not promised where the OS cannot implement it.
 
-Future work includes native target validation and measured improvements. hx_c_log migration, crash-policy frameworks and FreeRTOS/bare metal adaptation are not delivered features. The first-party distribution license is **not yet selected**; third-party licenses remain independently applicable. See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
+Future work includes native target validation and measured improvements. hx_c_log migration, general crash-policy frameworks and FreeRTOS/bare metal adaptation are not delivered features. Explicit per-EXE Windows [LocalDumps configuration](LOCAL_DUMPS.md) is available separately; it does not catch exceptions or recover a damaged process. The first-party distribution license is **not yet selected**; third-party licenses remain independently applicable. See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
 
 <a id="section-32"></a>
 

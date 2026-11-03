@@ -118,6 +118,7 @@ option(HX_OS_ENABLE_LOCAL_SOCKETS "Build pathname local stream sockets" ON)
 option(HX_OS_ENABLE_DUPLEX_PIPE "Build synchronous duplex socket pairs" ON)
 
 option(HX_OS_ENABLE_REGISTRY "Build Windows registry access" ON)
+option(HX_OS_ENABLE_LOCAL_DUMPS "Build explicit Windows WER configuration" ON)
 
 option(HX_OS_ENABLE_WINDOWS_VERSION "Build Windows version resource queries" ON)
 option(HX_OS_ENABLE_WINDOWS_DESKTOP "Build Windows window and GPU helpers" ON)
@@ -444,7 +445,7 @@ add_library(hx_c_platform
 	src/watch.c src/loop_fd.c
 	src/system.c src/cpu_features.c src/time_posix.c
 	src/process.c src/process_capture.c src/local.c src/duplex_pipe.c
-	src/registry.c src/windows_util.c src/native_interop.c
+	src/registry.c src/local_dumps.c src/windows_util.c src/native_interop.c
 	src/power.c src/obfuscate.c
 	src/calendar.c src/filename.c src/text_lookup.c src/bitstream.c
 	src/calldata.c src/params.c src/dispatch.c src/signal.c src/procedure.c
@@ -537,8 +538,13 @@ if(HX_OS_ENABLE_PROCESS AND HX_OS_HAVE_NATIVE_PROCESS)
 	endif()
 endif()
 
-if(WIN32 AND HX_OS_ENABLE_REGISTRY)
+if(WIN32 AND (HX_OS_ENABLE_REGISTRY OR HX_OS_ENABLE_LOCAL_DUMPS))
 	target_link_libraries(hx_c_platform PRIVATE advapi32)
+endif()
+
+if(WIN32 AND HX_OS_ENABLE_LOCAL_DUMPS)
+	target_sources(hx_c_platform PRIVATE
+		src/windows/local_dumps_native.c)
 endif()
 
 if(WIN32 AND HX_OS_ENABLE_WINDOWS_VERSION)
@@ -1092,7 +1098,7 @@ if(WIN32)
 	endif()
 
 	if(HX_OS_ENABLE_RANDOM OR HX_OS_ENABLE_REGISTRY
-		OR HX_OS_ENABLE_FILE_UTILS)
+		OR HX_OS_ENABLE_LOCAL_DUMPS OR HX_OS_ENABLE_FILE_UTILS)
 		string(APPEND HX_OS_PC_LIBS_PRIVATE " -ladvapi32")
 	endif()
 

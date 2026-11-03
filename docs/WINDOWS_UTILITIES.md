@@ -1,6 +1,6 @@
 # Windows version, window and GPU queries
 
-[简体中文](WINDOWS_UTILITIES.zh-CN.md) · [README](../README.md)
+[简体中文](WINDOWS_UTILITIES.zh-CN.md) · [WER LocalDumps](LOCAL_DUMPS.md) · [README](../README.md)
 
 **Use this module to display Windows version resources or GPU identity.** Build `hx_os_windows_info` and follow the [run instructions](../examples/README.md#run). No argument enumerates GPUs; supplying a DLL/EXE with version resources also queries that file first.
 

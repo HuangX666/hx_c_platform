@@ -149,6 +149,7 @@ Restoration needs a backup from a previous successful save. The first save to a 
 | [Frame JSON with a length prefix and read it](../docs/FRAMES.md) | [framed_messages.c](framed_messages.c) · `hx_os_framed_messages` | `{"device":"door-1","request":42}` |
 | [Write three JSONL records in the background](../docs/STREAMS.md) | [buffered_file.c](buffered_file.c) · `hx_os_buffered_file` | samples.jsonl; Saved 3 device readings |
 | [Query OS version and sampled process CPU usage](../docs/PLATFORM_UTILITIES.md) | [system_info.c](system_info.c) · `hx_os_system_info` | OS name, Process CPU |
+| [Explicit Windows crash-file configuration](../docs/LOCAL_DUMPS.md) | [local_dumps.c](local_dumps.c) · `hx_os_local_dumps` | No arguments: help only; query is read-only; enable/remove need explicit authorization |
 | [Measure elapsed time around a short wait](../docs/CONTROL.md) | [high_resolution_time.c](high_resolution_time.c) · `hx_os_high_resolution_time` | Requested 20 ms; measured value varies |
 | [Request sleep inhibition for a work interval](../docs/LINUX_DESKTOP.md) | [sleep_inhibit.c](sleep_inhibit.c) · `hx_os_sleep_inhibit` | requested/released or unsupported |
 

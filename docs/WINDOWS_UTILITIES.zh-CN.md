@@ -1,6 +1,6 @@
 # Windows 版本、窗口与 GPU 查询
 
-[English](WINDOWS_UTILITIES.md) · [README](../README.zh-CN.md)
+[English](WINDOWS_UTILITIES.md) · [WER LocalDumps](LOCAL_DUMPS.zh-CN.md) · [README](../README.zh-CN.md)
 
 **需要显示 Windows 版本资源或 GPU 身份时使用。** 构建 `hx_os_windows_info` 后，按[运行说明](../examples/README.zh-CN.md#run)直接运行可枚举 GPU；额外传入带版本资源的 DLL／EXE 路径，可先读取该文件版本。
 
