@@ -65,7 +65,7 @@ build/bin/hx_os_http_file upload http://your-server/upload firmware.bin
 
 ## 3. C++11 和协程调用
 
-在 C++11 中，包含 `<hx/Http.hpp>` 并调用 `hx::Http::create()` 即可获得 `hx::Result<hx::Http>`（零异常设计）。复用该客户端实例直接调用 `downloadFile(url, path)` 或 `uploadFile(url, path)`，随后检查返回状态与 HTTP 状态码即可；`pendingFile()` 与显式 `close()` 遵循与 C 接口完全相同的清理契约。
+在 C++11 中，包含 `<hx/Http.hpp>` 并调用 `hx::Http::create()` 即可获得 `hx::Result<hx::Http>`（零异常设计）。复用该客户端实例直接调用 `downloadFile(url, path)` 或 `uploadFile(url, path)`，随后检查返回状态与 HTTP 状态码即可；`pendingFile()` 与显式 `close()` 遵循与 C 接口完全相同的清理契约。要把客户端交给其他所有者稍后重试，可调用 `release()`。若析构时仍无法删除临时文件，包装类会释放客户端资源并将文件留在磁盘。如需稍后删除，应先复制路径。C 调用方可用 `hx_os_http_close_keep_file()` 选择保留文件。
 
 ### 在协程中发起非阻塞 HTTP 请求
 
@@ -76,7 +76,7 @@ build/bin/hx_os_http_file upload http://your-server/upload firmware.bin
 > [!IMPORTANT]
 > **协程 HTTP 服务的内存预算核算与关闭顺序**
 > - **按最大响应上限预留预算**：为了严格防止多个并发大图/大文件响应同时到达时撑爆内存，每个被接纳的请求都会**按其配置的 `max_body_bytes` 上限预先扣除服务预算**，而不是只按当前已收到的字节数计账！由于单个请求的默认响应上限为 `16 MiB`（外加请求体与响应头开销），默认的 `64 MiB` 服务预算同时最多接纳 3 个默认上限的并发请求。如果你在协程里发送的是小型 JSON 请求，建议将 `options.max_body_bytes` 显式调小（例如设为 `64 KiB`），或者在创建服务时调大总预算。
-> - **取消与关闭**：在协程 HTTP 中请使用协程自身的取消机制（传入的 HTTP `options.cancel` 必须保持为 `NULL`）。退出时，先在普通所有者线程上调用 `hx_os_coro_http_close_until()` 关闭 HTTP 服务（若超时则保留句柄重试），成功后再关闭协程运行时。
+> - **取消与关闭**：在协程 HTTP 中请使用协程自身的取消机制（传入的 HTTP `options.cancel` 必须保持为 `NULL`）。退出时，先在普通所有者线程上调用 `hx_os_coro_http_close_until()` 关闭 HTTP 服务（若超时则保留句柄重试），成功后再关闭协程运行时。已复制的固定正文可按普通 HTTP 请求的方法和正文重发规则跟随重定向。
 
 ## 4. 连 DNS 无响应也需要取消时
 

@@ -109,6 +109,8 @@ The matching engine is implemented in first-party C99 using a bounded backtracki
 | Inline and scoped flags | `(?i)`, `(?im-s:...)`, `(?x)`, `(?U)`, `(?n)` |
 | Unicode general categories, grapheme clusters, and newlines | `\p{L}`, `\p{Nd}`, `\P{Lu}`, `\X`; newline sequence `\R` |
 
+Possessive quantifiers remain greedy under `(?U)`. Relative references require a nonzero distance.
+
 > [!NOTE]
 > **UTF-8, Case Folding, and Dialect Rules:**
 > - **Byte offsets & strict UTF-8**: Subject strings and patterns must be valid UTF-8 (length-counted embedded `NUL` bytes are allowed), and all reported offsets and lengths are in **bytes**. The default newline is LF (`\n`). Shorthands `\d`, `\w`, and `\s` match ASCII ranges by default and switch to Unicode properties when `UCP` is enabled. Case-insensitive matching (`CASELESS`), `UCP`, `\p{...}`, and `\X` use the configured `utf8proc` provider. Matching never normalizes text implicitly; call [Unicode normalization](UNICODE.md) first when canonical equivalence is required.
@@ -152,6 +154,6 @@ When an error occurs, `hx_os_error_message(&error)` provides an English diagnost
 ## 5. Replace and split contracts
 
 - **Replacement templates (`replace`)**: Supports numeric references (`$0`, `$1`), braced group names or indices (`${name}`, `${1}`), and `$$` for a literal dollar sign. Unmatched capture groups expand to an empty string. The replacement is assembled using `out`'s allocator and committed only on complete success, so the subject and replacement template may safely borrow from `out` during the call.
-- **Global empty matches**: During global search or replacement, an empty match (`length == 0`) advances by one Unicode code point before continuing, preventing infinite loops.
+- **Global empty matches**: Replacement and splitting advance one Unicode code point when a match consumed no input. A pattern such as `a\K` consumes the `a` and reports an empty span after it. Replacing every match in `aa` with `X` yields `aXaX`.
 - **Splitting (`split`)**: Preserves empty slices between adjacent delimiters and excludes delimiter capture groups from the delivered slices. If splitting stops early due to budget exhaustion or a non-`HX_OS_OK` callback return, it still reports the number of slices delivered prior to stopping. Split callbacks must not destroy the regex object, mutate the subject text, throw C++ exceptions, or `longjmp`.
 - **Module configuration**: `HX_OS_ENABLE_REGEX` can be disabled independently in CMake. Basic UTF-8 literal and ASCII-class matching requires no external regex library, whereas Unicode properties, grapheme clusters, and case folding require `HX_OS_ENABLE_UNICODE`. See [platform support](PLATFORMS.md) for target boundaries.

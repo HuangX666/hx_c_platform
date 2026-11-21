@@ -121,7 +121,7 @@ hx::coro::Routine<int> answer()
 auto task = runtime.go(answer());
 ```
 
-[The complete C++20 program](../examples/coroutine20.cpp) prints `Answer: 42`. `Routine<>` represents a `void` coroutine and finishes with `co_return hx::Result<void>();`.
+[The complete C++20 program](../examples/coroutine20.cpp) prints `Answer: 42`. `Routine<>` represents a `void` coroutine and finishes with `co_return hx::Result<void>();`. Write an explicit result on every exit path, including success. A bare `co_return` requires a different promise, and falling off the end has undefined behavior.
 - **Frame allocation**: Compiler coroutine frames allocate through the default C allocator (`runtime.go()` returns `HX_OS_NO_MEMORY` if frame allocation fails), while scheduler structures and result slots use the runtime's `context`.
 - **Prefer named coroutine functions with value arguments**: Always invoke `runtime.go(namedFunction(args...))` and pass inputs by value. Avoid temporary capturing coroutine lambdas, because the temporary closure object may be destroyed at the first suspension point while the compiler frame still references `this`.
 

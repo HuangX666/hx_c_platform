@@ -36,6 +36,8 @@ hx::Result<hx::String> load_configuration(const char *path) noexcept
 
 [Variant 便利层](VARIANT.zh-CN.md#cpp) 遵循完全一致的规则：`set`、`emplace`、`visit` 返回 `Result<void>`，`clone` 返回 `Result<Variant>`，标量 `get` 返回值副本，自定义类型 `get` 返回受检查的借用引用；字符串拥有独立字节并通过 `StringView` 读取。
 
+构造 `hx::Failure(HX_OS_OK)` 会得到 `HX_OS_INVALID`，避免将失败对象转换为成功结果。
+
 ## 部分完成与超时
 
 在流式 I/O、批量处理或带截止时间的等待中，操作可能在完成一部分工作后遇到错误或超时。此时 **`ok()` 为 `false`，但 `hasValue()` 仍可能为 `true`**：

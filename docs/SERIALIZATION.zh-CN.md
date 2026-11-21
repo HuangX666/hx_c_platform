@@ -222,7 +222,7 @@ if (!yaml)
 
 - **严格类型匹配 vs. 标量文本转换**：在解码 JSON、YAML 和 TOML 时，解码器严格核对节点的真实类型——字符串 `"8080"` 不会被当成整数 `8080`，布尔 `true` 不会被当成整数 `1`，`null` 也不会被当成 `0`。而在解码本身只有文本标量的 XML、INI、ENV 和 properties 时，解码器则会严格按照 Schema 声明的字段类型解析文本。
 - **常见错误码**：
-  - `HX_OS_NOT_FOUND`：缺少必需字段（未标记为 `OPTIONAL`）。
+  - `HX_OS_NOT_FOUND`：缺少必需字段（未标记为 `OPTIONAL`）。编码时省略空指针表示的可选 `NODE` 字段。指向实际 JSON null 节点的指针仍编码为显式 `null`。
   - `HX_OS_TYPE_MISMATCH`：节点类型与 Schema 字段类型不兼容。
   - `HX_OS_RANGE`：整数缩窄到 8/16/32 位时发生溢出，或定长数组 `FIXED` 长度不匹配。
   - `HX_OS_EXISTS`：XML 中对应标量或子结构体字段的同名元素重复出现（XML 数组则规范地使用一个字段容器元素包裹多个 `<item>` 子元素）。

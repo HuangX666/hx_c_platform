@@ -173,7 +173,7 @@ printf '0123456789' > demo.txt
 | [在内存中压缩 JSON 字节流并解压还原](../docs/UTILITY_EXTENSIONS.zh-CN.md) | [compress_memory.c](compress_memory.c) · `hx_os_compress_memory` | 打印压缩前后字节数及还原后的 JSON |
 | [打包、列出或解包文件与目录归档](../docs/ARCHIVE.zh-CN.md) | [archive_files.c](archive_files.c) · `hx_os_archive_files` | 打印归档条目清单及处理文件数 |
 | [解析 URL 并安全编码查询参数（Query）](../docs/UTILITY_EXTENSIONS.zh-CN.md) | [url_query.c](url_query.c) · `hx_os_url_query` | 打印百分号编码后的完整 URL 与解码参数 |
-| [向 HTTP/HTTPS 服务端发送 JSON 请求](../docs/UTILITY_EXTENSIONS.zh-CN.md) | [http_json.c](http_json.c) · `hx_os_http_json` | 打印 HTTP 状态码及响应正文 |
+| [用 GET 获取 HTTP/HTTPS 响应](../docs/UTILITY_EXTENSIONS.zh-CN.md) | [http_json.c](http_json.c) · `hx_os_http_json` | 打印 HTTP 状态码及响应正文 |
 | [SQLite 持久化消息入队、消费与 ACK 确认](../docs/PERSISTENT_QUEUE.zh-CN.md) | [persistent_queue.c](persistent_queue.c) · `hx_os_persistent_queue` | 输出 3 行 `Handle recognition-...` 处理结果 |
 | [通过串口发送一行 JSON 指令并读取设备回复](../docs/UTILITY_EXTENSIONS.zh-CN.md) | [serial_message.c](serial_message.c) · `hx_os_serial_message` | 打印设备响应（无串口设备时返回错误或超时） |
 | [父子进程通过命名共享内存交接 JSON 数据](../docs/UTILITY_EXTENSIONS.zh-CN.md) | [shared_memory.c](shared_memory.c) · `hx_os_shared_memory` | `Child received: ...` |
@@ -210,7 +210,7 @@ python3 examples/run_tcp_business.py --bin-dir build/bin
 > - 如果你希望由库自动管理设备 ID、请求序号、连接会话与有界消息队列，请使用 **IPC 模块（`HXIP v1` 协议）**。
 > - 如果你需要对接现有的第三方 TCP、UDP、KCP 或 TLS 协议，请直接参考对应的独立业务示例（把对应的 `.c` 源码和同目录配套协议头文件一起复制到你的工程中）：
 >
-> | 示例名称 | 线山报文格式（Wire Format） |
+> | 示例名称 | 报文格式（Wire Format） |
 > | --- | --- |
 > | **IPC 设备控制** | `HXIP v1` 协议帧，载荷为 UTF-8 JSON（详见 [IPC 协议说明](../docs/IPC.zh-CN.md)） |
 > | **TCP 订单** | 2 字节大端序正文字节长度 + UTF-8 JSON |

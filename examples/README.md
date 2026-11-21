@@ -170,7 +170,7 @@ Pass `demo.txt` to the file examples. For instance, running `hx_os_positioned_re
 | [Compress bytes in memory and restore the original JSON](../docs/UTILITY_EXTENSIONS.md) | [compress_memory.c](compress_memory.c) · `hx_os_compress_memory` | Compressed/decompressed sizes and JSON |
 | [Pack, list, or extract files and directories](../docs/ARCHIVE.md) | [archive_files.c](archive_files.c) · `hx_os_archive_files` | Archive entry list and processed count |
 | [Parse URLs and percent-encode query parameters](../docs/UTILITY_EXTENSIONS.md) | [url_query.c](url_query.c) · `hx_os_url_query` | Encoded URL and decoded parameter |
-| [POST JSON to an HTTP/HTTPS endpoint](../docs/UTILITY_EXTENSIONS.md) | [http_json.c](http_json.c) · `hx_os_http_json` | HTTP status code and response body |
+| [GET an HTTP/HTTPS response](../docs/UTILITY_EXTENSIONS.md) | [http_json.c](http_json.c) · `hx_os_http_json` | HTTP status code and response body |
 | [Enqueue, consume, and ACK persistent SQLite messages](../docs/PERSISTENT_QUEUE.md) | [persistent_queue.c](persistent_queue.c) · `hx_os_persistent_queue` | 3 `Handle recognition-...` lines |
 | [Send a JSON line over a serial port and read a reply](../docs/UTILITY_EXTENSIONS.md) | [serial_message.c](serial_message.c) · `hx_os_serial_message` | Device reply (or timeout/error if no port attached) |
 | [Exchange JSON between parent and child via shared memory](../docs/UTILITY_EXTENSIONS.md) | [shared_memory.c](shared_memory.c) · `hx_os_shared_memory` | `Child received: ...` |

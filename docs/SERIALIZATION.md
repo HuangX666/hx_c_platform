@@ -220,7 +220,7 @@ if (!yaml)
 
 - **Strict typed formats vs. string-scalar formats**: When decoding JSON, YAML, or TOML, the decoder checks actual node kinds—`"8080"` is rejected for an integer field, `true` is rejected for `1`, and `null` is never coerced to `0`. When decoding XML, INI, ENV, or properties, scalar strings are parsed according to the field's declared type in the schema.
 - **Status codes**:
-  - `HX_OS_NOT_FOUND`: A required (non-`OPTIONAL`) field is missing.
+  - `HX_OS_NOT_FOUND`: A required (non-`OPTIONAL`) field is missing. An absent optional `NODE` pointer is omitted on encode. A pointer to a live JSON null node encodes as an explicit `null`.
   - `HX_OS_TYPE_MISMATCH`: The input node type is incompatible with the schema field type.
   - `HX_OS_RANGE`: An integer value overflows a narrower 8/16/32-bit target field, or an inline `FIXED` array length does not match.
   - `HX_OS_EXISTS`: Duplicate XML elements appear for a scalar or child-struct field (XML arrays use a single field container element wrapping repeated `<item>` children).

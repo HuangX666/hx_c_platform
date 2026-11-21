@@ -121,7 +121,7 @@ hx::coro::Routine<int> answer()
 auto task = runtime.go(answer());
 ```
 
-[完整 C++20 程序](../examples/coroutine20.cpp) 同样输出 `Answer: 42`。无返回值的协程使用 `Routine<>`，并通过 `co_return hx::Result<void>();` 正常结束。
+[完整 C++20 程序](../examples/coroutine20.cpp) 同样输出 `Answer: 42`。无返回值的协程使用 `Routine<>`，并通过 `co_return hx::Result<void>();` 正常结束。每条退出路径都应显式返回结果，包括成功路径。裸 `co_return` 要求不同的 promise，自然执行到函数末尾属于未定义行为。
 - **内存分配**：调用协程函数时，编译器生成的协程帧通过默认 C 分配器分配（若分配失败，`runtime.go()` 返回 `HX_OS_NO_MEMORY`）；调度器对象与任务结果槽位则使用运行时绑定的 `context`。
 - **避免悬空捕获**：编写 C++20 协程时，**优先使用具名协程函数并按值传参**（`runtime.go(answer())`）。不要使用带捕获的临时协程 lambda，因为临时闭包对象在 `co_await` 挂起后可能已经析构，导致协程帧内部访问悬空指针。
 

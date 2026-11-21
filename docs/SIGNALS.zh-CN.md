@@ -183,6 +183,6 @@ if (!notified)
 ## 8. 用可增长参数调用命名过程
 
 命名过程（Procedure）用于“一对一调用并返回结果”的场景。使用 `hx_os_proc_add_params()` 注册过程，再通过 `hx_os_proc_call_params(handler, name, input, &result, &error)` 发起调用：
-- **私有副本与全有或全无交付**：库会先使用处理器的 `context` 将 `input`（传 `NULL` 则创建空参数包）复制出一份私有副本交给过程回调修改。**只有当过程回调返回 `HX_OS_OK` 时**，这份结果才会通过 `result` 交付给调用方（调用方用完后需调用 `hx_os_params_destroy()` 释放）；如果回调返回任何错误，库会自动销毁半成品副本并将 `result` 保持为 `NULL`。
+- **私有副本与全有或全无交付**：库会先使用处理器的 `context` 将 `input`（传 `NULL` 则创建空参数包）复制出一份私有副本交给过程回调修改。**只有当过程回调返回 `HX_OS_OK` 时**，这份结果才会通过 `result` 交付给调用方（调用方用完后需调用 `hx_os_params_destroy()` 释放）；如果回调返回任何错误，库会自动销毁半成品副本并将 `result` 保持为 `NULL`。克隆时要独占源参数包，并发调用可各自使用一个输入包。`SignalHandler` 和 `ProcedureHandler` 的无参 `create()` 沿用构造时的 `context`，显式 `create(nullptr)` 选用默认上下文。
 - **与可写信号的核心区别**：可写信号允许多个订阅者逐步原地修改共享参数包（中途报错仍保留已生效的修改）；而命名过程只绑定单一回调，且仅在成功时发布独立的结果副本。
 - **名称空间与类型检查**：固定参数过程与可增长参数过程共享同一个名称空间；若用不匹配的调用入口调用同名过程，会直接返回 `HX_OS_TYPE_MISMATCH` 而不会启动回调。C++11 对应接口为 `ProcedureHandler::addParams(name, callback)` 与 `callParams(name, input)`（返回 `Result<Parameters>`，详见[参数包说明](PARAMETERS.zh-CN.md)）。

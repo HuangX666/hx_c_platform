@@ -104,7 +104,7 @@ hx::Result<uint32_t> plugin_abi(const char *path) noexcept
   - 获取或切换当前工作目录（`cwd`）会影响整个进程，多线程程序须自行协调相对路径访问。查询绝对路径要求目标文件存在并会解析符号链接。
   - `hx_os_path_glob`（需同时启用 `HX_OS_ENABLE_CONTAINERS` 与 `HX_OS_ENABLE_FILE_UTILS`）返回持有 `hx_string` 元素的序列容器（用 `hx_os_sequence_destroy` 释放）。支持区分大小写的 UTF-8 `*` 和 `?`（单码点匹配），前导 `.` 文件需显式匹配 `.`，不支持 `[...]` 或 `**` 跨层级展开。
 - **目录枚举与递归删除**：
-  - 目录遍历与递归删除默认限制最大深度 `64`（可调至 `256`）、最多访问 `1,000,000` 个目录项、最多 `65,536` 个匹配，容器与文本预算各 `16 MiB`。递归删除严格**不跟随符号链接**（POSIX 使用目录描述符相对 `openat` 加 `O_NOFOLLOW`，Windows 直接打开重解析点本身并保持目录句柄防止并发改名）。
+  - 目录遍历与递归删除默认限制最大深度 `64`（可调至 `256`）、最多访问 `1,000,000` 个目录项、最多 `65,536` 个匹配，容器与文本预算各 `16 MiB`。递归删除严格**不跟随符号链接**（POSIX 使用目录描述符相对 `openat` 加 `O_NOFOLLOW`，Windows 直接打开重解析点本身并保持目录句柄防止并发改名）。Windows 递归删除拒绝盘符相对形式的点和双点末分量。创建临时文件或临时目录时，显式空父路径返回 `INVALID`，选择系统临时目录应传 `NULL`。
 
 ```cpp
 #include <hx/Files.hpp>
@@ -296,7 +296,7 @@ hx_os_status status = hx_os_loop_attach_fd(loop, fd, HX_OS_WAIT_READ,
 `HX_OS_ENABLE_PROCESS` 与 `HX_OS_ENABLE_SYSTEM_UTILS` 默认开启，提供无 Shell 注入风险的子进程启动、标准输出/错误并发捕获以及系统参数/CPU 指令集查询：
 
 - **直接启动子进程（`hx_os_process_spawn` / `hx::Process`）**：
-  - 接收 UTF-8 可执行文件路径、不含 `argv[0]` 的参数数组（`argv[0]` 由库自动补入）、可选完整环境变量表以及标准流重定向。**直接启动目标可执行文件，绝不经过 Shell 解析，也不会沿 `PATH` 搜索裸文件名**。参数表与环境表各限 `4 MiB` / `65,536` 项（传入 `NULL` 环境表表示继承当前进程环境，传入 `{NULL}` 表示空环境；在 Windows 上传入显式环境表时不会自动塞入 `SystemRoot` 或 `PATH`，请按子程序需要显式提供）。
+  - 接收 UTF-8 可执行文件路径、不含 `argv[0]` 的参数数组（`argv[0]` 由库自动补入）、可选完整环境变量表以及标准流重定向。**直接启动目标可执行文件，绝不经过 Shell 解析，也不会沿 `PATH` 搜索裸文件名**。参数表与环境表各限 `4 MiB` / `65,536` 项（传入 `NULL` 会按原顺序继承当前进程环境，包括原有重名项；显式环境表要求变量名唯一，传入 `{NULL}` 表示空环境；在 Windows 上传入显式环境表时不会自动塞入 `SystemRoot` 或 `PATH`，请按子程序需要显式提供）。
   - **启动成功与 POSIX 退出码 `127`**：`spawn` 返回 `HX_OS_OK` 表示子进程已创建，但如 [POSIX `posix_spawn` 规范](https://pubs.opengroup.org/onlinepubs/9799919799/functions/posix_spawn.html)所述，部分 `exec` 前的失败（如 Android Bionic 下文件不存在）可能延后体现为子进程以退出码 `127` 结束，因此请同时检查等待结果。
   - **等待与销毁**：`wait_until` 支持单调截止时间（非零退出码也属于等待成功；POSIX 信号终止单独标记，Windows 先检查进程完成状态再读取退出码，因此真实退出码 `259` 不会被误判为仍在运行）。进程仍在运行时调用 `destroy` 会返回 `HX_OS_BUSY`；`close_until` 则先等待退出再销毁。库绝不强杀子进程、不分离句柄，也不篡改 `SIGCHLD`。
 - **一键运行并捕获子进程输出（`hx_os_process_capture_run` / `hx::ProcessCapture`）**：

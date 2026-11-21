@@ -111,7 +111,7 @@ Unless a header explicitly states otherwise:
 
 ## 4. Memory Pools and Thread Pools
 
-- **Memory Pools**: Grow on demand when `maximum_bytes = 0`. When a finite `maximum_bytes` budget is set, it bounds all pool-managed upstream blocks, headers, and metadata, while `cached_bytes` separately caps idle cached blocks. Destroying a pool while allocations remain outstanding returns `HX_OS_BUSY`. Arenas require caller serialization, and `reset` invalidates all prior arena allocations at once.
+- **Memory Pools**: Grow on demand when `maximum_bytes = 0`. When a finite `maximum_bytes` budget is set, it bounds all pool-managed upstream blocks, headers, and metadata, while `cached_bytes` separately caps idle cached blocks. Destroying a pool while allocations remain outstanding returns `HX_OS_BUSY`. Arenas require caller serialization, and `reset` invalidates all prior arena allocations at once. A zero-length pool reallocation clears the pointer, including when it starts empty. Reported reserved bytes and their peak count successful upstream allocations. In-flight reservations still participate in the budget.
 - **Thread Pools**: Use a fixed worker count and bounded queue capacity (defaults: 2 workers, 256 queued tasks). A rejected submission leaves caller data untouched; an accepted task guarantees its `cleanup` callback runs exactly once on a worker thread (even if the task is cancelled while queued).
 - **Deadlock Detection**: Waiting on a task or shutting down a pool from one of that pool's own worker threads returns `HX_OS_DEADLOCK` immediately.
 

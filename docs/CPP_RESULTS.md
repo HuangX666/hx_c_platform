@@ -36,6 +36,8 @@ hx::Result<hx::String> load_configuration(const char *path) noexcept
 
 The [Variant facade](VARIANT.md#cpp) follows the exact same conventions: `set`, `emplace`, and `visit` return `Result<void>`, `clone` returns `Result<Variant>`, scalar `get` returns a value copy, and custom `get` returns a checked borrowed reference. Strings are stored as owned bytes and read via `StringView`.
 
+Constructing `hx::Failure(HX_OS_OK)` records `HX_OS_INVALID`, including when converted to `Result<void>`.
+
 ## Partial completion and timeout
 
 In streaming I/O, batch updates, or deadline-bounded waits, an operation can fail or time out after making partial progress. In those cases, **`ok()` is `false`, yet `hasValue()` can still be `true`**:

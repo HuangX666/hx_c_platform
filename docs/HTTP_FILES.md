@@ -65,7 +65,7 @@ build/bin/hx_os_http_file upload http://your-server/upload firmware.bin
 
 ## 3. C++11 and coroutine use
 
-Include `<hx/Http.hpp>` and call `hx::Http::create()` to obtain an exception-free `hx::Result<hx::Http>`. Reuse that client across `downloadFile(url, path)` and `uploadFile(url, path)` calls, checking both the `Result` and `response.status_code`. `pendingFile()` and explicit `close()` preserve the exact same cleanup contract as C.
+Include `<hx/Http.hpp>` and call `hx::Http::create()` to obtain an exception-free `hx::Result<hx::Http>`. Reuse that client across `downloadFile(url, path)` and `uploadFile(url, path)` calls, checking both the `Result` and `response.status_code`. `pendingFile()` and explicit `close()` preserve the exact same cleanup contract as C. To transfer a client for later retries, call `release()`. If final deletion fails during destruction, the wrapper releases its client resources and leaves the temporary file on disk. Copy the path first if you need to remove it later. C callers can select that behavior with `hx_os_http_close_keep_file()`.
 
 ### Non-Blocking HTTP in Coroutines
 
@@ -76,7 +76,7 @@ Calling synchronous HTTP APIs directly inside a coroutine would block the underl
 > [!IMPORTANT]
 > **Reservation Accounting and Shutdown Order for `hx_os_coro_http`**
 > - **Up-Front Response Budget Reservation**: Each admitted request reserves its **configured maximum response size (`max_body_bytes`) up front**, not just the bytes received so far. With the default `16 MiB` per-response limit plus input/header overhead, a `64 MiB` service admits at most 3 default-sized requests simultaneously. When issuing small JSON requests from coroutines, lower `options.max_body_bytes` (for example, to `64 KiB`) or raise the service's overall byte budget at creation.
-> - **Cancellation & Shutdown**: Use coroutine cancellation (or bind an external cancel token to the coroutine; `options.cancel` inside the copied HTTP options must be `NULL`). At shutdown, close the HTTP service from a normal owner thread via `hx_os_coro_http_close_until()` (retrying on timeout) before closing the coroutine runtime.
+> - **Cancellation & Shutdown**: Use coroutine cancellation (or bind an external cancel token to the coroutine; `options.cancel` inside the copied HTTP options must be `NULL`). At shutdown, close the HTTP service from a normal owner thread via `hx_os_coro_http_close_until()` (retrying on timeout) before closing the coroutine runtime. Copied request bodies can follow redirects under the ordinary HTTP method and body replay rules.
 
 ## 4. Cancel even when DNS receives no reply
 
