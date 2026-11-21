@@ -2,23 +2,30 @@
 
 [English](PROFILER.md) · [README](../README.zh-CN.md)
 
-需要自动 CPU 采样、非法访问／泄漏检查或堆报告时，查看[可选开发分析](ANALYSIS.zh-CN.md)。它与人工区间计时配合使用，普通构建默认关闭。
+当你想知道业务代码中某个具体步骤（如“读取传感器”“解析一条网络报文”或“渲染一帧画面中的各个子阶段”）究竟耗时多久、波动多大、长尾延迟（P95 / P99）落在哪个范围时，可以使用内置的有界区间计时器（`hx_os_profiler` / `hx::Profiler`）。如果你需要免插桩的全局 CPU 热点采样、内存越界/泄漏检测或堆峰值分析，请结合使用[可选开发分析](ANALYSIS.zh-CN.md)。
 
-**先运行一个完整例子。** 要比较采集、解析等业务步骤的耗时分布时，用区间 profiler 记录多次调用，再取快照查看统计。
+你可以直接编译并运行完整示例 [profile_statistics.c](../examples/profile_statistics.c) 来查看统计快照与分位数输出：它创建一个开启了直方图功能的 Profiler，连续记录 12 次 `read_sensor` 区间耗时，抓取一份独立快照，关闭 Profiler 后再从快照中读取均值、标准差以及 P50 / P95 / P99 区间并释放快照。
 
-打开 [profile_statistics.c](../examples/profile_statistics.c)。创建并开启直方图 → 为 read_sensor 记录 12 次区间 → 创建快照 → 关闭 profiler → 从独立快照读取均值和分位数 → release。
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 `HX_OS_BUILD_EXAMPLES=ON` 并构建 `hx_os_profile_statistics`（无需命令行参数或外部文件）：
 
-按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_profile_statistics`。此例无命令行参数、无需输入文件。
+```sh
+cmake --build build --config Release --target hx_os_profile_statistics
 
-**会得到什么：**输出 `read_sensor: 12 samples`、均值、标准差以及 P50/P95/P99 的区间。实际时间随系统调度变化；把示例 sleep 换成要测量的代码。
+# Linux / macOS：
+./build/bin/hx_os_profile_statistics
 
-下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+# Windows PowerShell（Visual Studio 生成器）：
+.\build\bin\Release\hx_os_profile_statistics.exe
+```
+
+运行后会看到 `read_sensor: 12 samples` 以及均值、标准差和 P50 / P95 / P99 耗时区间输出（具体毫秒数随机器调度而定）。在实际工程中，只需把示例里的 `sleep` 替换为你真正要测量的代码即可；也可参考[最小工程配置](USAGE.zh-CN.md#c-project)将该示例作为工程模板。
 
 ## 1. 它测量什么
 
-你想知道“读取传感器花了多久”“一帧里哪个子操作最耗时”，就可以使用 Profiler。操作前调用 `start_root`，结束后调用 `leave`；进入子操作时调用 `reach`。每次成功进入都要在同一线程或本库协程中配对一次 leave。
-
-Profiler 使用单调时钟，单位为纳秒，睡眠、等待和调度延迟都会计入。这不是 CPU 使用率。不同线程中，相同父路径下的相同名称会合并统计；多个线程的操作相互重叠，总耗时可能超过进程实际经过的时间。
+Profiler 通过显式的进入/退出标记来构建层级式的操作耗时树：
+- 在顶层操作开始前调用 `hx_os_profiler_start_root`，结束后调用 `hx_os_profiler_leave`。
+- 在顶层操作内部进入子步骤时调用 `hx_os_profiler_reach`，子步骤结束时同样调用 `hx_os_profiler_leave`。
+- 每次成功进入区间后，都必须在**同一个线程（或同一个本库有栈协程）**上配对调用一次 `leave`。
 
 ```mermaid
 flowchart LR
@@ -30,21 +37,15 @@ flowchart LR
     E --> G[关闭 Profiler 后仍可读快照]
 ```
 
-frame 的“包含耗时”包含 read_sensor；“独占耗时”会减掉已完成的子操作耗时。未结束或已中止的区间不产生耗时样本。`last_*` 指最近完成的那次操作。重置线程会中止未结束区间、释放该线程的计时栈，不会清空已有统计。
+理解以下几个核心概念有助于正确解读报告数据：
+- **单调墙钟耗时（而非 CPU 占用率）**：Profiler 使用纳秒级单调时钟（Monotonic Clock）记录从进入到退出的实际经过时间，期间的线程睡眠、锁等待和操作系统调度延迟都会计入其中。
+- **包含耗时（Inclusive） vs. 独占耗时（Exclusive）**：如上图所示，父区间 `frame` 的**包含耗时**涵盖了其内部 `read_sensor` 的时间；而 `frame` 的**独占耗时**则会自动扣掉所有已完成子区间（`read_sensor`）的耗时，帮助你一眼看出时间究竟花在父函数自身逻辑还是子函数调用上。
+- **跨线程同路径合并**：不同线程中具有相同父路径和相同名称的区间会自动汇总到同一条统计记录中（因此当多个线程并发执行同一路径时，累计总耗时可能超过进程实际经过的墙钟时间）。
+- **中止区间不污染样本**：尚未结束或因调用 `hx_os_profiler_restart_thread` 而中途放弃（Aborted）的区间只增加 `aborted` 计数，不会产生虚假的耗时样本。`last_*` 字段始终记录最近一次正常完成的样本耗时。
 
-## 2. 运行完整 C 示例
+## 2. 运行完整 C 示例与选择入口
 
-[profile_statistics.c](../examples/profile_statistics.c) 模拟读取传感器十二次，关闭 Profiler 后，从保留的快照打印结果。实际使用时，把睡眠换成你要测量的操作。正常构建项目也会构建这个程序：
-
-```sh
-cmake --build build --config Release --target hx_os_profile_statistics
-# Linux / macOS：
-./build/bin/hx_os_profile_statistics
-# Windows，使用 Visual Studio 构建时：
-./build/bin/Release/hx_os_profile_statistics.exe
-```
-
-输出形式如下，数值会随机器和调度情况变化：
+在 [profile_statistics.c](../examples/profile_statistics.c) 中，输出形如：
 
 ```text
 read_sensor: 12 samples, mean ... ms, deviation ... ms
@@ -53,39 +54,43 @@ P95: [..., ...] ms (approximate interval)
 P99: [..., ...] ms (approximate interval)
 ```
 
-`hx_os_profiler_create()` 默认提供基础统计。需要包含耗时的分位数时，改用 `hx_os_profiler_create_with_features()`，传入 `HX_OS_PROFILER_HISTOGRAM_INCLUSIVE`。还需要独占耗时的分位数时，再加上 `HX_OS_PROFILER_HISTOGRAM_EXCLUSIVE`。这些选项创建后不变，也不会启动后台线程。
+默认入口 `hx_os_profiler_create()` 仅开启基础汇总统计（次数、累计值、极值、均值和标准差）。如果需要查询分位数（P50 / P95 / P99），请改用 `hx_os_profiler_create_with_features()`：
+- 传入 `HX_OS_PROFILER_HISTOGRAM_INCLUSIVE` 启用**包含耗时**直方图。
+- 加上 `HX_OS_PROFILER_HISTOGRAM_EXCLUSIVE` 同时启用**独占耗时**直方图。
 
-常见的报告操作如下：
+直方图特性在创建 Profiler 时固定，运行期间不会动态改变，也不会启动任何后台线程。常用的快照与报告入口对照如下：
 
-| 操作 | C 入口 | C++11 入口 |
+| 操作 | C99 入口 | C++11 入口 |
 | --- | --- | --- |
-| 获取所有路径的快照 | `hx_os_profiler_snapshot_create` | `profiler.snapshot()` |
-| 遍历统计记录 | `snapshot_count` 和 `snapshot_at` | 对 `ProfileSnapshot` 使用范围 for |
-| 查询包含耗时的 P95 | `snapshot_percentile(snapshot, id, 95, ...)` | `snapshot.percentile(id, 95)` |
-| 查询独占耗时的 P95 | `snapshot_quantile(snapshot, id, 1, 95, 100, ...)` | `snapshot.percentile(id, 95, true)` |
-| 释放快照 | `hx_os_profiler_snapshot_release` | 自动 RAII 释放 |
-| 使用原有文本报告 | `hx_os_profiler_dump_string` | `profiler.dump()` |
+| 捕获当前所有路径的结构化快照 | `hx_os_profiler_snapshot_create` | `profiler.snapshot()` |
+| 获取记录条数并按索引访问条目 | `hx_os_profiler_snapshot_count` / `hx_os_profiler_snapshot_at` | 对 `hx::ProfileSnapshot` 使用范围 `for` 循环 |
+| 查询包含耗时的整数百分位数（如 P95） | `hx_os_profiler_snapshot_percentile(snapshot, id, 95, ...)` | `snapshot.percentile(id, 95)` |
+| 查询独占耗时的任意分位数（或 P95） | `hx_os_profiler_snapshot_quantile(snapshot, id, 1, 95, 100, ...)` | `snapshot.percentile(id, 95, true)` |
+| 释放结构化快照 | `hx_os_profiler_snapshot_release` | 离开作用域自动 RAII 释放 |
+| 导出制表符分隔（TSV）文本报告 | `hx_os_profiler_dump_string` | `profiler.dump()` |
 
-表中的快照查询函数省略了公共前缀，实际都以 `hx_os_profiler_` 开头。分位数查询接收 `entry.identifier`，编号从 1 开始；`snapshot_at` 接收从 0 开始的数组下标。父编号只在原 Profiler 内有意义，0 表示根节点。
+> [!NOTE]
+> **数组下标 `index` 与路径标识符 `identifier` 的区别**
+> `hx_os_profiler_snapshot_at` 接收的是从 `0` 开始的连续数组下标；而分位数查询函数 `hx_os_profiler_snapshot_percentile` / `quantile` 接收的是条目结构体中的 `entry.identifier`（从 `1` 开始编号；`entry.parent == 0` 表示根路径）。
 
 ## 3. 直接读取统计数据
 
-快照直接提供只读的 `hx_os_profiler_entry`，无需再解析 TSV 文本。
+结构化快照直接暴露只读的 `hx_os_profiler_entry` 结构体，业务代码无需自行解析 TSV 文本即可读取各项指标：
 
-| 字段 | 含义 |
+| 结构体字段 | 含义说明 |
 | --- | --- |
-| `name`、`name_bytes`、`identifier`、`parent`、`depth` | 已复制的 UTF-8 名称及区间树中的位置 |
-| `completed`、`aborted` | 完成和中止次数 |
-| `inclusive_ns`、`exclusive_ns` | 包含、独占耗时的累计值 |
-| `minimum_ns`、`maximum_ns`、`last_inclusive_ns` | 包含耗时的最小值、最大值、最近完成值 |
-| `minimum_exclusive_ns`、`maximum_exclusive_ns`、`last_exclusive_ns` | 对应的独占耗时数据 |
-| `mean_inclusive_ns`、`deviation_inclusive_ns` | 包含耗时的平均值、总体标准差 |
-| `mean_exclusive_ns`、`deviation_exclusive_ns` | 对应的独占耗时统计 |
-| `flags` | 1：计数发生饱和；2：时钟错误 |
+| `name`、`name_bytes`、`identifier`、`parent`、`depth` | 已复制的 UTF-8 区间名称，以及该节点在调用树中的编号、父节点编号与层级深度 |
+| `completed`、`aborted` | 正常完成的次数与中途放弃（Aborted）的次数 |
+| `inclusive_ns`、`exclusive_ns` | 包含耗时与独占耗时的累计总纳秒数 |
+| `minimum_ns`、`maximum_ns`、`last_inclusive_ns` | 包含耗时的最小值、最大值与最近一次完成值（纳秒） |
+| `minimum_exclusive_ns`、`maximum_exclusive_ns`、`last_exclusive_ns` | 独占耗时的最小值、最大值与最近一次完成值（纳秒） |
+| `mean_inclusive_ns`、`deviation_inclusive_ns` | 包含耗时的算术平均值与总体标准差（`double` 近似值） |
+| `mean_exclusive_ns`、`deviation_exclusive_ns` | 独占耗时的算术平均值与总体标准差（`double` 近似值） |
+| `flags` | 状态标志位：`1` 表示累加计数器发生 `UINT64_MAX` 饱和；`2` 表示遇到过时钟读取错误 |
 
-平均值和标准差用 double 近似表示。没有样本时，统计值为零。不保留每次耗时样本，快照提供汇总统计。带错误标记的数据可以帮助诊断，不应当作精确测量值。
+当某条路径尚无已完成样本（`completed == 0`）时，所有耗时统计值均为 `0`。如果 `flags` 非零，说明采样期间发生过计数饱和或底层时钟异常，应将该条记录视为诊断线索而非精确测量值。
 
-例如，你已经成功初始化 `hx::Profiler profiler` 并记录了操作后，可以使用下面的 C++11 报告代码读取平均值和 P95。需包含 `<hx/Profiler.hpp>` 与 `<cstdio>`：
+在 C++11 中，只需包含 `<hx/Profiler.hpp>` 与 `<cstdio>`，即可在录制完成后抓取快照并遍历打印均值与 P95 区间：
 
 ```cpp
 auto report = profiler.snapshot();
@@ -112,43 +117,32 @@ else {
 }
 ```
 
-Profiler 的宿主句柄仍需要显式关闭，先让参与线程退出或释放其计时缓存。上面的报告代码不会关闭它。`ProfileSnapshot` 自己拥有数据；复制或移动该对象不会深复制全部记录，复制只是保留同一份只读快照。正常遍历不分配内存。
+`hx::ProfileSnapshot` 采用引用计数共享底层只读快照数据，因此复制或移动 `ProfileSnapshot` 不会深拷贝整棵记录树，范围 `for` 遍历也零动态内存分配。快照一经创建即与原 `profiler` 解耦——哪怕随后关闭并销毁了 `profiler`，手里保留的 `ProfileSnapshot` 依然可以安全读取。
 
 ## 4. 怎样理解 P50、P95、P99
 
-分位数对应已完成耗时按大小排序后的某个位置。例如 P95 取第 `ceil(样本数 × 95 / 100)` 个样本。只有十二个样本时，P95 和 P99 都落到最大值，这符合定义，不能据此认为已经精确测出了长尾表现。
+- **次序统计量定义**：百分位数对应将所有已完成样本按耗时从小到大排序后的指定位置。例如 P95 对应排序后的第 `ceil(样本数 × 95 / 100)` 个样本（当只有 12 个样本时，`ceil(12 × 0.95) = 12`，因此 P95 和 P99 都会落到第 12 个样本即最大值上——这是小样本下的正常数学定义，若要观察稳定的长尾分布，请采集足够多的样本）。
+- **252 桶有界对数直方图**：为了在不保存海量原始样本的前提下高效计算分位数，每个启用的耗时通道固定使用 `252` 个对数分桶（Logarithmic Bins）：`0～3 ns` 各自占一个精确桶，此后每跨越一个 2 的幂次范围细分为 4 个等宽子桶（例如 `1,024～1,279 ns` 共用一个桶），直至安全覆盖 `UINT64_MAX`。除 `0～3 ns` 精确小桶外，任意桶的宽度最多不超过其下界的 `25%`（四分之一）。
+- **返回区间 `{lower_ns, upper_ns, samples}`**：分位数查询返回目标排序样本所在的桶边界 `[lower_ns, upper_ns]`（并自动用实际观察到的精确最小值 `minimum_ns` 和最大值 `maximum_ns` 裁剪收紧边界；查询 `P0` 和 `P100` 会直接返回精确的已观察最小/最大值）。注意：这是一个确定性的桶边界区间，而非统计学上的置信区间或线性插值估算值。如果需要查询 `P99.9` 等小数分位数，可调用 `hx_os_profiler_snapshot_quantile` 并传入分子 `999`、分母 `1000`。
 
-每个启用的耗时通道使用 252 个固定统计桶。0～3 ns 分别有精确桶，之后每个二次幂范围分成四桶。例如，1,024～1,279 ns 共用一个桶。最大桶能够安全覆盖 `UINT64_MAX`。除精确小桶外，桶宽最多为其下界的四分之一。
+分位数查询的返回状态码如下表所示（查询失败时保持输出结构体不变，绝不会用平均值或极值伪造分位数）：
 
-查询结果为 `{lower_ns, upper_ns, samples}`：所选排序位置的耗时位于这个区间内。它不是置信区间，也不是插值得到的精确耗时。结果还会限制在实际观察到的最小值和最大值之间。P0／P100 直接返回精确的已观察极值。需要 P99.9 等值时，可用 `snapshot_quantile` 传入分数 999/1000。
-
-| 情况 | 返回值 |
+| 条件 | 返回状态码 |
 | --- | --- |
-| 没有启用所查询的直方图 | `HX_OS_NOT_SUPPORTED` |
-| 该路径尚无已完成样本 | `HX_OS_NOT_FOUND` |
-| 编号无效、分子大于分母，或计数发生饱和 | `HX_OS_RANGE` |
-| 必需参数为空、分母为零，或 exclusive 标志无效 | `HX_OS_INVALID` |
-
-查询失败不改变输出结构。没有启用直方图时，不会拿平均值或极值冒充百分位数。功能创建后不变，样本在 Profiler 的整个生命周期内累计；这里没有滑动时间窗口或逐个原始样本导出功能。
+| 创建 Profiler 时未启用所查询通道的直方图 | `HX_OS_NOT_SUPPORTED` |
+| 该路径尚无任何已完成的样本（`completed == 0`） | `HX_OS_NOT_FOUND` |
+| `identifier` 无效、`numerator > denominator`，或该路径计数已发生饱和 | `HX_OS_RANGE` |
+| 必传指针参数为 `NULL`、`denominator == 0`，或 `exclusive` 标志非法 | `HX_OS_INVALID` |
 
 ## 5. 内存、并发与关闭
 
-每个启用的直方图，为每条不同的统计路径固定增加 2,016 字节，直方图区前最多另有七字节对齐填充。两个耗时通道共增加 4,032 字节。快照会复制启用的直方图数据。默认最多 1,024 条路径，嵌入式设备可以调低 `max_records`。名称和线程计时栈继续受各自的既有限制约束。
-
-既有 options 布局保持不变。`max_output_bytes` 同时约束每份新增独立快照，包括分配头和对齐预留；原有 TSV 继续按最终文本大小限制。默认预算是 4 MiB；同时启用两种直方图且 options 为空时使用 8 MiB。明确传入 options 时，严格使用调用方给定的预算。快照超预算返回 `HX_OS_LIMIT`，不会偷偷省略路径或直方图。应用还应限制同时保留的快照数量。
-
-预热后，在线程或协程上下文仍保留的情况下，重复记录已有路径不再分配新的 context 内存。首次使用和新增路径可能分配内存。
-
-Profiler 对多线程共享的统计数据提供同步保护，记录操作不是无锁的。分配／释放回调以及上下文清理在统计锁外执行，重入限制仍然适用。退出时先读取结束时间，再等待更新统计的锁，因此这次等锁的时间不会计入刚完成的区间。
-
-路径按父路径和名称内容匹配，动态生成的 UTF-8 名称可以直接传入，不需要保存查找标识。
-
-建议测量“解析一条消息”这样的一段实际操作，不要给每个字符处理或原子加法都单独套一个区间。对于很短的操作，进入和退出区间的成本可能与操作本身相当。并发记录可能增加锁竞争，应结合有代表性的业务负载测量。需要自动查看 CPU 热点时，使用[可选分析流程](ANALYSIS.zh-CN.md)，无需给每个小操作手动标记。
-
-检查返回的 `hx_os_status`，需要原生诊断信息时再传入错误对象。
-
-快照一致地捕获统计和直方图数据。创建开销随路径数和启用桶数增加，因此建议定期采样，不要在每次被测操作后都抓取一次。并发新增路径导致容量不足时最多重试八次，再返回 `HX_OS_BUSY`，可以稍后重试。快照带有单调观察时间戳；创建失败会把输出句柄置空。
-
-默认快照使用与 Profiler 无关的默认分配器，因此原 context 在自己的资源释放后即可关闭。`snapshot_create_with_context` 可以明确指定另一分配器；只要快照还保留，该 context 就会报告 busy。记录指针和名称借用到快照最后一次 release；并发读者需要持有各自引用，并通过正常同步方式发布指针。卸载实现库之前，必须释放所有快照以及 Profiler／TLS 状态。
-
-原有停止和关闭契约继续适用：stop 拒绝新进入，仍允许 leave、释放线程缓存和捕获快照。close 不会强杀线程或丢弃其它线程的活动计时栈。超时／BUSY 保留同一对象供重试，包括其它线程仍在执行分配器回调或释放上下文的情况。调用方需要阻止新调用与最终销毁竞争，也不能同时执行多个最终关闭操作。不安装信号处理器，不捕获原生调用栈。关闭 `HX_OS_ENABLE_PROFILER` 后，创建、捕获和查询明确报告不支持。
+- **直方图与快照内存开销**：
+  - 每启用一个直方图通道，每条不同的记录路径会固定增加 `2,016` 字节（252 个 8 字节桶）及最多 7 字节对齐填充；同时启用包含与独占两个通道则每条路径增加 `4,032` 字节。默认最多支持 `1,024` 条路径（嵌入式环境可通过 `options.max_records` 调小上限）。
+  - `options.max_output_bytes` 同时约束每份独立快照的总内存占用（默认预算为 `4 MiB`；若同时启用两个直方图且传入 `options = NULL`，默认预算会自动升至 `8 MiB`）。一旦快照所需空间超过预算，创建会明确返回 `HX_OS_LIMIT`，绝不会偷偷丢弃部分路径或直方图。
+- **预热后零分配与锁外计时**：
+  - 同一线程或协程在同一路径上完成首次预热后，后续重复进入和退出该路径**不再分配任何 `hx_context` 内存**。
+  - 多线程共享统计表通过内部互斥锁同步。在调用 `leave` 退出区间时，库会**先读取单调时钟结束时间戳，再去获取统计更新锁**，因此等待统计锁的时间不会被错误计入刚刚完成的业务区间耗时中。
+  - **合理选择插桩粒度**：建议对“解析一条完整消息”“执行一次数据库查询”这类毫秒/微秒级业务单元插桩，不要在每个字符循环或原子加法外层套一层 Profiler 区间（极短操作本身的耗时可能还不如读取时钟与进出锁的开销大；若需排查细粒度指令热点，请使用[可选分析流程](ANALYSIS.zh-CN.md)）。
+- **快照分配器与安全关闭顺序**：
+  - 默认情况下，`hx_os_profiler_snapshot_create` 使用内置默认分配器，使快照生命周期与 Profiler 自身的 `hx_context` 解耦；若需指定自定义分配器，可调用 `hx_os_profiler_snapshot_create_with_context`（只要快照尚未释放，该自定义 `context` 就会保持忙碌状态；卸载动态库前必须释放所有快照及 Profiler 状态）。
+  - `hx_os_profiler_stop` 拒绝新的区间进入，但允许在途区间完成 `leave`、调用 `restart_thread` 以及抓取快照。`hx_os_profiler_close` 会等待在途调用和其他线程的 TLS 缓存退役（若当前调用线程自身仍有未调用 `leave` 的打开区间，会立即返回 `HX_OS_DEADLOCK`；若超时或仍有外部线程持有缓存则返回 `HX_OS_TIMEOUT` / `HX_OS_BUSY` 并保留句柄供重试）。当编译期关闭 `HX_OS_ENABLE_PROFILER=OFF` 时，所有入口明确返回 `HX_OS_NOT_SUPPORTED`。

@@ -1,22 +1,18 @@
-# Cryptography: text, files, hashes and signatures
+# Cryptography: Text, Files, Hashes and Signatures
 
-[简体中文](CRYPTO.zh-CN.md) · [README](../README.md) · [Dependency setup](DEPENDENCIES.md)
+[简体中文](CRYPTO.zh-CN.md) · [README](../README.md) · [Dependency Setup](DEPENDENCIES.md)
 
-**Start with a complete program.** Use the text encryption helper when stored text should only be recoverable with the password.
+When your application needs to encrypt sensitive configuration text with a password, encrypt and authenticate large local files without loading them into RAM, compute SHA-256 / SHA-512 digests and HMACs, or sign and verify messages with Ed25519 and RSA-PSS, `hx_os_crypto` provides high-level C99 and exception-free C++11 APIs. Built on a pinned OpenSSL 3.5 dependency stack, it handles random salt and nonce generation, PBKDF2 key derivation, AES-256-GCM authenticated encryption, and atomic file publication so you do not have to wire up low-level `EVP_*` state machines by hand.
 
-Open [encrypt_text.c](../examples/encrypt_text.c). encrypt_text accepts a password and UTF-8 → retain authenticated ciphertext → decrypt_text → use plaintext → destroy strings and clean up thread crypto resources.
-
-Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_encrypt_text`. This program needs no arguments or input files.
-
-**Expected result:** It prints `Encrypted: ...` and `Decrypted: Hello, UTF-8!`. Random salt/nonce change the ciphertext each run. The embedded demo password must be replaced with application secret input.
-
-Short snippets below explain individual calls; use the complete example when running them. An [installed SDK consumer](USAGE.md#installed-project) must also enable the corresponding SDK module.
+Build and run the standalone [encrypt_text.c](../examples/encrypt_text.c) example to see authenticated text encryption in action (enable `HX_OS_BUILD_EXAMPLES=ON` per the [example run instructions](../examples/README.md#run) and build `hx_os_encrypt_text`; no command-line arguments or input files are needed):
+- The program prints a freshly randomized Base64 ciphertext line (`Encrypted: ...`) followed by the verified plaintext (`Decrypted: Hello, UTF-8!`).
+- When linking against an [installed SDK package](USAGE.md#installed-project), keep the corresponding OpenSSL dependency module enabled.
 
 ## 1. Build and deploy
 
-Enable `HX_OS_ENABLE_CRYPTO` (default ON). This adds the pinned OpenSSL 3.5 SDK to the compiled library; application code still includes only the hx headers. The core remains C99, with optional exception-free C++11 wrappers. There are no worker threads started by this module.
+`HX_OS_ENABLE_CRYPTO` is `ON` by default, linking the pinned OpenSSL 3.5 SDK into the library while keeping public headers pure C99 / C++11 with zero background threads started at load time.
 
-First prepare the dependency SDK using [the dependency instructions](DEPENDENCIES.md#4-build-the-native-dependency-stack), then configure the library with an absolute prefix:
+First build the native dependency stack following the [Dependency Guide](DEPENDENCIES.md#4-build-the-native-dependency-stack), then pass the absolute install prefix to `HX_OS_DEPENDENCY_PREFIX`:
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
@@ -26,21 +22,21 @@ cmake --build build --config Release --target hx_os_encrypt_text --parallel 4
 build/bin/hx_os_encrypt_text
 ```
 
-Windows multi-configuration builds place these programs in the corresponding `bin/Release/` directory with an `.exe` suffix.
+(On multi-config Windows generators, the binary is placed at `build/bin/Release/hx_os_encrypt_text.exe`.)
 
-OpenSSL is dynamically linked by default. On Windows the build copies its selected Crypto DLL into the library's `bin/<config>` directory; applications using `add_subdirectory` with another executable directory must also place that DLL beside their executable, or use the installed `bin` directory on PATH. Installation includes the selected Crypto runtime by default (`HX_OS_INSTALL_OPENSSL_RUNTIME=OFF` disables copying when your application owns deployment). Linux installs it next to the core shared library with an origin-relative runtime path. Static core consumers still link OpenSSL dynamically unless explicitly configured otherwise. They need the SDK prefix in their `CMAKE_PREFIX_PATH` when calling `find_package(hx_c_platform CONFIG REQUIRED)`.
+### Dynamic Linking, Static Linking, and Building Without OpenSSL
 
-With TLS enabled, the selected SSL runtime is included alongside Crypto; see the [TLS guide](TLS.md).
-
-To embed OpenSSL statically, build its SDK with `HX_DEPS_OPENSSL_SHARED=OFF` and configure the library with `HX_OS_OPENSSL_STATIC=ON`. Read section 5 before using external threads or unloading a plugin. Keep the license materials of the actual libraries you distribute. Android and Linux ARM SDK commands are in [cross builds](DEPENDENCIES.md#6-cross-build-linux-arm-and-android). See [platform support](PLATFORMS.md) for target requirements.
-
-Android SDKs use `libcrypto-hx.so` and `libssl-hx.so` SONAMEs through a first-party OpenSSL configuration overlay, avoiding system BoringSSL names. The CMake targets and runtime manifest carry the chosen files; do not manually rename a desktop runtime or copy one ABI's library to another. See [Android deployment](ANDROID.md).
-
-Set `HX_OS_ENABLE_CRYPTO=OFF` and `HX_OS_ENABLE_ARCHIVE=OFF` to avoid OpenSSL entirely. ARCHIVE also uses OpenSSL for encrypted ZIP. Headers and functions remain available; `hx_os_crypto_available()` returns 0 and crypto operations return `HX_OS_NOT_SUPPORTED`. Basic strings, containers and file I/O do not need OpenSSL.
+- **Default Dynamic OpenSSL Linking**:
+  - On Windows, the build copies the selected OpenSSL Crypto DLL into `bin/<config>` (if you integrate via `add_subdirectory` with a custom runtime output directory, copy that DLL beside your executable or add the installed `bin` folder to `PATH`).
+  - `cmake --install` installs the Crypto runtime by default (pass `-DHX_OS_INSTALL_OPENSSL_RUNTIME=OFF` if your installer packages runtimes separately). On Linux, the runtime is installed beside the core shared library with an `$ORIGIN`-relative `RPATH`.
+  - Even when the core library is built as a static archive, OpenSSL remains dynamically linked by default; static consumers calling `find_package(hx_c_platform CONFIG REQUIRED)` should include the SDK prefix in `CMAKE_PREFIX_PATH` (enabling TLS also installs the SSL runtime; see the [TLS Guide](TLS.md)).
+- **Static OpenSSL Embedding**: To link OpenSSL statically, build the dependency stack with `-DHX_DEPS_OPENSSL_SHARED=OFF`, configure the main project with `-DHX_OS_OPENSSL_STATIC=ON`, and follow the thread-cleanup rules in Section 5.
+- **Android SONAME Isolation**: Android SDK builds use custom `libcrypto-hx.so` and `libssl-hx.so` SONAMEs so they never collide with Android's system BoringSSL libraries (see [Cross-Building for Linux ARM and Android](DEPENDENCIES.md#6-cross-build-linux-arm-and-android) and [Android Deployment](ANDROID.md)).
+- **Disabling OpenSSL Entirely**: Set both `-DHX_OS_ENABLE_CRYPTO=OFF` and `-DHX_OS_ENABLE_ARCHIVE=OFF` (since encrypted ZIP support in `ARCHIVE` also uses OpenSSL). All symbols remain linkable, `hx_os_crypto_available()` returns `0`, and crypto calls return `HX_OS_NOT_SUPPORTED`.
 
 ## 2. Encrypt and decrypt UTF-8 text
 
-This complete C program encrypts a short message, decrypts it and prints the verified plaintext. The encrypted value is Base64 text, so it can be stored as a JSON string. The password here is only a demonstration: obtain real passwords from your application's input or secret storage.
+The complete C program below encrypts a UTF-8 string with a password, decrypts the resulting Base64 envelope, and prints the verified plaintext (replace the hard-coded demo password with secret input from your application or credential store in production):
 
 ```c
 #include <hx_os.h>
@@ -69,9 +65,7 @@ int main(void)
 }
 ```
 
-Expected output: `Hello`. Ciphertext differs on every encryption because the salt and nonce are random. The runnable [encrypt_text.c](../examples/encrypt_text.c) also prints the ciphertext; run `build/bin/hx_os_encrypt_text` or `build\bin\Release\hx_os_encrypt_text.exe`.
-
-The same operation in C++11 uses `Result<String>`, without exceptions:
+Expected output: `Hello`. In C++11, include `<hx/Crypto.hpp>` to use `hx::Result<hx::String>` without exceptions:
 
 ```cpp
 #include <hx/Crypto.hpp>
@@ -93,11 +87,12 @@ int main()
 }
 ```
 
-The C text output uses the initialized string's allocator and remains unchanged on failure. Input and password use strict UTF-8, without normalization; input spans may include NUL. Base64 is canonical, with no spaces or line breaks. Text input is limited to 16 MiB; passwords contain 1–1024 bytes. A wrong password or modified authenticated data returns `HX_OS_AUTH_FAILED`; malformed framing/encoding gets a separate error. Never interpret a failed result as plaintext.
+- **Encoding & Size Limits**: Plaintext and passwords must be valid UTF-8 (no Unicode normalization is performed, and length-delimited plaintext spans may contain embedded `\0` bytes). Base64 ciphertexts must be canonical without whitespace or line breaks. Text inputs are capped at `16 MiB` and passwords at `1`–`1024` bytes.
+- **Authentication Failures**: Supplying a wrong password or modifying any ciphertext or header byte returns `HX_OS_AUTH_FAILED` (malformed Base64 or truncated headers return distinct framing/encoding errors) while leaving the output string untouched. **Never use the output buffer unless the call returns `HX_OS_OK`.**
 
 ## 3. Encrypt files or arbitrary bytes
 
-For files, these two C calls perform open/read/write/close, authentication and publication:
+For files on disk, `hx_os_crypto_encrypt_file()` and `hx_os_crypto_decrypt_file()` (`hx::Crypto::encryptFile()` and `decryptFile()` in C++11) handle chunked streaming, authentication, and atomic file publication:
 
 ```c
 hx_os_status status =
@@ -107,19 +102,29 @@ if (status == HX_OS_OK)
 		"report.hxc", "restored.pdf", password, &error);
 ```
 
-Here `password` comes from the application, and `error` is an `hx_os_error`. Check `status` before using the output. C++ equivalents are `hx::Crypto::encryptFile` and `decryptFile` returning `Result<void>`. By default an existing destination produces `EXISTS`; it is never silently replaced. The `_with_options` functions accept `HX_OS_CRYPTO_REPLACE`, a raw 32-byte key or a password span, explicit limits and `hx_os_file_save_result`. This result separates successful publication from parent-directory durability.
+- **Chunked Streaming & Atomic Publication**:
+  - Files are processed in `32 KiB` chunks using a `64 KiB` working buffer rather than reading the entire file into memory. The default file size cap is `4 GiB`, configurable up to `64 GiB - 32 bytes` (the AES-GCM single-message ceiling).
+  - By default, an existing destination file causes the call to return `HX_OS_EXISTS` without overwriting. Use the `_with_options` variants with `HX_OS_CRYPTO_REPLACE` to overwrite existing files, supply a raw 32-byte key, adjust size limits, or inspect `hx_os_file_save_result`.
+  - Output is staged in a sibling temporary file in the destination directory, synced, and published only after the GCM authentication tag verifies cleanly—failed authentication never overwrites the target file.
+- **Owner-Only Permissions on Decrypted Staging Files**:
+  - Decryption creates its temporary file with private permissions (mode `0600` verified on POSIX, or a protected owner-only DACL on Windows) so other local non-admin users cannot read staged plaintext. Filesystems that ignore `0600` (such as certain WSL Windows-drive mounts) or lack persistent ACLs fail with `HX_OS_NOT_SUPPORTED` before any plaintext is written.
+- **In-Memory Binary Encryption (`hx_os_crypto_encrypt` / `decrypt`)**:
+  - Pass an `hx_os_bytes_view` input and an `hx_os_crypto_secret` (either a password span or a 32-byte key from `hx_os_crypto_random_key()`) to obtain an owned `hx_os_crypto_bytes *` (default cap `16 MiB`, max `64 MiB`).
+  - Access the bytes via `hx_os_crypto_bytes_data()` and `bytes_size()`, then call `hx_os_crypto_bytes_destroy(&result)`, which securely zeroes the buffer before freeing. Always wipe your own raw key buffers with `hx_os_secure_zero()` when done.
 
-Files use 32 KiB chunks, a 64 KiB working buffer and finite length limits, rather than loading the entire file. Default input limit is 4 GiB; the maximum is 64 GiB minus 32 bytes (the GCM per-message limit). Inputs must remain stable during a call. Same-directory staging is synced before publication. A failed authentication never replaces the destination. POSIX publication can use a hard-link fallback when the filesystem lacks no-replace rename; the completed temporary's extra name is removed afterward.
-
-Decryption stages plaintext with private permissions: POSIX owner-only mode or a protected owner-only Windows DACL. The created file's POSIX mode is checked; mounts that ignore 0600, and Windows filesystems lacking persistent ACLs, return `NOT_SUPPORTED` before writing plaintext. The published file retains these permissions. This protects against other ordinary accounts, not an administrator or another process running as the same user. Cleanup is best-effort after failure/publication; an OS cleanup failure may leave a private temporary. Use an application-controlled destination directory. WSL's native filesystem and its Windows mount are distinct test environments.
-
-For non-text data use `hx_os_crypto_encrypt/decrypt`: inputs are `hx_os_bytes_view`, the secret is `hx_os_crypto_secret`, and the output is an owned `hx_os_crypto_bytes *`. `hx_os_crypto_random_key` produces a 32-byte key. Read the result with `bytes_data/bytes_size`, then call `hx_os_crypto_bytes_destroy(&result)`; destruction wipes owned bytes. No NUL terminator is promised. The binary options default to 16 MiB and allow up to 64 MiB, excluding envelope and bounded temporary copies. Memory limits are per call, not a process-wide budget. Keep keys secret and clear your own key buffers with `hx_os_secure_zero` when finished. Raw-key users must coordinate rotation across all processes/devices and keep each key below 2^32 encryptions; this stateless span API does not maintain a global key counter. See the random-nonce constraint in [NIST SP 800-38D section 8.3](https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-38d.pdf).
+> [!WARNING]
+> **Raw 32-Byte Key Rotation Limit (NIST SP 800-38D)**
+> When encrypting directly with a raw 32-byte key instead of a password-derived PBKDF2 key, each encryption generates a fresh 96-bit random GCM nonce. Per [NIST SP 800-38D Section 8.3](https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-38d.pdf), **you must rotate a raw key before it reaches $2^{32}$ total encryptions across all processes and devices**.
 
 ## 4. Hashes, HMAC and signatures
 
-`hx_os_crypto_sha256(NULL, input, &text, &error)` writes lowercase hexadecimal SHA-256. `hash` also supports SHA-512; `sha256_file/hash_file` use a bounded file buffer. `hmac` accepts a key span and message span. Verify a received hexadecimal tag with `hx_os_crypto_hmac_verify` / `hx::Crypto::verifyHmac`; the validated tag is compared in constant time and a mismatch returns `AUTH_FAILED`. These functions do not change an output string on failure. A plain hash is not authentication; use HMAC with a secret key or a signature to authenticate data.
+- **One-Shot SHA Digests & Constant-Time HMAC Verification**:
+  - `hx_os_crypto_sha256(NULL, input, &text, &error)` writes a lowercase hexadecimal SHA-256 digest (`hx_os_crypto_hash()` also supports SHA-512, and `sha256_file` / `hash_file` hash files on disk in bounded chunks; for chunked streaming inputs, see [Incremental SHA and HMAC](INCREMENTAL_HASH.md)).
+  - `hx_os_crypto_hmac()` computes an HMAC tag, and `hx_os_crypto_hmac_verify()` (`hx::Crypto::verifyHmac()` in C++11) validates a hex tag in **constant time**, returning `HX_OS_AUTH_FAILED` on mismatch.
+- **Digital Signatures (Ed25519 & RSA-PSS)**:
+  - `hx::CryptoKey::generate()` creates an **Ed25519** key pair by default; passing `HX_OS_CRYPTO_RSA_3072` generates a 3072-bit RSA key using **RSA-PSS with SHA-256, MGF1-SHA256, and a 32-byte salt** (imported RSA keys must be 2048–8192 bits; max message size is `16 MiB`).
 
-The following C++ excerpt generates an Ed25519 private key and checks a signature using only the exported public key:
+The C++11 snippet below generates an Ed25519 key pair, exports the public SPKI PEM, and verifies a signature using only the imported public key:
 
 ```cpp
 auto key = hx::CryptoKey::generate();
@@ -141,48 +146,42 @@ if (!verified)
 	return 1;
 ```
 
-Use the same methods in C through `hx_os_crypto_key_*`, `sign` and `verify`. Explicit `HX_OS_CRYPTO_RSA_3072` generates an RSA key: signatures use RSA-PSS with SHA-256, MGF1-SHA256 and a 32-byte salt. Imported RSA keys must be 2048–8192 bits. Ed25519 signs the message directly. Message size is at most 16 MiB, signature size at most 1024 bytes. RSA generation and password derivation can take noticeable CPU time and are synchronous.
-
-Imports accept exactly one unencrypted PKCS#8 private PEM or SPKI public PEM, with surrounding whitespace only, at most 64 KiB. Unsupported algorithms fail; the library never opens a password prompt. Private export is explicitly **unencrypted** PKCS#8 in a wiping `CryptoBytes` owner. To password-protect it, encrypt those bytes with the authenticated envelope before storing them; decrypt before importing. Encrypted PKCS#8 and traditional PKCS#1 PEM are not parsed by this entry point. Public-only keys cannot sign or export private material. Keys retain their engine, and separate calls may share an immutable key while its owner remains alive.
+(In C, use `hx_os_crypto_key_*`, `hx_os_crypto_sign()`, and `hx_os_crypto_verify()`.) Key imports accept a single unencrypted PKCS#8 private key PEM or SPKI public key PEM (up to `64 KiB`), and private-key exports return unencrypted PKCS#8 bytes inside a zero-on-destroy `CryptoBytes` container—encrypt those exported bytes with `hx_os_crypto_encrypt()` if you need password-protected storage on disk.
 
 ## 5. Threads, memory and unloading
 
-Pass a NULL engine for a one-off C operation. For repeated work, create one `hx_os_crypto` and pass it to the operations, then release it; C++ `hx::Crypto::create()` supplies RAII and `native()`. Engines use private `OSSL_LIB_CTX` and the built-in default provider. They do not replace the host's allocator, properties or configuration. Existing native error entries are saved/restored around operations, but OpenSSL's public restore API does not preserve `ERR_set_mark` nesting and may lose auxiliary error text on allocation failure. Do not call this API inside a native error-mark scope or an OpenSSL allocator/provider callback. Reentry from a first-party allocator into an active crypto operation on the same thread returns `DEADLOCK`, preventing nested cleanup of active thread state.
-
-First-party objects/buffers use the selected `hx_os_context`; native OpenSSL allocations use OpenSSL's own allocator. Do not claim a context memory budget limits native crypto allocations. Separate calls may share engines/keys, but outputs and destruction require external exclusion. Native thread state for a private engine is retired before each operation returns so its final release can safely occur on another thread. This adds work to short operations; context reuse is not a promise of zero allocation or higher performance. OpenSSL's process/thread infrastructure remains owned by OpenSSL.
-
-Dynamic OpenSSL on Windows cleans ordinary native thread state at thread exit. With **static OpenSSL**, controlled external Windows threads must call `hx_os_crypto_thread_cleanup()` at their last use of that OpenSSL runtime. This clears all OpenSSL state on the calling thread, including other native consumers; never call it while another OpenSSL operation or callback is active there. The library does not call this global per-thread cleanup implicitly. Before unloading any runtime/plugin, all operations and objects must end and participating threads must exit or perform the coordinated cleanup while code is still loaded. Do not unload while TLS destructors or live objects still reference the code.
-
-Owned binary results wipe their bytes on destruction. Ordinary `hx_string` results do not gain a secure-memory guarantee: application copies, allocator history, paging and crash dumps are outside this API. Synchronous file/KDF/key generation calls do not promise cancellation or a hard deadline. Run expensive work on a caller-owned worker when the UI must stay responsive.
+- **Reusable Engine Contexts**: Pass `NULL` as the engine for one-off calls, or create an `hx_os_crypto *` handle (`hx::Crypto::create()` in C++11) to reuse across operations. Each engine owns an isolated `OSSL_LIB_CTX` and default provider without altering the host process's global OpenSSL settings. Same-thread re-entry into an active crypto call from a custom allocator callback returns `HX_OS_DEADLOCK`.
+- **Static OpenSSL Thread Cleanup on Windows**: Dynamic OpenSSL DLLs clean up thread-local state automatically when native Windows threads exit. When linking **static OpenSSL (`HX_OS_OPENSSL_STATIC=ON`)**, any external Windows thread that uses that OpenSSL runtime must call `hx_os_crypto_thread_cleanup()` after its final OpenSSL operation. Before unloading a plugin or shared library, finish all crypto calls, destroy all keys and engines, and ensure participating threads have exited or completed thread cleanup.
 
 ## 6. HXCRYPT v1 binary format
 
-This is a documented application envelope around OpenSSL AES-256-GCM, not the output format of `openssl enc`. Independent peers must follow this framing and reject failed authentication.
+Binary and file encryption use the documented **HXCRYPT v1** authenticated envelope around AES-256-GCM (note that this is not the `openssl enc` CLI format). Peers in other languages must validate this exact layout:
 
-| Offset | Bytes | Meaning |
+| Byte Offset | Length (Bytes) | Field Description |
 | --- | --- | --- |
-| 0 | 8 | ASCII `HXCRYPT`, followed by byte 1 |
-| 8 | 1 | Cipher 1: AES-256-GCM |
-| 9 | 1 | Secret kind 1: raw 32-byte key; 2: password |
-| 10 | 2 | Reserved zero |
-| 12 | 4 | Big-endian PBKDF2 iteration count; zero for raw key |
-| 16 | 16 | Random password salt; all zero for raw key |
-| 32 | 12 | Random GCM nonce |
-| 44 | N | Ciphertext; same byte count as plaintext |
-| 44 + N | 16 | Authentication tag |
+| `0` | `8` | 7-byte ASCII magic `HXCRYPT` followed by version byte `0x01` |
+| `8` | `1` | Cipher ID: `1` = `AES-256-GCM` |
+| `9` | `1` | Secret kind: `1` = raw 32-byte key; `2` = password |
+| `10` | `2` | Reserved: must be `0` |
+| `12` | `4` | Big-endian `uint32_t` PBKDF2 iteration count (`0` for raw key mode) |
+| `16` | `16` | 16-byte random password salt (all zeroes for raw key mode) |
+| `32` | `12` | 12-byte random GCM nonce |
+| `44` | `N` | Ciphertext payload (same byte length as plaintext) |
+| `44 + N` | `16` | 16-byte AES-GCM authentication tag |
 
-All 44 header bytes are GCM additional authenticated data. Password mode uses PBKDF2-HMAC-SHA256 to derive 32 bytes from the exact supplied password bytes and salt. Default cost is 600,000 iterations; configurable encryption cost is 100,000–2,000,000, with a separately bounded accepted decryption maximum (default 2,000,000). Reject oversized inputs and excessive iteration counts before running the KDF. Text helpers encode this complete envelope as standard padded Base64.
+- **Additional Authenticated Data (AAD)**: All **44 header bytes are passed as GCM Additional Authenticated Data (AAD)**, so any tampering with the header fields, iteration count, salt, or nonce fails tag verification with `HX_OS_AUTH_FAILED`.
+- **PBKDF2 Parameters**: Password mode runs **PBKDF2-HMAC-SHA256** over the exact UTF-8 password bytes and 16-byte salt to derive a 32-byte key. The default iteration count is **600,000** (configurable between `100,000` and `2,000,000` for encryption, with a matching bounded cap enforced before running the KDF on decryption). Text helpers (`_text`) encode the complete binary envelope as standard padded Base64.
 
 ```mermaid
 flowchart LR
-    A["Password + random salt"] --> B["PBKDF2 key"]
-    B --> C["AES-GCM + authenticated header"]
-    D["Bytes or streamed file"] --> C
-    C --> E["HXCRYPT / Base64"]
-    E --> F["Decrypt and check tag"]
-    F --> G["Publish only after success"]
+    A["UTF-8 password + 16-byte salt"] --> B["PBKDF2-HMAC-SHA256 key"]
+    B --> C["AES-256-GCM (44-byte header as AAD)"]
+    D["Plaintext bytes or 32 KiB file chunks"] --> C
+    C --> E["HXCRYPT envelope / Base64"]
+    E --> F["Decrypt and verify 16-byte GCM tag"]
+    F --> G["Deliver plaintext or publish file only on success"]
 ```
 
 ## 7. Try the example
 
-Build and run the public [encrypt_text.c](../examples/encrypt_text.c) to try encryption and decryption. Handle authentication failure for a wrong password or modified data before using output. See [platform support](PLATFORMS.md) for target requirements.
+Build and run [encrypt_text.c](../examples/encrypt_text.c) to verify encryption and decryption on your target toolchain. Always check for `HX_OS_AUTH_FAILED` before using any decrypted output, and see [Platform Support](PLATFORMS.md) for deployment details.

@@ -1,31 +1,36 @@
-# Practical network I/O
+# Practical Network I/O: Packet Routing, Batch/Vector I/O, Happy Eyeballs & Trusted-LAN KCP
 
-[简体中文](NETWORK_IO.zh-CN.md) · [Network options](NETWORK_OPTIONS.md) · [Installed SDK](INSTALL.md)
+[简体中文](NETWORK_IO.zh-CN.md) · [Network Options](NETWORK_OPTIONS.md) · [Installed SDK](INSTALL.md)
+
+Beyond basic socket reads and writes, networked applications frequently need finer-grained control: multi-homed devices must identify which network interface received a UDP packet and reply from that same interface, high-rate services want batched datagram I/O or scatter/gather vector sends without intermediate buffer copies, clients need dual-stack IPv4/IPv6 hostname dialing, and multi-machine deployments on a trusted LAN often want reliable KCP sessions. This guide covers these entry points, runnable examples, and failure-handling rules.
 
 ## 1. Choose an entry point
 
-| Task | Entry point | What you own |
+| Task | Entry Point | What the Caller Owns |
 | --- | --- | --- |
-| Wait for one UDP message | `hx_os_socket_receive_from_until` | Socket and receive buffer |
-| Identify the receiving interface and local destination | `hx_os_socket_receive_packet_until` | Socket, buffer and returned metadata value |
-| Choose the source interface for a UDP reply | `hx_os_socket_send_packet_until` | Optional per-packet route value |
-| Send/receive several datagrams | `hx_os_socket_send_batch_until` / `receive_batch_until` | Up to 64 entries and their buffers |
-| Send a header and payload without combining buffers | `hx_os_socket_sendv_until` | Ordered borrowed buffers |
-| Connect by hostname with IPv4/IPv6 fallback | `hx_os_tcp_dial_until` | Network lease and returned socket |
-| Cancel DNS network waiting | `hx_os_resolver_resolve_until` | Explicit c-ares resolver |
-| Reliable KCP messages across trusted machines | `hx_os_kcp_session_*` | Explicit session owner and received messages |
+| Wait for a single UDP datagram | `hx_os_socket_receive_from_until` | `hx_os_socket` handle and receive buffer |
+| Identify the receiving interface and local destination IP | `hx_os_socket_receive_packet_until` | `hx_os_socket`, buffer, and returned `hx_os_packet_info` |
+| Select the outgoing interface or source IP for a UDP reply | `hx_os_socket_send_packet_until` | Optional per-packet route struct (`hx_os_packet_info`) |
+| Send or receive up to 64 UDP datagrams in one call | `hx_os_socket_send_batch_until` / `receive_batch_until` | Array of up to 64 datagram entries and their buffers |
+| Send or receive split headers and payloads (Scatter/Gather) | `hx_os_socket_sendv_until` / `receivev_until` | Array of up to 64 ordered borrowed buffers |
+| Connect by hostname with staggered IPv4/IPv6 fallback | `hx_os_tcp_dial_until` | `hx_os_network` lease and the connected `hx_os_socket` |
+| Perform cancellable DNS lookups with a deadline | `hx_os_resolver_resolve_until` | Explicit `hx_os_resolver` (c-ares) and returned address list |
+| Exchange reliable KCP messages across trusted LAN machines | `hx_os_kcp_session_*` | Session handle (`hx_os_kcp_session`) and received messages |
 
-All `_until` arguments are absolute monotonic deadlines. Construct one with `hx_os_deadline_after_ms(...)` and reuse it across the action. UDP `NOW` attempts once, then returns `TIMEOUT` if it would block. A zero-length datagram is a valid message. Raw TCP remains a byte stream; use [message frames](FRAMES.md) when message boundaries matter.
+All `_until` functions accept an **absolute monotonic deadline**. Create one with `hx_os_deadline_after_ms(...)` at the start of an operation and reuse it across steps.
+- Passing `HX_OS_DEADLINE_NOW` to a UDP call attempts one non-blocking transfer and returns `HX_OS_TIMEOUT` immediately if the socket would block.
+- A **zero-length UDP datagram** is a valid message.
+- Raw TCP sockets remain byte streams; use [Message Frames (`hx_frame`)](FRAMES.md) when you need discrete message boundaries over TCP.
 
 ## 2. Run the UDP packet example
 
-Build the complete [udp_packet.c](../examples/udp_packet.c) program in your existing directory:
+Build the standalone [udp_packet.c](../examples/udp_packet.c) example in your existing build directory:
 
 ```sh
 cmake --build build --config Release --target hx_os_udp_packet
 ```
 
-Run `build/bin/Release/hx_os_udp_packet.exe` on Visual Studio builds, or `build/bin/hx_os_udp_packet` on Linux. It sends a JSON datagram to its own ephemeral loopback port, receives it and prints:
+Run `build/bin/Release/hx_os_udp_packet.exe` on Windows (Visual Studio) or `build/bin/hx_os_udp_packet` on Linux. It requires no fixed port, second process, or external server—it binds an ephemeral loopback port, sends a JSON datagram to itself, reads back both the payload and ancillary packet metadata, and prints:
 
 ```text
 JSON: {"device_id":7,"state":"online"}
@@ -33,9 +38,9 @@ Destination: 127.0.0.1
 Interface: <this machine's loopback index>
 ```
 
-There is no fixed port, second process or external service to prepare. The example enables packet information before receiving. Check metadata flags before reading a field; absent information is not invented. `info.local.port` is zero: query the bound port separately only if needed.
+### Replying via the Receiving Interface on Multi-Homed Hosts
 
-For a device with Ethernet and Wi-Fi, receiving the sender's address alone does not tell you which local address it contacted. Packet information adds that distinction. To select the outgoing interface without changing the socket's global route:
+On a device with both Ethernet and Wi-Fi active, knowing the sender's IP address alone does not tell you which local IP address or network interface the sender contacted. Enabling packet metadata (`hx_os_socket_set_packet_info`) before receiving populates `hx_os_packet_info`. You can then pin the outgoing reply to that same interface without altering the socket's global routing table:
 
 ```c
 hx_os_packet_info route = {0};
@@ -46,29 +51,48 @@ status = hx_os_socket_send_packet_until(socket, &sender, &route,
 	json, json_bytes, deadline, &sent, &error);
 ```
 
-Here `received_info` and `sender` are outputs from the previous packet receive. Only set `INTERFACE` when reception reported it. For a unicast local source you may also set `LOCAL_ADDRESS`; never reuse a multicast or broadcast destination as a reply's source address. This selects a route, not authentication or guaranteed delivery. C++ can use the borrowed `hx::Datagram` facade from `<hx/Datagram.hpp>`.
+- **Inspect `flags` First**: Always check `received_info.flags` before reading a metadata field; fields not supplied by the OS are never fabricated. Note that `info.local.port` is always `0` (query the socket's bound address separately if you need the local port).
+- **Specifying a Unicast Source IP**: You can also set `HX_OS_PACKET_LOCAL_ADDRESS` in `route.flags` to select a specific local unicast source IP. **Never pass a multicast or broadcast destination address as a reply's source IP.**
+- **C++11 Wrapper**: Include `<hx/Datagram.hpp>` to use the non-owning `hx::Datagram` wrapper with the same packet metadata semantics.
 
 ## 3. Truncation, batches and vectors
 
-`LIMIT` means a datagram was consumed but did not fit; its remaining bytes are discarded by the OS. Inspect the copied byte count and truncation flags, then receive the next message. Windows also preserves `WSAEMSGSIZE` in the error record. Retrying cannot retrieve the missing suffix.
-
-Batch send returns the actual number of complete packets accepted before the first failure. Retry only the remaining entries. Batch receive waits for the first packet, then returns the currently available batch; it does not wait to fill all 64 entries. A consumed truncated final entry is included in the count and the call returns `LIMIT`.
-
-Stream vectors visit up to 64 buffers in order without a combined allocation. `completed` counts bytes across the entire prefix, not the number of buffers. `sendv_until` attempts the complete prefix; `receivev_until` returns when some data is available. On timeout, advance by the actual completed bytes. These interfaces reduce application-side copying; no throughput improvement is claimed without measurement.
+- **UDP Truncation (`HX_OS_LIMIT`)**: When a received datagram is larger than your buffer, the receive call returns `HX_OS_LIMIT`. **The datagram has already been consumed from the OS socket queue, and its excess trailing bytes are permanently discarded by the kernel** (on Windows, `WSAEMSGSIZE` is also recorded in `hx_os_error`). Inspect the copied byte count and truncation flags, then move on to the next message—retrying the receive call cannot recover the discarded tail of the truncated packet.
+- **Batched Datagram I/O**:
+  - `hx_os_socket_send_batch_until()` returns the number of complete datagrams accepted before the first error; retry only the remaining unsent entries.
+  - `hx_os_socket_receive_batch_until()` waits until **at least one datagram** arrives, then drains up to 64 immediately available datagrams without blocking to fill the entire array. If the final datagram in the batch is truncated, it is included in the completed count and the call returns `HX_OS_LIMIT`.
+- **Scatter/Gather Stream Vectors**:
+  - `hx_os_socket_sendv_until()` and `hx_os_socket_receivev_until()` process up to 64 buffers in sequence without requiring you to allocate a combined contiguous buffer.
+  - The `completed` output reports the **total byte count transferred across all buffers**, not the number of buffers completed. `sendv_until` loops until the entire prefix is sent or the deadline expires; `receivev_until` returns as soon as any bytes arrive. If a timeout occurs, advance your buffer views by `completed` bytes before continuing.
 
 ## 4. Change an attached socket safely
 
-Ordinary option setters still return `BUSY` after loop attachment. On the loop owner thread, first finish or cancel the pending socket operations and consume their completions. Then call `hx_os_loop_socket_configure_tcp` or `hx_os_loop_socket_multicast`. Submit a normal loop `POST` from another thread to arrange this work. These helpers preserve the native loop association and reject unfinished I/O; they do not introduce another queue.
+Once an `hx_os_socket` is attached to an `hx_os_loop`, ordinary `hx_os_socket_set_*` option setters return `HX_OS_BUSY`.
 
-`hx_os_socket_set_buffers` requests capacities, while `get_buffers` returns actual OS values, which may be rounded or doubled. `set_tcp_user_timeout` configures Linux/Android unacknowledged-data timing; it does not replace a connect deadline or application heartbeat. `set_udp_icmp_errors` controls Windows UDP reset reporting. Unsupported platform extensions return `NOT_SUPPORTED` rather than pretending that identical option names have identical effects.
+To reconfigure a socket that is already attached to an event loop:
+1. On the loop's owner thread, finish or cancel any in-flight operations on that socket and consume their completion callbacks.
+2. Call `hx_os_loop_socket_configure_tcp()` or `hx_os_loop_socket_multicast()` (from another thread, post a normal `HX_OS_LOOP_POST` callback to run this on the loop thread). These helpers preserve the native IOCP/epoll association while rejecting changes if unfinished I/O remains.
+
+> [!NOTE]
+> **Platform-Specific Socket Options**
+> - `hx_os_socket_set_buffers()` requests kernel send/receive buffer sizes, while `hx_os_socket_get_buffers()` reads back the actual capacities granted by the OS (which may be clamped, rounded, or doubled on Linux).
+> - `hx_os_socket_set_tcp_user_timeout()` configures the Linux/Android `TCP_USER_TIMEOUT` for unacknowledged in-flight data; it does not replace connect deadlines or application heartbeats.
+> - `hx_os_socket_set_udp_icmp_errors()` controls Windows UDP `SIO_UDP_CONNRESET` error reporting.
+> - Unsupported platform extensions return `HX_OS_NOT_SUPPORTED` rather than silently mapping to an option with different semantics.
 
 ## 5. Existing native sockets and shutdown
 
-`hx_os_socket_import(network, &native, HX_OS_SOCKET_DUP, &socket, &error)` creates another handle for an already nonblocking IP socket. `TAKE` instead consumes the caller's handle only after success. The duplicate shares endpoint state and options with the original; it is not an independent connection. Neither input may have active I/O or an existing incompatible event-loop registration. Windows requires caller-guaranteed nonblocking and OVERLAPPED capability; Winsock does not expose a read-only nonblocking-mode query.
-
-`hx_os_socket_shutdown_drain_until` explicitly sends FIN and discards remaining input while waiting for EOF. Use it only when those remaining bytes are unwanted. It never closes the socket; timeout leaves the same half-closed owner for retry or ordinary close. Neither EOF nor successful drain proves remote business completion.
+- **Importing Native Sockets (`hx_os_socket_import`)**:
+  - Passing `HX_OS_SOCKET_DUP` duplicates an already non-blocking native IP socket into a new `hx_os_socket` handle (the duplicated descriptor shares kernel endpoint state and options with the original; it is not a second independent connection).
+  - Passing `HX_OS_SOCKET_TAKE` transfers ownership of the caller's native handle only when the import succeeds.
+  - Neither handle may have active I/O or an incompatible event-loop registration at import time. On Windows, because Winsock provides no read-only query for non-blocking mode, the caller must guarantee that the socket is already non-blocking and was created with `WSA_FLAG_OVERLAPPED`.
+- **Sending FIN and Draining Input (`hx_os_socket_shutdown_drain_until`)**:
+  - Explicitly sends a TCP `FIN` (shutting down the write half) and discards incoming bytes until `HX_OS_EOF` or the deadline.
+  - Call this only when remaining incoming bytes are unneeded. It **never closes the socket handle itself**; on timeout, the same half-closed handle remains valid so you can retry draining or close it directly. Note that neither `HX_OS_EOF` nor a successful drain proves that the remote peer's application logic finished committing your data.
 
 ## 6. KCP JSON request/reply on a trusted network
+
+While `hx_ipc_*` factories are restricted to same-machine loopback, `hx_os_kcp_session_*` lets you exchange reliable, correlated KCP messages **across separate machines on a trusted LAN**.
 
 Build [kcp_session.c](../examples/kcp_session.c):
 
@@ -76,44 +100,49 @@ Build [kcp_session.c](../examples/kcp_session.c):
 cmake --build build --config Release --target hx_os_kcp_session
 ```
 
-Input endpoints accept an optional `kcp://` prefix. `hx_os_kcp_session_address` returns that URI, including an ephemeral listener port; it can be passed directly to a client. Replace a wildcard bind address with the server's reachable IP when connecting.
+Endpoint strings accept an optional `kcp://` prefix. Calling `hx_os_kcp_session_address()` on a listener returns its resolved URI (including the assigned port when bound to port `0`), which you can pass to clients (replace a wildcard `0.0.0.0` bind address with the server's LAN IP when connecting from another host).
 
-In two terminals on Linux:
+**Run in two terminals on Linux:**
 
 ```sh
-# Server; listens for one request for up to 30 seconds.
+# Server: listens for one request for up to 30 seconds, then exits.
 build/bin/hx_os_kcp_session server 0.0.0.0:39031
 
-# Client on the same machine; use the server's LAN IP on another machine.
+# Client: use 127.0.0.1 locally, or the server's LAN IP from another machine.
 build/bin/hx_os_kcp_session client 127.0.0.1:39031
 ```
 
-On Windows use `build/bin/Release/hx_os_kcp_session.exe` with the same arguments. The server prints `Request: {"type":"status","device_id":7}`; the client prints `Reply: {"accepted":true,"device_id":7}`. The example's reply is an application acknowledgement, distinct from transport queue admission. The library does not alter firewall rules.
+(On Windows, run `build/bin/Release/hx_os_kcp_session.exe` with the same arguments.)
 
-An endpoint owns one I/O thread, bounded peers and message queues. Sends copy the message and are safe to call from application threads; receive returns a complete message or a connection event. Release each message once. A timed-out connection can still return a non-NULL session: wait again or close it with a deadline. Reconnection never silently replays a previous request.
+Expected output:
+- Server prints: `Request: {"type":"status","device_id":7}`
+- Client prints: `Reply: {"accepted":true,"device_id":7}`
 
-The remote session reuses the documented [HXIP session envelope and KCP message protocol](IPC.md#8-hxip-v1-for-peers-in-other-languages). A peer written in another language must implement both. Raw KCP engine packets are not interchangeable with these session packets. There is no encryption or authentication; use it only on a trusted network. Existing `hx_ipc_*` factories remain loopback-only. Use TLS for verified encrypted streams.
+### Session Lifecycle and Security Boundaries
+
+- **Threading & Ownership**: Each `hx_os_kcp_session` endpoint owns one background I/O worker thread, a bounded peer table, and bounded message queues. Send calls copy the payload and are thread-safe for application callers; receive calls return one complete message or connection event at a time (release each message once). A timed-out connect call may still return a non-NULL session handle—continue waiting or close it with a deadline rather than leaking the pointer. Automatic reconnect never silently replays prior business requests.
+- **Wire Protocol**: Remote KCP sessions use the exact same [HXIP v1 session envelope and KCP message-mode protocol](IPC.md#8-hxip-v1-for-peers-in-other-languages) as local IPC. Peers written in other languages must implement both layers; raw KCP packets without the outer HXIP envelope will be rejected.
+- **Trusted Networks Only**: `hx_os_kcp_session` provides neither encryption nor peer authentication (and never modifies OS firewall rules). Use it only on trusted internal networks; use [TLS](TLS.md) whenever you need certificate verification and encrypted streams.
 
 ## 7. Domain names and platform boundaries
 
-`hx_os_hostname_ascii` converts a UTF-8 DNS name for the raw socket/TLS/DNS entries. It performs no lookup. Non-ASCII conversion requires IDN support in the selected libcurl build; otherwise it returns `NOT_SUPPORTED` and preserves the output. The backend's IDNA rules apply; this is not a confusable-name detector.
-
-Interface indices and routes are snapshots, not stable identities or reachability tests. Requery after an interface-change notification. Android applications own permissions, Network selection and APK lifecycle. Android Network handles are not interface indices. UDP/KCP cannot repair a firewall or virtual network path that persistently drops fragments. Keep datagrams appropriately sized and use business IDs, acknowledgement, deduplication and persistence where your application requires them.
+- **IDN Hostname Conversion (`hx_os_hostname_ascii`)**: Converts a UTF-8 internationalized domain name into its Punycode ASCII representation for raw socket, TLS, and DNS APIs without performing a network lookup. Non-ASCII names require IDN support in the linked `libcurl` build; if unavailable, the call returns `HX_OS_NOT_SUPPORTED` and leaves the output buffer unchanged. Backend IDNA rules apply (this function does not perform visual confusable/homograph detection).
+- **Transient Interface Snapshots & Mobile Rules**: Interface indices and route lookups are point-in-time snapshots, not permanent device IDs—re-query after network change notifications. On Android, the host APK manages permissions, Android `Network` handle selection, and lifecycle (an Android `Network` handle is distinct from an OS interface index).
 
 ## 8. Handle disconnects, slow consumers and shutdown
 
-After an error, check how much work was completed and whether you still own the object before retrying or closing. A timeout alone is not a reason to resend an entire business message.
+When a network call returns an error or timeout, always check **how much progress was already accepted** and **whether you still own the handle** before deciding to resume, retry, or close. **Never blindly resend an entire business message just because a call returned `HX_OS_TIMEOUT`.**
 
-| Situation | Library behavior | Application action |
+| Runtime Scenario | Library Behavior | Recommended Application Action |
 | --- | --- | --- |
-| Peer stops or the path stops responding | IPC/KCP use configured idle detection and reconnect policies; reconnect creates a new session. Raw sockets and TLS do not reconnect automatically | Handle disconnect events and re-establish device identity. Old requests are not replayed; use business IDs and peer deduplication rules to decide whether to retry |
-| DNS receives no reply | Explicit c-ares queries support cancellation/deadlines; default system DNS may still block | Choose cancellable entries when shutdown latency matters. HTTP also needs the matching SDK; see [DNS](NETWORK_OPTIONS.md#123-use-an-event-loop-or-coroutine) and [HTTP configuration](HTTP_FILES.md#4-cancel-even-when-dns-receives-no-reply) |
-| Consumer processes data slowly | IPC queues are bounded and reliable sends may return `LIMIT`; TLS sends may time out with a nonzero `accepted` count | Keep consuming and releasing messages. On the same live TLS connection, send only the unaccepted suffix; if all bytes were accepted, continue with `flush_until` |
-| Frequent connect/disconnect cycles | Messages, requests and connections have separate owners; old peer IDs cannot address a new session | Release each message/request once and retain a client owner until close completes. Close/abort accepted TLS server peers when finished to release their slots |
-| Shutdown during waiting or reconnect backoff | Close rejects new work and wakes relevant waits; orderly TLS close also attempts to drain accepted data | Use an explicit deadline and inspect both status and owner pointer. Retain a non-NULL owner, allocator and context for retry. Explicitly abort only when discarding is acceptable; never kill a worker thread |
+| Peer crashes or network path goes silent | IPC / KCP sessions detect inactivity and reconnect under a fresh session ID; raw sockets and TLS do not auto-reconnect | Handle disconnect events and re-verify device identity on the new session. Old requests are never replayed automatically; use business operation IDs and server deduplication to retry safely |
+| DNS server stops responding | Explicit `hx_os_resolver` (c-ares) queries honor deadlines and cancellation tokens; default OS DNS calls may block | Use cancellable resolver APIs when bounded shutdown latency matters (see [Cancellable DNS](NETWORK_OPTIONS.md#123-use-an-event-loop-or-coroutine) and [HTTP DNS Cancellation](HTTP_FILES.md#4-cancel-even-when-dns-receives-no-reply)) |
+| Slow consumer (backpressure) | Bounded IPC queues return `HX_OS_LIMIT`; a timed-out TLS write may report a non-zero `accepted` byte count | Keep draining and releasing received messages. On the same live TLS connection, **send only the unaccepted suffix** after a partial timeout (or call `flush_until` if all bytes were accepted) |
+| Frequent connect / disconnect churn | Messages, requests, and connections have independent owners; stale `peer` IDs are invalid on new sessions | Release each message and request once; retain client handles until close succeeds; close or abort finished TLS server peers to free listener slots |
+| Shutdown during active waits or backoff | Close rejects new calls and wakes active waiters; orderly TLS close also attempts to drain accepted ciphertext | Pass an explicit deadline and check both the return status and handle pointer. If the pointer remains non-NULL on timeout, keep the handle, allocator, and context alive to retry close (call explicit `abort` only when discarding data is acceptable; never kill worker threads) |
 
-For example, a TLS send of 8 MiB may time out with `accepted` equal to 64 KiB. The library already owns that prefix. Once the receiver resumes reading, continue from the remaining offset. Acceptance still does not prove remote business processing. Whole-message IPC/KCP acknowledgements likewise describe their communication-layer contract; database insertion or device actions need an application reply.
+> [!TIP]
+> **Why Partial TLS Writes Must Resume from `accepted`**
+> Suppose you call a TLS write with an 8 MiB buffer and it returns `HX_OS_TIMEOUT` with `accepted = 64 KiB`. Those first 64 KiB have already been encrypted and queued inside the TLS session. Once the peer resumes reading, pass only the remaining `8 MiB - 64 KiB` starting at offset `64 KiB`—resubmitting from offset `0` would corrupt the stream by duplicating the first 64 KiB. And as always, transport acceptance (whether TLS `accepted` or IPC/KCP `ACK`) only confirms transport buffering; require an application-level reply to confirm database commits or hardware actions.
 
-Distinguish a peer explicitly closing from a path silently dropping packets. The former may immediately report EOF; the latter needs idle detection. Detection time is separate from resource-close time. A newly established session does not continue an old request automatically.
-
-Use the existing [TCP business example](TCP_BUSINESS.md), [TLS examples](TLS.md), [KCP example](#6-kcp-json-requestreply-on-a-trusted-network) and [HTTP file example](HTTP_FILES.md) against your deployment, checking slow consumers, peer restart and retryable close. Emulator shell, ARM user-mode QEMU, physical devices and real APKs are separate environments. Explicitly record paths unavailable because of QEMU socket-option translation, Android Unix-socket permissions or WSL mirrored IPv4 fragmentation; another successful transport does not validate them. Host sanitizers do not replace target-device acceptance.
+When validating your target environment, reuse the repository's [TCP Business Example](TCP_BUSINESS.md), [TLS Examples](TLS.md), [Trusted-LAN KCP Example](#6-kcp-json-requestreply-on-a-trusted-network), and [HTTP File Example](HTTP_FILES.md) to test slow receivers, peer restarts, and retryable close paths. Treat emulator shells, ARM user-mode QEMU, physical boards, and signed Android APKs as distinct targets—if a path is blocked by missing QEMU `setsockopt` translation, Android Unix-socket sandbox policies, or WSL2 mirrored IPv4 UDP fragmentation, record that platform constraint explicitly and select an appropriate transport.

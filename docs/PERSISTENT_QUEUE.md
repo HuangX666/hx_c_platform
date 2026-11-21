@@ -2,15 +2,27 @@
 
 [简体中文](PERSISTENT_QUEUE.zh-CN.md) · [README](../README.md)
 
-**Start with three recognition records that need eventual upload.** Build `hx_os_persistent_queue` with the SQLite backend. Inside build, run `hx_os_persistent_queue publish records.db`, then `hx_os_persistent_queue consume records.db`, using the bin/configuration prefix from the [run instructions](../examples/README.md#run).
+Use the SQLite-backed persistent queue (`hx_os_persistent_queue`) when records—such as gate recognition events, billing records, or telemetry payloads—must survive network outages, process crashes, or system reboots. Producers assign a stable business ID to each record and persist it to disk; consumers claim (`take`) a record under a timed lease and acknowledge (`ack`) it only after the remote service confirms receipt.
 
-Publish stores three JSON records. Consume prints three `Handle recognition-...` lines and acknowledges them. A second consume waits about one second and ends without redelivering acknowledged records. In [persistent_queue.c](../examples/persistent_queue.c), replace printing with upload; ack only after the platform confirms success, or release after failure.
+### Quick Start Example
 
-Use a fresh demo database for the first run. Processes can share the queue, but taking a record grants a timed lease. Redelivery can repeat work; deduplicate by stable message ID.
+With examples and the SQLite backend enabled (see the [run instructions](../examples/README.md#run) for binary paths), build `hx_os_persistent_queue` and run `publish` followed by `consume`:
+
+```sh
+cmake --build build --config Release --target hx_os_persistent_queue
+./build/bin/hx_os_persistent_queue publish records.db
+./build/bin/hx_os_persistent_queue consume records.db
+```
+
+- `publish` writes three JSON recognition records into `records.db`.
+- `consume` prints three `Handle recognition-...` lines and acknowledges each record.
+- Running `consume` a second time waits about one second and exits cleanly without redelivering acknowledged records.
+
+When integrating into your own application, open [persistent_queue.c](../examples/persistent_queue.c) and replace the `printf` call with your actual upload logic: call `ack` only after the server confirms success, or call `release` on a retryable upload failure so the record becomes available immediately.
 
 ## 1. Write, take, acknowledge
 
-Use this queue for records that must survive disconnects or application restarts. A producer assigns a stable record ID and pushes JSON or arbitrary bytes. A consumer takes an owned message, handles/uploads it, then acknowledges only after business success.
+Taking a record from disk, processing it, and acknowledging completion looks like this:
 
 ```c
 hx_os_persistent_queue *queue = NULL;
@@ -34,11 +46,15 @@ hx_os_persistent_message_destroy(&message);
 hx_os_persistent_queue_close(&queue, NULL);
 ```
 
-Replace the comment with real processing and check its outcome. On a retryable business failure, call release instead of ack. Destroying the returned copy neither acknowledges nor releases its lease.
+> [!IMPORTANT]
+> **Destroying the in-memory message (`destroy`) does not acknowledge (`ack`) or release the lease**
+> - `hx_os_persistent_message_destroy(&message)` only frees the in-memory copy held by your process—it **neither deletes the record from SQLite nor releases its active lease**.
+> - Call `hx_os_persistent_queue_ack()` only after business processing succeeds to permanently remove the record.
+> - Call `hx_os_persistent_queue_release()` on a retryable failure to return the record to the ready state immediately instead of waiting for the lease to expire.
 
 ## 2. Runnable JSON workflow
 
-The complete [persistent_queue.c](../examples/persistent_queue.c) uses recognition records from factory and hospital gates:
+The complete [persistent_queue.c](../examples/persistent_queue.c) program demonstrates publishing and consuming recognition records from factory and hospital gates:
 
 ```sh
 cmake --build build-shared-linux --target hx_os_persistent_queue
@@ -46,32 +62,30 @@ build-shared-linux/bin/hx_os_persistent_queue publish records.db
 build-shared-linux/bin/hx_os_persistent_queue consume records.db
 ```
 
-Start the last command in two terminals to test multiple consumers. Each successful take claims one record; the example prints it and acknowledges it. Replace the print with an upload and acknowledge only when the server confirms. Windows uses `--config Debug` and the executable under `bin/Debug/`.
+You can run the `consume` command in two terminals simultaneously to observe multiple processes sharing the same queue file (on Windows with Visual Studio, pass `--config Debug` and run the executable under `bin/Debug/`).
 
-C++11 provides `hx::PersistentQueue::open`, `push`, `take`, `ack`, `release`, `renew`, and `close` in [PersistentQueue.hpp](../include/hx/PersistentQueue.hpp), using Result and owned messages.
+For C++11 applications, [PersistentQueue.hpp](../include/hx/PersistentQueue.hpp) provides `hx::PersistentQueue::open`, `push`, `take`, `ack`, `release`, `renew`, and `close` using exception-free `hx::Result` and RAII-owned message objects.
 
 ## 3. Delivery and crash recovery
 
-The same local queue file supports multiple processes and threads. The default lease lasts 30 seconds. renew explicitly extends an unexpired receipt; release makes it available immediately. After expiry or a consumer crash, a later take returns the same ID with a new receipt. Old receipts return CLOSED and cannot delete a later delivery.
-
-Delivery is at least once. The remote business service must deduplicate by stable ID. A pending ID with identical payload is an idempotent push; different payload returns EXISTS. Once acknowledged and deleted, that ID is not remembered forever. An uncertain commit must be retried with the original IDs.
-
-Leases persist UTC milliseconds. System-clock changes affect expiry. Deadlines for local waiting remain monotonic; no persisted monotonic clock is invented. Use a local filesystem, not a network-mounted database file.
-
-Claim, ack and renew sample UTC after acquiring the SQLite write transaction. Waiting for a competing writer does not extend an expired receipt: ack/renew return CLOSED if its lease has expired by then, and the record remains queued. A successful renewal starts its duration from that sample. Synchronization and returning to the caller can still consume the remaining lease; success does not promise a minimum lease remaining when the function returns.
+Multiple processes and threads can safely open the same local SQLite queue file:
+- **Timed leases and receipt tokens**: The default processing lease is `30` seconds. Call `renew` to extend an unexpired lease, or `release` to return the record immediately. If a consumer crashes or its lease expires before `ack`, a subsequent `take` redelivers the same message ID with a **new receipt token**. If the stalled consumer later wakes up and attempts `ack` or `renew` with its stale receipt, the call fails with `HX_OS_CLOSED` and cannot delete the new consumer's delivery.
+- **At-least-once delivery and idempotent pushes**:
+  - Because lease expiry causes redelivery, your remote server should deduplicate records by their stable message ID.
+  - Pushing a message ID that is already pending in the queue with the **exact same payload** succeeds idempotently (`HX_OS_OK`), whereas pushing the same pending ID with a **different payload** returns `HX_OS_EXISTS`. Once a record is acknowledged and deleted, its ID is not retained forever.
+- **Clocks and local filesystem requirement**:
+  - Persisted lease expirations use UTC milliseconds (since monotonic clocks do not survive reboots), so system wall-clock jumps affect lease expiry; local waiting in `take_until` still uses the monotonic clock.
+  - Always place the database file on a local filesystem, never on an NFS/SMB network mount.
+- **Timestamp sampling under the write lock**: `take`, `ack`, and `renew` sample the current UTC time after acquiring the SQLite write transaction. Waiting for a competing writer does not extend an expiring lease: if the lease has expired by the time the write lock is acquired, `ack` and `renew` return `HX_OS_CLOSED` and leave the record queued.
 
 ## 4. Durability, batches and capacity
 
-Single push/ack and each batch execute a transaction and request synchronization before success. The backend uses a DELETE rollback journal and synchronous EXTRA for new databases. Hardware/filesystem guarantees still determine actual power-loss durability.
-
-push_many and ack_many accept up to 1024 items and commit the whole batch once. This is an atomic database batch, unlike the completed-prefix semantics of the in-memory message queue. Failed commits can be indeterminate.
-
-Defaults are 65,536 pending messages, 64 MiB payload total, and 1 MiB per message. A full queue returns LIMIT; unacknowledged records are never evicted. Capacity is stored at creation. NULL options inherit an existing queue's capacity; explicitly incompatible capacities are rejected. SQLite pages, journal overhead and returned copies are additional. Deleted pages are reusable; the file is not promised to shrink immediately.
+- **Transaction durability**: Every single `push`/`ack` and every batch executes inside a SQLite transaction and requests disk synchronization before returning `HX_OS_OK`. Newly created databases configure a `DELETE` rollback journal and `synchronous = EXTRA` (actual power-loss durability still depends on the OS, filesystem, and storage hardware honoring flush requests).
+- **Atomic batch transactions (`push_many` / `ack_many`)**: Each batch accepts up to `1,024` items and commits the entire batch as a single SQLite transaction—unlike the in-memory message queue's partial-prefix behavior. If a commit fails due to an I/O error, the transaction outcome may be indeterminate; retry using the original message IDs.
+- **Bounded capacity**: Default limits are `65,536` pending messages, `64 MiB` total payload bytes, and `1 MiB` per message. When full, new pushes return `HX_OS_LIMIT`; unacknowledged records are never evicted. Capacity limits are persisted when the database is first created; passing `NULL` options when opening an existing queue inherits its stored limits, while passing mismatched limits is rejected.
 
 ## 5. Lifecycle and native use
 
-No worker or network service starts. Open/write/ack have a five-second SQLite lock-contention budget; native disk synchronization can exceed it. take is nonblocking; take_until retries emptiness/contention using bounded sleeps and supports cancellation. It cannot interrupt arbitrary filesystem work.
-
-Exclude active/new callers before close. A close failure retains the handle. Returned messages own their bytes independently of the queue. IDs/views borrowed from a message expire when it is destroyed.
-
-PERSISTENT_QUEUE is independently selectable and requires RANDOM and THREAD_EX. SQLite has its own allocator; library objects use the chosen context. The queue owns its dedicated schema and native connection. Use a separate application connection for direct SQLite work through [hx_c_platform::sqlite](NATIVE_DEPENDENCIES.md), without editing the queue schema or changing its journal policy.
+- **No background threads and bounded lock waits**: The queue starts no background threads or network services. `open`, `push`, and `ack` use a `5`-second SQLite lock-contention budget (native disk flushes may exceed that bound). `take` is nonblocking; `take_until` retries empty or contended states using short bounded sleeps and supports cancellation tokens (though it cannot interrupt an in-kernel filesystem call).
+- **Closing and message lifetime**: Exclude active and new callers before calling `hx_os_persistent_queue_close()` (a failed close preserves the handle). Returned `hx_os_persistent_message` objects own their payload bytes independently of the queue handle and remain readable even after the queue closes; ID strings and byte views borrowed from a message expire when `hx_os_persistent_message_destroy()` is called.
+- **Module trimming and direct SQLite usage**: `HX_OS_ENABLE_PERSISTENT_QUEUE` can be toggled independently and requires `HX_OS_ENABLE_RANDOM` and `HX_OS_ENABLE_THREAD_EX`. The queue owns its dedicated schema and SQLite connection; if your application also uses SQLite directly, open a separate connection via [hx_c_platform::sqlite](NATIVE_DEPENDENCIES.md) and never modify the queue's tables or journal mode.

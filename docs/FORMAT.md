@@ -2,32 +2,33 @@
 
 [简体中文](FORMAT.zh-CN.md) · [README](../README.md)
 
-**Start with a complete program.** Use typed format arguments for brace formatting while keeping standard C99.
+When building log lines, status messages, or CLI output in C99 and C++11, traditional `printf` calls make it easy to mismatch format specifiers and argument types, and cannot reuse arguments by position or name. This module brings brace-style UTF-8 formatting (`{}`, `{:.2f}`, `{name}`) and cross-platform terminal printing to C99 and C++11 with explicit type checking, zero C++ exceptions, and native UTF-8 console support on both Windows and POSIX.
 
-Open [format.c](../examples/format.c). Build an argument array with hx_fmt_str/hx_fmt_f64 → hx_print_args renders {} and {:.2f} → check status.
+To see it in action, check out [format.c](../examples/format.c). The program packs typed arguments with `hx_fmt_str()` and `hx_fmt_f64()`, formats them through `hx_print_args()` using `"{}: {:.2f}"`, and checks the returned status. Follow the [example run instructions](../examples/README.md#run) to enable examples and build the `hx_os_format` target (it takes no command-line arguments or input files):
 
-Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_format`. This program needs no arguments or input files.
+```text
+张三: 3.75
+```
 
-**Expected result:** A UTF-8 terminal shows `张三: 3.75`. Replace the arguments with application values. This form needs no generator; automatic expression typing has a separate build integration.
-
-Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+You can replace the sample literals with your own variables or drop the example source into the [minimal project](USAGE.md#c-project) as `main.c`. The sections below walk through the available calling styles and format specifiers.
 
 ## 1. Choose a calling style
 
-These styles use the same C99 UTF-8 formatting engine. None uses C++ exceptions. `HX_OS_ENABLE_FORMAT` defaults ON; when disabled, runtime entries return `HX_OS_NOT_SUPPORTED` and `HX_OS_CAP_FORMAT` is absent.
+All four styles below share the same underlying C99 UTF-8 formatting engine and never throw C++ exceptions. The CMake option `HX_OS_ENABLE_FORMAT` defaults to `ON`; when disabled, runtime formatting functions return `HX_OS_NOT_SUPPORTED` and `HX_OS_CAP_FORMAT` is omitted from the capability bitmask.
 
 | Style | Example | Build requirements |
 | --- | --- | --- |
-| C99, convenient typed calls | `HX_PRINTLN("{}", hx_fmt_i64(count))` from `hx_print.h` | The existing C compiler; no generator |
-| C99, no generator | `hx_fmt_i64(count)` inside an argument array | Your normal C compiler |
-| C99, automatic argument types | `HX_PRINTLN("{}", count)` | Optional host Python 3.10+ and Clang, enabled once in CMake |
-| C++11 | `hx::println("{}", count)` | Your normal C++11 compiler |
+| C99 convenient typed macros | Include `hx_print.h` and call `HX_PRINTLN("{}", hx_fmt_i64(count))` | Standard C99 compiler; no code generator |
+| C99 explicit argument array | Pack `hx_fmt_i64(count)` into an `hx_format_arg` array | Standard C99 compiler; no code generator |
+| C99 automatic argument types & inline expressions | Include `hx_format_syntax.h` and call `HX_PRINTLN("{}", count)` | Enable once per target in CMake; requires host Python 3.10+ and Clang |
+| C++11 facade | Include `<hx/Format.hpp>` and call `hx::println("{}", count)` | Standard C++11 compiler |
 
-`std::format` belongs to C++20; `std::print` belongs to C++23. The interfaces here provide a documented brace-format language, not complete standard-library or Python compatibility.
+> [!NOTE]
+> `std::format` requires C++20 and `std::print` requires C++23. This module provides a well-defined brace-formatting subset tailored for C99 and C++11 projects (see Section 5), rather than a drop-in clone of the full C++20 or Python format specification.
 
 ## 2. C: write expressions directly
 
-The complete [format_syntax.c](../examples/format_syntax.c) prints `张三: 18, total=3.75`. Its important lines are:
+If you want to embed C variables and arithmetic expressions directly inside format string literals—or let the build deduce argument types automatically—include `<hx_format_syntax.h>`. The complete [format_syntax.c](../examples/format_syntax.c) example prints `张三: 18, total=3.75` using:
 
 ```c
 #include <hx_format_syntax.h>
@@ -37,9 +38,9 @@ hx_os_status status = HX_FPRINTLN(
 	"{user.name}: {user.age}, total={price * count:.2f}");
 ```
 
-`HX_FPRINTLN` extracts C expressions from the literal. `user.name` reads a field, `price * count` performs ordinary C multiplication, and `.2f` prints two digits after the decimal point. Check `status == HX_OS_OK` before assuming output succeeded.
+During the build, `HX_FPRINTLN` extracts the C expressions from the literal: `user.name` reads the struct member, `price * count` performs standard C multiplication, and `:.2f` formats the floating-point product to two decimal places. Always check `status == HX_OS_OK` to confirm that formatting and output succeeded.
 
-Explicit argument lists work too:
+You can also pass arguments explicitly after the format string:
 
 ```c
 HX_PRINTLN("{}: {:04d}", user.name, count);
@@ -50,13 +51,15 @@ hx_string text = HX_STRING_INIT;
 
 hx_os_status status = HX_FFORMAT(&text, "Total: {price * count:.2f}");
 
-// Use text only after checking status; release it even on failure.
+// Use text only after checking status == HX_OS_OK; always destroy it when done.
 hx_string_destroy(&text);
 ```
 
-`HX_FORMAT(&text, pattern, args...)` formats into a string with explicit arguments. `HX_PRINT` writes without a newline, `HX_PRINTLN` adds LF, and `HX_EPRINTLN` targets stderr. The `F` variants parse expressions from a literal; they do not inspect runtime strings for variable names.
+- `HX_FORMAT(&text, pattern, args...)` and `HX_FFORMAT(&text, pattern)` write the formatted result into an initialized `hx_string`.
+- `HX_PRINT` writes without a trailing newline, `HX_PRINTLN` appends `\n` (LF), and `HX_EPRINTLN` writes to `stderr`.
+- The `F`-prefixed macros (`HX_FPRINT`, `HX_FPRINTLN`, `HX_FEPRINTLN`, `HX_FFORMAT`) extract C expressions from string literals at build time; they never inspect runtime strings to look up local variable names.
 
-Enable the build step on a target after setting its sources, dependencies, include directories and compiler options:
+To enable this syntax on a CMake target, call `hx_enable_format_syntax()` after configuring the target's sources, linked libraries, include directories, and compiler flags:
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
@@ -78,7 +81,7 @@ endif()
 hx_enable_format_syntax(format_demo SOURCES main.c)
 ```
 
-The helper is also available through `add_subdirectory` of this repository. Build normally with `cmake --build build --config Release`; there is no separate developer-operated generation command. If Clang is not on PATH, pass `-DHX_FORMAT_CLANG=/path/to/clang` when configuring, or use the function's `CLANG` argument. `PYTHON` selects a host interpreter and `CLANG_OPTIONS` supplies additional parser options, such as a toolchain-specific system include path.
+`hx_enable_format_syntax()` works whether you consume the library via `find_package(hx_c_platform)` or `add_subdirectory()`. Build normally with `cmake --build build --config Release`—no manual code generation step is needed. If `clang` is not on your host `PATH`, pass `-DHX_FORMAT_CLANG=/path/to/clang` at configure time or specify the `CLANG` argument in `hx_enable_format_syntax()`. Use `PYTHON` to select a specific host Python interpreter and `CLANG_OPTIONS` to pass extra parser flags such as custom toolchain system includes.
 
 ```mermaid
 flowchart LR
@@ -88,15 +91,18 @@ flowchart LR
     C --> R[C99 library on target device]
 ```
 
-The original file stays unchanged. Each configuration gets separate generated files. The helper inherits target include directories, definitions and compile options, including dependency usage requirements. It checks source/header/tool changes before reuse; an unchanged build preserves the generated file's timestamp. A failed check stops the build without replacing the previous generated C file. Installation includes the helper and script; the target device needs neither Python nor Clang.
+Your original source files in the working tree are never modified. Each build configuration writes its generated C99 sources into the build directory, inheriting the target's include paths, preprocessor definitions, and compile options (including transitive dependency requirements). Generation only re-runs when the source file, included headers, or generator script change; unchanged builds preserve timestamps. If type or format validation fails, the build stops immediately without overwriting the last good generated file. Installed packages include the CMake helper and generator script, while the target device running the compiled binary needs neither Python nor Clang.
 
-Use direct `.c` sources and target-level compile settings. Source-specific settings are rejected with an actionable error. Markers in macro definitions, generated macro bodies, global initializers or nested marker calls are unsupported; an ordinary assertion wrapper around a direct marker is supported. Call the helper once per target. A cross build needs host Clang capable of parsing the target triple, sysroot and compiler extensions; unsupported dialects fail during analysis rather than receiving guessed types. MSVC runtime selection also supplies `_MT`, `_DLL` and `_DEBUG` to analysis. Header search changes made only through environment variables require rebuilding the generation cache. Application branches based on frontend identity (such as `__clang__` versus `__GNUC__`) must expose the same types to analysis and the final compiler; use shared project definitions or the explicit typed C99 entry if they differ. A second frontend is not a proof of identical behavior for every compiler extension.
-
-Expressions use C scope and C semantics. Parenthesize a ternary expression containing `:` to separate it from the format specifier. Fixed literals check field count, basic types and specs during generation. Unknown members are Clang errors. Argument expressions are evaluated once, in source order; output and pattern expressions are evaluated first. Registered structure values are copied into call-local storage, while their pointer members remain borrowed. Ordinary runtime format strings are checked at runtime. This is not Python expression evaluation, C++ template specialization, or a general compile-time proof of custom formatter behavior.
+> [!IMPORTANT]
+> **Generator Constraints and Expression Semantics:**
+> - **Target-level settings**: Pass direct `.c` sources to `hx_enable_format_syntax()` once per target, and keep compile flags at the target level. Per-source compile properties are rejected with an explicit error.
+> - **Supported call sites**: Format markers inside macro definitions, macro-expanded function bodies, global initializers, or nested format calls are not supported (wrapping a top-level format call in an ordinary `assert`-style macro is fine).
+> - **Cross-compilation & frontend consistency**: For cross-builds, host Clang must understand the target triple, sysroot, and compiler extensions used by your headers (on MSVC, `_MT`, `_DLL`, and `_DEBUG` are forwarded automatically). If your code branches on compiler identity (`__clang__` vs. `__GNUC__`), make sure both the analysis pass and the final compiler see identical type definitions—or use the generator-free C99 macros in Section 3. If you change include paths solely via environment variables, clean and rebuild the generation cache.
+> - **Evaluation order & lifetimes**: Inline expressions obey C scope and semantics at the call site. Parenthesize ternary expressions (`?:`) inside braces so `:` is not parsed as a format specifier delimiter. Output and pattern expressions are evaluated first, followed by argument expressions once each in source order. Registered custom structs are copied into call-local stack storage, while any pointer members inside them remain borrowed.
 
 ## 3. C99 without a build tool
 
-Include `hx_print.h` for ordinary C99 calls. Keep the usual `add_executable` and `target_link_libraries`; no `hx_enable_format_syntax`, Python or Clang step is needed. This complete program uses explicitly typed values:
+If you prefer not to require Python or Clang on build machines, include `<hx_print.h>`. Your CMake setup stays a standard `add_executable` + `target_link_libraries` build, and you tag each argument with a lightweight `hx_fmt_*` wrapper:
 
 ```c
 #include <hx_print.h>
@@ -110,16 +116,12 @@ int main(void)
 }
 ```
 
-`HX_PRINT` omits the LF, `HX_PRINTLN` appends it, `HX_EPRINTLN` writes to stderr and `HX_FORMAT(&text, pattern, ...)` writes to an initialized `hx_string`. A plain call such as `HX_PRINTLN("ready")` also works. All return `hx_os_status`. Parameters must be `hx_format_arg` values constructed with `hx_fmt_*`; ordinary raw values are not inferred. Named values use `HX_NAMED("name", hx_fmt_str("HuangX"))`, and custom objects use `hx_fmt_custom(&object, format_callback)`.
+`<hx_print.h>` provides `HX_PRINT`, `HX_PRINTLN`, `HX_EPRINTLN`, and `HX_FORMAT(&text, pattern, ...)`, all returning `hx_os_status`. Argument-free calls like `HX_PRINTLN("ready")` work out of the box. Every value argument must be an `hx_format_arg` constructed via `hx_fmt_*`: pass named arguments as `HX_NAMED("name", hx_fmt_str("HuangX"))` and custom structs as `hx_fmt_custom(&object, format_callback)`.
 
-The C99 macros accept **0–64 value arguments**, excluding the format string and destination. More than 64 is a compile-time error. This is not a limit on replacement-field occurrences: `{0}` may be repeated many times using one argument; `{{` and `}}` produce literal braces and consume none. Each argument expression is evaluated once, with ordinary C evaluation-order rules; avoid depending on a left-to-right order of side effects. A temporary argument array, including an internal sentinel, uses automatic storage and does not allocate a separate heap buffer. The formatter itself retains its existing allocations and limits.
+- **Argument count & stack storage**: The C99 macros accept **0–64 value arguments** (excluding the destination and format pattern); passing more than 64 produces a compile-time error. A single argument can be referenced any number of times via `{0}`, and escaped braces (`{{` / `}}`) consume no arguments. The macro builds a temporary argument array on the stack with no heap allocation of its own. Each argument expression is evaluated once under standard C evaluation rules—do not rely on left-to-right ordering of side effects across arguments.
+- **Mutually exclusive headers**: Include either `<hx_print.h>` (explicitly typed C99 calls) or `<hx_format_syntax.h>` (build-time generated types/expressions) in a single translation unit, never both. `<hx_os.h>` does not implicitly include either macro header.
 
-Include only one of `hx_print.h` (typed C99 calls) and `hx_format_syntax.h` (generated automatic types/expressions) in a translation unit. Both use the same macro names; mixing them is rejected explicitly. `hx_os.h` does not implicitly select either macro interface. The new macros are for C; C++11 callers use the facade described below. No exported function or public object layout changes.
-
-For dynamic arrays, more than 64 values, custom limits or a full error object, use the existing functions below. Their defaults are **1,024 arguments** and **16 MiB of UTF-8 output**, including any LF added by printing. These are runtime defaults, not a hard 1,024-field ceiling: `hx_format_with_options` can explicitly set `max_arguments` and `max_output_bytes`. Raising them also increases potential work/memory. Missing positional arguments return `HX_OS_RANGE`; exceeding the selected limits returns `HX_OS_LIMIT`. Formatting failures preserve the destination and do not silently truncate.
-
-
-[format.c](../examples/format.c) is a complete program needing only the C library:
+When you need dynamically constructed argument arrays, more than 64 arguments, custom memory/output bounds, or a detailed `hx_os_error` diagnostic, call the underlying runtime functions directly (as shown in [format.c](../examples/format.c)):
 
 ```c
 hx_format_arg args[] = {hx_fmt_str("张三"), hx_fmt_f64(3.75)};
@@ -130,11 +132,17 @@ hx_os_status status = hx_print_args(HX_PRINT_STDOUT, 1,
 	hx_string_view_from_cstr("{}: {:.2f}"), args, 2, &error);
 ```
 
-The wrappers state the real types explicitly, so the runtime never guesses a `va_list` argument. Available wrappers cover signed/unsigned 64-bit integers, float/double/long double, boolean, Unicode scalar character, UTF-8 view/string, object pointer, named argument and custom formatter. `hx_fmt_char` takes a Unicode scalar; an arbitrary individual byte from a multibyte UTF-8 character is not a whole character.
+Because `hx_fmt_*` wrappers record the exact type in `hx_format_arg`, the runtime never guesses `va_list` promotions. Wrappers are provided for signed and unsigned 64-bit integers, `float` / `double` / `long double`, booleans, Unicode scalar code points (`hx_fmt_char`—pass a decoded code point, not an individual byte of a multibyte UTF-8 sequence), UTF-8 string views, object pointers, named arguments, and custom formatter callbacks.
 
-Use `hx_format` for an `hx_string`, `hx_format_with_options` to set bounds, and `hx_format_buffer` for caller-owned buffers. The last entry reports required capacity including the trailing NUL. `OUTPUT_FULL` leaves the buffer unchanged; a NULL buffer with zero capacity can query the requirement. Existing printf-style `hx_string_format` remains available.
+For string destinations:
+- `hx_format()` writes into an `hx_string` with default runtime limits of **1,024 arguments** and **16 MiB of UTF-8 output** (including any trailing LF added by print functions).
+- `hx_format_with_options()` lets you customize `max_arguments` and `max_output_bytes`.
+- `hx_format_buffer()` writes into a caller-supplied buffer and reports the required capacity (including the trailing NUL). If the buffer is too small, it returns `HX_OS_OUTPUT_FULL` without modifying the buffer (pass `buffer = NULL` and `capacity = 0` to query the required size).
+- Missing positional arguments return `HX_OS_RANGE`, and exceeding argument or output limits returns `HX_OS_LIMIT`. Traditional `printf`-style `hx_string_format()` remains available as well.
 
 ## 4. C++11
+
+In C++11, include `<hx/Format.hpp>` to format native types directly without wrapper macros. All calls return `hx::Result<T>`:
 
 ```cpp
 #include <hx/Format.hpp>
@@ -149,28 +157,32 @@ if (!text)
 // text.value() owns "Answer: 0042".
 ```
 
-`formatTo(existingString, pattern, args...)` uses the destination's context. `format` creates an owning `hx::String`; `print`, `println` and `printTo` return `Result<void>`. `hx::named("name", value)` borrows its value until the call completes. Do not store a named argument that refers to a temporary. Object pointers and enums are supported; function pointers need an explicit application representation. `Formatter<T>` specializes application formatting with a `noexcept` static `format` function. Unsupported C++ types fail to compile; format-string/type compatibility is checked at runtime in this C++11 layer.
+- `hx::format(pattern, args...)` returns an owning `hx::Result<hx::String>`, while `hx::formatTo(existingString, pattern, args...)` writes into `existingString` using its bound memory context.
+- `hx::print`, `hx::println`, and `hx::printTo` return `hx::Result<void>`.
+- `hx::named("name", value)` borrows `value` for the duration of the call; never store a named argument that binds to a temporary object.
+- Object pointers and enums work out of the box (format function pointers by converting them to an explicit application representation first). To support custom C++ types, specialize `hx::Formatter<T>` with a `noexcept` static `format` method. Unsupported types fail at compile time, while format specifier compatibility is verified at runtime.
 
 ## 5. Format rules
 
 | Pattern | Meaning |
 | --- | --- |
-| `{}`, `{0}`, `{name}` | Automatic, positional, named field; do not mix automatic and numbered indexes |
-| `{{`, `}}` | Literal braces |
-| `{:>8}`, `{:*^8}`, `{:<8}` | Right, centered with `*`, left alignment |
-| `{:+08d}`, `{:#x}`, `{:b}`, `{:o}` | Sign/zero padding, hex prefix, binary, octal |
-| `{:.2f}`, `{:.3e}`, `{:.6g}`, `{:a}`, `{:.1%}` | Fixed, scientific, significant digits, hexadecimal float, percentage |
-| `{:,.2f}`, `{:_d}` | Group decimal digits with comma or underscore |
-| `{:.3s}`, `{:?}`, `{!r}` | Truncate text, quote/escape text, string representation |
-| `{0:>{1}}`, `{value:.{precision}f}` | Dynamic integer width or precision |
+| `{}`, `{0}`, `{name}` | Automatic, positional, or named replacement field (do not mix automatic `{}` and numbered `{0}` fields in the same pattern) |
+| `{{`, `}}` | Literal `{` or `}` |
+| `{:>8}`, `{:*^8}`, `{:<8}` | Right-aligned, centered with `*` fill, or left-aligned |
+| `{:+08d}`, `{:#x}`, `{:b}`, `{:o}` | Sign and zero-padding, `0x` hex prefix, binary, or octal |
+| `{:.2f}`, `{:.3e}`, `{:.6g}`, `{:a}`, `{:.1%}` | Fixed-point, scientific, significant digits, hex float, or percentage |
+| `{:,.2f}`, `{:_d}` | Group decimal integer digits with `,` or `_` |
+| `{:.3s}`, `{:?}`, `{!r}` | Truncate text length, quoted/escaped debug text, or string representation |
+| `{0:>{1}}`, `{value:.{precision}f}` | Dynamic integer width or precision supplied by another argument |
 
-Widths and string precision count Unicode scalar values, not terminal cells or grapheme clusters. Chinese characters and combining marks therefore do not promise visual table alignment. Strict UTF-8 is required; invalid data fails rather than being replaced. Embedded NUL bytes can be represented by explicit views; NUL in a built-in specification is invalid. Character conversion rejects invalid scalars. Boolean default/`s` output is `true` or `false`; numeric specs produce 0 or 1.
-
-Formatting does not change the process locale. Floats use a native C locale; a platform without that required locale facility reports `NOT_SUPPORTED` for floating conversion; default conversion searches for a significant-digit representation that round-trips to the input type. It can choose a different scientific/fixed spelling from `std::format`. Precision is bounded at 4,096. This portable libc path may perform repeated conversion and locale allocation; it is not a high-performance Dragonbox implementation. Integer and string paths do not use floating conversion. No assembly optimization or speedup claim is attached to this module.
+> [!NOTE]
+> **Unicode Scalar Counting and Floating-Point Behavior:**
+> - **Unicode code point counts**: Field widths and string truncation precisions (such as `{:.3s}`) count Unicode scalar values (code points), not terminal column widths or grapheme clusters. As a result, CJK characters and combining marks are not guaranteed to align visually in monospaced terminal tables. Input strings must be valid UTF-8; malformed UTF-8 fails with an error rather than inserting replacement characters. Explicit `hx_string_view` values may contain embedded NUL bytes, but format specifiers themselves cannot contain NUL. Booleans format as `true` / `false` by default (or with `:s`), and as `1` / `0` with numeric specifiers.
+> - **Locale-independent floats**: Floating-point formatting always uses C-locale rules without mutating the process-global locale. If a target platform lacks the required locale-independent conversion primitive, floating-point formatting returns `HX_OS_NOT_SUPPORTED`. Default float formatting searches for a significant-digit representation that round-trips back to the input type (which may choose fixed vs. scientific notation at slightly different thresholds than `std::format`). Precision is capped at `4096`.
 
 ## 6. Custom structures and failure contracts
 
-A C callback has the following shape:
+In C, you can register or pass a custom formatting callback for your own structs:
 
 ```c
 static hx_os_status format_user(const void *object, hx_string_view spec,
@@ -178,10 +190,14 @@ static hx_os_status format_user(const void *object, hx_string_view spec,
 HX_FORMATTER(user_info, format_user);
 ```
 
-The registration belongs to the source being generated and names a previously declared type and callback. The callback borrows `object`, formats UTF-8 into `out` using its context, obeys `limit`, and returns an explicit status. Its own spec language is its responsibility. With no generator, use `hx_fmt_custom(&user, format_user)`. C++ follows the same signature through `hx::Formatter<T>::format` with a typed first argument and `hx::StringView` specification.
+- When using `hx_enable_format_syntax`, place `HX_FORMATTER(type_name, callback)` in the compiled source file after declaring both the struct type and callback. Without the generator, pass `hx_fmt_custom(&user, format_user)` at each call site.
+- The callback borrows `object` for the synchronous call, parses its custom `spec`, appends valid UTF-8 to `out` using `out`'s allocator context, and must respect `limit` before allocating memory. In C++11, specialize `hx::Formatter<T>::format` with a typed `const T &` first parameter and an `hx::StringView` specifier.
 
-Formatting copies into temporary output and commits only on success. The destination is unchanged on invalid syntax/type/UTF-8, allocation failure or limit exhaustion, including when arguments borrow its existing bytes. Argument pointers and callback data are borrowed for the synchronous call only. Default limits are 16 MiB of output and 1,024 arguments; print's optional LF counts within that output limit. Callbacks must honor their supplied limit before allocation; final checking cannot prevent an application callback from allocating excessive private memory. No global formatter registry or global allocator is installed.
+**Transactional Output and Error Diagnostics:**
+- **Unchanged destination on failure**: Formatting always assembles output in temporary storage and commits to the destination only on complete success. On syntax errors (`HX_OS_SYNTAX`), type mismatches (`HX_OS_TYPE_MISMATCH`), invalid UTF-8, allocation failure (`HX_OS_NO_MEMORY`), or budget exhaustion (`HX_OS_LIMIT`), the destination string remains untouched—even when arguments borrow bytes from the destination string itself.
+- **Byte-offset error reporting**: When format string parsing or field validation fails without an underlying OS error domain, `hx_os_error.cause_code` records the byte offset of the offending field in the format string. Native error domains reported by custom callbacks are preserved.
 
-`hx_os_error` keeps the existing status/native fields. For parser/field failures without a native error domain, `cause_code` identifies the failing field's byte offset. Convenience source markers return status; use the typed runtime entry for a caller-owned error object. Custom callbacks retain their native error domain/details.
-
-Printing formats completely before writing, so a formatting failure emits nothing. Output errors can occur after some bytes have been written; a print call is not an atomic transaction across processes. Windows consoles use UTF-16 `WriteConsoleW`; redirected handles receive UTF-8 without BOM. POSIX writes retry interrupted calls and contain a newly generated `SIGPIPE` within the calling thread. No process-global signal handler, console code-page switch or locale change is installed. stdout/stderr printing is synchronous and can block; do not use it as cancellable coroutine I/O.
+**Terminal and Stream Printing Behavior:**
+- Print functions finish formatting the complete string in memory before writing to the output stream, so a formatting error never writes partial output.
+- On Windows, writing to a console handle converts the text to UTF-16 and calls `WriteConsoleW` directly (without changing the console code page), while redirected files and pipes receive raw UTF-8 without a BOM.
+- On POSIX, writes automatically retry on `EINTR` and suppress `SIGPIPE` locally within the calling thread if a pipe breaks, without installing a process-global signal handler. Because `stdout` / `stderr` writes are synchronous and may block, do not treat them as non-blocking coroutine I/O.

@@ -1,106 +1,145 @@
-# Behavior and lifetime contracts
+# Behavior, Ownership, and Lifetime Contracts
 
-[简体中文](CONTRACTS.zh-CN.md) · [README](../README.md)
+[简体中文](CONTRACTS.zh-CN.md) · [Back to README](../README.md) · [Getting-Started Guide](USAGE.md)
 
-**Use this page to answer “what remains valid after an error or timeout?”** Start with the [file, configuration or pool tutorial](USAGE.md); this page collects their shared rules.
+Use this reference whenever you need to know **what remains valid after an error or timeout, which handles must be retained for retry, and when memory can be safely freed**. If you are new to `hx_c_platform`, start with the [Getting-Started Tutorials](USAGE.md) first.
 
-After a successful text read, you own the string and the file is already closed. After a pool wait times out, work may still be running, so task data must remain alive. Check status, account for any documented partial progress, then decide whether to release resources or retain them for retry.
+Every API in the library follows one core rule: **inspect the returned `hx_os_status` first, account for any partial byte count or progress, and only free resources once background workers or asynchronous I/O have completely stopped using them.**
 
-## Shared rules
+---
 
-[Variant values](VARIANT.md) follow these ownership/error rules without requiring a global setup. They are independent of the immutable configuration tree and mutable settings. Clear releases the active value while keeping a context lease; destroy releases that lease. Custom descriptors/code/user state are borrowed until all associated objects retire; there is no global registration or automatic plugin pinning.
+## 1. Status Codes, Ownership, and Allocation Contexts (`hx_os_context`)
 
-A status is not a Boolean. OK means the stated operation completed; EOF, NEED_INPUT and OUTPUT_FULL are distinct non-error flow states. Negative values report failure, timeout, cancellation, temporary blocking or capacity limits. Inspect the byte count after partial I/O. An optional caller-owned error record holds the normalized status, native domain/code and secondary cause code. There is no mutable thread-global "last library error" and no logging callback. Native messages are formatted as UTF-8 into caller storage.
+### 1.1 Status Code Categories (`hx_os_status` Is Not a Boolean)
 
-Unless explicitly stated otherwise, pointer inputs are borrowed for the call, output objects have one owner, and destruction requires external exclusion of new users. A failed constructor publishes no object. Never release an object with free(), another library instance or another pool. NULL cleanup is accepted where documented; a disabled constructor returns NOT_SUPPORTED.
+- **Success and Non-Error Flow States (`>= 0`)**:
+  - `HX_OS_OK` (`0`): The operation completed as requested.
+  - `HX_OS_EOF` (`1`): Reached the end of a file, stream, or directory listing.
+  - `HX_OS_NEED_INPUT` (`2`): A streaming decoder or parser requires more input bytes to complete a unit.
+  - `HX_OS_OUTPUT_FULL` (`3`): The destination buffer is too small; grow the buffer and retry.
+- **Errors, Timeouts, and Blocking States (`< 0`)**:
+  - Negative codes distinguish invalid arguments (`HX_OS_INVALID`), out-of-memory (`HX_OS_NO_MEMORY`), timeouts (`HX_OS_TIMEOUT`), cancellation (`HX_OS_CANCELLED`), busy resources (`HX_OS_BUSY`), non-blocking readiness (`HX_OS_WOULD_BLOCK`), and capacity limits (`HX_OS_LIMIT`).
+  - Always check the transferred byte count out-parameter after partial I/O operations.
+- **Standalone Error Records (`hx_os_error`)**:
+  - The library keeps no mutable thread-global "last error" variable and invokes no global logging callbacks. Callers can pass an optional `hx_os_error *` to capture the normalized `hx_os_status`, the native error domain (e.g., `HX_OS_ERROR_WIN32`, `HX_OS_ERROR_ERRNO`, `HX_OS_ERROR_OPENSSL`), the raw OS code, and any secondary cause code, then format a human-readable UTF-8 message with `hx_os_error_message()`.
 
-The constructors listed below have one explicit exception: creation/open may fail with a non-NULL owner when rollback also fails. The error still describes creation. This owner is only for cleanup and must not accept business work. Keep it and its allocation context alive, then retry the corresponding cleanup below. Ordinary creation failure still returns NULL; no hidden reaper or forced thread termination is used.
+### 1.2 Handle Ownership and the Non-NULL Cleanup Exception
 
-| Retained owner | Existing cleanup entry |
+Unless a header explicitly states otherwise:
+- **Input pointers** are borrowed only for the duration of the call.
+- **Output objects** have a single owner and must be released through the matching destroy/release function of the same library instance (never pass library handles to `free()` or across isolated static-library copies in different plugins). Callers must exclude new concurrent users before destroying an object.
+- **Disabled modules and `NULL` cleanup**: Constructors for build-disabled modules return `HX_OS_NOT_SUPPORTED`. Cleanup functions that document `NULL` support treat `NULL` as a safe no-op.
+
+> [!WARNING]
+> **Six Constructors That May Retain a Non-`NULL` `owner` on Failure**:
+> Ordinary constructors always set their output pointer to `NULL` on failure. However, the six multi-resource objects below manage worker threads or kernel handles where an **intermediate creation failure combined with an incomplete rollback** cannot safely free the partially created state immediately.
+>
+> In that case, the constructor returns a failure status while leaving a **non-`NULL` `owner` pointer** for cleanup. Do **not** submit work to that `owner`; keep it and its `hx_os_context` alive and retry cleanup using the matching entry point below:
+>
+> | Object with Retained `owner` | Cleanup Function to Retry |
+> | --- | --- |
+> | **Thread Pool** | `hx_os_thread_pool_shutdown()` (C++: `hx::ThreadPool(owner).shutdownUntil(deadline)`) |
+> | **Coroutine Runtime** | `hx_os_coro_runtime_close_until()`, followed by `hx_os_coro_runtime_destroy()` once closed |
+> | **Directory Watch** | `hx_os_watch_close_until()` (a failed watch creation never takes ownership of caller callbacks/cleanup) |
+> | **Coroutine HTTP Service** | `hx_os_coro_http_close_until()`, before destroying the underlying coroutine runtime |
+> | **Process Output Capture** | `hx_os_process_capture_close_until()`, called on the thread that created the capture |
+> | **Named Shared Memory** | `hx_os_shared_memory_close()` (`data` remains `NULL` and `size` is `0` when open/create fails) |
+
+### 1.3 Allocator Contexts (`hx_os_context`) and `Variant`
+
+- **Default Context (`NULL`)**: Passing `NULL` uses the default `malloc` / `free` allocator. Status helpers, capability queries, clocks, Unicode helpers, and atomics require no context setup.
+- **Custom Allocator Contexts**: `hx_os_context_create()` copies the `hx_os_allocator` callback table and borrows `user` state for the lifetime of the context. Callbacks must be thread-safe, provide fundamental alignment, and support cross-thread deallocation; the library wrapper provides higher power-of-two alignments and records the originating allocator per block.
+- **Context Destruction**: `hx_os_context_destroy()` returns `HX_OS_BUSY` while any allocation or context lease remains active (note that even an empty `hx_string` initialized with a non-`NULL` context holds a lease until `hx_string_destroy()`). Stop new allocations and destroy all owned objects before destroying the context.
+- **[Variant Values](VARIANT.md)**: Follow the same ownership model. Calling `clear` releases the active value while keeping the context lease; calling `destroy` releases the context lease as well. Custom type descriptors and callbacks must remain valid until all associated `Variant` instances are destroyed.
+
+---
+
+## 2. Clocks, Deadlines, and Thread Synchronization
+
+### 2.1 Monotonic Deadlines
+
+- **Absolute Monotonic Deadlines**: All timed wait APIs accept an absolute monotonic timestamp in nanoseconds (`hx_os_deadline`), typically created via `hx_os_deadline_after_ms(milliseconds)`.
+  - `HX_OS_DEADLINE_NOW` (`0`): Poll once without blocking.
+  - `HX_OS_DEADLINE_INFINITE` (`UINT64_MAX`): Wait indefinitely (note that `hx_os_sleep_until(HX_OS_DEADLINE_INFINITE)` is invalid and returns `HX_OS_INVALID`).
+- **Clock Semantics**: Monotonic time excludes system suspend time (using `QueryUnbiasedInterruptTime` on Windows); wall-clock time is Unix epoch milliseconds and may jump across clock adjustments. Nanosecond units provide a uniform representation and do not imply hard real-time nanosecond wakeup precision.
+- **Fail-Closed Clock Reads**: Status-returning clock reads (`hx_os_monotonic_read()` / `hx_os_wall_time_read()`) report native clock failures; convenience reads return `UINT64_MAX` or `INT64_MIN` on failure, causing `hx_os_deadline_after_ms()` to yield `HX_OS_DEADLINE_NOW` so finite waits fail closed instead of blocking on a broken clock.
+
+### 2.2 Synchronization Primitives and Thread Lifetimes
+
+| Facility | Core Contract |
 | --- | --- |
-| Thread pool | `hx_os_thread_pool_shutdown()` |
-| Coroutine runtime | `hx_os_coro_runtime_close_until()`, then `hx_os_coro_runtime_destroy()` after successful close |
-| Directory watch | `hx_os_watch_close_until()` |
-| Coroutine HTTP service | `hx_os_coro_http_close_until()`, before releasing its runtime |
-| Process output capture | `hx_os_process_capture_close_until()`, on its creator thread |
-| Shared memory | `hx_os_shared_memory_close()`; data is NULL and size is zero until open/create succeeds |
+| **Mutex** | Non-recursive by default (recursive mode is opt-in); wakeup order is not guaranteed to be fair |
+| **Condition Variable** | Must be paired with a non-recursive mutex locked once; signals emitted with no current waiters are not queued |
+| **Condition Wait** | Spurious wakeups are permitted—always test your predicate in a `while` loop; returns with the mutex re-locked |
+| **Auto-Reset Event** | Retains at most one signal and resets automatically after waking a single waiter |
+| **Manual-Reset Event** | Remains signaled for all current and future waiters until explicitly reset |
+| **Thread Join** | Supports a single concurrent joiner; a timed-out join (`HX_OS_TIMEOUT`) can be retried; join success includes TLS destructor completion |
+| **Thread Destroy** | Returns `HX_OS_BUSY` until `join` succeeds; never detaches or forcefully terminates threads |
+| **TLS Key** | Runs its destructor on normal thread exit; destroying a key while any thread holds a non-`NULL` value returns `HX_OS_BUSY` |
+| **TLS Replace vs. Clear** | Overwriting a TLS slot via `set` does **not** run the destructor on the old value; `clear` or thread exit runs the destructor |
 
-Check ownership even when creation reports failure. A failed watch creation never transfers callback/cleanup ownership, including when a native owner remains. C++ factories return a failed `Result` while preserving the caller's owner variable for the same cleanup; do not call `value()` on that failed result.
+> [!NOTE]
+> - Ensure all waiting threads have returned before destroying a mutex, condition variable, or event. A timed-out wait never corrupts the synchronization primitive.
+> - On Windows, Fiber-Local Storage (FLS) drives TLS cleanup on thread exit; if the host application explicitly switches Win32 fibers, values behave as fiber-local.
+> - **Atomics**: Expose aligned 64-bit integer and pointer storage. Initialize atomic objects before publishing them to other threads, never place them in packed or under-aligned structs, and never access their struct fields directly during concurrent use.
 
-Pure status/capability/time/Unicode/atomic functions need no initialization. A NULL context uses an immutable malloc/free policy. Explicit contexts copy allocator callbacks and borrow user state. They cannot change allocator. Create one per consumer when allocator lifetimes differ. Strings retain even an empty context; allocated objects also keep it busy. Context destruction returns BUSY until all allocations and leases retire. It does not race safely with a new allocation: exclude admission before destruction.
+---
 
-Allocator callbacks require fundamental alignment, thread safety and cross-thread freeing. Sizes are size_t; reject checked conversions from wider consumer sizes. The wrapper supplies higher power-of-two alignment and stores the originating allocator. Callback code/user data remain loaded until every allocation is freed and context destruction succeeds. Native APIs and iconv may allocate internally using their own allocators; the context controls this library's allocations, not all OS/backend memory.
+## 3. Files, Paths, and Text Encoding
 
-## Time and synchronization
+### 3.1 File I/O and Persistence
 
-All waiting APIs accept absolute monotonic deadlines in nanoseconds, computed with deadline_after_ms(). NOW polls and INFINITE waits without a time limit. sleep_until(INFINITE) is invalid. Large durations saturate to the largest finite deadline. Monotonic time excludes suspend; wall time is Unix epoch milliseconds and can jump. Nanosecond units do not promise nanosecond resolution. Windows uses QueryUnbiasedInterruptTime for this suspend contract. Status-returning clock reads preserve native failures. Convenience reads return UINT64_MAX for monotonic failure and INT64_MIN for wall-clock failure; deadline creation then yields NOW. Finite waits fail closed instead of using an invalid clock value. A 32-bit SDK's time_t remains relevant to dates beyond 2038; select and verify a time64-capable SDK where that is required.
+- **Unbuffered Handles**: `hx_os_file` wraps native OS file descriptors/handles directly without adding a user-space `stdio` buffer (OS kernel page caching still applies).
+- **Read and Write Semantics**:
+  - `read_some`: Returns `HX_OS_OK` with a positive byte count when data is read, or `HX_OS_EOF` with `0` bytes at end-of-file. A zero-length read request returns `HX_OS_OK` immediately and does not test for `EOF`.
+  - `write_some` / `write_all`: `write_some` may write only a prefix; `write_all` loops until all bytes are written or an error occurs, reporting the total bytes written so far (on retry, pass only the unwritten suffix).
+- **Sync and Close**: `sync` requests OS persistence via `fsync` or `FlushFileBuffers`. `close` consumes and clears the caller's handle pointer even if the underlying close reports an I/O error, preventing double-close on a potentially reused OS descriptor.
 
-An already available event or completed task may succeed at an expired deadline. Scheduling, a slow callback, mutex reacquisition and native retirement can extend observed return latency. None of these are hard real-time deadlines.
+### 3.2 UTF-8 Paths, Directory Iteration, and Strings
 
-| Facility | Common guarantee |
-|---|---|
-| Mutex | Nonrecursive by default; explicit recursive option; no fairness |
-| Condition | Nonrecursive mutex locked once; notifications not retained |
-| Condition wait | Predicate loop required; returns with mutex locked |
-| Auto event | Retains at most one signal; one waiter consumes it |
-| Manual event | Remains signaled for all waiters until explicit reset |
-| Thread join | One joiner; retryable timeout; success includes TLS cleanup |
-| Thread destruction | BUSY before successful join; never detaches/kills |
-| TLS key | Destructor on normal exit; live values prevent key destruction |
-| TLS replace | Does not destroy old value; clear explicitly destroys it |
+- **UTF-8 Paths**: All path arguments are NUL-terminated UTF-8 strings (converted internally to UTF-16 with long-path support on Windows). The library performs no implicit Unicode normalization, case folding, or cross-filesystem copy fallback on `rename` (`HX_OS_CROSS_DEVICE`).
+- **Directory Enumeration**: Copies NUL-terminated entry names (`required` includes the trailing NUL). On `HX_OS_OUTPUT_FULL`, the current entry is retained so you can retry with a larger buffer; `HX_OS_EOF` marks the end of the directory.
+- **`hx_string` and `hx_string_view`**: `hx_string` always contains valid UTF-8 and must not be shallow-copied. `hx_string_view` borrows memory from its owner and is invalidated when the owner is modified or destroyed.
 
-Condition waits may wake spuriously. All waiters must leave before a mutex, condition or event is destroyed. A timed-out wait does not invalidate its object. Thread user data remains borrowed until native termination, including TLS destructors. A key destructor must not reset that same key. On Windows, FLS supplies exit cleanup and is fiber-local if the host explicitly uses fibers.
+### 3.3 Streaming Text Encoding Conversion (`hx_os_text`)
 
-Atomics expose aligned 64-bit integer and pointer storage. Initialize before publication; do not directly touch the members concurrently or embed them in packed/under-aligned storage. Load/store/CAS order rules are documented in the header. Storage must be writable even for native RMW-based loads. The implementations may use stronger ordering. GCC/Clang use __atomic; MSVC uses matching Interlocked operations, with a CAS loop on x86 for 64-bit updates. A capability query distinguishes lock-free support. Volatile alone is never used as synchronization. CPU hints provide no ordering guarantee.
+- Input and output sizes are **always measured in bytes** (even for UTF-16 and UTF-32), and no BOM is implicitly added, stripped, or guessed.
+- `HX_OS_TEXT_STRICT` stops on invalid sequences; `HX_OS_TEXT_REPLACE` substitutes `U+FFFD` (or `'?'` when unrepresentable) and counts replacements.
+- On `HX_OS_OUTPUT_FULL`, grow the output buffer and resubmit the unconsumed input slice. On `HX_OS_NEED_INPUT`, retain the incomplete trailing bytes and prepend them to the next input chunk.
 
-## Files, paths and text
+---
 
-Regular files use unbuffered library handles; native/kernel caching remains. read_some reports OK with positive bytes, EOF with zero bytes, or a failure. A zero-length request returns OK and does not discover EOF. write_some can write a prefix. write_all retries progress, reports total bytes on later failure, and does not spin forever on a successful zero-byte write. Callers retry only the remaining suffix when that is appropriate.
+## 4. Memory Pools and Thread Pools
 
-sync requests native persistence using fsync/FlushFileBuffers. There is no stdio buffer in this object to flush. Hardware power-loss guarantees and directory-entry persistence are outside this common promise. File calls may block and have no artificial cancellation/deadline guarantee. Serialize handle position operations. Append applies at the native write level; a multi-write record is not an atomic transaction. close consumes the pointer even on error; do not retry a raw close against a possibly reused native descriptor.
+- **Memory Pools**: Grow on demand when `maximum_bytes = 0`. When a finite `maximum_bytes` budget is set, it bounds all pool-managed upstream blocks, headers, and metadata, while `cached_bytes` separately caps idle cached blocks. Destroying a pool while allocations remain outstanding returns `HX_OS_BUSY`. Arenas require caller serialization, and `reset` invalidates all prior arena allocations at once.
+- **Thread Pools**: Use a fixed worker count and bounded queue capacity (defaults: 2 workers, 256 queued tasks). A rejected submission leaves caller data untouched; an accepted task guarantees its `cleanup` callback runs exactly once on a worker thread (even if the task is cancelled while queued).
+- **Deadlock Detection**: Waiting on a task or shutting down a pool from one of that pool's own worker threads returns `HX_OS_DEADLOCK` immediately.
 
-Paths are NUL-terminated UTF-8. No normalization, sandbox, locale conversion, case-folding or symlink policy is inferred. POSIX arbitrary non-UTF-8 names and Windows unpaired-surrogate names cannot be represented. Windows converts to UTF-16 and handles long absolute drive/UNC paths. Symlink-following is an explicit stat argument; special reparse points retain native behavior. Rename is same-filesystem, without copy/delete fallback. Unsupported atomic no-replace modes fail. Directory deletion requires emptiness. Recursive directory creation can leave successfully created parents on later failure.
+---
 
-Directory next copies a NUL-terminated name; required includes the NUL. OUTPUT_FULL retains the current entry for retry. Invalid-encoding entries are consumed and reported, allowing explicit continuation. EOF ends enumeration.
+## 5. Networking and Event Loops (`hx_os_loop`)
 
-Strings always own valid UTF-8. Mutation requires serialization. A view borrows; do not hold it across owner destruction/mutation. Copy retains the destination context; move transfers the source context and leaves an empty default-context source. Never shallow-copy the struct. Indexes are bytes at codepoint boundaries. No grapheme editing, Unicode case folding, normalization or locale sorting.
+### 5.1 Socket Options and Close Semantics
 
-Encoding lengths are bytes even for UTF-16/32. No BOM or NUL is inserted, removed or guessed. No lossy conversion occurs under STRICT. REPLACE reports replacement counts, using U+FFFD or '?' when needed. Input/output cannot overlap. On OUTPUT_FULL, retry unconsumed input; on NEED_INPUT, retain and resubmit the incomplete suffix. final_input distinguishes truncated final input. Reset after final success or a strict error. error_offset is the stream byte offset; UINT64_MAX means no conversion error. A converter is not concurrently shared. The legacy adapter supports the declared stateless encoding set, not arbitrary iconv names or stateful ISO-2022 encodings.
+- **Non-Blocking and Non-Inheritable**: Sockets are created non-blocking and non-inheritable (`WSA_FLAG_NO_HANDLE_INHERIT` on Windows; `SOCK_CLOEXEC | SOCK_NONBLOCK` and `accept4` on Linux/Android).
+- **Inspect Both Status and `owner` After Closing a Socket**:
+  - **Windows**: When a non-blocking socket has a non-zero `SO_LINGER` timeout, `closesocket` can return `HX_OS_WOULD_BLOCK`. The library preserves the socket handle, network reference, and loop attachment so you can retry closing later.
+  - **POSIX (Linux / macOS / Android)**: `close()` is invoked once; even if an error is reported, the descriptor is consumed and `owner` is cleared to `NULL`.
 
-## Pools and asynchronous work
+### 5.2 Event Loop Thread Ownership and Shutdown Order
 
-Memory pools grow by default. maximum_bytes=0 permits growth; a finite maximum counts pool-controlled upstream blocks, allocation wrappers and metadata. It excludes allocator-private bookkeeping and native kernel state. Pending allocation/free callbacks continue to consume their reserved budget. cached_bytes limits idle whole-block caching separately. There is no hidden upstream bypass. Free uses the original pool; reallocation preserves the original on failure. An in-slot resize may remain in place. Outstanding blocks make destroy BUSY. Object pools bound the number of live objects; arenas require external serialization and reset invalidates all of their allocations.
+- **Single Driving Thread**: The thread that creates an `hx_os_loop` owns loop driving (`run_until` / `poll_until`), I/O submission, socket attachment, and loop destruction. Cross-thread `POST` submissions, request cancellation, reference counting, and request waits (`wait`) are thread-safe.
+- **Completion Callbacks**: Accepted requests invoke their callback exactly once on the loop-driving thread without holding internal locks and never synchronously inside `submit`. Callbacks must return normally (no C++ exceptions, `longjmp`, or library unloading inside callbacks).
+- **Shutdown Order**: `hx_os_loop_close_until()` stops new request admission, requests cancellation of in-flight work, and drives callbacks until idle (retaining all live resources if `HX_OS_TIMEOUT` occurs). **Wait for all requests to finish, close all attached sockets, and then destroy the closed loop with `hx_os_loop_destroy()`.**
 
-Thread pools have fixed workers and a bounded waiting queue (defaults: 2 and 256). Queued plus in-flight submissions consume queue capacity. Running jobs are additionally bounded by worker count. Rejection transfers no user data. Accepted jobs call cleanup once on a worker, including queued cancellation. A running task must cooperate with its cancellation flag. Waiting for pending work on the same worker pool returns DEADLOCK. Wait success includes cleanup; work status is separate. Task handles are reference-counted and may outlive a closed pool. Close chooses drain or cancel-pending, shares the caller's deadline across joins, retains resources on timeout, and may be retried.
+---
 
-No library background thread is created by core functions or event-loop creation. Thread pools create only the requested bounded workers. Async DNS lazily creates the loop's configured bounded resolver pool. There is no process termination, forced thread termination or unmanaged detach.
+## 6. Dynamic Linking and Safe Plugin Unloading Checklist
 
-## Networking and event loops
+Always release objects through the same `hx_c_platform` binary instance that created them. Before unloading a plugin DLL / `.so` that uses `hx_c_platform`:
 
-Network instances balance native startup/cleanup and retain sockets/loops. Basic sockets are nonblocking and noninheritable. Direct socket use is serialized by the caller. TCP receive distinguishes EOF from an empty requested buffer. UDP zero-length datagrams are data. Truncated datagrams report LIMIT plus the copied byte count; the remainder is discarded. IPv6 scope_id is explicit; parse/format handle the address literal, while port/scope remain separate fields. DNS takes ASCII/Punycode hostnames, with at most 256 distinct addresses.
-
-Windows creates sockets with WSA_FLAG_NO_HANDLE_INHERIT. Linux/Android set close-on-exec during socket creation and use accept4 with SOCK_CLOEXEC | SOCK_NONBLOCK; an unavailable accept4 reports an error instead of silently using a racy fallback. POSIX close-on-exec prevents retention across exec, not the temporary descriptor copy made by fork. On macOS, creation/acceptance still uses a separate fcntl step: the host must coordinate concurrent socket creation and child-process startup when inheritance isolation is required.
-
-Direct connect_until timeout leaves establishment in progress; close to abandon. send_until reports a sent prefix. Data already delivered is never rolled back. Readiness is a hint and subsequent nonblocking I/O may still return WOULD_BLOCK.
-
-A client can disconnect before the server accepts it. Known recoverable accept errors return WOULD_BLOCK with their native details; loop ACCEPT operations keep waiting for another connection, subject to the original deadline and cancellation. They do not fail the whole IPC/TLS listener merely because one incoming connection was aborted. Invalid listeners and resource exhaustion remain errors; the library does not retry every failure indefinitely.
-
-Always inspect the owner pointer after socket close. On Windows, a native close failure preserves the socket, its network reference and any loop attachment for retry. In particular, nonzero SO_LINGER on a nonblocking socket can make close return WOULD_BLOCK; do not discard the owner or destroy its network/loop. POSIX close is issued once: an error may still consume the descriptor and clear the owner, so do not retry the old native descriptor.
-
-The creating thread owns loop driving, I/O submission, attached sockets and destruction, and must stay alive until loop destruction. POST submission, request cancellation/reference operations and waiting are thread-safe. One read-side and one write-side request may coexist per socket; CONNECT occupies both. Do not mix direct I/O with pending loop I/O. A socket stays attached to one loop until close; closing a busy socket fails.
-
-Operations copy their descriptions, addresses and DNS names. Sending copies bytes by default. SEND_BORROW and receive buffers remain valid until completion; user is borrowed through callback return. Accepted operations call the callback once on the driving thread, outside internal locks, never inline in submit. Rejection calls no callback. Defaults are 1,024 requests and 4 MiB pending buffer/name bytes, plus bounded per-request metadata; DNS uses 2 workers and 16 queue entries. Request handles retained after completion still occupy caller-controlled memory but are not pending-work budget.
-
-Callbacks can submit new work or close idle sockets. Recursive driving/closing and owner-thread waits for unfinished requests return DEADLOCK. Callback code must return normally: no C++ exceptions, longjmp or library-unload during calls. Completion data is borrowed until request release; accepted sockets/address lists must be taken to transfer ownership. Untaken results are freed with the request. Request wait success includes callback return; waiting does not drive.
-
-run_until drains to idle; poll_until performs a batch and may wait for work. A run/wait deadline does not cancel requests. An operation deadline requests cancellation and may retire later. IOCP cancellation waits for the native completion packet before freeing OVERLAPPED/buffers. POSIX readiness removal does not undo a connection attempt. Close a socket after failed/cancelled CONNECT. DNS may remain inside getaddrinfo until the native resolver finishes; deadline/close can time out without freeing its job or adding replacement threads.
-
-Close stops new admission, requests cancellation and drives retirement. It can invoke callbacks and retains everything live on timeout. Close attached sockets after their requests retire, then destroy the closed loop. Completed request handles can outlive the loop. There is no fixed two-second library shutdown policy.
-
-On Windows, failure to post an IOCP wake is reported with its native error instead of permanently suppressing future wakes. Native waits check for this failure at intervals of at most 250 ms; normal posts still wake immediately, and internal checks do not create public timeouts. This is not a hard response-time guarantee. A poll error does not release accepted requests or their buffers: continue driving them or call close. If closing the internal DNS worker pool fails, the loop stays owned and unfinished; retry `hx_os_loop_close_until()` before destruction.
-
-## Linking and unloading
-
-Static and shared consumers must release objects through the creating library instance. Do not exchange owning handles between private static copies in different plugins, or mix incompatible CRT/allocator tables. CMake target usage keeps build/consumer macros and transitive dependencies consistent.
-
-Before unloading a plugin/library: stop admission, retire work and callbacks, join workers including native TLS cleanup, clear/destroy live TLS keys, release objects and destroy contexts. A timeout forbids unloading the code/user state still referenced. Forked children must not reuse existing library synchronization, pools or loops; exec or create a separately defined post-fork environment. No function is promised async-signal-safe.
+1. **Stop admitting new work** to thread pools, event loops, watches, and signal handlers.
+2. **Wait for all background tasks, timers, and async I/O callbacks to complete** (if any wait returns `HX_OS_TIMEOUT`, plugin code or memory is still in use—**do not unload the plugin**).
+3. **Join all worker threads** created by the plugin (including TLS destructor execution) and clear/destroy all plugin TLS keys.
+4. **Release all owned objects and destroy the plugin's `hx_os_context`** (verifying `HX_OS_OK` rather than `HX_OS_BUSY`).
+5. **`fork()` and Async Signals**: On POSIX systems, a `fork()` child process must not reuse synchronization primitives, thread pools, or event loops inherited from the parent. No API in this library is async-signal-safe.

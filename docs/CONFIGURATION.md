@@ -2,88 +2,83 @@
 
 [简体中文](CONFIGURATION.zh-CN.md) · [README](../README.md)
 
-**Start with a complete program.** Use a configuration document to load settings and query an immutable parsed tree.
+When your application needs to load configuration files or in-memory text at startup and query ports, feature flags, nested objects, or arrays through a read-only tree, this module provides a unified C99 and C++11 interface covering seven formats: **JSON, YAML, XML, INI, TOML, ENV (dotenv), and Java-style properties**.
 
-Open [configuration.c](../examples/configuration.c). Parse the built-in TOML → locate server.port → get_i64 reads its integer → release the document.
+To see a complete working example, open [configuration.c](../examples/configuration.c). The program parses an embedded TOML snippet with `hx_os_config_parse()`, looks up the `server.port` node, reads its integer value with `hx_os_config_node_get_i64()`, and releases the document with `hx_os_config_release()`. Follow the [example run instructions](../examples/README.md#run) to enable examples and build `hx_os_configuration` (it needs no command-line arguments or external input files):
 
-Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_configuration`. This program needs no arguments or input files.
+```text
+Server port: 8080
+```
 
-**Expected result:** It prints `Server port: 8080` without an input file. Use load for files; the usage tutorial has the complete JSON file version. Check field types rather than treating errors as defaults.
+To load directly from a file on disk, call `hx_os_config_load()` instead (see the [complete JSON program](USAGE.md#configuration) for a file-based example, or drop the example source into the [minimal project](USAGE.md#c-project) as `main.c`).
 
-Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
-
-To read a port or device name from `config.json`, start with the [complete JSON program](USAGE.md#configuration). Loading creates a read-only document: query fields, then release it. Editing the original file does not change an already loaded value; load again to read the change.
-
-This page explains format limits, parser selection and data lifetimes. Use the [settings tutorial](USAGE.md#settings) to edit values in memory and save them, or the [serialization tutorial](SERIALIZATION.md) to convert your own structures to JSON and other text formats.
-
-This optional, synchronous C99 module returns immutable documents through a C ABI. Application settings, reload watchers, environment mutation, variable expansion, defaults, schema validation, includes and save timing remain consumer policies. All seven formats now have output APIs; nested document construction, explicit replacement and schema-based object conversion are described in [serialization](SERIALIZATION.md). No background thread or queue is created.
-
-The default backend is always BUILTIN. Installing dependencies never changes parsing implicitly. Select options.backend and check hx_os_config_backend_available. Disabled or mismatched backends return NOT_SUPPORTED and publish no document.
+**Scope and Where to Go Next:**
+- **Immutable snapshots**: Parsing or loading produces an **immutable document**. External edits to the file on disk never mutate an already loaded document in memory—call `hx_os_config_load()` again when you want to reload.
+- **In-memory editing & struct serialization**: This guide covers the supported grammar profiles, parser backend selection, and lifetime contracts. To insert, replace, or remove keys in memory and save the updated file, see [Editing configuration documents](CONFIG_EDIT.md) or the [settings tutorial](USAGE.md#settings). To map C/C++ structs directly to and from JSON, YAML, or TOML, see the [serialization tutorial](SERIALIZATION.md).
+- **Default built-in backends**: Every format defaults to the first-party C99 `HX_OS_CONFIG_BACKEND_BUILTIN` parser—enabling optional third-party libraries at build time never changes parsing behavior behind your back. Select an optional backend explicitly via `options.backend` and check `hx_os_config_backend_available()` (disabled or mismatched backends return `HX_OS_NOT_SUPPORTED` without publishing a document).
 
 ## Input and lifetime
 
-Input, paths, keys and values are UTF-8. An initial UTF-8 BOM is accepted; UTF-16 BOMs and malformed UTF-8 fail. Convert legacy input explicitly with hx_os_text_convert or hx_string_assign_encoded. There is no ANSI-codepage fallback and no process-locale change.
-
-parse borrows input/options during the call and copies retained names/values. load uses the regular-file API and its UTF-8-to-UTF-16 Windows path adapter. Failure clears the output document and releases this call's resources. Successful documents retain context allocations until their final release. retain/release balance references; nodes/slices borrow the document. Exclude final release while any reader uses borrowed data. Retained immutable documents support concurrent queries. Retaining a freed pointer is invalid.
-
-Slices carry byte lengths plus an extra terminating NUL. An allowed escape can produce embedded NUL, even in JSON keys; pass the slice length to member instead of strlen. XML preserves ordered element/text children and a separate attribute object. Namespace prefixes remain literal names; no namespace expansion or XPath is provided.
+- **Strict UTF-8 inputs**: Input text, file paths, keys, and string values must be valid UTF-8. A leading UTF-8 BOM is accepted and stripped automatically, whereas UTF-16 BOMs and invalid UTF-8 sequences fail immediately without falling back to the active ANSI code page or mutating the process locale (convert legacy encodings explicitly with `hx_os_text_convert()` or `hx_string_assign_encoded()` first).
+- **Reference counting & concurrent read queries**:
+  - `hx_os_config_parse()` borrows the input slice and `options` during the call and copies all retained keys and values into the document; `hx_os_config_load()` reads files through the cross-platform file API (including UTF-8-to-UTF-16 long-path handling on Windows). On failure, the output pointer is cleared and all temporary allocations are freed.
+  - A parsed document owns its memory through its bound `hx_context` until the final `hx_os_config_release()`. Pair `hx_os_config_retain()` and `hx_os_config_release()` when sharing ownership.
+  - All `hx_os_config_node *` pointers and `hx_string_view` slices returned by query functions **borrow from the owning document**. As long as the final `release` is excluded while readers are active, multiple threads can query a retained immutable document concurrently. Never call `retain` on an already released pointer.
+- **Embedded NUL bytes & XML structure**: Returned `hx_string_view` slices carry an explicit byte length plus an extra trailing `\0` in storage. Because valid escape sequences (such as `\u0000` in JSON) can produce embedded `NUL` bytes even inside object keys, pass the explicit slice length to `hx_os_config_node_member()` rather than using `strlen()`. In XML documents, child elements and text/CDATA nodes are preserved in document order on the child list while attributes live in a separate attribute object; XML namespace prefixes (such as `ns:tag`) remain literal strings without URI expansion or XPath evaluation.
 
 ## Format profiles
 
-Unsupported structures fail rather than being silently flattened or guessed.
+Constructs outside the profiles below fail explicitly rather than being silently flattened or guessed:
 
-| Format | Builtin profile | Optional backend |
+| Format | Built-in profile (`BUILTIN`) | Optional backend (opt-in via CMake) |
 |---|---|---|
-| JSON | Strict values, objects, arrays, Unicode escapes, exact numeric text | cJSON 1.7.19 |
-| YAML | One document, block maps/sequences, scalar keys and values | libyaml 0.2.5 |
-| XML | UTF-8 XML 1.0 elements/attributes, mixed text, CDATA, references | Mini-XML 4.0.6 |
-| INI | Sections and string key/value pairs | inih r62 |
-| TOML | Common tables, dotted keys, scalars, arrays, inline tables | tomlc17 R260821 |
-| ENV | Explicit dotenv dialect | Builtin |
-| properties | UTF-8 Java-style property syntax | Builtin |
+| **JSON** | Strict RFC 8259 values, objects, arrays, Unicode escapes, exact numeric text | `cJSON 1.7.19` |
+| **YAML** | Single document, block maps/sequences, empty `{}` / `[]`, scalar keys and values | `libyaml 0.2.5` |
+| **XML** | UTF-8 XML 1.0 elements/attributes, mixed text, CDATA, predefined & numeric references | `Mini-XML 4.0.6` |
+| **INI** | `[section]` headers and single-line string key/value pairs | `inih r62` |
+| **TOML** | Standard tables, dotted keys, single-line scalars, arrays, single-line inline tables | `tomlc17 R260821` |
+| **ENV** | Explicit `.env` (dotenv) dialect | Built-in only (`BUILTIN`) |
+| **properties** | UTF-8 Java-style `.properties` syntax | Built-in only (`BUILTIN`) |
 
-JSON accepts top-level scalars and rejects trailing garbage/commas, malformed numbers and unpaired surrogates. Numbers retain lexical spelling; 9007199254740993 is not rounded to double while constructing the document.
-
-Builtin YAML supports space indentation, block sequences, mapping sequence items, quotes, comments, and optional --- / ... document markers. Plain true/false are booleans; null/~ and empty values are null; JSON-style numbers are numeric; other plain values are strings. Yes/on/dates are strings; quoted values stay strings. Multiline plain/quoted scalars, nonempty flow containers, directives, block scalars, compact nested sequences and Unicode line-break extensions require libyaml. Both backends reject anchors, aliases, complex keys and custom tags. No alias expansion or YAML merge semantics occur. libyaml adds flow containers, multiline strings and block folding with the same scalar schema. Known standard scalar tags are checked against that schema. This is not a claim of complete YAML 1.2 support. Builtin double quotes support the common JSON escape set and UXXXXXXXX; other YAML-specific escapes require libyaml.
-
-XML supports predefined entities and numeric character references, checks XML character/name rules and matching tags, and normalizes CR/CRLF. Literal attribute whitespace becomes spaces; referenced whitespace is preserved. Comments/processing instructions are intentionally omitted from the data tree. A leading declaration specifies XML 1.0 and, if present, UTF-8 encoding. DTD and other named entities are unsupported; nothing external is loaded. Repeated elements and adjacent text/CDATA nodes remain distinct. This configuration tree is not a round-trip XML editor.
-
-INI accepts = or : separators, leading # / ; comments, and inline ; comments preceded by whitespace. It trims keys, values and section names. Quotes and backslashes in values remain literal. Repeated section headers reopen a section; scalar/section name conflicts fail. Indented lines are ordinary assignments; multiline continuation is disabled in both backends. inih's unchanged internal buffer limits its untrimmed section names to 49 UTF-8 bytes; its compiled line limit is 1 MiB. The adapter rejects overflow before truncation. The builtin uses the configured general limits.
-
-Builtin TOML supports single-line basic/literal strings, true/false, signed 64-bit integers (decimal/hex/octal/binary and valid underscores), real values, arrays (including multiline/trailing commas), dotted keys, tables and inline tables. Inline tables have no newlines between entries or trailing commas; an array value can span lines. Multiline strings, arrays of tables and date/time values require tomlc17. Duplicate keys/tables always fail. The native backend adds these constructs and TOML 1.1 parsing, subject to upstream limits: 10 key components, 30 bracket/brace levels, and 16K entries per table/array. Both upstream and configured limits apply. DATETIME nodes retain source spelling, including fractional precision and timezone offsets. Numbers also retain spelling instead of formatting an upstream double back to text.
-
-ENV keys match [A-Za-z_][A-Za-z0-9_]*, with an optional export prefix. Values may be empty, single quoted, double quoted or unquoted. Single quotes are literal. Double quotes accept backslash, quote, slash, b/f/n/r/t, uXXXX escapes, and escaped $, apostrophe and #. An unquoted # begins a comment at the start or after whitespace. Neither dollar expressions nor shell syntax are evaluated. This is an explicit dotenv dialect, not a universal standard.
-
-properties supports unescaped = / : / whitespace separators, # / ! comments, escaped keys/separators/spaces, odd-backslash line continuation and uXXXX Unicode escapes with surrogate validation. Comments do not continue. Leading continuation whitespace is removed; trailing value spaces remain. Unknown escapes drop the backslash, as in Java properties. Input is UTF-8, not the legacy ISO-8859-1 default of some Java APIs; convert legacy data first.
-
-Raw ASCII controls other than tab/CR/LF are rejected; properties also accepts formfeed. Escaped controls follow each format's rules.
+**Format Details and Backend Differences:**
+- **JSON**: Accepts top-level scalars, objects, or arrays, and rejects trailing garbage, trailing commas, non-standard numbers, and unpaired UTF-16 surrogates. Numeric nodes preserve their exact lexical text, so 64-bit integers like `9007199254740993` are never rounded through `double` during tree construction.
+- **YAML**:
+  - **Built-in backend**: Supports space indentation, block sequences (`- item`), mappings inside sequences, single/double quotes, comments, optional `---` / `...` document markers, and empty flow collections (`{}` and `[]`) so serialized empty containers round-trip cleanly. Unquoted `true`/`false` become booleans, `null`/`~` and empty values become `null`, JSON-formed numbers become numeric nodes, and all other unquoted scalars (including `yes`, `on`, and dates) as well as all quoted values remain strings. Built-in double-quoted strings support standard JSON escapes plus `\UXXXXXXXX`.
+  - **libyaml backend**: Adds non-empty flow containers, multiline plain and quoted strings, block scalars (`|` and `>`), directives, compact nested sequences, and YAML-specific escapes while enforcing the exact same scalar typing rules.
+  - **Shared boundaries**: Both backends reject anchors (`&`), aliases (`*`), complex non-scalar keys, and custom tags—no alias expansion or `<<` merge key processing occurs (this is not a full YAML 1.2 implementation).
+- **XML**: Supports predefined entities (`&lt;`, `&amp;`, etc.) and numeric character references, validates XML character/name rules and matching closing tags, and normalizes `CR`/`CRLF` line endings to `LF`. Literal whitespace in attributes is normalized to spaces while character-reference whitespace is preserved. Comments and processing instructions are omitted from the configuration tree. An optional leading `<?xml ...?>` declaration must specify version `1.0` and (if present) `UTF-8` encoding. `DOCTYPE`/`DTD` declarations and external entities are rejected. Repeated sibling elements and adjacent text/CDATA nodes remain distinct.
+- **INI**: Accepts `=` or `:` key/value separators, leading `#` or `;` comments, and inline `;` comments preceded by whitespace. Keys, values, and section names are trimmed of surrounding whitespace while quotes and backslashes inside values remain literal. Repeating a `[section]` header reopens and merges into that section, whereas a name collision between a scalar key and a section fails. Multiline continuations are disabled in both backends. Note that `inih`'s fixed internal buffer limits untrimmed section names to `49` UTF-8 bytes and lines to `1 MiB` (the adapter rejects longer inputs before truncation occurs); the built-in backend uses the general `options` limits.
+- **TOML**:
+  - **Built-in backend**: Supports single-line basic and literal strings, `true`/`false`, signed 64-bit integers (decimal, `0x`, `0o`, `0b`, and valid underscores), floating-point numbers, arrays (including multiline arrays and trailing commas), dotted keys, standard `[table]` headers, and single-line inline tables `{ a = 1, b = 2 }`.
+  - **tomlc17 backend**: Adds multiline strings, `[[array_of_tables]]`, date/time values (`DATETIME` nodes preserve their exact lexical text, fractional precision, and timezone offset), and TOML 1.1 parsing, subject to upstream ceilings (`10` dotted key components, `30` bracket/brace nesting levels, and `16K` entries per table or array). Duplicate keys or tables fail in both backends, and numbers always retain their source spelling.
+- **ENV (dotenv)**: Keys match `[A-Za-z_][A-Za-z0-9_]*` with an optional `export ` prefix. Values may be empty, single-quoted (literal), double-quoted (supporting `\\`, `\"`, `\/`, `\b`, `\f`, `\n`, `\r`, `\t`, `\uXXXX`, and escaped `\$`, `\'`, `\#`), or unquoted (where `#` at the start or after whitespace begins a comment). Variable expansion (`${VAR}`) and shell command substitution are never evaluated.
+- **properties**: Supports unescaped `=`, `:`, or whitespace separators, `#` or `!` comments, backslash-escaped keys/separators/spaces, odd-backslash line continuations (stripping leading continuation whitespace while preserving trailing value spaces), and surrogate-validated `\uXXXX` escapes. Input must be UTF-8 (convert legacy ISO-8859-1 files first).
+- **Control characters**: Raw unescaped ASCII control characters other than `\t`, `\r`, and `\n` are rejected across all formats (`properties` additionally allows formfeed `\f`).
 
 ## Queries and errors
 
-member uses exact case-sensitive bytes. pointer implements RFC 6901 for objects/arrays: empty selects the root, /a~1b selects key a/b, and ~0 escapes a tilde. Array indices are unsigned decimal without leading zeros. Dots are not generic path separators. XML uses first/next and attributes instead. at walks siblings, so indexed access is linear.
-
-Missing values return NOT_FOUND; wrong types return TYPE_MISMATCH. get_i64/get_u64 accept integer nodes and complete integer strings, including TOML radix spelling; they check overflow and never truncate fractions. get_double uses a private C numeric locale, may round, and reports ERANGE. An SDK without per-call locale support returns NOT_SUPPORTED for that getter; CMake rejects CJSON/TOMLC enablement there. get_bool accepts only true/false, including complete strings. Getter outputs are unchanged on failure. HX_OS_CAP_CONFIG_DOUBLE reports the numeric conversion capability.
-
-Duplicate keys default to EXISTS. FIRST/LAST are available for JSON, YAML, INI, ENV and properties; LAST retains the key's original sibling position. TOML duplicates and duplicate XML attributes always fail. Discarded entries still consume parse work, nodes and memory.
-
-Errors contain a copied UTF-8 source label, status, available backend/native details, and controlled English messages without configuration values. Positions are byte offsets plus one-based Unicode-codepoint line/column counts. CRLF is one line break, a tab one column, and BOM an input codepoint. Unknown positions are SIZE_MAX / 0 / 0. Backend messages that might include secrets are not forwarded. Libyaml character indices are translated to byte positions; TOMLC/Mini-XML failures without reliable positions report unknown. SYNTAX means invalid grammar; NO_MEMORY means allocation failure; LIMIT means a configured bound; recognizable out-of-profile features use NOT_SUPPORTED. Malformed syntax resembling an unsupported feature may still report SYNTAX.
+- **Tree navigation**:
+  - `hx_os_config_node_member()` performs exact, case-sensitive byte matching.
+  - `hx_os_config_node_pointer()` implements **RFC 6901 JSON Pointer** across objects and arrays: `""` selects the root, `"/a~1b"` selects key `"a/b"` (`~0` escapes `~`, `~1` escapes `/`), and array indices are unsigned decimal numbers without leading zeros (dots `.` are not path separators).
+  - For XML elements, traverse `first_child` / `next_sibling` and query the attribute object. Indexed sibling access via `at()` walks the sibling list linearly.
+- **Typed value getters**:
+  - Missing nodes return `HX_OS_NOT_FOUND` and incompatible node types return `HX_OS_TYPE_MISMATCH`; failed getters never modify the caller's output variable.
+  - `get_i64()` and `get_u64()` accept both integer nodes and complete integer strings (including TOML radix prefixes), checking for overflow and never truncating fractional values.
+  - `get_double()` parses floating-point values using a private C numeric locale and reports range errors on `ERANGE`. On target SDKs that lack per-call locale support, `get_double()` returns `HX_OS_NOT_SUPPORTED` (`HX_OS_CAP_CONFIG_DOUBLE` reflects this capability, and CMake rejects enabling `cJSON`/`tomlc17` on such toolchains).
+  - `get_bool()` accepts only boolean nodes or complete `"true"` / `"false"` strings.
+- **Duplicate key policy**: Duplicate keys default to failing with `HX_OS_EXISTS`. For JSON, YAML, INI, ENV, and properties, `options` can select `FIRST` or `LAST` (`LAST` replaces the value while preserving the key's original sibling position); duplicate TOML keys and duplicate XML attributes always fail. Overwritten duplicate entries still count toward parse work, node, and memory budgets.
+- **Diagnostics without leaking secret values**: `hx_os_error` records a copied UTF-8 source name, the status code, and a controlled English diagnostic message that **never echoes raw configuration values** (preventing accidental logging of secrets). Error locations report a byte offset plus 1-based Unicode code-point line and column numbers (`CRLF` counts as one newline, `\t` as one column, and a leading BOM as one code point; unknown locations report `SIZE_MAX / 0 / 0`). Grammar errors return `HX_OS_SYNTAX`, allocation failures return `HX_OS_NO_MEMORY`, exhausted budgets return `HX_OS_LIMIT`, and recognized out-of-profile features return `HX_OS_NOT_SUPPORTED`.
 
 ## Limits and isolation
 
-Initialize options with hx_os_config_options_init. Defaults: 1 MiB input, 16 MiB parse memory, 65,536 materialized/temporary nodes, depth 64, and 16,777,216 work units. Zero limits are invalid; maximum configured depth is
-128. Work counts input/copy/comparison bytes and adapter operations, not vendor instructions or elapsed time. No hard deadline/cancellation is promised.
-
-The memory budget includes the document, block metadata, allocation wrappers, retained scratch, and redirected vendor malloc/calloc/realloc/strdup calls. Reallocation accounts for old and replacement buffers simultaneously. Context allocator overhead, libc locale objects, OS locks, caller input and load's file-read buffers are outside this budget. During growth load can hold two buffers, each bounded by max_input_bytes. Numeric getters can allocate temporary conversion buffers/locales after parsing, outside the parse budget.
-
-Synchronous vendor calls use nested compiler-TLS allocation scopes, with no owned TLS destructor, hidden worker, queue or global consumer settings. Allocator callbacks can reenter parsing on the same thread, but must not yield/switch fibers inside a native parse. They retain the core allocator's thread-safety, alignment and lifetime requirements.
-
-Vendor symbols are private/prefixed and global hook setters are never called. cJSON writes global error state even with its options API; private cJSON parsing is serialized, allowing same-thread reentry. Builtin JSON and immutable queries do not take this lock. Mini-XML's private callback table stays read-only and allocates no TLS state. Numeric conversion uses a per-call C locale. Third-party source remains unchanged.
-
-cJSON and Mini-XML do native parsing plus shared strict validation/tree materialization. This preserves embedded NUL, large JSON integers and exact XML normalization/mixed content that native trees alone do not guarantee. They are not independent lossless DOM alternatives or promised faster paths. libyaml, inih and tomlc17 build from native events/data. No throughput improvement is claimed.
+Initialize parse options with `hx_os_config_options_init(&options)`:
+- **Default bounds**: `1 MiB` input size, `16 MiB` parse memory, `65,536` nodes (including temporary nodes during construction), nesting depth `64` (configurable up to `128`; setting any limit to `0` is rejected with `HX_OS_INVALID`), and `16,777,216` work units.
+- **Memory accounting**: The `16 MiB` parse memory budget tracks the document tree, block metadata, retained scratch buffers, and all redirected third-party `malloc`/`calloc`/`realloc`/`strdup` allocations (accounting for both old and new buffers during `realloc`). Caller input buffers, `load()` file-read buffers, and post-parse `get_double()` conversion buffers live outside the parse tree budget.
+- **Vendor symbol isolation & thread safety**: All five optional third-party parsers (`cJSON`, `libyaml`, `Mini-XML`, `inih`, `tomlc17`) are compiled with private prefixed symbols and routed through nested compiler-TLS allocation scopes bound to the caller's `hx_context`—their global allocator hook setters are never called. Because upstream `cJSON` mutates a global error struct even when called through its options API, `cJSON` backend parsing is serialized internally with a reentrant lock (built-in JSON parsing and all read-only queries are lock-free).
 
 ## Build and delivery
 
-The five optional parsers use the shared pinned dependency provider: Git submodules by default, or `HX_OS_DEPENDENCY_PROVIDER=FETCHCONTENT`. No source-path arguments or Python downloader are required. Explicit `HX_OS_<PARSER>_SOURCE_DIR` overrides remain available for existing integrations. The example disables unrelated OpenSSL/archive modules; use a prepared SDK when those are needed.
+All five optional parser backends default to `OFF`, while `HX_OS_ENABLE_CONFIG` defaults to `ON`. When enabled, the optional parsers are pulled from pinned Git submodules (or via `-DHX_OS_DEPENDENCY_PROVIDER=FETCHCONTENT`) without requiring manual source path variables:
 
 ~~~sh
 git submodule update --init --recursive
@@ -97,10 +92,7 @@ cmake --build build-parsers --config Release --parallel 4
 build-parsers/bin/hx_os_configuration
 ~~~
 
-Windows multi-configuration builds place these programs in the corresponding `bin/Release/` directory with an `.exe` suffix.
+(On Windows multi-configuration generators, the compiled binary is located at `build-parsers/bin/Release/hx_os_configuration.exe`.)
 
-All five backend switches default OFF; HX_OS_ENABLE_CONFIG defaults ON. CONFIG=OFF removes format parsers but keeps ABI queries/error entry points; parse/load return NOT_SUPPORTED. Backend=ON with CONFIG=OFF is an error. Embedded consumers can select builtin-only or omit the entire module.
-
-Native sources are private object code inside the static library or DLL/so. Installed consumers need neither vendor headers nor separate parser libraries. Enabled dependency licenses are installed; see THIRD_PARTY_NOTICES.md. examples/configuration.c is the common C example and requires no C++.
-
-Builtin YAML also accepts empty `{}` and `[]` to preserve empty collection types on output/readback. Nonempty flow containers still require libyaml.
+- Setting `-DHX_OS_ENABLE_CONFIG=OFF` strips all format parsers for minimal embedded builds while keeping ABI query stubs that return `HX_OS_NOT_SUPPORTED` (enabling a parser backend while `HX_OS_ENABLE_CONFIG=OFF` is a CMake configuration error).
+- Enabled third-party parsers are compiled privately into the library binary, so downstream consumers never need vendor headers or extra link targets; their license notices are installed automatically (see `THIRD_PARTY_NOTICES.md`).

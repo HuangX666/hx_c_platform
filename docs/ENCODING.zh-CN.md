@@ -2,19 +2,23 @@
 
 [English](ENCODING.md)
 
-**先运行一个完整例子。** 需要把包含 NUL 的二进制数据放进 JSON 字符串或纯文本协议时，用 Base64／十六进制表示这些字节。
+当需要把包含 `\0`（NUL）字节或高位字节的原始二进制数据放进 JSON 字段、配置文件、URL 参数或纯文本协议时，直接当作 C 字符串处理会意外截断，也可能破坏 UTF-8 校验。本模块提供零外部依赖的 Base64、Base64URL 与十六进制（Hex）双向转换接口，帮助你在任意二进制字节流与可打印 ASCII 文本之间安全往返。
 
-打开 [encoding.c](../examples/encoding.c)。准备 00 01 fe ff → base64_encode_string → base64_decode 到调用者数组 → 按实际字节数读取 → destroy 字符串。
+你可以先运行 [encoding.c](../examples/encoding.c) 查看完整流程：程序准备了 `00 01 fe ff` 四个原始字节，调用 `hx_os_base64_encode_string()` 编码为文本，再调用 `hx_os_base64_decode()` 还原到调用方字节数组并按实际解码长度读取。按[示例运行方法](../examples/README.zh-CN.md#run)启用示例后，构建并运行 `hx_os_encoding`（无需命令行参数或输入文件）：
 
-按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_encoding`。此例无命令行参数、无需输入文件。
+```text
+Base64: AAH+/w==
+Decoded 4 bytes; last byte: 255
+```
 
-**会得到什么：**输出 `Base64: AAH+/w==` 和 `Decoded 4 bytes; last byte: 255`。这只是表示方式，任何人都可以解码；需要保密时使用加密模块。
+你也可以按[最小工程配置](USAGE.zh-CN.md#c-project)将该示例源码直接作为 `main.c` 编译。
 
-下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+> [!NOTE]
+> Base64 与十六进制仅用于**数据表示（Encoding）**，任何拿到文本的一方都可以直接还原原始字节。若业务需要机密性或完整性保护，请配合加密与消息认证模块使用。
 
 ## 1. 不依赖 OpenSSL 的字节编码
 
-开启 `HX_OS_ENABLE_ENCODING` 即可使用 Base64、Base64URL 和十六进制转换。这些是字节的文本表示，不是加密，不要求 OpenSSL、网络初始化或容器模块。关闭模块后函数仍存在，返回 `HX_OS_NOT_SUPPORTED`。
+开启 CMake 选项 `HX_OS_ENABLE_ENCODING`（默认开启）即可使用 Base64、Base64URL 和十六进制转换。该模块由纯 C99 实现，不需要链接 OpenSSL、不需要初始化网络子系统，也不依赖容器模块。若在构建时关闭该选项，相关函数符号依然保留，调用时明确返回 `HX_OS_NOT_SUPPORTED`。
 
 ```c
 #include <hx_encoding.h>
@@ -35,33 +39,42 @@ int main(void)
 }
 ```
 
-输出为 `aGVsbG8=`。改用 `hx_os_hex_encode_string` 则得到 `68656c6c6f`。[完整编码示例](../examples/encoding.c) 演示包含 NUL 和大于 127 的字节进行编码与解码。复用已经开启 examples 的构建目录，编译 `hx_os_encoding` 目标。
+上述代码输出 `aGVsbG8=`；若改用 `hx_os_hex_encode_string()`，则会输出 `68656c6c6f`。对于包含内嵌 `\0` 和大于 `127` 的字节序列，完整的编码与解码往返写法可参考 [完整编码示例](../examples/encoding.c)。
 
 ## 2. 明确选择 Base64 格式
 
-| flags | 字母表 | 填充 |
+通过 `flags` 参数可以精确控制 Base64 的字母表与末尾填充（Padding）策略：
+
+| `flags` 取值 | 字母表 | `=` 填充规则 |
 |---|---|---|
-| `0` | 标准 `A-Z a-z 0-9 + /` | 最后分组需要时必须带 `=`。 |
-| `HX_OS_BASE64_URL` | URL 安全格式，用 `- _` 替换 `+ /` | 需要时必须带 `=`。 |
-| `HX_OS_BASE64_NO_PADDING` | 标准格式 | 编码不写 `=`，解码拒绝 `=`。 |
-| 两个标志按位或 | URL 安全格式 | 编码不写 `=`，解码拒绝 `=`。 |
+| `0` | 标准字母表 `A-Z a-z 0-9 + /` | 编码时按需补齐 `=`；解码时若最后分组不足 4 字符则必须带 `=`。 |
+| `HX_OS_BASE64_URL` | URL 安全字母表（用 `-` 和 `_` 替换 `+` 和 `/`） | 编码时按需补齐 `=`；解码时必须带 `=`。 |
+| `HX_OS_BASE64_NO_PADDING` | 标准字母表 `A-Z a-z 0-9 + /` | 编码时不输出 `=`；解码时若出现 `=` 则拒绝并返回错误。 |
+| `HX_OS_BASE64_URL \| HX_OS_BASE64_NO_PADDING` | URL 安全字母表 | 编码时不输出 `=`；解码时拒绝 `=`。 |
 
-解码拒绝空格、换行、混用字母表、多余或缺少的填充、不可能的长度，以及末尾未使用位不为零的输入。例如带填充的 `Zg==` 和不带填充的 `Zg` 在各自模式下都表示 `f`；`Zh==` 的未使用位非零，因此拒绝。接口接收明确长度，不把 C 字符串末尾的 NUL 计入长度。
-
-十六进制默认输出小写，`HX_OS_HEX_UPPERCASE` 选择大写。解码同时接受大小写，但不接受奇数字符、`0x` 前缀、空白或分隔符。
+> [!IMPORTANT]
+> **严格解码校验规则：**
+> - **Base64 解码**：严格拒绝空格、换行符、混用标准与 URL 字母表、多余或缺失的 `=` 填充、不可能出现的余数长度，以及末尾未使用的低位比特不为 `0` 的非规范编码（例如 `'f'` 的规范编码是带填充的 `Zg==` 或无填充的 `Zg`；若传入末尾废位非零的 `Zh==`，解码会返回 `HX_OS_INVALID`）。
+> - **十六进制转换**：编码默认输出小写字母 `0-9a-f`，传入 `HX_OS_HEX_UPPERCASE` 可输出大写 `0-9A-F`。解码时同时接受大小写十六进制字符，但严格拒绝奇数个字符、`0x` 前缀、空白字符或冒号／连字符等分隔符。
+> - **显式字节长度**：所有接口均按显式传入的字节数处理输入，切勿把 C 字符串末尾的终止符 `\0` 误计入需要编码的载荷长度（除非你确实想把 `\0` 字节也编码进去）。
 
 ## 3. 缓冲区与所有权
 
-四个缓冲区接口都先完整验证输入并计算所需长度。任何失败都保持输出缓冲区不变。输入合法时，在 `HX_OS_OK` 或 `HX_OS_OUTPUT_FULL` 下写出 `required`；输入不合法时保持该值不变。
+底层四个缓冲区接口（`hx_os_base64_encode`、`hx_os_base64_decode`、`hx_os_hex_encode`、`hx_os_hex_decode`）都会先完整校验输入并计算所需输出大小。任何校验失败或容量不足都不会污染输出缓冲区：
 
-- 编码的 `required` 包含末尾 NUL。
-- 解码的 `required` 是二进制字节数，不包含终止符。
-- 传 `output=NULL, capacity=0` 查询长度。编码空输入仍需要一个 NUL；解码空输入直接成功，长度为零。
-- 输入、输出和 `required` 对象必须位于不同的存储区域，不提供原地转换。
-- 缓冲区接口不分配内存。可以根据所需长度调用 `hx_os_memory_alloc`，解码后用 `hx_os_memory_free` 释放，也可以直接传入已有数组。
-- 字符串便利接口使用输出字符串自己的 context，允许输入借用同一字符串，并在失败时保留原值。编码结果正文上限为 16 MiB；更大的结果使用调用者管理内存的缓冲区接口。
+- **长度汇报（`required`）**：当输入合法且返回 `HX_OS_OK` 或 `HX_OS_OUTPUT_FULL` 时，`*required` 会被写入所需的输出容量；若输入本身不合法（如返回 `HX_OS_INVALID`），`*required` 保持原值不变。
+- **编码与解码的终止符差异**：
+  - **编码接口**的 `required` 字节数**包含**末尾自动写入的 `\0` 终止符。
+  - **解码接口**输出的是纯二进制字节流，`required` 为实际还原出的二进制字节数，**不包含**末尾 `\0`。
+- **预查询长度**：传入 `output = NULL, capacity = 0` 可在不写入数据的情况下查询所需容量。注意：对空输入（长度为 `0`）执行编码仍需要 `1` 字节存放末尾 `\0`；对空输入执行解码则直接返回 `HX_OS_OK`，所需字节数为 `0`。
+- **禁止原地重叠转换**：输入缓冲区、输出缓冲区以及 `required` 指针指向的对象必须位于互不重叠的内存区域，不支持原地（in-place）转换。
+- **内存分配与上限**：
+  - 缓冲区接口本身**不分配任何堆内存**。你可以直接传入栈上数组，或先查询 `required` 大小再通过 `hx_os_memory_alloc()` 分配内存（用完后调用 `hx_os_memory_free()` 释放）。
+  - 字符串便利接口（`*_encode_string`）使用目标 `hx_string` 绑定的内存上下文，支持输入视图借用同一个 `hx_string` 的原有内容，并在失败时保持原字符串不变。字符串便利接口的正文上限为 **16 MiB**；若需编码超过 16 MiB 的大块数据，请改用调用方自管内存的缓冲区接口。
 
 ## 4. C++11 返回值
+
+在 C++11 中，包含 `<hx/Encoding.hpp>` 即可使用静态方法直接获取 `hx::Result<T>`：
 
 ```cpp
 #include <hx/Encoding.hpp>
@@ -80,4 +93,6 @@ int main()
 }
 ```
 
-`Encoding::hex` 返回 `Result<String>`；`fromHex` 和 `fromBase64` 返回 `Result<Buffer>`。`Buffer` 可以保存任意字节并自动释放。C++ 拥有型结果的上限为 16 MiB，不使用异常，继续使用状态码与原生错误信息。先检查成功，再访问 `.value()`。
+- `hx::Encoding::base64()` 与 `hx::Encoding::hex()` 返回拥有文本的 `hx::Result<hx::String>`。
+- `hx::Encoding::fromBase64()` 与 `hx::Encoding::fromHex()` 返回拥有二进制字节数组的 `hx::Result<hx::Buffer>`（`hx::Buffer` 会在析构时自动释放内存）。
+- C++11 拥有型结果同样遵循 **16 MiB** 的输出上限，全程不使用 C++ 异常，并通过 `hx::Result` 保留完整的状态码与错误信息。访问 `.value()` 前请先检查结果是否成功。

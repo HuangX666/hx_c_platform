@@ -2,38 +2,67 @@
 
 [English](ATOMICS.md)
 
-**先运行一个完整例子。** 一个线程算出结果，另一个线程需要确认结果已写完时，可以用原子标志发布一次结果。
+当一个线程完成数据计算并希望通过无锁方式将结果安全发布给另一个线程，或者需要在 C99 / C++11 中跨平台维护原子计数器、标志位与状态机时，可以使用 `<hx_os_atomic.h>`。它属于始终编入的核心模块，不随可选模块裁剪。
 
-打开 [atomic_publication.c](../examples/atomic_publication.c)。`calculate` 写入 42 → release 写 ready → 主线程 acquire 读 ready → 读取 answer → join 并回收线程。
+### 快速运行示例：Release-Acquire 结果发布
 
-按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_atomic_publication`。此例无命令行参数、无需输入文件。
+完整示例位于 [atomic_publication.c](../examples/atomic_publication.c)：工作线程将计算结果 `42` 写入普通变量 `answer`，随后使用 `HX_OS_RELEASE` 内存序将原子标志 `ready` 置为 `1`；主线程使用 `HX_OS_ACQUIRE` 内存序观测到 `ready == 1` 后安全读取 `answer`，最后 `join` 并销毁工作线程。
 
-**会得到什么：**输出 `answer: 42`。改业务时替换计算部分，并保留发布顺序。示例只说明短等待；设备响应等长等待应使用事件或条件变量，不能照搬忙循环。
+按[示例运行方法](../examples/README.zh-CN.md#run)启用示例后，构建并运行 `hx_os_atomic_publication`（无需命令行参数或输入文件）：
 
-下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+```sh
+cmake --build build --config Release --target hx_os_atomic_publication
+```
 
-hx_os_atomic.h 提供的 C99 类型和函数可直接用于 C++11。既有 hx_os_atomic 继续占 8 字节、按 8 字节对齐；独立 hx_os_atomic32 占 4 字节、按 4 字节对齐；指针类型按原生指针对齐。不要压缩结构体对齐、复制正在使用的存储、并发访问原始 value 成员，也不能把 std::atomic 强转成本库类型。发布前完成初始化，外层对象负责生命周期。指针原子操作不负责回收、所有权转移和 ABA 保护。
+预期输出：
 
-常见的数据发布使用 release store 配 acquire load，见 [同一份 C 示例](../examples/atomic_publication.c)。C++ 可以直接用这套 API；纯 C++ 对象也可用自己的 std::atomic 存储，不能混用同一块存储。较长等待应使用事件或条件变量，cpu_relax 不是阻塞等待替代品。
+```text
+answer: 42
+```
 
-| 操作 | 合法内存序 |
+在接入自己的工程时，可参考[最小工程配置](USAGE.zh-CN.md#c-project)使用[同一份 C 示例](../examples/atomic_publication.c)中的发布模式。
+
+> [!TIP]
+> **短自旋与长等待的选择**
+> 示例中的 `hx_os_cpu_relax()` 自旋仅用于演示极短的跨线程状态发布。如果等待的是磁盘 I/O、网络收发或设备响应等长耗时操作，请使用事件（`hx_os_event`）或条件变量（`hx_os_cond`），避免忙自旋浪费 CPU。
+
+## 存储类型与对齐规则
+
+`<hx_os_atomic.h>` 提供三种可在 C99 和 C++11 中直接使用的原子存储类型：
+- **`hx_os_atomic`**：64 位有符号整数（`int64_t`），占 8 字节并强制按 8 字节对齐（静态初始化宏 `HX_OS_ATOMIC_INIT(v)`）。
+- **`hx_os_atomic32`**：32 位有符号整数（`int32_t`），占 4 字节并强制按 4 字节对齐（静态初始化宏 `HX_OS_ATOMIC32_INIT(v)`）。
+- **`hx_os_atomic_ptr`**：无类型指针（`void *`），按目标平台原生指针对齐（静态初始化宏 `HX_OS_ATOMIC_PTR_INIT(v)`）。
+
+> [!WARNING]
+> **存储生命周期与类型边界**
+> - 严禁使用 `#pragma pack` 等方式压缩包含原子类型的结构体对齐，严禁按字节复制（`memcpy`）正在被并发访问的原子存储，也不要在并发期间直接读写结构体的 `.value` 成员。
+> - 不要将 C++ `std::atomic<T>` 与 `hx_os_atomic*` 互相强制类型转换（`reinterpret_cast`）或混用同一块内存。
+> - `hx_os_atomic_ptr` 仅负责指针值本身的原子读写，不提供自动内存回收、所有权转移或 ABA 问题保护。
+
+## 内存序与操作契约
+
+库定义了五种内存序枚举值：`HX_OS_RELAXED`、`HX_OS_ACQUIRE`、`HX_OS_RELEASE`、`HX_OS_ACQ_REL` 和 `HX_OS_SEQ_CST`。各操作支持的合法内存序如下表所示：
+
+| 原子操作 | 合法的 `hx_os_memory_order` 组合 |
 | --- | --- |
-| load | relaxed、acquire、seq_cst |
-| store | relaxed、release、seq_cst |
-| fetch add/sub/or/and/xor、exchange | 五种均可 |
-| CAS 成功为 relaxed 或 release | 失败只能 relaxed |
-| CAS 成功为 acquire 或 acq_rel | 失败 relaxed 或 acquire |
-| CAS 成功为 seq_cst | 失败 relaxed、acquire 或 seq_cst |
-| fence | 五种均可；relaxed 只做编译器屏障 |
+| `load` | `HX_OS_RELAXED`、`HX_OS_ACQUIRE`、`HX_OS_SEQ_CST` |
+| `store` | `HX_OS_RELAXED`、`HX_OS_RELEASE`、`HX_OS_SEQ_CST` |
+| `fetch_add` / `sub` / `or` / `and` / `xor`、`exchange` | 全部五种内存序均可 |
+| `compare_exchange`（成功序为 `HX_OS_RELAXED` 或 `HX_OS_RELEASE`） | 失败序必须为 `HX_OS_RELAXED` |
+| `compare_exchange`（成功序为 `HX_OS_ACQUIRE` 或 `HX_OS_ACQ_REL`） | 失败序可为 `HX_OS_RELAXED` 或 `HX_OS_ACQUIRE` |
+| `compare_exchange`（成功序为 `HX_OS_SEQ_CST`） | 失败序可为 `HX_OS_RELAXED`、`HX_OS_ACQUIRE` 或 `HX_OS_SEQ_CST` |
+| `hx_os_atomic_fence` | 全部五种均可（`HX_OS_RELAXED` 仅作为编译器指令重排屏障） |
 
-强 CAS 不允许伪失败，弱 CAS 允许，通常在循环内重试。成功返回 1，expected 不变；失败返回 0，将观测值写入 expected。expected 是单独的可写存储，不与原子对象重叠，不被其它线程并发访问。fetch/exchange 返回修改前的值，加减按整数位宽取模。非法枚举或非法内存序组合保守退回 seq_cst，CAS 两个序都退回，不会隐式终止进程。
+- **比较并交换（CAS）**：
+  - `compare_exchange`（强 CAS）保证值相等时绝不伪失败；`compare_exchange_weak`（弱 CAS）允许在 LL/SC 架构上发生伪失败，通常配合循环重试使用。
+  - 写入成功时返回 `1` 并保持 `*expected` 不变；写入失败时返回 `0` 并将当前观测到的实际值写入 `*expected`。`expected` 必须指向独立的线程私有可写变量，不得与目标原子变量重叠或被其他线程并发访问。
+- **算术与交换返回值**：所有 `fetch_*` 和 `exchange` 均返回**修改之前的旧值**，算术加减按对应位宽无符号二进制补码规则回绕。
+- **非法内存序的保守回退**：若传入了表中未列出的非法枚举值或非法的 CAS 成功/失败内存序组合，函数不会触发断言崩溃或终止进程，而是保守地升级为 `HX_OS_SEQ_CST` 执行。
 
-GCC/Clang 按常量内存序分支调用内建函数；直接传运行期整数可能被 GCC 统一加强成 seq_cst，不能只写一个枚举转换。MSVC 使用 Interlocked，始终不弱于请求序；其弱 CAS 和原生 x86 一样使用强 CAS。MSVC 非 relaxed 栅栏在私有栈变量上使用完整屏障的 Interlocked，relaxed 使用 _ReadWriteBarrier。 GCC/Clang relaxed 使用空编译器内存屏障，其余使用 __atomic_thread_fence。栅栏须配合适当的原子通信，不能修复普通数据竞争，volatile 不能替代同步。
+## 编译器后端与无锁查询
 
-编译器依据： [GCC 原子内建](https://gcc.gnu.org/onlinedocs/gcc/_005f_005fatomic-Builtins.html)、 [Microsoft Interlocked CAS](https://learn.microsoft.com/en-us/cpp/intrinsics/interlockedcompareexchange-intrinsic-functions)。
-
-is_lock_free 返回针对正确对齐存储的保守编译目标保证。缺少原生 64 位原子能力的 GCC 目标由 CMake 检测并链接工具链 libatomic。这些接口不通过 hx context 分配，不调用用户回调，但运行时回退可能有锁。无锁不等于无等待，也不保证所有信号上下文可用。CPU 等待提示沿用原生能力，不承诺忙等待一定更快。
-
-现有调用点已核查：线程 join、线程池 close、watch close 的 acquire 争用与 release 释放配对；join 结果另有自己的 release/acquire 发布。IOCP 唤醒去重使用 acq_rel CAS、release 复位及既有队列锁；Apple run-loop 指针使用 release 发布、acquire 获取，后续 relaxed 读取发生在 join 后。不依赖隐藏的 seq_cst。
-
-原子属于核心，不随可选模块裁剪。GCC TSan 不支持建模独立栅栏；仅在该构建下保留其警告并允许 atomic.c 编译。发布测试使用实际 acquire/release 原子操作及失败 acquire CAS，不依赖无法建模的栅栏。TSan 通过不能当作栅栏证明，也不能代替 ARM 目标运行。
+- **GCC / Clang 与 MSVC 实现细节**：
+  - 在 GCC / Clang 下，库内部通过常量分支调用对应的 `__atomic_*` 内建函数（避免将运行期枚举直接传给 GCC 内建函数而导致被无条件提升为 `seq_cst`），非 `HX_OS_RELAXED` 栅栏调用 `__atomic_thread_fence`。
+  - 在 MSVC 下，底层基于 `Interlocked*` 内建函数实现，实际内存序始终不弱于调用方请求的顺序（MSVC 与原生 x86 下的 `compare_exchange_weak` 等价于强 CAS；非 `HX_OS_RELAXED` 栅栏在栈私有变量上执行完整屏障的 `Interlocked` 操作，`HX_OS_RELAXED` 栅栏使用 `_ReadWriteBarrier`）。
+  - 编译器参考文档：[GCC 原子内建](https://gcc.gnu.org/onlinedocs/gcc/_005f_005fatomic-Builtins.html)、[Microsoft Interlocked CAS](https://learn.microsoft.com/en-us/cpp/intrinsics/interlockedcompareexchange-intrinsic-functions)。
+- **无锁能力查询（`is_lock_free`）**：`hx_os_atomic_is_lock_free()`、`hx_os_atomic32_is_lock_free()` 和 `hx_os_atomic_ptr_is_lock_free()` 返回当前编译目标对正确对齐存储的保守无锁保证。对于缺少原生 64 位原子指令的 32 位 GCC 目标，CMake 会自动检测并链接工具链的 `libatomic`。所有原子接口均不通过 `hx_os_context` 分配内存，也不调用用户回调。

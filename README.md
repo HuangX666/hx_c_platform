@@ -2,52 +2,63 @@
 
 [![C99 core][c-badge]](CMakeLists.txt) [![C++11 facade][cpp-badge]](docs/CPP_POOL.md) [![Header-only C++ facade][header-badge]](docs/CPP_POOL.md) [![CMake 3.16+][cmake-badge]](CMakeLists.txt) [![First-party license pending][license-badge]](THIRD_PARTY_NOTICES.md) [![Linux GCC and Clang][linux-badge]](docs/PLATFORMS.md) [![macOS validation pending][macos-badge]](docs/PLATFORMS.md) [![Windows MSVC][windows-badge]](docs/PLATFORMS.md) [![Embedded Linux target pending][embedded-badge]](docs/PLATFORMS.md) [![Android API 21 ARM][android-badge]](docs/ANDROID.md)
 
-[简体中文](README.zh-CN.md) · [Complete getting-started guide](docs/USAGE.md) · [Find a feature](#section-6) · [API reference](docs/REFERENCE.md)
-
-Choose further tasks from the [runnable example directory](examples/README.md), which lists use cases, build targets, inputs and expected results.
-
-Investigate CPU hotspots and memory problems with the [optional perf, Valgrind and WPR/WPA workflow](docs/ANALYSIS.md). Detailed analysis stays off by default.
+[简体中文](README.zh-CN.md) · [Getting-Started Guide](docs/USAGE.md) · [Runnable Examples](examples/README.md) · [Find a Feature](#section-6) · [API Reference](docs/REFERENCE.md)
 
 <a id="section-1"></a>
 
-## 1. What this library is for
+## 1. What This Library Does
 
-C/C++ programs often need to read files, parse configuration, edit strings, sort arrays or send work to background threads. `hx_c_platform` provides these common operations through one interface and handles Windows, Linux and other platform differences internally.
-
-For example, `hx_os_file_read_text()` reads a UTF-8 text file, and `hx_os_sort_i32()` sorts integers in ascending order. This page starts with small programs you can run, then points to more features.
+Cross-platform C and C++ applications repeatedly need the same building blocks: reading and writing files, parsing configuration files, manipulating UTF-8 strings, sorting arrays and containers, running work on background thread pools, and communicating over sockets or local IPC. `hx_c_platform` unifies these everyday system facilities behind one clean interface while handling Windows, Linux, Android, and macOS platform differences internally.
 
 ```mermaid
 flowchart LR
-    A["Your C / C++ application"] --> B["Files, configuration, strings, containers, tasks"]
-    B --> C["hx_c_platform platform adapters"]
+    A["Your C / C++ Application"] --> B["Unified API: Files / Config / Text / Containers / Threads / Network"]
+    B --> C["hx_c_platform Platform Adapters"]
     C --> D["Windows / Linux / Android / macOS"]
 ```
 
-The compiled core uses C99. Optional C++11 wrappers provide automatic resource management and explicit results. Ordinary use needs no global initialization and has no Qt or OBS runtime dependency. The C++20 coroutine layer is opt-in. See [platform support](docs/PLATFORMS.md) for baselines and limits.
+### Key Highlights
+
+- **Compiled C99 Core + Header-Only C++11 Facade**: The core library is written in standard C99 with a stable C ABI. Optional headers under `include/hx/` add RAII resource management and explicit `hx::Result<T>` error handling (with zero `try`/`catch`/`throw` exceptions), plus opt-in C++20 coroutine adapters.
+- **No Global Initialization or Heavy Frameworks**: Ordinary API calls work out of the box without global runtime setup or dependencies on Qt, Boost, or OBS. Custom allocators can be injected per subsystem via `hx_os_context`.
+- **Modular CMake Feature Toggles**: Files, strings, built-in configuration parsers (JSON, INI, TOML, etc.), containers, and thread pools work out of the box. External SDK modules—such as cryptography (OpenSSL), archives and compression (libarchive/zlib/lzma/zstd), HTTP (libcurl), and persistent queues (SQLite)—can be enabled or stripped individually via CMake options.
+- **Explicit Ownership and Timeout-Safe Lifetimes**: Every blocking or shutdown operation accepts an explicit monotonic deadline. A timed-out wait (`HX_OS_TIMEOUT`) never forcefully kills worker threads or frees memory that background tasks may still be accessing.
+
+> [!TIP]
+> - Want to build and run working examples right away? Browse the [Runnable Example Directory](examples/README.md), which lists each task, CMake target, input requirement, and expected output.
+> - Investigating CPU hotspots or memory leaks? See the [perf, Valgrind, and WPR/WPA Analysis Workflow](docs/ANALYSIS.md).
+> - See [Platform Support and Deployment](docs/PLATFORMS.md) for OS baselines, compiler requirements, and platform limits.
 
 <a id="section-2"></a>
 <a id="section-3"></a>
 
-## 2. Prepare a runnable project
+## 2. 5-Minute Setup: Prepare a Minimal Project
 
-Use CMake 3.16+ and a C compiler: an MSVC developer terminal on Windows, or GCC/Clang on Linux. This source-integration example places the third-party library in your project's `deps` directory:
+**Prerequisites**: CMake 3.16+ and a C/C++ compiler (MSVC Developer Command Prompt on Windows, or GCC/Clang on Linux).
+
+If you already have a prebuilt `include/lib/bin` SDK package, jump directly to the [Installed SDK Integration Guide](docs/INSTALL.md). Below is the standard **source integration (`add_subdirectory`)** workflow:
+
+### 2.1 Clone the Repository
+
+Create a project directory `hx_demo`, place `hx_c_platform` inside `deps/`, and initialize its submodules:
 
 ```sh
-mkdir hx_demo
-cd hx_demo
-mkdir deps
-cd deps
+mkdir hx_demo && cd hx_demo
+mkdir deps && cd deps
 git clone --branch dev https://github.com/HuangX666/hx_c_platform.git
 git -C hx_c_platform submodule update --init --recursive
 cd ..
 ```
 
-Create `CMakeLists.txt` in `hx_demo` with the following content. Use the complete C program in section 3.1 as `main.c`.
+### 2.2 Create `CMakeLists.txt`
+
+Create `CMakeLists.txt` in `hx_demo`. To get started immediately without building external native SDKs (OpenSSL, libcurl, etc.) first, this starter configuration disables the external-SDK modules and keeps all built-in core modules enabled (when you need HTTP, crypto, or archives later, follow the [Dependency Build Guide](docs/DEPENDENCIES.md) and turn those options back on):
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
 project(hx_demo LANGUAGES C)
 
+# Disable modules that require external prebuilt native SDKs
 foreach(module CRYPTO ARCHIVE COMPRESSION HTTP URL UNICODE PERSISTENT_QUEUE)
 	set(HX_OS_ENABLE_${module} OFF CACHE BOOL "")
 endforeach()
@@ -62,83 +73,90 @@ set_target_properties(hx_demo PROPERTIES
 	C_EXTENSIONS NO)
 ```
 
-This starter configuration keeps files, strings, built-in configuration parsing, containers and thread pools, while disabling modules that require a separately prepared native SDK. When you need HTTP, cryptography or compression, prepare that SDK using the [dependency guide](docs/DEPENDENCIES.md) and enable the corresponding modules.
+> [!NOTE]
+> **Building the C++11 examples (`main.cpp`) in Section 3**:
+> Change `project(hx_demo LANGUAGES C)` to `LANGUAGES C CXX`, replace `main.c` with `main.cpp`, and link against `hx_c_platform::cpp` instead of `hx_c_platform::hx_c_platform`. See the [complete C++ CMake setup](docs/USAGE.md#cpp-project) for compiler flags.
 
-Build from `hx_demo`:
+### 2.3 Build the Project
+
+Save any complete program from Section 3 as `hx_demo/main.c` (or `main.cpp`) and build from `hx_demo`:
 
 ```sh
 cmake -S . -B build
 cmake --build build --config Release
 ```
 
-Run all commands below from the `hx_demo` directory. Select one complete program as `main.c` at a time; replace it and rebuild to try another task. For C++, save `main.cpp` and use the [complete C++ CMake setup](docs/USAGE.md#cpp-project). If you already have an `include/lib/bin` SDK, use the [installed-package setup](docs/INSTALL.md).
-
 <a id="section-4"></a>
 
-## 3. Common operations: run first, then use your own data
+## 3. Common Recipes: Run First, Then Substitute Your Data
 
-### 3.1 Read a text file: C
+Each subsection below is a standalone program. Save one program at a time as `main.c` (or `main.cpp`), rebuild, and run from the `hx_demo` directory.
 
-Suppose your program needs to read `hello.txt` and display its contents. The library opens, reads and closes the file, then stores its text in `text`.
+### 3.1 Read a UTF-8 Text File in One Call (C99)
 
-**Prepare the input:** create UTF-8 `hello.txt` in `hx_demo`:
+**Scenario**: Read the entire contents of `hello.txt` into an `hx_string` and print it to stdout. The library opens, reads, and closes the file automatically.
 
-```text
-Hello, hx_c_platform!
-```
+1. Create a UTF-8 file named `hello.txt` in `hx_demo`:
 
-**Complete program:** save as `main.c` and build with section 2's setup.
+   ```text
+   Hello, hx_c_platform!
+   ```
 
-```c
-#include <hx_os.h>
-#include <stdio.h>
+2. Save the following program as `main.c`:
 
-int main(void)
-{
-	hx_string text = HX_STRING_INIT;
+   ```c
+   #include <hx_os.h>
+   #include <stdio.h>
 
-	hx_os_status status =
-		hx_os_file_read_text("hello.txt", &text, NULL);
+   int main(void)
+   {
+   	hx_string text = HX_STRING_INIT;
 
-	if (status == HX_OS_OK)
-		puts(hx_string_c_str(&text));
-	else
-		fprintf(stderr, "Read failed: %s\n",
-			hx_os_status_name(status));
+   	hx_os_status status =
+   		hx_os_file_read_text("hello.txt", &text, NULL);
 
-	hx_string_destroy(&text);
+   	if (status == HX_OS_OK)
+   		puts(hx_string_c_str(&text));
+   	else
+   		fprintf(stderr, "Read failed: %s\n",
+   			hx_os_status_name(status));
 
-	return status == HX_OS_OK ? 0 : 1;
-}
-```
+   	hx_string_destroy(&text);
 
-The three read arguments mean:
+   	return status == HX_OS_OK ? 0 : 1;
+   }
+   ```
 
-| Argument | Purpose here |
+3. Run the executable from `hx_demo` (so relative path lookup finds `hello.txt`):
+
+   ```powershell
+   # Windows (MSVC Release)
+   .\build\Release\hx_demo.exe
+   ```
+
+   ```sh
+   # Linux / WSL
+   ./build/hx_demo
+   ```
+
+   **Expected output**: `Hello, hx_c_platform!`
+
+**How the calls work**:
+
+| Expression | Purpose & Ownership |
 | --- | --- |
-| `"hello.txt"` | Input path; replace it with your own, such as `"data/config.txt"` |
-| `&text` | String that receives the contents |
-| `NULL` | This example checks the returned status without requesting detailed native errors |
+| `hx_string text = HX_STRING_INIT` | Initializes an empty string struct on the stack (no heap allocation yet) |
+| `hx_os_file_read_text("hello.txt", &text, NULL)` | Reads the file into `text`; passing `NULL` for the 3rd `hx_os_error *` argument means we only inspect the returned `hx_os_status` |
+| `hx_string_c_str(&text)` | Returns a NUL-terminated `const char *` borrowed from `text` |
+| `hx_string_destroy(&text)` | Frees the string buffer (the file handle was already closed before `hx_os_file_read_text` returned) |
 
-`HX_STRING_INIT` initializes an empty string. `HX_OS_OK` means the read succeeded. `hx_string_c_str(&text)` returns a character pointer usable by `puts()`. Finally, `hx_string_destroy()` releases the text; the read function has already closed the file.
+See [File Operations and C++ Wrappers](docs/USAGE.md#files) for writing files, line-by-line reading, and C++ `hx::Files::readText`.
 
-**Run from `hx_demo`:** use the Windows command or the Linux command below.
+---
 
-```powershell
-.\build\Release\hx_demo.exe
-```
+### 3.2 Trim and Normalize User Input (C99)
 
-```sh
-./build/hx_demo
-```
-
-Normal output is `Hello, hx_c_platform!`. If the file is not found, check that `hello.txt` is in your terminal's current directory: relative paths start there.
-
-For your application, change the path and replace `puts()` with the work that uses the contents. Destroy the string after that work finishes. [More file operations and the C++ version](docs/USAGE.md#files).
-
-### 3.2 Clean up user-entered text: C
-
-Given `"  DEVICE_A  "`, remove surrounding spaces and obtain lowercase `device_a`. Replace `main.c` and rebuild; no input file is needed.
+**Scenario**: Clean up raw user input `"  DEVICE_A  "` by stripping leading/trailing ASCII whitespace and converting ASCII uppercase letters to lowercase (`device_a`) in place.
 
 ```c
 #include <hx_os.h>
@@ -165,53 +183,63 @@ int main(void)
 }
 ```
 
-Output is `device_a`. `assign_cstr` copies the input; `trim_ascii_in_place` removes surrounding ASCII whitespace; `lower_ascii_in_place` converts ASCII capitals. All three calls use the same string, which is destroyed once at the end.
+**Expected output**: `device_a`
 
-This suits English device names, tags and ordinary ASCII input. Non-ASCII characters remain intact. For normalization or Unicode case folding, use the [Unicode tools](docs/UNICODE.md).
+- `hx_string_assign_cstr()` copies the input C string into `name`.
+- `hx_string_trim_ascii_in_place()` and `hx_string_lower_ascii_in_place()` mutate the same string buffer in place while leaving non-ASCII UTF-8 bytes untouched.
+- For full Unicode normalization (NFC/NFKC) or locale-independent Unicode case folding, see [Unicode Tools](docs/UNICODE.md).
 
-### 3.3 Read a port from JSON configuration: C++11
+---
 
-Create `config.json` in `hx_demo`:
+### 3.3 Read a Port from JSON Configuration (C++11)
 
-```json
-{"port": 8080}
-```
+**Scenario**: Load `config.json` and read the integer field `/port` using `hx::Result<T>` for explicit, exception-free error handling.
 
-Use the [complete C++ build configuration](docs/USAGE.md#cpp-project) and save this as `main.cpp`. It loads the file, then reads `port`.
+1. Create `config.json` in `hx_demo`:
 
-```cpp
-#include <hx/Config.hpp>
-#include <cstdio>
+   ```json
+   {"port": 8080}
+   ```
 
-int main()
-{
-	auto config = hx::ConfigDocument::load("config.json");
-	if (!config) {
-		std::fprintf(stderr, "Config failed: %s\n",
-			hx_os_status_name(config.status()));
-		return 1;
-	}
+2. Using the [C++ CMake setup](docs/USAGE.md#cpp-project), save the following program as `main.cpp`:
 
-	auto port = config.value().integer("/port");
-	if (!port) {
-		std::fprintf(stderr, "Port failed: %s\n",
-			hx_os_status_name(port.status()));
-		return 1;
-	}
+   ```cpp
+   #include <hx/Config.hpp>
+   #include <cstdio>
 
-	std::printf("Port: %lld\n", static_cast<long long>(port.value()));
+   int main()
+   {
+   	auto config = hx::ConfigDocument::load("config.json");
+   	if (!config) {
+   		std::fprintf(stderr, "Config failed: %s\n",
+   			hx_os_status_name(config.status()));
+   		return 1;
+   	}
 
-	return 0;
-}
-```
+   	auto port = config.value().integer("/port");
+   	if (!port) {
+   		std::fprintf(stderr, "Port failed: %s\n",
+   			hx_os_status_name(port.status()));
+   		return 1;
+   	}
 
-Output is `Port: 8080`. `load` returns a result containing success/failure and, on success, the document. `if (!config)` checks failure; `config.value()` obtains the document after that check. `integer("/port")` reads the root object's integer `port`; `/port` is its location inside JSON.
+   	std::printf("Port: %lld\n", static_cast<long long>(port.value()));
 
-A missing field or wrong type takes the error branch. Write the number as `8080`; the string `"8080"` has a different type. C++ objects release their resources when they leave scope. [Complete C version, nested objects and error handling](docs/USAGE.md#configuration).
+   	return 0;
+   }
+   ```
 
-### 3.4 Sort an existing integer array: C
+**Expected output**: `Port: 8080`
 
-Sort the ordinary C array `{5, 1, 3}` in ascending order. Save this as `main.c`, build and run:
+- `hx::ConfigDocument::load()` returns `hx::Result<hx::ConfigDocument>`. Check `if (!config)` first; on success, access the document via `config.value()`. The document automatically releases its memory when it leaves scope.
+- `integer("/port")` queries the `port` key on the root JSON object. Type checking is strict: a missing key returns `HX_OS_NOT_FOUND`, and a quoted string `"8080"` returns `HX_OS_TYPE_MISMATCH`.
+- See the [Configuration Guide](docs/USAGE.md#configuration) for the C API, nested paths, and YAML/TOML/INI/XML support.
+
+---
+
+### 3.4 Sort a Native C Array in Place (C99)
+
+**Scenario**: Sort an ordinary C array `int32_t values[] = {5, 1, 3}` in ascending order without copying elements into a separate container.
 
 ```c
 #include <hx_algorithm.h>
@@ -235,32 +263,82 @@ int main(void)
 }
 ```
 
-Output is `1 3 5`. `values` is the array to modify, `3` is its element count, and the final `NULL` omits detailed errors. The sorted values stay in the original array. It is a normal local array and requires no library destroy call.
+**Expected output**: `1 3 5`
 
-See [algorithms](docs/ALGORITHMS.md) for structure sorting, binary search, filtering and C++ iterators. Use [containers](docs/USAGE.md#containers) when you need a dynamically growing collection.
+- `hx_os_sort_i32(values, 3, NULL)` sorts the 3 elements directly inside `values`. Because `values` is a stack array, no cleanup call is needed.
+- See [Generic Algorithms](docs/ALGORITHMS.md) for custom struct sorting, binary search, filtering, and C++ iterator ranges, or [Containers](docs/USAGE.md#containers) when you need dynamically resizing collections.
 
-### 3.5 Run a calculation on a background thread: C++11
+---
 
-For example, calculate `21 × 2` on a worker, then display `42` on the main thread. The complete sequence is:
+### 3.5 Run a Calculation on a Background Thread Pool (C++11)
 
-1. Create a pool with two workers.
-2. Submit the calculation and argument `21`.
-3. Wait for and obtain its result.
-4. Explicitly shut down the pool.
+**Scenario**: Create a thread pool with 2 worker threads, submit `21 * 2` for background execution, wait for the result with a 2-second deadline, and shut down the pool cleanly (from [examples/thread_pool.cpp](examples/thread_pool.cpp)).
 
-Use the complete contents of [thread_pool.cpp](examples/thread_pool.cpp) as `main.cpp`, build with the C++ setup and expect:
+```cpp
+#include <hx/ThreadPool.hpp>
+#include <cstdio>
 
-```text
-Task result: 42
+int main()
+{
+	hx_os_thread_pool *owner = NULL;
+
+	if (!(hx_os_capabilities() & HX_OS_CAP_THREAD_POOL)) {
+		std::puts("Thread pools are disabled.");
+		return 0;
+	}
+
+	// 1. Create a pool with 2 worker threads; native handle is stored in owner
+	auto created = hx::ThreadPool::withThreads(owner, 2);
+	if (!created) {
+		std::fprintf(
+			stderr, "%s\n", hx_os_status_name(created.status()));
+		auto closed = hx::ThreadPool(owner).shutdownUntil(
+			hx_os_deadline_after_ms(2000));
+		if (!closed)
+			std::fputs("Cleanup pending; keep owner to retry.\n",
+				stderr);
+		return 1;
+	}
+
+	auto &pool = created.value();
+
+	// 2. Submit background work and wait up to 2 seconds for the result
+	auto submitted =
+		pool.submit([](int value) noexcept { return value * 2; }, 21);
+
+	hx_os_status workStatus = submitted.status();
+	if (submitted) {
+		auto answer = submitted.value().getUntil(
+			hx_os_deadline_after_ms(2000));
+		workStatus = answer.status();
+		if (answer)
+			std::printf("Task result: %d\n", answer.value());
+	}
+
+	// 3. Explicitly shut down the pool (cancel queued work, wait up to 2s)
+	auto closed = pool.shutdownUntil(
+		hx_os_deadline_after_ms(2000), HX_OS_POOL_CANCEL_PENDING);
+	if (!closed) {
+		std::fprintf(stderr, "Close pending: %s\n",
+			hx_os_status_name(closed.status()));
+		return 1;
+	}
+
+	return workStatus == HX_OS_OK ? 0 : 1;
+}
 ```
 
-`submit()` accepts the work, `getUntil()` waits for the result, and `shutdownUntil()` closes the pool. The example chooses a two-second budget; applications choose their own. Timeout means work may remain active. A service must retain `owner` and task data while arranging further handling or retrying close.
+**Expected output**: `Task result: 42`
 
-The [step-by-step tutorial](docs/USAGE.md#thread-pool) includes a complete program, explains each object, and covers failure and shutdown.
+> [!IMPORTANT]
+> **Why pass `owner` and call `shutdownUntil()` explicitly?**
+> `hx_c_platform` never forcefully terminates threads or frees active resources on a timeout. If a worker is still running when the deadline expires, `shutdownUntil()` returns `HX_OS_TIMEOUT` and keeps `owner` valid so the worker never touches freed memory. Long-running services should retain `owner` (and any data borrowed by active tasks) and retry `shutdownUntil()` later. See the [Thread Pool Guide](docs/USAGE.md#thread-pool) for details.
 
-### 3.6 Print text and numbers with `{}`: C99
+---
 
-To display a voltage with two decimal places, save this as `main.c`:
+### 3.6 Print Formatted Text and Numbers with `{}` (C99)
+
+**Scenario**: Format strings and floating-point numbers using modern `{}` and `{:.2f}` placeholders in standard C99 with explicit typed argument wrappers.
 
 ```c
 #include <hx_print.h>
@@ -274,93 +352,121 @@ int main(void)
 }
 ```
 
-Output is `Voltage: 3.75`. `{}` takes the next argument; `{:.2f}` prints a floating-point value with two decimal places. `hx_fmt_str` identifies a string argument and `hx_fmt_f64` a floating-point argument. Include the header and link normally; this example needs no source generation.
+**Expected output**: `Voltage: 3.75`
 
-C++ selects formatting from argument types. See [formatting](docs/FORMAT.md) for custom structures and more placeholder forms.
+- `{}` consumes the next argument in order, and `{:.2f}` formats a `double` to two decimal places.
+- In C99, `hx_fmt_str()` and `hx_fmt_f64()` tag argument types inline—just include `<hx_print.h>` and link the library, with no code generation step required.
+- In C++11, argument types are deduced automatically. See the [Formatting Guide](docs/FORMAT.md) for custom structs, automatic C argument macros, and format specifiers.
 
 <a id="section-5"></a>
 
-## 4. Remember these rules first
+## 4. Four Core Rules to Keep in Mind
 
-- **Check a C status before using output.** `HX_OS_OK` means success; other statuses depend on the operation. `hx_os_status_name()` returns readable English text.
-- **Check a C++ result before obtaining its value.** `if (!result)` checks failure; call `result.value()` after success. Errors are explicit and require no exception handling.
-- **Release C resources with their matching function.** Strings use `hx_string_destroy()`, configuration documents use `hx_os_config_release()`, and other interfaces document their cleanup function.
-- **Finish closing objects that contain workers or I/O.** After a timeout they may still be active; retain them and any data borrowed by their work.
+1. **Always check `hx_os_status` in C**: `HX_OS_OK` (`0`) indicates success; positive statuses (such as `HX_OS_EOF`) and negative error codes carry specific meanings. Use `hx_os_status_name(status)` to get a human-readable status string.
+2. **Check `hx::Result<T>` before calling `.value()` in C++**: Test `if (!result)` first, and only call `result.value()` after confirming success. All C++ wrappers use explicit `Result` returns rather than exceptions.
+3. **Pair C allocations with their matching release function**: Release strings with `hx_string_destroy()`, configuration documents with `hx_os_config_release()`, and other C handles with the cleanup function documented in their header.
+4. **Complete shutdown on objects with workers or async I/O**: After a timeout (`HX_OS_TIMEOUT`), background work may still be running. Retain the owner handle and any borrowed task data until close/shutdown succeeds.
 
-See [first-use questions](docs/USAGE.md#questions) for concrete explanations.
+See [First-Use Questions and Troubleshooting](docs/USAGE.md#questions) for concrete examples.
 
 <a id="section-6"></a>
 
-## 5. Where to find more features
+## 5. Feature Map & Documentation Index
 
-For one-call text/file encryption, SHA-256, HMAC and signatures, see [cryptography with complete C/C++ examples](docs/CRYPTO.md).
+Use the tables below to jump directly to the guide and runnable example for your task:
 
-| What you need | Where to start |
+### 5.1 Files, Streams & Text Processing
+
+| What you want to do | Where to start |
 | --- | --- |
-| Native IPC device control | [Independent IPC example](docs/IPC_BUSINESS.md) |
-| TCP order submission and receipts | [Independent TCP example](docs/TCP_BUSINESS.md) |
-| UDP samples and feedback | [Independent UDP example](docs/UDP_BUSINESS.md) |
-| Keepalive, IPv6 dual stack, broadcast, multicast and network interfaces | [Socket options and discovery](docs/NETWORK_OPTIONS.md) |
-| UDP metadata, batch I/O, vector I/O and trusted-LAN KCP | [Practical network I/O](docs/NETWORK_IO.md) |
-| Stream HTTP files and suspend coroutine requests | [HTTP transfers](docs/HTTP_FILES.md) |
-| KCP reliable block transfer | [Independent KCP example](docs/KCP_BUSINESS.md) |
-| Verified TLS connections and threaded JSON send/receive | [TLS guide and runnable programs](docs/TLS.md) |
-| Pack/unpack files and directories, encrypted ZIP and optional encrypted 7z | [Archive guide and runnable program](docs/ARCHIVE.md) |
-| IPC, duplex messages, concurrent callers and other languages | [IPC tutorial and protocol](docs/IPC.md) |
-| Brace formatting, automatic C arguments and expressions | [Formatting](docs/FORMAT.md) |
-| Complete text, configuration, container and pool programs | [Task tutorials](docs/USAGE.md) |
-| Nested file search and background scanning | [Recursive search tutorial](docs/FILE_SEARCH.md) |
-| Full feature list, limits and build switches | [Detailed reference](docs/REFERENCE.md) |
-| Encoding, translation, directory visits and lexing | [Common utilities](docs/COMMON_UTILITIES.md) |
-| JSON/YAML/XML/INI/TOML/ENV/properties | [Configuration formats](docs/CONFIGURATION.md) |
-| Structures, deeply nested mixed values and all-format output | [Serialization tutorial](docs/SERIALIZATION.md) |
-| Different value types and custom structures | [Variant](docs/VARIANT.md) |
-| Base64 / Base64URL and hexadecimal bytes | [Encoding helpers](docs/ENCODING.md) |
-| Compact integers, UUID parsing and UUID v7 | [Integer tools](docs/INTEGER_TOOLS.md) |
-| Bounded UTF-8 line-by-line input | [Line reader](docs/LINE_READER.md) |
-| Borrowed splitting, strict integers and natural string order | [Text utilities](docs/TEXT_UTILITIES.md) |
-| Stopwatch, bounded backoff and token-bucket limits | [Timing and flow control](docs/CONTROL.md) |
-| Shared cancellation, WaitGroup and reader/writer locking | [Thread coordination](docs/COORDINATION.md) |
-| Sort/search ordinary arrays, structures and C++ iterator ranges | [Generic algorithms](docs/ALGORITHMS.md) |
-| Other containers and element copy/release | [C containers](docs/CONTAINERS.md) |
-| Cancellation, close retries and C++ results | [Thread pool](docs/CPP_POOL.md) · [Result](docs/CPP_RESULTS.md) |
-| UTF-8 filenames with FILE, native wchar_t conversion | [Text interoperation](docs/TEXT_INTEROP.md) |
-| Bounded byte buffering with bulk read, write and peek | [Byte queues](docs/BYTE_QUEUE.md) |
-| Caller-owned ring storage and two-span borrowing | [Fixed byte rings](docs/RING.md) |
-| Single/batch thread messages and SPSC/MPSC/MPMC queues | [Concurrent queues](docs/QUEUES.md) |
-| Bounded LRU caching with per-entry expiry | [LRU caches](docs/CACHE.md) |
-| Dynamic bitmaps, bit search and set operations | [Bitsets](docs/BITSET.md) |
-| Binary protocols and bounded background file output | [Streams and file writer](docs/STREAMS.md) |
-| INI editing, configuration backups and settings overlays | [Configuration editing](docs/CONFIG_EDIT.md) |
-| Interval trees, owned snapshots and bounded P50/P95/P99 | [Profiler](docs/PROFILER.md) |
-| Growable named values and binary parameter data | [Parameter packs](docs/PARAMETERS.md) |
-| Observe signals, modify shared arguments and return growable procedure results | [Signals](docs/SIGNALS.md) |
-| Runtime token checks, quoted strings and nested group skipping | [Parsing helpers](docs/PARSING.md) |
-| Runtime constants, conditions and bounded configuration includes | [Preprocessing](docs/PREPROCESSING.md) |
-| Windows DLL versions, window titles and monitor/GPU identification | [Windows utilities](docs/WINDOWS_UTILITIES.md) |
-| Explicit Windows crash-file configuration for a customer EXE | [WER LocalDumps](docs/LOCAL_DUMPS.md) |
-| Borrowing native file, socket, thread and process objects | [Native interoperability](docs/NATIVE_INTEROP.md) |
-| Scoped sleep requests through existing Linux desktop services | [Linux desktop](docs/LINUX_DESKTOP.md) |
-| Direct SQLite/OpenSSL/libcurl/archive SDK calls | [Native dependencies](docs/NATIVE_DEPENDENCIES.md) |
-| Persistent messages, business acknowledgements and leases | [Persistent queue](docs/PERSISTENT_QUEUE.md) |
-| Unicode normalization and case folding | [Unicode](docs/UNICODE.md) |
-| Chunked SHA-256/SHA-512 and HMAC | [Incremental digest](docs/INCREMENTAL_HASH.md) |
-| UTF-8 regex, captures, replacement and advanced syntax | [Regular expressions](docs/REGEX.md) |
-| Complete messages over streams, sockets and TLS | [Message frames](docs/FRAMES.md) |
-| Initialize shared state once | [One-time initialization](docs/ONCE.md) |
-| Shuffle/sample, radix sorting, byte search and Bloom | [Binary/search tools](docs/FAST_TOOLS.md) |
-| HTTP/HTTPS, compression, URL, CLI, temporary resources, serial and shared memory | [Everyday I/O tools](docs/UTILITY_EXTENSIONS.md) |
-| Optional dependency sources and native builds | [Dependencies](docs/DEPENDENCIES.md) |
-| Network, processes, pipes, watches, mappings and system info | [Platform utilities](docs/PLATFORM_UTILITIES.md) |
-| Android and embedded builds | [Android](docs/ANDROID.md) · [Cross-compilation](docs/REFERENCE.md#section-28) |
+| Step-by-step tutorials for files, strings, config, containers, and pools | [Getting-Started Tutorials](docs/USAGE.md) |
+| Brace `{}` formatting, automatic C arguments, and custom struct output | [Formatting Guide](docs/FORMAT.md) |
+| Bounded UTF-8 line-by-line file and stream reading | [Line Reader](docs/LINE_READER.md) |
+| Zero-copy string splitting, strict integer parsing, and natural sort order | [Text Utilities](docs/TEXT_UTILITIES.md) |
+| Open `FILE*` with UTF-8 paths and convert Windows `wchar_t` strings | [Text Interoperability](docs/TEXT_INTEROP.md) |
+| Unicode normalization (NFC/NFD/NFKC/NFKD) and case folding | [Unicode Tools](docs/UNICODE.md) |
+| UTF-8 regular expressions, capture groups, and text replacement | [Regular Expressions](docs/REGEX.md) |
+| Base64 / Base64URL and hexadecimal encoding/decoding | [Encoding Helpers](docs/ENCODING.md) |
+| Recursive directory file search and background scanning | [Recursive File Search](docs/FILE_SEARCH.md) |
+| Binary endian-aware streams and bounded background file writing | [Streams and File Writer](docs/STREAMS.md) |
+| Pack/unpack ZIP and TAR archives, encrypted ZIP, and optional 7z | [Archive Guide](docs/ARCHIVE.md) |
+| Legacy encodings, translation lookup tables, directory visits, and lexing | [Common Utilities](docs/COMMON_UTILITIES.md) |
+
+### 5.2 Configuration, Serialization & Dynamic Types
+
+| What you want to do | Where to start |
+| --- | --- |
+| Parse JSON / YAML / XML / INI / TOML / ENV / Properties | [Configuration Formats](docs/CONFIGURATION.md) |
+| Edit INI files, manage configuration backups, and apply settings overlays | [Configuration Editing](docs/CONFIG_EDIT.md) |
+| Serialize C/C++ structs and nested trees across 7 configuration formats | [Serialization Tutorial](docs/SERIALIZATION.md) |
+| Hold heterogeneous values or custom structs in a single variable | [Variant Values](docs/VARIANT.md) |
+| Pass growable named parameters and binary payloads | [Parameter Packs](docs/PARAMETERS.md) |
+| Runtime token checks, quoted strings, and nested block skipping | [Parsing Helpers](docs/PARSING.md) |
+| Expand runtime constants, conditionals, and bounded file includes | [Configuration Preprocessing](docs/PREPROCESSING.md) |
+
+### 5.3 Containers, Algorithms & Data Structures
+
+| What you want to do | Where to start |
+| --- | --- |
+| Generic C vectors, doubly linked lists, queues, and red-black tree maps | [C Containers](docs/CONTAINERS.md) |
+| Sort and search C arrays, custom structs, and C++ iterator ranges | [Generic Algorithms](docs/ALGORITHMS.md) |
+| Bounded byte queues with bulk read, write, and peek | [Byte Queues](docs/BYTE_QUEUE.md) |
+| Caller-owned fixed byte rings with two-span zero-copy borrowing | [Fixed Byte Rings](docs/RING.md) |
+| Bounded LRU cache with per-entry expiration (TTL) | [LRU Cache](docs/CACHE.md) |
+| Dynamic bitsets, bit scanning, and set operations | [Bitsets](docs/BITSET.md) |
+| Compact Varint/ZigZag integers, UUID parsing, and UUID v7 generation | [Integer and UUID Tools](docs/INTEGER_TOOLS.md) |
+| Random shuffle/sampling, radix sort, multi-pattern search, and Bloom filters | [Fast Binary & Search Tools](docs/FAST_TOOLS.md) |
+
+### 5.4 Concurrency, Thread Pools, Queues & Coroutines
+
+| What you want to do | Where to start |
+| --- | --- |
+| Submit C++ thread-pool tasks, cancel work, retry close, and use `Result<T>` | [Thread Pool](docs/CPP_POOL.md) · [Result Guide](docs/CPP_RESULTS.md) |
+| Single and batched inter-thread messaging (SPSC / MPSC / MPMC queues) | [Concurrent Queues](docs/QUEUES.md) |
+| SQLite-backed persistent message queues with consumer ACKs and leases | [Persistent Queue](docs/PERSISTENT_QUEUE.md) |
+| Cooperative cancellation tokens, `WaitGroup`, and reader/writer locks | [Thread Coordination](docs/COORDINATION.md) |
+| Thread-safe one-time initialization (`hx_os_once`) | [One-Time Initialization](docs/ONCE.md) |
+| Stopwatches, bounded exponential backoff, and token-bucket rate limiting | [Timing and Flow Control](docs/CONTROL.md) |
+| Observe signals, mutate shared call arguments, and collect procedure results | [Signals](docs/SIGNALS.md) |
+
+### 5.5 Networking, IPC, Security & Cryptography
+
+| What you want to do | Where to start |
+| --- | --- |
+| End-to-end TCP business example (order submission and receipts) | [Independent TCP Example](docs/TCP_BUSINESS.md) |
+| End-to-end UDP business example (sensor samples and feedback) | [Independent UDP Example](docs/UDP_BUSINESS.md) |
+| Reliable UDP block transfer over KCP | [Independent KCP Example](docs/KCP_BUSINESS.md) |
+| Local IPC device control and cross-language wire protocol | [Independent IPC Example](docs/IPC_BUSINESS.md) · [IPC Guide & Protocol](docs/IPC.md) |
+| Socket keepalive, IPv6 dual stack, broadcast, multicast, and NIC queries | [Socket Options and Discovery](docs/NETWORK_OPTIONS.md) |
+| UDP packet metadata, batch I/O, scatter/gather I/O, and trusted-LAN KCP | [Practical Network I/O](docs/NETWORK_IO.md) |
+| Length-prefixed message frames over streams, sockets, and TLS | [Message Frames](docs/FRAMES.md) |
+| Certificate-verified TLS connections and multi-threaded JSON messaging | [TLS Guide and Examples](docs/TLS.md) |
+| Streaming HTTP/HTTPS file transfers and coroutine HTTP requests | [HTTP Transfers](docs/HTTP_FILES.md) |
+| One-call text/file encryption, SHA-256, HMAC, and digital signatures | [Cryptography Guide](docs/CRYPTO.md) |
+| Incremental chunked SHA-256 / SHA-512 and HMAC computation | [Incremental Digest](docs/INCREMENTAL_HASH.md) |
+
+### 5.6 System Integration, Profiling & Platform Utilities
+
+| What you want to do | Where to start |
+| --- | --- |
+| HTTP, memory compression, URLs, CLI parsing, temp files, serial ports, and shm | [Everyday I/O Tools](docs/UTILITY_EXTENSIONS.md) |
+| Child processes, pipes, directory watches, memory mappings, and system info | [Platform Utilities](docs/PLATFORM_UTILITIES.md) |
+| Borrow native handles (`HANDLE`, `fd`, `SOCKET`, thread, and process handles) | [Native Interoperability](docs/NATIVE_INTEROP.md) |
+| Read Windows DLL version resources, window titles, and monitor/GPU info | [Windows Utilities](docs/WINDOWS_UTILITIES.md) |
+| Configure Windows Error Reporting (WER) LocalDumps for a customer EXE | [WER LocalDumps](docs/LOCAL_DUMPS.md) |
+| Request scoped idle-sleep inhibition through Linux desktop services | [Linux Desktop Power](docs/LINUX_DESKTOP.md) |
+| Hierarchical interval profiling trees, snapshots, and P50/P95/P99 percentiles | [Profiler Guide](docs/PROFILER.md) |
+| Call the bundled SQLite, OpenSSL, libcurl, or compression SDKs directly | [Native Dependencies](docs/NATIVE_DEPENDENCIES.md) |
+| Manage third-party submodules and build optional native dependency SDKs | [Dependency Build Guide](docs/DEPENDENCIES.md) |
+| Cross-compile for Android NDK and embedded Linux targets | [Android Guide](docs/ANDROID.md) · [Cross-Compilation](docs/REFERENCE.md#section-28) |
+| Look up all CMake switches, limits, and complete module contracts | [Detailed Reference](docs/REFERENCE.md) |
 
 <a id="section-7"></a>
 
-## 6. Builds, platforms and licensing
+## 6. Build Options, Platforms & Licensing
 
-Public examples are independent; enable `HX_OS_BUILD_EXAMPLES=ON` to build them. See [build/install options](docs/REFERENCE.md#section-27) and [platform support](docs/PLATFORMS.md). Maintainer regression sources, execution logs and temporary reports remain local. Remote CI is disabled.
-
-The first-party distribution license is not yet selected. Third-party components retain their own licenses. Read [third-party notices](THIRD_PARTY_NOTICES.md) before use or redistribution.
+- **Building Public Examples**: Pass `-DHX_OS_BUILD_EXAMPLES=ON` to CMake to build the standalone programs in `examples/`. See [Build and Install Options](docs/REFERENCE.md#section-27) for all CMake switches and [Platform Support](docs/PLATFORMS.md) for OS/architecture baselines.
+- **Licensing**: The distribution license for first-party code in `hx_c_platform` is not yet finalized. Third-party components under `deps/` retain their respective upstream licenses; review [Third-Party Notices](THIRD_PARTY_NOTICES.md) before use or redistribution.
 
 [c-badge]: https://img.shields.io/badge/C-99-blue?logo=c
 [cpp-badge]: https://img.shields.io/badge/C%2B%2B-11-blue?logo=cplusplus

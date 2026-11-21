@@ -1,26 +1,32 @@
-# Network options, interface selection and multicast discovery
+# Network Options, Interface Selection and Multicast Discovery
 
-[简体中文](NETWORK_OPTIONS.zh-CN.md) · [Usage](USAGE.md) · [Runnable examples](../examples/README.md) · [Installed SDK](INSTALL.md)
+[简体中文](NETWORK_OPTIONS.zh-CN.md) · [Usage](USAGE.md) · [Runnable Examples](../examples/README.md) · [Installed SDK](INSTALL.md)
+
+When building LAN device discovery, industrial sensor multicast subscribers, long-lived TCP connections with keepalive probes, or dual-stack IPv4/IPv6 servers, you often need fine-grained socket options alongside accurate host network interface inspection, route selection, live network-change notifications, and cancellable DNS resolution. This guide covers the network options, interface enumeration, routing, and `c-ares` DNS APIs in `hx_c_platform`.
 
 ## 1. Pick the operation you need
 
-These APIs configure ordinary TCP/UDP sockets. Use them before attaching the socket to an I/O loop and while no other thread is using it. They do not change the machine's network settings or start a background thread. Both `HX_OS_ENABLE_NETWORK` and `HX_OS_ENABLE_NET_OPTIONS` must be enabled (the default). Disabling either makes these operations report `HX_OS_NOT_SUPPORTED` and `hx_os_interfaces_available()` return zero. Windows links the system `iphlpapi` library through the exported CMake target; no new third-party dependency is needed.
+The socket configuration APIs below operate on ordinary TCP and UDP sockets. **Call them before attaching the socket to an `hx_os_loop` event loop and while no other thread is accessing the socket.** None of these functions alter global OS network settings or spawn background threads.
 
-| Need | C entry point | What the call does |
+> [!NOTE]
+> **Build Switches and System Dependencies**
+> Both `HX_OS_ENABLE_NETWORK` and `HX_OS_ENABLE_NET_OPTIONS` must be enabled (`ON` by default). Disabling either switch causes these functions to return `HX_OS_NOT_SUPPORTED` and `hx_os_interfaces_available()` to return `0`. On Windows, the exported CMake target automatically links the system `iphlpapi` library with no extra third-party dependency.
+
+| Need | C Entry Point | What the Call Does |
 | --- | --- | --- |
-| Detect an idle TCP connection that has disappeared | `hx_os_socket_configure_keepalive` | Enables keepalive and sets the idle/probe intervals in seconds |
-| Listen for IPv4 and IPv6 on one IPv6 socket | `hx_os_socket_set_dual_stack` | Explicitly enables or disables IPv4-mapped IPv6 use |
-| Send an IPv4 UDP broadcast | `hx_os_socket_set_broadcast` | Permits broadcast transmission; it does not choose a destination |
-| Receive a multicast group | `hx_os_socket_join_multicast` / `leave_multicast` | Changes membership on a specified interface |
-| Select where multicast leaves the host | `hx_os_socket_set_multicast_interface` | Selects an outgoing interface by its family-specific index |
-| Limit multicast propagation / allow local reception | `hx_os_socket_set_multicast_hops` / `set_multicast_loopback` | Configures native TTL/hop-limit and loopback behavior |
-| Show available IP interfaces and addresses | `hx_os_interfaces_query` | Returns an owned, immutable snapshot without requiring a network object |
+| Detect a silently dropped idle TCP connection | `hx_os_socket_configure_keepalive` | Enables TCP keepalive and sets the idle time and probe interval in seconds |
+| Accept both IPv4 and IPv6 clients on one IPv6 socket | `hx_os_socket_set_dual_stack` | Explicitly enables or disables IPv4-mapped IPv6 (`IPV6_V6ONLY`) |
+| Send an IPv4 UDP broadcast packet | `hx_os_socket_set_broadcast` | Grants broadcast permission (`SO_BROADCAST`); you still pass the destination to `send_to` |
+| Subscribe to or leave a UDP multicast group | `hx_os_socket_join_multicast` / `leave_multicast` | Joins or leaves an any-source multicast (ASM) group on a specific interface |
+| Choose which network interface sends multicast traffic | `hx_os_socket_set_multicast_interface` | Selects the outgoing interface using its family-specific index |
+| Limit multicast router hops / control local loopback | `hx_os_socket_set_multicast_hops` / `set_multicast_loopback` | Configures native multicast TTL/hop-limit and local loopback delivery |
+| Enumerate visible network interfaces and IP addresses | `hx_os_interfaces_query` | Returns a caller-owned, immutable snapshot without requiring an `hx_os_network` handle |
 
-Ordinary socket receive calls still return bytes or one UDP datagram. For complete TCP messages, use [message frames](FRAMES.md); for correlated requests and reconnecting sessions, use [IPC](IPC.md). These options do not add encryption, delivery acknowledgements or business-level deduplication.
+Ordinary socket receive calls still return raw stream bytes or single UDP datagrams. Use [Message Frames (`hx_frame`)](FRAMES.md) when you need discrete message boundaries over TCP, or [Local IPC (`hx_ipc`)](IPC.md) when you need request/reply correlation and automatic session reconnection.
 
 ## 2. Find an interface before choosing one
 
-Build the two public examples in your existing directory. Replace `build` with that directory. The Windows commands below use Debug; use the configuration matching your installed dependency SDK, changing both `--config` and the executable path together. Linux single-configuration builds keep the configuration already selected in their cache.
+Reuse your existing CMake build directory (`build`) to compile the interface enumeration and multicast discovery examples. The Windows commands below use `Debug`—match the configuration of your installed dependency SDK and adjust both `--config` and the output binary path accordingly:
 
 ```sh
 cmake -S . -B build -DHX_OS_BUILD_EXAMPLES=ON
@@ -28,19 +34,21 @@ cmake --build build --config Debug --target hx_os_network_interfaces
 cmake --build build --config Debug --target hx_os_multicast_discovery
 ```
 
-From the checkout root, list interfaces:
+From the repository root, run the interface enumeration tool:
+
+**Windows PowerShell:**
 
 ```powershell
 .\build\bin\Debug\hx_os_network_interfaces.exe
 ```
 
-Linux/WSL:
+**Linux / WSL:**
 
 ```sh
 ./build/bin/hx_os_network_interfaces
 ```
 
-Example output, with values that depend on your machine:
+The program lists all IP-bearing interfaces visible to the current process along with their family indices, MTU, flags, and assigned addresses:
 
 ```text
 IP-visible interfaces: 2
@@ -51,9 +59,11 @@ eth0 (eth0)
   fe80::1234/64 (IPv6, scope=2)
 ```
 
-Choose an interface with the address family you need, normally `up=1` and `multicast=1`. Use its **IPv4 index for IPv4**, and **IPv6 index for IPv6**; these may differ on Windows. Do not assume the first entry is the preferred route. The complete C program is [network_interfaces.c](../examples/network_interfaces.c).
+When selecting an interface for multicast, pick one that has an address in your target family and reports `up=1` and `multicast=1`. **Always pass `ipv4_index` for IPv4 operations and `ipv6_index` for IPv6 operations**—on Windows, those two indices can differ for the same adapter—and never assume the first entry in the list is the system's default route. Full source code is in [network_interfaces.c](../examples/network_interfaces.c).
 
-For an application UI or device selector, this is the C ownership pattern:
+### Querying Interfaces in C and C++11
+
+To populate an interface selector in C:
 
 ```c
 #include <hx_os.h>
@@ -82,7 +92,7 @@ int main(void)
 }
 ```
 
-C++11 provides the same snapshot with automatic destruction:
+In C++11, `<hx/NetworkInterfaces.hpp>` wraps the snapshot in an RAII container:
 
 ```cpp
 #include <hx/NetworkInterfaces.hpp>
@@ -105,13 +115,14 @@ int main()
 }
 ```
 
-Names and addresses are borrowed from the snapshot and remain valid until its destruction. Names are UTF-8; Windows exposes a stable-looking adapter name and a friendly display name, while POSIX normally uses the interface name for both. Neither an interface index nor its current address is a permanent device ID. Query again after a network change; this is not a monitoring subscription.
-
-Only interfaces with IP addresses visible to the process are listed, not every physical adapter. `UP` reflects native state, not Internet reachability. MTU/index `0` means unavailable, and prefix length `255` means unknown. An empty snapshot is valid. Sandboxes or Android access restrictions can make enumeration fail; `available()` reports build support, not permission. No MAC address, route ranking or Android network binding is implied.
+> [!NOTE]
+> **Snapshot Lifetime and Field Semantics**
+> - **Borrowed Pointers**: Interface names (UTF-8) and address arrays belong to the `hx_os_interface_list` snapshot and remain valid until `hx_os_interface_list_destroy()`. Windows populates both a stable adapter `name` and a friendly `display_name`; POSIX typically uses the interface name (e.g., `eth0`) for both.
+> - **What Enumeration Covers**: Only interfaces with IP addresses visible to the current process are listed (an empty list is a valid result). `up=1` reflects link/protocol state rather than internet reachability; an MTU or index of `0` means unavailable, and a prefix length of `255` means unknown. MAC addresses, route metrics, and Android `Network` bindings are not part of this snapshot.
 
 ## 3. Configure TCP Keepalive in one call
 
-For an already created TCP socket, the following helper enables probes after 30 seconds of inactivity, then requests 5-second probe intervals. The probe count remains the operating system's current value. Check the returned status before continuing setup:
+For an existing TCP socket, `hx_os_socket_configure_keepalive()` enables keepalive probes and sets the idle delay and probe interval in a single call. The helper below starts probing after 30 seconds of inactivity, repeats probes every 5 seconds, and leaves the probe retry count at the OS default (`0`):
 
 ```c
 hx_os_status configure_device_connection(hx_os_socket *socket,
@@ -121,9 +132,9 @@ hx_os_status configure_device_connection(hx_os_socket *socket,
 }
 ```
 
-Use a positive final argument, such as `3`, if your application requires exactly three failed probes. Unsupported settings return `HX_OS_NOT_SUPPORTED`; they are not silently ignored. Windows 7/8.1 supports configuring the durations through this API but not an explicit probe count, so `0` is useful for that baseline. Durations must be positive; native upper limits still apply.
+Pass a positive fourth argument (such as `3`) if your application requires an explicit probe count. Note that Windows 7 and 8.1 support configuring the idle and interval durations through this API, but do not support per-socket probe counts—pass `0` when targeting that baseline (unsupported settings return `HX_OS_NOT_SUPPORTED` rather than silently succeeding). Both durations must be positive integers.
 
-C++11 keeps the same behavior and borrows the socket without owning it:
+The C++11 wrapper borrows the `hx_os_socket *` without taking ownership:
 
 ```cpp
 #include <hx/SocketOptions.hpp>
@@ -134,13 +145,14 @@ hx::Result<void> configureDeviceConnection(hx_os_socket *socket)
 }
 ```
 
-The caller checks `result.ok()` and can read `result.error()` for native details. To disable keepalive again, call `hx_os_socket_set_keepalive(socket, 0, error)` or `hx::SocketOptions(socket).keepAlive(false)`.
+To turn keepalive off, call `hx_os_socket_set_keepalive(socket, 0, error)` or `hx::SocketOptions(socket).keepAlive(false)`.
 
-Keepalive detects transport failure; it does not prove the device application is responsive or that a command was processed. It also does not guarantee a disconnect at exactly `idle + interval * count`. The configuration uses several native operations: a later failure can leave earlier settings changed. Do not assume rollback; stop setup, inspect the error, then reconfigure or close the socket.
+> [!IMPORTANT]
+> TCP keepalive detects dead transport paths, **not whether the remote application thread is hung or whether a business command completed**. Because configuring keepalive issues multiple native socket calls sequentially, a failure on a later step may leave earlier steps applied without automatic rollback—stop setup on error and either reconfigure or close the socket.
 
 ## 4. Enable an IPv4/IPv6 listener explicitly
 
-Create a socket using `HX_OS_IPV6` and `HX_OS_TCP`. Pass that still-unbound socket to this helper, then use the normal accept interface. Bind to `::`, not `::1`, when accepting both address families:
+Because operating systems differ on whether an IPv6 socket accepts IPv4 connections by default (`IPV6_V6ONLY`), portable dual-stack servers should create an `HX_OS_IPV6` + `HX_OS_TCP` socket, call `hx_os_socket_set_dual_stack(listener, 1, error)` before `bind`, and bind to the IPv6 wildcard address `::` (not loopback-only `::1`):
 
 ```c
 hx_os_status listen_on_both_families(hx_os_socket *listener,
@@ -160,51 +172,50 @@ hx_os_status listen_on_both_families(hx_os_socket *listener,
 }
 ```
 
-The caller keeps ownership and closes the socket on setup failure. `enabled=0` requests IPv6 only. This must happen before bind/connect, and does not alter global IPv6 policy or create an extra socket. C++ uses `hx::SocketOptions(listener).dualStack()` or `.dualStack(false)` and returns `Result<void>`.
+Passing `enabled = 0` restricts the socket to pure IPv6 traffic. In C++11, call `hx::SocketOptions(listener).dualStack()` or `.dualStack(false)`.
 
-An IPv4 peer accepted through the dual-stack socket remains represented as IPv6, for example `::ffff:192.168.1.20`. Do not compare its family directly with `HX_OS_IPV4` and discard it. Outgoing IPv4 destinations used with this IPv6 socket must also be IPv4-mapped IPv6 addresses. If IPv6 is disabled on the machine, report the error or explicitly create separate sockets according to your application's policy.
+> [!TIP]
+> **Handling IPv4 Clients Accepted on a Dual-Stack Socket**
+> When an IPv4 client connects to a dual-stack IPv6 listener, `accept` reports the peer address with family `HX_OS_IPV6` as an **IPv4-mapped IPv6 address** (for example, `::ffff:192.168.1.20`). Do not reject the peer just because `family != HX_OS_IPV4`—use `hx_os_address_is_ipv4_mapped()` and `hx_os_address_unmap_ipv4()` from Section 8 to inspect or convert it.
 
 ## 5. Broadcast and multicast are different operations
 
-**Broadcast** sends an IPv4 UDP datagram to a broadcast destination. Enable `hx_os_socket_set_broadcast(socket, 1, error)`, then send to an explicitly chosen address such as `255.255.255.255` using `hx_os_socket_send_to`. A successful option call does not select a destination, bind a port or establish delivery. IPv6 has multicast instead of broadcast; passing an IPv6/TCP socket is an invalid use of this convenience API.
+- **IPv4 Broadcast**: Call `hx_os_socket_set_broadcast(socket, 1, error)` to enable broadcast permission, then pass an explicit broadcast address (such as `255.255.255.255` or a subnet broadcast address) to `hx_os_socket_send_to()`. Because IPv6 replaces broadcast with multicast, passing an IPv6 or TCP socket to `set_broadcast` returns an error.
+- **UDP Multicast**: Multicast sends datagrams to a group address (e.g., `239.255.42.99` or `ff02::114`). A receiver **joins the group** on a specific interface and binds the UDP port; a sender independently **selects its outgoing interface**. Joining a group does not bind a port, and setting an outgoing interface does not join the group:
 
-**Multicast** sends to a group. A receiver joins the group on an interface; a sender independently chooses its outgoing interface. Joining does not bind the UDP port, and setting the outgoing interface does not join the group.
-
-| Step | Receiver | Sender |
+| Step | Multicast Receiver (Listener) | Multicast Sender |
 | --- | --- | --- |
-| Create | IPv4/IPv6 UDP socket matching the group | Same family as the group |
-| Configure loopback | Enable for same-machine demonstrations | Enable for same-machine demonstrations |
-| Select outgoing interface | Only needed if this socket also sends | `set_multicast_interface(socket, index, error)` |
-| Bind | Wildcard address and the discovery port | Optional source binding |
-| Membership | `join_multicast(socket, &group, index, error)` | Not required just to send |
-| Traffic | `receive_from`; on WOULD_BLOCK, wait and retry | `send_to`; on WOULD_BLOCK, wait and retry |
-| Finish | Leave the same group/interface, then close | Close |
+| 1. Create socket | Create an IPv4 or IPv6 UDP socket matching the group family | Create a UDP socket matching the group family |
+| 2. Loopback | Enable `set_multicast_loopback(1)` for same-host demos | Enable `set_multicast_loopback(1)` for same-host demos |
+| 3. Outgoing interface | Needed only if this socket also transmits multicast | Call `hx_os_socket_set_multicast_interface(socket, index, error)` |
+| 4. Bind | Bind wildcard address (`0.0.0.0` or `::`) and the discovery port | Optional source bind |
+| 5. Group membership | Call `hx_os_socket_join_multicast(socket, &group, index, error)` | Not required just to transmit |
+| 6. Send / Receive | Call `receive_from` (on `HX_OS_WOULD_BLOCK`, wait and retry) | Call `send_to` (on `HX_OS_WOULD_BLOCK`, wait and retry) |
+| 7. Cleanup | Call `leave_multicast` with the same group/index, then close | Close socket |
 
-The APIs implement any-source multicast, not source-specific multicast filters. Membership uses the group address; `group.port` is ignored by join/leave, while bind/send use the actual UDP port. Index `0` delegates interface choice to the OS. For IPv6, a nonzero `group.scope_id` supplies a missing interface index; conflicting explicit values fail. For link-local groups, choose an explicit IPv6 interface index.
+### Multicast Configuration Details
 
-Multicast hop limit accepts `0..255`; `1` limits forwarding to the local link, while `0` keeps traffic on the host. This is a limit, not a delivery guarantee. On Windows IPv4, the loopback option affects local reception; on POSIX it affects sending. Enable it on both endpoints in portable same-machine examples. The option is not a packet filter or a substitute for membership.
-
-There is no automatic `SO_REUSEADDR`. The example uses one listener and does not need sharing. If your application deliberately needs multiple listeners on the same port, explicitly call `hx_os_socket_set_reuseaddr` before bind and account for the native platform's port-sharing behavior. Joining twice is not normalized into success; native membership errors are retained.
+1. **Interface Index & IPv6 Scope**: `join_multicast` and `leave_multicast` use only the IP address in `group` and ignore `group.port` (the UDP port is determined by `bind` and `send_to`). Passing index `0` lets the OS pick a default interface; for IPv6 link-local groups (`ff02::...`), always specify an explicit IPv6 interface index (if `index` is `0` and `group.scope_id` is non-zero, `scope_id` is used; conflicting non-zero values return an error).
+2. **Hop Limit & Cross-Platform Loopback**: `hx_os_socket_set_multicast_hops()` accepts `0..255` (`1` restricts packets to the local link; `0` restricts them to the local host). On Windows IPv4, `hx_os_socket_set_multicast_loopback()` applies to the **receiving** socket, whereas on POSIX it applies to the **sending** socket—enable it on both ends in portable same-machine tests.
+3. **Port Sharing (`SO_REUSEADDR`)**: The library never enables `SO_REUSEADDR` behind your back. If your protocol requires multiple listeners on the same host to share one multicast UDP port, call `hx_os_socket_set_reuseaddr()` explicitly before `bind`.
 
 ## 6. Run a JSON multicast discovery message
 
-[multicast_discovery.c](../examples/multicast_discovery.c) is a standalone two-mode program. Start the listener first and send from a second terminal within ten seconds. Each process owns its socket, handles WOULD_BLOCK with the same finite deadline, and closes its resources. The listener receives one datagram of at most 1024 bytes; it does not wait forever or process truncated data.
+[multicast_discovery.c](../examples/multicast_discovery.c) is a standalone two-mode (`listen` / `send`) program. First run `hx_os_network_interfaces` from Section 2 and replace the interface index below (`12` on Windows or `2` on Linux) with your active adapter's **IPv4 index**.
 
-First run the interface example. Replace `12` below with its IPv4 index. Both processes on the same machine should use the same interface. On separate machines, each uses its own index on the same reachable multicast network.
-
-Windows, terminal 1:
+**Windows PowerShell (Terminal 1 — start listener for 10 seconds):**
 
 ```powershell
 .\build\bin\Debug\hx_os_multicast_discovery.exe listen 239.255.42.99 12
 ```
 
-Windows, terminal 2:
+**Windows PowerShell (Terminal 2 — send discovery packet within 10 seconds):**
 
 ```powershell
 .\build\bin\Debug\hx_os_multicast_discovery.exe send 239.255.42.99 12
 ```
 
-Linux/WSL uses its own interface index, here illustrated as `2`:
+**Linux / WSL (illustrated with interface index `2`):**
 
 ```sh
 # Terminal 1
@@ -219,22 +230,22 @@ Expected sender output:
 Sent 41 bytes: {"type":"discover","request_id":"demo-1"}
 ```
 
-Expected listener output, with the sender address and ephemeral port varying:
+Expected listener output (sender IP and ephemeral port will match your machine):
 
 ```text
 Listening for one discovery datagram (10 seconds)...
 Received from 192.168.1.20 port 54321: {"type":"discover","request_id":"demo-1"}
 ```
 
-The payload is fixed valid JSON, transmitted without a trailing NUL. The receiver displays the datagram bytes; it does not validate arbitrary peers' JSON or implement a discovery reply. Use the [serialization guide](SERIALIZATION.md) when adding your own fields and decoding received messages. A sender's success means local send acceptance, not an acknowledgement from a listener.
+For **IPv6 multicast discovery**, replace the group address with `ff02::114` and pass the adapter's **IPv6 index** (both modes also accept an optional trailing port number such as `send 239.255.42.99 12 39022` as long as both peers match). See the [Serialization Guide](SERIALIZATION.md) when adding custom JSON fields and parsing responses.
 
-For IPv6, replace the group with `ff02::114` and the index with the interface's **IPv6** index. The program sets the destination scope explicitly. Both modes accept an optional final port, for example `send 239.255.42.99 12 39022`; both sides must agree. Group addresses here are demonstration values, not a registration for your application's protocol.
-
-If reception times out, first check the chosen family/index, the listener startup window, interface multicast support and the network's multicast policy. A VPN, WSL virtual network, Wi-Fi access point or host firewall can limit delivery even after successful socket setup. The program reports the failure and does not change those system settings. A timeout does not establish that the API implementation is broken, or that the packet reached the other host.
+> [!TIP]
+> **Troubleshooting Multicast Timeouts**
+> If the listener times out after 10 seconds, verify that: 1) you passed the matching family's interface index (`ipv4_index` vs. `ipv6_index`), 2) the sender ran within the 10-second listening window, 3) the adapter shows `up=1, multicast=1`, and 4) no VPN tunnel, WSL virtual switch, Wi-Fi client isolation policy, or host firewall is dropping multicast UDP traffic.
 
 ## 7. C++ setup and ownership
 
-The C++ facade exposes the same calls. For an existing UDP socket and a parsed group, a helper can stop at the first error while leaving socket ownership with its caller:
+In C++11, `hx::SocketOptions` configures a borrowed `hx_os_socket *` without taking ownership:
 
 ```cpp
 #include <hx/SocketOptions.hpp>
@@ -259,11 +270,13 @@ hx::Result<void> configureMulticast(hx_os_socket *socket,
 }
 ```
 
-Bind the receiver as shown in section 5 before using it. Use `options.leaveMulticast(group, index)` when ending membership; closing the socket also releases memberships. `SocketOptions` never closes its borrowed socket. All setters require exclusive access and return `HX_OS_BUSY` after loop attachment, even when the loop is idle. Configure first, then hand the socket to its I/O owner. Snapshot readers can run concurrently, but snapshot destruction must wait for readers to stop.
+Bind the receiver socket as shown in Section 5 before receiving. Call `options.leaveMulticast(group, index)` when done (closing the socket also releases group memberships automatically). Remember that all option setters require exclusive access and return `HX_OS_BUSY` once a socket is attached to an `hx_os_loop`, even when the loop is idle—configure options first, then hand the socket to the loop.
 
 ## 8. Parse an endpoint without losing its IPv6 scope
 
-Use `hx_os_endpoint_parse()` when configuration contains both a numeric address and a port. It accepts `192.168.1.20:9000` and `[fe80::1%7]:9000`; the `%7` selects interface index 7. A native interface name is also accepted as the zone. This is not DNS or URL parsing: IPv6 requires brackets, the port is mandatory, and URI percent escaping is not decoded.
+Use `hx_os_endpoint_parse()` when a configuration string contains both a numeric IP address and a port (including optional IPv6 zone/scope IDs):
+- IPv4 format: `192.168.1.20:9000`
+- Scoped IPv6 format: `[fe80::1%7]:9000` (where `%7` selects interface index `7`; native interface names like `%eth0` are also accepted).
 
 ```c
 hx_os_address destination;
@@ -279,86 +292,95 @@ if (status == HX_OS_OK)
 	puts(text);
 ```
 
-The output is `[fe80::1%7]:9000`. Formatting always uses a numeric zone. Parsing and formatting leave their output unchanged on failure. The parser accepts at most 255 bytes.
+This prints `[fe80::1%7]:9000` (`hx_os_endpoint_format()` always formats the zone as a numeric index). `hx_os_endpoint_parse()` is a strict numeric endpoint parser (up to 255 bytes): it does not perform DNS lookups or decode URI percent-encoding, IPv6 addresses require brackets `[...]`, and the port is mandatory.
 
-For dual-stack peers, `hx_os_address_is_ipv4_mapped()` identifies `::ffff:192.168.1.20`; `hx_os_address_unmap_ipv4()` restores an IPv4 value, and `hx_os_address_map_ipv4()` performs the reverse conversion. Both preserve the port and allow in-place use. `hx_os_address_equal(&a, &b, 1)` compares addresses and ports while treating unscoped mapped IPv6 as IPv4; pass `0` to require the same family. IPv6 scope is part of equality. These helpers do not perform DNS or change socket state.
+For dual-stack address inspection and conversion, use these in-memory helpers:
+- `hx_os_address_is_ipv4_mapped(&addr)`: Detects `::ffff:a.b.c.d` addresses.
+- `hx_os_address_unmap_ipv4(&addr)` / `hx_os_address_map_ipv4(&addr)`: Converts between IPv4 and IPv4-mapped IPv6 in place while preserving the port.
+- `hx_os_address_equal(&a, &b, 1)`: Compares addresses and ports, treating unscoped IPv4-mapped IPv6 addresses as equal to their IPv4 counterparts when the third argument is `1` (pass `0` to require identical families).
 
 ## 9. Find the route for this destination
 
-Do not select the first `UP` interface from the snapshot. `hx_os_route_query(network, &destination, &route, &error)` asks which local source address and interface apply to the destination. It does not send an application datagram or prove the remote device is alive. The returned source port is zero.
+Instead of guessing the first `up=1` adapter from the interface list, call `hx_os_route_query(network, &destination, &route, &error)` to ask the OS routing table which local source IP and interface index will be used to reach `destination` (without transmitting any application packet on the wire).
 
-The interface example now has a route mode. With the existing executable, run:
+You can test route queries directly with the `--route` flag on `hx_os_network_interfaces`:
+
+**Windows PowerShell:**
 
 ```powershell
 .\build\bin\Debug\hx_os_network_interfaces.exe --route 127.0.0.1:9000
 ```
 
-Linux/WSL:
+**Linux / WSL:**
 
 ```sh
 ./build/bin/hx_os_network_interfaces --route 127.0.0.1:9000
 ```
 
-Example output: `Destination 127.0.0.1:9000 uses 127.0.0.1:0 on interface 1`. The index depends on the machine. For a real device, substitute its address and port; IPv6 uses a quoted endpoint such as `"[fe80::1%7]:9000"`.
+Example output: `Destination 127.0.0.1:9000 uses 127.0.0.1:0 on interface 1` (substitute a real LAN device's IP and port, or quote an IPv6 endpoint such as `"[fe80::1%7]:9000"`). In C++11, call `hx::NetworkInterfaces::routeTo(network, destination)`, which returns `hx::Result<hx_os_route_info>`.
 
-Windows uses the native route query. POSIX obtains the selected source through a temporary UDP connection and matches the IP snapshot. If the same selected address belongs to multiple interfaces, the call returns `HX_OS_NOT_SUPPORTED` rather than choosing one arbitrarily. Network changes or enumeration restrictions may also cause failure; query again after a change. Unscoped mapped IPv6 destinations use an IPv4 lookup. C++ uses `hx::NetworkInterfaces::routeTo(network, destination)` and returns `Result<hx_os_route_info>`.
+> [!NOTE]
+> Windows uses the native OS route lookup API. POSIX determines the kernel-selected source IP via a temporary UDP route association and matches it against the interface snapshot (returning `HX_OS_NOT_SUPPORTED` if the same source IP is assigned to multiple interfaces rather than guessing).
 
 ## 10. Refresh the list after a network change
 
-Run the existing example with `--watch`:
+When cables are unplugged, Wi-Fi networks switch, or VPNs connect, previously cached interface snapshots become stale. Run `hx_os_network_interfaces` with `--watch` to observe live change notifications:
 
 ```sh
 ./build/bin/hx_os_network_interfaces --watch
 ```
 
-On Windows, append `--watch` to the `.exe` command above. It subscribes first, prints the initial snapshot, then waits up to 30 seconds for one change. A notification prints `Network changed; querying a fresh snapshot:` followed by a new list. With no change, it prints `No interface changes within 30 seconds.` and exits successfully. The example does not change network settings itself.
+(On Windows, append `--watch` to the `.exe` command.) The program subscribes to OS network notifications, prints the initial snapshot, and waits up to 30 seconds: if a change occurs, it prints `Network changed; querying a fresh snapshot:` followed by the updated list; otherwise it prints `No interface changes within 30 seconds.` and exits cleanly.
 
-Applications use this sequence: create an `hx_os_interface_watch`, query their initial snapshot, call `hx_os_interface_watch_wait_until()` with a monotonic deadline, then query again after success. Close with `hx_os_interface_watch_close(&watch, error)` after the waiter has returned. `NOW` polls; a timeout keeps the watch valid.
+In your own application, follow this sequence:
+1. Create an `hx_os_interface_watch` handle.
+2. Query your initial snapshot with `hx_os_interfaces_query()`.
+3. Call `hx_os_interface_watch_wait_until()` with a monotonic deadline (pass `HX_OS_DEADLINE_NOW` to poll without blocking).
+4. When `wait_until` returns `HX_OS_OK`, call `hx_os_interfaces_query()` to obtain a fresh snapshot.
+5. Once the waiting thread has returned, close the subscription with `hx_os_interface_watch_close(&watch, error)` (always close a non-NULL watch handle even if creation failed during rollback).
 
-Notifications are rescan hints, not an ordered event history. They may coalesce, include routing or non-IP changes, or require a refresh after native overflow. The next snapshot may therefore be unchanged. The library starts no worker and allocates no unbounded event queue. Windows uses native callbacks that only signal its event; closing waits for those short internal callbacks. Linux/Android uses netlink, and macOS uses a routing socket. There is no polling fallback.
-
-Android application policy may deny the native subscription even when address enumeration works. Report that permission error; a host application can forward its platform network-change notifications and request a fresh snapshot instead. Shell/emulator execution does not establish ordinary APK permission behavior. Native registration failure normally returns a null watch; if rollback itself fails, a non-null owner is retained for close retry. Always close a non-null result, even after creation failed. Exclude closing from an active wait.
+> [!NOTE]
+> **Coalesced Rescan Hints and Platform Backends**
+> - Change watches use native OS mechanisms (signaled callbacks on Windows, Netlink on Linux/Android, and routing sockets on macOS) with **zero background polling threads and no unbounded event queues**.
+> - Notifications act as **coalesced rescan hints**, not an ordered event log—multiple rapid changes merge into one wakeup, and routing or non-IP changes can also trigger a wakeup where the resulting IP snapshot appears unchanged. If Android sandbox policies block native Netlink subscriptions inside an unprivileged APK, forward platform `ConnectivityManager` callbacks from your host activity to trigger `hx_os_interfaces_query()`.
 
 ## 11. Tune socket buffers and restrict multicast sources
 
-`hx_os_socket_set_buffers(socket, 65536, 65536, error)` requests 64 KiB send and receive buffers. Zero preserves that direction. `hx_os_socket_get_buffers()` returns both native capacities; check them rather than assuming they equal the request. Operating systems may clamp, round or account for capacity differently, including Linux's doubled values. Updates are sequential and may partially apply on failure. These are transport buffers, not the Frame/IPC/TLS application queue limits.
-
-In C++, `hx::SocketOptions(socket).buffers(65536, 65536)` returns a status result; `.buffers()` returns `Result<SocketOptions::BufferSizes>` with `sendBytes` and `receiveBytes`.
-
-For multicast from a specific sender, use `hx_os_socket_join_multicast_source(socket, &group, &source, index, error)` and leave with `hx_os_socket_leave_multicast_source()` using the same values. For example, group `232.1.2.3` and source `192.168.1.20` request only that sender on the selected IPv4 interface. Both addresses must match the socket family; source is unicast, ports are ignored, and membership does not bind the socket or choose its outgoing interface. Unsupported native filters report `HX_OS_NOT_SUPPORTED`; the call never falls back to receiving every source. C++ exposes `.joinMulticastSource(group, source, index)` and `.leaveMulticastSource(...)`.
-
-Source filtering is not authentication: a sender's IP address does not establish its identity. These additions retain the existing platform boundaries; target compilation, shell operation and real application permissions are separate verification steps.
-
+- **Tuning Kernel Send/Receive Buffers**:
+  - Call `hx_os_socket_set_buffers(socket, 65536, 65536, error)` to request 64 KiB kernel send and receive buffers (passing `0` for either direction leaves that buffer unchanged).
+  - Call `hx_os_socket_get_buffers()` to inspect the actual capacities granted by the OS (which may be clamped, rounded, or doubled on Linux).
+  - In C++11, use `hx::SocketOptions(socket).buffers(65536, 65536)` to set capacities and `.buffers()` to read back `Result<SocketOptions::BufferSizes>` (`sendBytes` and `receiveBytes`). Note that these control OS transport buffers, not the application-level queue limits of `hx_frame`, `hx_ipc`, or `hx_tls`.
+- **Source-Specific Multicast (SSM)**:
+  - To receive multicast traffic only from a specific unicast sender IP, call `hx_os_socket_join_multicast_source(socket, &group, &source, index, error)` and leave with `hx_os_socket_leave_multicast_source()` using the same arguments (in C++11, `.joinMulticastSource(...)` and `.leaveMulticastSource(...)`).
+  - For example, group `232.1.2.3` and source `192.168.1.20` filter for that sender on the chosen IPv4 interface. If the OS does not support source-specific multicast filtering, the call returns `HX_OS_NOT_SUPPORTED` rather than silently falling back to any-source reception.
 
 ## 12. Connect by name and select cancellable DNS
 
-Use `hx_os_tcp_dial_until(network, host, port, NULL, deadline, &socket, error)` when you want the library to resolve a name, create candidate sockets and keep the first successful connection. IPv4 and IPv6 candidates alternate, with a default 250 ms stagger and at most two live attempts. One deadline covers the operation; losing sockets are closed before return. Success transfers the connected socket to the caller, who closes it before destroying `network`. `hx::TcpDial(owner).connect(...)` provides the same explicit-owner C++11 facade.
-
-By default, name resolution uses the existing system resolver. Its blocking DNS call cannot be forcibly cancelled. If you already have addresses, use `hx_os_tcp_dial_addresses_until()` instead. If network DNS waiting must respond to cancellation, explicitly create an `hx_os_resolver` and set `hx_os_dial_options.resolver` to it. The resolver is borrowed only during the dial call, and its DNS query shares that call's deadline and cancel token. Neither path starts a detached worker.
-
-Stalled addresses no longer keep later candidates from starting. While untried addresses remain, each pending connection holds its slot for at most two seconds. A shorter overall budget is divided across remaining candidates and also caps the start delay. Ready connections are checked before retirement. Once every address has started, surviving candidates may use the remaining overall deadline. This preserves the two-connection bound but may abandon slow addresses; it does not affect established connections or guarantee network reachability. All TLS client entry points use this same dialer, including the original connect functions and C++ Tls::connect(); see the [TLS timing and ownership contract](TLS.md#2-direct-c-and-c-calls).
+Call `hx_os_tcp_dial_until(network, host, port, NULL, deadline, &socket, error)` when you want the library to resolve a hostname, stagger IPv4 and IPv6 connection attempts (Happy Eyeballs), keep the first socket that connects, and close the remaining candidates automatically (`hx::TcpDial(owner).connect(...)` in C++11).
+- **Staggered Candidate Pacing**: IPv4 and IPv6 candidates alternate with a default 250 ms stagger and at most two concurrent connection attempts in flight. While untried candidate addresses remain, a stalled attempt holds its slot for at most 2 seconds (or a proportional share of a shorter overall deadline) so unresponsive addresses cannot starve later candidates. Once all candidates have started, surviving attempts wait until the overall deadline.
+- **System DNS vs. Cancellable `c-ares` Resolver**: Passing `NULL` options uses the OS resolver, whose blocking lookup cannot be cancelled mid-flight (if you already have resolved addresses, call `hx_os_tcp_dial_addresses_until()` directly). When **DNS network waits must also respect deadlines and cancellation tokens**, create an `hx_os_resolver` and pass it via `hx_os_dial_options.resolver`. All TLS client connection APIs (`hx_tls_connect*` and `hx::Tls::connect()`) share this exact dialer; see the [TLS Client Guide](TLS.md#2-direct-c-and-c-calls).
 
 ### 12.1 Run the DNS example
 
-The optional `HX_OS_ENABLE_CARES` module uses the pinned c-ares dependency, with submodules/FetchContent handled by the [dependency setup](DEPENDENCIES.md). When unavailable, `hx_os_resolver_available()` is zero and creation returns `HX_OS_NOT_SUPPORTED`. Build the public example in your existing directory:
+The optional `HX_OS_ENABLE_CARES` module uses the pinned `c-ares` library prepared via the [dependency setup](DEPENDENCIES.md) (when disabled, `hx_os_resolver_available()` returns `0` and resolver creation returns `HX_OS_NOT_SUPPORTED`). Build the example in your existing build directory:
 
 ```sh
 cmake --build build --config Release --target hx_os_dns_lookup
 ```
 
-Windows PowerShell:
+**Windows PowerShell:**
 
 ```powershell
 .\build\bin\Release\hx_os_dns_lookup.exe 127.0.0.1
 ```
 
-Linux / WSL:
+**Linux / WSL:**
 
 ```sh
 ./build/bin/hx_os_dns_lookup 127.0.0.1
 ```
 
-Both print `IPv4 127.0.0.1 port=443`; this local check does not need internet access. Replace the address with a DNS name to list its current IPv4/IPv6 results. An optional second argument selects a numeric DNS server, for example `127.0.0.1:5353` for your own local DNS service. The example does not start that service. The address port 443 is just attached to the result; the example does not connect to it. An unanswered query reports timeout after its two-second overall budget, subject to local setup and OS scheduling.
+Both commands print `IPv4 127.0.0.1 port=443` without requiring internet access. Replace `127.0.0.1` with a hostname to print its current IPv4/IPv6 records, or pass an optional second argument (such as `127.0.0.1:5353`) to query a specific numeric DNS server.
 
 ### 12.2 Own one resolver and reuse it
 
@@ -379,15 +401,13 @@ if (resolver)
 	(void)hx_os_resolver_destroy(&resolver, NULL);
 ```
 
-The resolver drives c-ares asynchronous sockets on the calling thread, so this convenience call still occupies that thread while waiting; it is not a coroutine await or an `hx_os_loop` request. One active query per object is allowed. Concurrent calls return `BUSY`, same-thread reentry returns `DEADLOCK`, and no internal queue grows. Pass an `hx_os_cancel_token` to cancel from another thread; cancellation is checked within 50 ms during network waits, subject to scheduling. The native cancellation callbacks retire before the call returns, so timeout does not retain the caller's buffers. Exclude new calls before destroying the resolver. Result lists own their storage and can outlive it.
-
-Up to 256 unique addresses and 64 active native sockets are allowed. Native cache is disabled to avoid unbounded accumulation of unique names; c-ares's own parsing/configuration allocations remain outside the hx allocator budget. Names are ASCII/Punycode. Default lookups use the hosts file and DNS; `use_hosts_file=0` chooses DNS only. This does not reproduce every OS NSS plugin, VPN resolver policy or mDNS behavior. Configuration/hosts-file reads are not hard-real-time operations. Recreate the resolver after changing DNS configuration.
-
-C++ uses `<hx/Resolver.hpp>`, `hx::Resolver(owner).create()`, and `.resolve(host, port)` returning `Result<hx::Addresses>`; the address list releases itself. `.close()` explicitly releases the resolver. Direct native c-ares use remains possible through the dependency target, but the host must coordinate process-global initialization, cleanup and allocator changes across native users and libcurl users sharing the same c-ares binary. Do not initialize it from Windows `DllMain`.
+- **Single Active Query & Safe Cancellation**: `hx_os_resolver_resolve_until()` drives `c-ares` non-blocking sockets on the calling thread without spawning background threads. Each resolver instance allows one active query at a time: concurrent calls return `HX_OS_BUSY` and same-thread re-entry returns `HX_OS_DEADLOCK`. Passing an `hx_os_cancel_token` allows another thread to cancel the lookup (checked within 50 ms during network waits), and all native callbacks retire before the function returns so timeouts never leave dangling references to caller buffers. The returned `hx_os_address_list` owns its memory independently and can outlive the resolver.
+- **Bounds & Resolution Scope**: Lookups return up to 256 unique addresses, track at most 64 native sockets, and disable unbounded internal caching. By default, queries consult both the local `hosts` file and DNS (`use_hosts_file = 0` queries DNS only). Recreate the resolver if the host's DNS server configuration changes.
+- **C++11 Wrapper**: Include `<hx/Resolver.hpp>` and use `hx::Resolver(owner).create()` and `.resolve(host, port)` (which returns an RAII `Result<hx::Addresses>`; call `.close()` explicitly to destroy the resolver).
 
 ### 12.3 Use an event loop or coroutine
 
-Call `hx_os_loop_resolve()` when the calling thread needs to process other events while waiting. No resolver object or operation structure is needed. A loop from `hx_os_loop_create_local()` also works; NULL options selects c-ares defaults.
+When your thread needs to keep processing other I/O events while a DNS lookup is in flight, call `hx_os_loop_resolve()` directly on an `hx_os_loop` (no separate `hx_os_resolver` handle is required):
 
 ```c
 hx_os_request *request = NULL;
@@ -396,17 +416,13 @@ hx_os_status status = hx_os_loop_resolve(loop, "localhost", 443,
 	resolved, &state, &request, &error);
 ```
 
-Here `resolved` is your completion callback and `state` holds your result. Drive the loop with `hx_os_loop_run_until` or `poll_until`. The callback runs once on that polling thread; take ownership with `hx_os_request_take_addresses()` and destroy the list when finished. See [dns_lookup.c](../examples/dns_lookup.c) for the complete definitions and cleanup.
+Drive the loop with `hx_os_loop_run_until()` or `poll_until()`. Your completion callback (`resolved`) runs once on the polling thread; call `hx_os_request_take_addresses()` inside the callback to take ownership of the address list and destroy it when finished (see [dns_lookup.c](../examples/dns_lookup.c)). Another thread may call `hx_os_request_cancel(request)`, but you must keep polling until the completion callback returns before freeing `state`.
 
-Another thread may call `hx_os_request_cancel(request)`. Keep polling and wait for the callback to return before releasing its state. A close timeout retains the loop and its owners for retry. Submission failure invokes no callback. Hosts/options are copied and charged to existing DNS-worker, request-count and byte limits; there is no thread per query. Disabled c-ares returns `NOT_SUPPORTED` without a blocking fallback.
-
-Inside a coroutine, call `hx_os_coro_resolve_cancellable(host, port, options, deadline, &addresses, &error)` to suspend while waiting. Stackful code calls it directly. C state machines use `HX_OS_CORO_AWAIT` with persistent output and deadline fields. Existing `hx_os_coro_resolve` and `HX_OS_OP_RESOLVE` retain system DNS.
+Inside a coroutine, call `hx_os_coro_resolve_cancellable(host, port, options, deadline, &addresses, &error)` to suspend the current coroutine while waiting for DNS (stackful coroutines call it directly; C state-machine coroutines use `HX_OS_CORO_AWAIT`):
 
 ```sh
 ./build/bin/hx_os_dns_lookup --async 127.0.0.1
 ./build/bin/hx_os_dns_lookup --coro 127.0.0.1
 ```
 
-On Windows use `build/bin/Release/hx_os_dns_lookup.exe`. Both modes print `IPv4 127.0.0.1 port=443`. Substitute a hostname to resolve it within the same two-second budget; optionally append your own `DNS_IP:PORT`. Numeric-address checks demonstrate the calling patterns without depending on an external DNS service.
-
-C++11 `hx::IoLoop::resolve(host, port, callback, deadline)` delivers an owning `Result<hx::Addresses>` and returns a cancellable `IoRequest`; still drive `runUntil` and explicitly `closeUntil`. Coroutines use `hx::coro::Addresses::resolveCancellable(host, port, deadline)`. C++20 uses `co_await hx::coro::async::resolveCancellable(...)`. All facades reuse the C implementation.
+(On Windows, run `build/bin/Release/hx_os_dns_lookup.exe`.) In C++, use `hx::IoLoop::resolve(...)` for event loops, `hx::coro::Addresses::resolveCancellable(...)` for C++11 coroutines, or `co_await hx::coro::async::resolveCancellable(...)` for C++20 coroutines.

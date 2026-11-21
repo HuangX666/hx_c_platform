@@ -2,35 +2,54 @@
 
 [简体中文](CPP_POOL.zh-CN.md) · [README](../README.md) · [Result contracts](CPP_RESULTS.md)
 
-**Start with a complete program.** Use a thread pool for independent background work with a bounded number of workers and a result retrieved later.
+Use `hx/ThreadPool.hpp` when you want to offload independent calculations or background jobs to a fixed number of worker threads and retrieve their results under an explicit deadline. It provides a header-only C++11 facade over the bounded C99 thread pool: link `hx_c_platform::cpp`, handle outcomes via `hx::Result<T>`, and compile with or without C++ exceptions (`-fno-exceptions` / `/EHs-c-`). The underlying scheduler and public C ABI remain pure C99. Coroutines live in a [separate module](COROUTINES.md) and are not needed for standard thread-pool jobs.
 
-Open [thread_pool.cpp](../examples/thread_pool.cpp). withThreads(owner, 2) → submit passes 21 to the task → getUntil retrieves the result → shutdownUntil closes; check each Result.
+### Quick Start Example
 
-Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_cpp_thread_pool`. This program needs no arguments or input files.
+Open [thread_pool.cpp](../examples/thread_pool.cpp) for a complete runnable program: it creates a two-worker pool with `withThreads(owner, 2)`, submits a job with input `21`, retrieves the computed answer via `getUntil()`, and shuts the pool down cleanly with `shutdownUntil()`.
 
-**Expected result:** It prints `Task result: 42`. Replace the lambda with your work. Captured references must outlive the task; retain owner if shutdown times out.
+Follow the [example run instructions](../examples/README.md#run) to enable examples and build `hx_os_cpp_thread_pool` (no command-line arguments or input files are required):
 
-Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#cpp-project).
+```sh
+cmake --build build --config Release --target hx_os_cpp_thread_pool
+```
 
-`hx/ThreadPool.hpp` provides a header-only C++11 interface over the bounded C pool. Link `hx_c_platform::cpp`. The scheduler and C ABI remain C99. The facade uses explicit results and supports builds with exceptions disabled. Coroutines are a [separate module](COROUTINES.md), unnecessary for ordinary pool tasks.
+Expected output:
+
+```text
+Task result: 42
+```
+
+To integrate the thread pool into your own application, you can copy [thread_pool.cpp](../examples/thread_pool.cpp) as your starting `main.cpp` using the [minimal project](USAGE.md#cpp-project) setup.
 
 ## Ownership and shutdown
 
-`ThreadPool` is a view over a host-owned `hx_os_thread_pool *` variable. That variable must outlive every view and must not change concurrently with pool calls. Copies of a view refer to the same owner. Destroying a view performs no shutdown, infinite wait or detach. The host must eventually close and destroy the native owner.
+`hx::ThreadPool` is a lightweight non-owning view over a host-owned `hx_os_thread_pool *` pointer:
+- **Host-owned lifetime**: The native `owner` variable must outlive every `ThreadPool` view and must not be modified concurrently while pool operations are running. Copying a `ThreadPool` view still refers to the same `owner`.
+- **No hidden blocking in destructors**: Destroying a `ThreadPool` view does not close the pool, block indefinitely, or detach worker threads. The host application is responsible for explicitly closing and destroying the native `owner`.
+- **Reference-counted task handles**: `Task<T>` and `CancellationSource` automatically manage their own native references. A `Task<T>` may outlive a destroyed thread pool, though unconsumed results keep their allocation `context` active until released.
 
-`Task<T>` and cancellation sources automatically release their own references. A task may outlive successful pool destruction; retained results may keep the allocation context busy. A view never hides the owner required for retry after TIMEOUT or BUSY.
+The [complete example](../examples/thread_pool.cpp) checks creation, submission, result retrieval, and shutdown step by step. Its two-second deadline is an application choice: in a long-running service, keep the native `owner` in host state, stop new submissions, and retry shutdown with a fresh monotonic deadline if needed. `shutdownUntil()` combines close and destroy, clearing `owner` to `NULL` **only when both steps succeed**. Callers must exclude new operations and concurrent destruction before performing final teardown.
 
-The [complete example](../examples/thread_pool.cpp) checks creation, submission, result and shutdown separately. Its two-second deadline is consumer policy. A service keeps the native owner in long-lived shutdown state, stops new submissions and retries with a fresh monotonic deadline. `shutdownUntil()` combines close and destroy, clearing the owner only on success. Exclude new callers and simultaneous final destruction.
+Once `closeUntil()` begins, the pool permanently rejects new submissions and supports two modes:
+- `HX_OS_POOL_DRAIN`: Executes all accepted tasks already in the queue before stopping workers.
+- `HX_OS_POOL_CANCEL_PENDING`: Skips queued tasks that have not started yet (still running their cleanup callbacks) without forcibly interrupting tasks already running on workers.
 
-`closeUntil()` permanently rejects new submissions. DRAIN runs accepted queued tasks; CANCEL_PENDING skips queued work without forcibly interrupting work already running. Both wait for cleanup and native thread exit. Closing from a worker in the same pool returns DEADLOCK. Concurrent close or in-progress preparation can return BUSY. No reaper thread or forced termination is introduced.
+Both modes wait for task cleanup and native worker thread exit. Calling close from a worker thread belonging to the same pool returns `HX_OS_DEADLOCK`. Concurrent close calls or in-flight task preparation can return `HX_OS_BUSY`. The library never spawns hidden background reaper threads or forcibly terminates worker threads.
 
-Worker exit and worker-handle cleanup are separate steps. If `destroy()` or `shutdownUntil()` reports a native cleanup error, keep the same non-NULL owner and retry after handling the error. Already released handles are skipped; tasks and their cleanup callbacks are not executed again. The C `hx_os_thread_pool_destroy()` and `hx_os_thread_pool_shutdown()` entries follow the same rule.
-
-Creation can also retain a closing owner if partial worker startup fails and rollback cannot finish. Check `owner` even when `create()` / `withThreads()` returns a failed Result. Use `hx::ThreadPool(owner).shutdownUntil(deadline)` to retry cleanup; do not submit work. The creation error is preserved. See [shared lifetime rules](CONTRACTS.md#shared-rules).
+> [!IMPORTANT]
+> **Why must `owner` be retained when `shutdownUntil()` returns `HX_OS_TIMEOUT` or `HX_OS_BUSY`?**
+> As long as a worker thread is still running, it may be accessing pool state or captured task data. Freeing those resources on a timeout would cause a use-after-free crash in the background thread. Therefore:
+> - Worker thread exit and native thread-handle cleanup are separate steps. If `destroy()` or `shutdownUntil()` returns `HX_OS_TIMEOUT`, `HX_OS_BUSY`, or a native cleanup error, retain the non-NULL `owner` pointer and any borrowed data, then retry `shutdownUntil()` later (already released worker handles are skipped, and completed tasks or cleanup callbacks are never run twice). The C functions `hx_os_thread_pool_destroy()` and `hx_os_thread_pool_shutdown()` follow the exact same rule.
+> - Pool creation can also leave a non-NULL closing `owner` if partial worker startup fails and rollback cleanup cannot finish before the deadline. Always inspect `owner` even when `create()` or `withThreads()` returns a failed `Result`: do not submit work, and use `hx::ThreadPool(owner).shutdownUntil(deadline)` to finish cleanup. See [shared lifetime rules](CONTRACTS.md#shared-rules).
 
 ## Wait for work without closing the pool
 
-`pool.waitUntil(deadline)` waits for tasks already accepted when this call captures its boundary under the pool mutex. Later submissions do not extend this wait. `pool.waitIdleUntil(deadline)` waits until no accepted tasks remain; continuing submissions can delay it. `waitFor(milliseconds)` and `waitIdleFor(milliseconds)` accept relative durations. Both modes include delayed tasks and task cleanup, leave the pool open, and return TIMEOUT when their monotonic deadline expires. Zero duration polls.
+When you want to wait for current jobs to finish while **keeping the pool open** for subsequent batches, choose between two waiting modes:
+- **Batch snapshot wait (`waitUntil(deadline)` / `waitFor(duration)`)**: Captures the boundary of already accepted tasks under the pool mutex and waits only for that batch; tasks submitted after the boundary is captured do not extend the wait.
+- **Pool-idle wait (`waitIdleUntil(deadline)` / `waitIdleFor(duration)`)**: Waits until no accepted tasks remain in the pool; continuous submissions during the wait can delay completion.
+
+Both modes include delayed tasks and task cleanup callbacks, leave the pool open, and return `HX_OS_TIMEOUT` if the monotonic deadline expires (a zero duration polls immediately):
 
 ```cpp
 auto first = pool.submit([]() noexcept { return 21 * 2; });
@@ -45,44 +64,47 @@ if (!completed)
 auto second = pool.submit([]() noexcept { return 7 * 3; });
 ```
 
-The snippet runs inside a function returning `hx::Result<void>` with a live `pool`. Check `second` before using it, and use each task's `getUntil()` to inspect work results: a successful pool wait reports completion, including failed or cancelled tasks, not success of every task. Preserve explicit shutdown when the owner is no longer needed.
+This snippet runs inside a function returning `hx::Result<void>` with an active `pool`. Always check `second` before using it, and call each task's `getUntil()` to inspect its outcome: a successful pool wait confirms that tasks and their cleanup callbacks have finished (including tasks that failed or were cancelled), not that every task succeeded.
 
-Multiple external callers may wait concurrently. Same-pool workers, including cleanup callbacks, receive DEADLOCK. Preparation still in progress is excluded until accepted. A new snapshot wait after a timeout captures a new boundary; idle success is only an observation, not a prohibition on future submission. Exclude final destruction while starting new calls. Sequence exhaustion rejects new submissions with LIMIT instead of wrapping.
-
-The C equivalents are `hx_os_thread_pool_wait_until()` and `hx_os_thread_pool_wait_idle_until()`. No allocation is added to submission or waiting. An accepted task stores two list pointers and a 64-bit sequence; completion acquires the pool mutex once to unlink it. The pool has one extra condition variable so completion waiters cannot consume work-availability notifications. This is a correctness mechanism, not a measured performance improvement.
+Multiple external threads may wait concurrently. Calling either wait function from a worker thread (or task cleanup callback) of the same pool returns `HX_OS_DEADLOCK`. Tasks still being prepared outside the pool mutex are not included until formally accepted. Calling `waitUntil()` again after a timeout captures a fresh snapshot boundary; an idle wait succeeding is a point-in-time observation and does not block subsequent submissions. If the internal 64-bit submission sequence ever saturates, new submissions return `HX_OS_LIMIT` rather than wrapping. The C equivalents are `hx_os_thread_pool_wait_until()` and `hx_os_thread_pool_wait_idle_until()`.
 
 ## Submission and results
 
-`submit(callable, args...)` returns `Result<Task<T>>`. It accepts functions, member pointers, lambdas, move-only captures/arguments and `std::ref`. Stored functions run as lvalues; stored arguments move into the invocation. Function objects must declare their invocation `noexcept`. Capture/argument construction and destruction must be non-failing. C++11 function/member pointers cannot encode that guarantee in the type, so their implementations must honor the same contract.
+`submit(callable, args...)` returns `Result<Task<T>>`. It accepts plain functions, member pointers, lambdas, move-only captures and arguments, and `std::ref`. The stored callable is invoked as an lvalue while stored arguments are moved into the call.
 
-| Callable result | Submitted result | Retrieved result |
+> [!NOTE]
+> **No-exception callable contract**: Function objects and lambdas must mark their invocation operator `noexcept`, and constructing or destroying captures and arguments must not throw. Because C++11 plain function pointers and member pointers cannot encode `noexcept` in their type system, their implementations must uphold the same non-throwing guarantee by contract.
+
+| Callable return type | `submit()` return type | `get()` / `getUntil()` return type and semantics |
 | --- | --- | --- |
-| T | Result<Task<T>> | Result<T> |
-| Result<T> | Result<Task<T>> | Result<T>, preserving native errors and partial values |
-| void or Result<void> | Result<Task<void>> | Result<void> |
-| T& | Result<Task<T&>> | Result<T&>, borrowing external storage |
+| `T` | `Result<Task<T>>` | `Result<T>` |
+| `Result<T>` | `Result<Task<T>>` | `Result<T>`, preserving native `hx_os_error` details and partial values |
+| `void` or `Result<void>` | `Result<Task<void>>` | `Result<void>` |
+| `T&` | `Result<Task<T&>>` | `Result<T&>`, borrowing external storage that outlives consumption |
 
-A task returning an ordinary status integer produces `Task<hx_os_status>`: that integer is its value. Return `Result<void>` when it should represent success or failure.
+A callable returning a raw `hx_os_status` integer produces `Task<hx_os_status>`, treating that integer as the task's value. Return `Result<void>` instead when the status should represent task success or failure.
+
+`Task<T>` provides the following operations:
 
 | Method | Contract |
 | --- | --- |
-| valid() | Holds a native task reference |
-| ready() | Nonblocking completion query, including capture cleanup |
-| waitUntil(deadline) | Result<void>; absolute library monotonic deadline |
-| waitFor(milliseconds) | Result<void>; zero/negative duration polls |
-| wait() | Result<void>; explicit infinite waiting |
-| getUntil(deadline) | Result<T>; retains task on wait failure, consumes completed outcome |
-| get() | Result<T>; explicit infinite waiting |
-| cancel() | Cooperative stop request |
-| cancellationSource() | Independently retained source for a controller thread |
+| `valid()` | Returns `true` if the handle holds a native task reference |
+| `ready()` | Nonblocking query for task and capture-cleanup completion |
+| `waitUntil(deadline)` | Returns `Result<void>`; waits until an absolute monotonic deadline |
+| `waitFor(milliseconds)` | Returns `Result<void>`; zero or negative duration polls without blocking |
+| `wait()` | Returns `Result<void>`; explicit unbounded wait for completion |
+| `getUntil(deadline)` | Returns `Result<T>`; preserves the `Task` handle on wait timeout/failure, and consumes it once the task has finished |
+| `get()` | Returns `Result<T>`; explicit unbounded wait that consumes the completed outcome |
+| `cancel()` | Requests cooperative cancellation |
+| `cancellationSource()` | Returns an independently reference-counted `CancellationSource` for a controller thread |
 
-Successful waiting reports completion, not successful work. Inspect `getUntil()` or `get()` for the outcome. Unfinished same-pool waits return DEADLOCK. Timeout preserves the task. Completed failure and queued cancellation consume the handle just like success. Dropping a Task releases observation without cancelling work.
+Note that `wait*()` succeeding only reports that execution has finished; inspect `getUntil()` or `get()` to see whether the task succeeded, failed, or was cancelled. Waiting on an unfinished task from a worker in the same pool returns `HX_OS_DEADLOCK`. Once a task finishes (whether by succeeding, failing, or being cancelled while queued), `getUntil()` or `get()` consumes the `Task` handle. Destroying a `Task` handle merely releases the observation reference without cancelling the underlying job.
 
-`Result<T>` stores its value inline and performs no allocation. Read `value()` only after checking `ok()` or, for documented partial progress, `hasValue()`. `get()` returns a nullable pointer. A returned reference must outlive consumption and must not refer to captures/arguments destroyed during worker cleanup.
+`Result<T>` stores its value inline without extra heap allocation. Always check `ok()` (or `hasValue()` on interfaces with documented partial progress) before calling `value()`, or use `get()` to obtain a nullable pointer. Returned references (`Result<T&>`) must outlive consumption and must never point to captures or arguments that are destroyed during worker cleanup.
 
 ## Cancellation
 
-This function accepts a host-owned pool view and returns a separate controller handle. Keep that handle on the controller thread while the task executes independently.
+Use `submitCancelable()` to pass an `hx::CancellationToken` into your job and extract an independent `hx::CancellationSource` for the controlling thread:
 
 ~~~cpp
 #include <hx/ThreadPool.hpp>
@@ -106,24 +128,27 @@ start_work(hx::ThreadPool &pool) noexcept
 }
 ~~~
 
-`CancellationToken::check()` returns CANCELLED after a stop request. Sources/tokens retain native references and may outlive the pool. Copy a source before moving the Task to a waiting thread. Do not call methods on the same Task concurrently with its move, consumption or destruction. Independent stable sources may request stop concurrently with execution/waiting. Cancellation cannot interrupt arbitrary blocking user code.
+After a controller calls `source.requestStop()`, `token.stopRequested()` returns `true` and `token.check()` returns `HX_OS_CANCELLED`.
+
+- **Independent lifetime**: Both `CancellationSource` and `CancellationToken` retain native task references and may safely outlive the thread pool.
+- **Thread-safety boundary**: Do not invoke methods on, move, consume, or destroy the same `Task` instance concurrently from multiple threads. Instead, copy a `CancellationSource` via `task.cancellationSource()` before moving the `Task` to a waiting thread; separate `CancellationSource` instances can safely call `requestStop()` concurrently with task execution and waiting.
+- **Cooperative semantics**: Cancellation is cooperative and cannot forcibly interrupt arbitrary blocking user or third-party calls.
 
 ## Admission, allocation and cleanup
 
-Prepared submission reserves queue capacity before constructing a C++ job. Full/closed queues reject without copying the callable or allocating its C++ job. Preparation runs outside the pool mutex. Allocation failure returns NO_MEMORY and releases partial resources. Copy/move of captures must be non-failing; allocate fallible user state before submission and check it explicitly.
+Task submission uses prepared admission (`hx_os_thread_pool_submit_prepared()`):
+1. **Capacity reserved first**: Queue capacity is reserved before constructing the C++ job. A full or closed queue rejects submission immediately without copying the callable or allocating C++ job storage.
+2. **Preparation outside the pool lock**: C++ job allocation and capture construction run outside the pool mutex. An allocation failure returns `HX_OS_NO_MEMORY` and releases any partial resources.
+3. **Close race cleanup**: If pool shutdown races with a job that has already finished preparation, submission returns `HX_OS_CLOSED` and the submitting thread cleans up the prepared job once (note that moved-from arguments have already been consumed and cannot be restored). Once a job is accepted into the queue, its captures are cleaned up on a worker thread exactly once—even if the job is later skipped by `HX_OS_POOL_CANCEL_PENDING`.
 
-If close races successful preparation, submission returns CLOSED and cleanup runs once on the submitting thread. Moved-from inputs cannot be restored after this race. Accepted captures are retired exactly once on workers, including cancelled queued tasks. An admission claim remains held until rejected preparation cleanup completes.
+The callable, inline result slot, and reference state share a single context allocation aligned to the job's actual alignment (`alignas`), while native task and event structures are allocated separately. The default inline job size limit is `1 MiB` and can be adjusted via `ThreadPool(owner, maxTaskBytes)`. This bound limits the inline job structure itself, not external heap graphs owned by user pointers; holding onto many `Task` or result handles after the queue drains will keep their backing `context` memory allocated.
 
-Callable, result and reference state share one aligned context allocation; native task/event allocations are separate. Default inline job limit is 1 MiB. `ThreadPool(owner, maxTaskBytes)` selects another bound. This limits the job object size, not arbitrary user-owned heap graphs. Retaining Task/result handles can retain memory after the queue drains. The library does not replace the global C++ allocator.
-
-Capture/result destructors may run on a worker, on a rejecting submission thread, or on the thread releasing the final reference. They must return normally and avoid unbounded work. Library deadlines cannot preempt them. User callbacks must not unwind or jump across C frames.
+> [!WARNING]
+> **Destructor and callback execution rules**
+> Capture and result destructors may execute on a **worker thread**, on a **rejecting submission thread**, or on the **thread releasing the final task reference**. Destructors must return normally without unbounded blocking and must never unwind exceptions or `longjmp` across C stack frames.
 
 ## Alignment, rebuilding and trimming
 
-Inline result/capture slots use C++11 `alignas`. The job is allocated with its actual alignment through the context. Tests cover result alignment from 16 through 128 bytes, move-only values, references, rollback and destruction. Layout reduction alone does not establish a performance improvement.
-
-This migration changes C++ source signatures and template layouts. Rebuild all consumers/plugins using these headers together. Do not exchange old and new C++ task objects across module boundaries. Public C structures, opaque handles and exports remain unchanged.
-
-With THREAD_POOL disabled, factories return NOT_SUPPORTED and the capability bit is clear. The C library alone needs no C++ compiler with tests/examples disabled. The imported C++ target requests C++11 without forcing exception flags on unrelated consumer targets. Explicit flags are in [the Result guide](CPP_RESULTS.md).
-
-Keep allocator code, task functions, destructors, referenced data and their modules alive until every task, result and cancellation reference is released. Task references do not pin plugins in the OS loader. Separate static copies maintain separate state; release through the instance that created the resource.
+- **Over-aligned types**: Inline result and capture slots use C++11 `alignas` and allocate through the bound `hx_os_context` using the job's true alignment, supporting `16`- through `128`-byte aligned results, move-only values, and references.
+- **C++ recompilation boundary**: Public C structs, opaque handles, and exported functions maintain a stable C99 ABI. Because the C++ facade consists of header templates, rebuild all C++ consumers and plugins together when updating headers, and do not pass C++ `Task` objects across modules built with mismatched header revisions.
+- **Module trimming and plugin lifetime**: When `HX_OS_ENABLE_THREAD_POOL` is disabled, pool factories return `HX_OS_NOT_SUPPORTED` and clear the capability bit. The `hx_c_platform::cpp` CMake target requires only C++11 and does not force exception flags onto unrelated consumer targets (see [the Result guide](CPP_RESULTS.md) for no-exception CMake settings). Keep custom allocators, task code, destructors, borrowed data, and dynamic plugins loaded until every task, result, and cancellation reference has been released.

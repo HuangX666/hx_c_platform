@@ -2,15 +2,17 @@
 
 [English](LOCAL_DUMPS.md) · [Windows 工具](WINDOWS_UTILITIES.zh-CN.md) · [分析工具](ANALYSIS.zh-CN.md) · [README](../README.zh-CN.md)
 
-**这个模块用于明确告诉 Windows：某个程序崩溃以后，请在本机保存一个 `.dmp` 现场文件。** 它只负责配置 Windows，不自己捕获异常、写现场文件、检查内存损坏、恢复已经损坏的程序、监控卡死或上传客户数据。编译、链接或加载这个模块，都不会自动修改 Windows 设置。
+当部署在客户机器上的 Windows 应用程序发生未处理异常崩溃时，排查问题最直接的凭据就是系统生成的 `.dmp` 进程转储文件（Dump）。`WER LocalDumps` 模块（`<hx_os_local_dumps.h>` / `<hx/LocalDumps.hpp>`）提供了一套安全的配置接口，用于向 Windows 错误报告（Windows Error Reporting, WER）注册应用的本地转储规则，告诉操作系统：“当指定 `.exe` 崩溃时，请自动在本机指定目录保存一份 `.dmp` 现场文件。”
 
-C99 接口位于 `<hx_os_local_dumps.h>`，也由 `<hx_os.h>` 包含；不使用异常的 C++11 封装位于 `<hx/LocalDumps.hpp>`。`HX_OS_ENABLE_LOCAL_DUMPS` 默认 ON，独立于 REGISTRY、PROCESS 和 SYSTEM_UTILS。Windows 链接系统 Advapi32 库。其他平台或关闭模块时，接口仍可链接，但返回 `HX_OS_NOT_SUPPORTED`；`hx_os_local_dumps_available()` 只表示这个构建包含 Windows 实现。
+请注意本模块的职责边界：**它仅负责在管理员授权下配置、查询或移除 Windows 注册表中的 `LocalDumps` 策略**——它本身不在进程内安装异常捕获器、不自己写出 `.dmp` 文件、不监控死锁卡死，也不会向微软或外部服务器上传任何客户数据。仅仅编译、链接或加载本模块绝不会自动修改系统的任何设置。
+
+`HX_OS_ENABLE_LOCAL_DUMPS` 默认开启（`ON`），独立于 `REGISTRY`、`PROCESS` 和 `SYSTEM_UTILS` 模块（在 Windows 上自动链接系统 `Advapi32.lib`）。在非 Windows 平台或关闭该开关的构建中，函数声明依然保留并固定返回 `HX_OS_NOT_SUPPORTED`；运行时可通过 `hx_os_local_dumps_available()` 检查当前构建是否包含该实现。
 
 ## 1. 安装软件时，为客户程序设置一次
 
-建议由获得授权、具有管理员权限的安装程序调用。客户以后正常权限运行业务程序即可，不应为了保存现场，每次都要求客户以管理员身份运行软件。设置在安装程序／进程退出后继续保留，不会因为某个 C++ 对象析构而撤销。
+由于 Windows `LocalDumps` 策略存储在 `HKEY_LOCAL_MACHINE`（`HKLM`）下，配置操作需要管理员权限。最佳实践是在**拥有管理员权限的安装程序（Installer）或部署脚本**中为目标业务程序配置一次；配置落盘后长期有效，客户日常只需以普通标准用户权限运行业务程序即可，无需每次启动软件都请求管理员提权。
 
-下面是完整 C 程序，它配置的是 **MyApp.exe**，不是安装程序本身。运行之前替换成真实业务程序名。构建方式见 [C 工程配置](USAGE.zh-CN.md#c-project)。
+下面的完整 C 程序演示如何为名为 `MyApp.exe` 的业务程序开启默认本地转储配置（运行前请将 `"MyApp.exe"` 替换为你自己的可执行文件名，编译方式见[C 工程配置](USAGE.zh-CN.md#c-project)）：
 
 ```c
 #include <hx_os_local_dumps.h>
@@ -29,18 +31,27 @@ int main(void)
 		return 1;
 	}
 
-	puts("Configured. Verify actual crash collection on the target system.");
+	puts("LocalDumps configured for MyApp.exe.");
 	return 0;
 }
 ```
 
-`application=NULL` 表示当前运行的**宿主 EXE**，即使函数是在 DLL 中调用，也不是配置 DLL。安装程序通常应明确传入客户业务 EXE 名。只接受以 `.exe` 结尾的单个 UTF-8 文件名，不接受路径、通配符或 DLL 名；上限为 255 个 UTF-16 单元。Windows 的程序名匹配不区分大小写；不同目录中同名的 EXE，会共享所选注册表视图里的设置。
-
-`options=NULL` 的默认值是：完整现场、最多 3 份、调用进程的注册表视图、字面目录 `%LOCALAPPDATA%\CrashDumps`。这个目录由 Windows 按崩溃程序的运行账号展开，而不是安装程序提前展开成管理员的目录。这里为了排查问题，使用比 Windows 自身“较小现场、10 份”更明确的默认值。完整现场文件可能很大，也可能包含密码、文档和其他敏感数据。数量上限不等于磁盘空间上限。
-
-函数只修改 `HKLM\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps` 下属于这个 EXE 的子项，不修改全局 WER 值，不调整目录权限，不自行提权，也不创建文件夹。返回 `ACCESS_DENIED` 表示当前权限不足，原生错误保留在 `hx_os_error`。不要从 `DllMain`、信号处理函数或异常处理函数中调用。
+- **目标程序名（`application`）规则**：
+  - 仅接受以 `.exe` 结尾的单个 UTF-8 文件名（如 `"MyApp.exe"`，最长 `255` 个 UTF-16 码元），**不接受包含目录分隔符的路径、通配符或 `.dll` 名称**。
+  - 若传入 `application = NULL`，则自动选取当前正在运行的**宿主 `.exe` 文件名**（即使该调用发生在某个 DLL 内部，配置的也是宿主 EXE 而非 DLL；因此如果是独立的安装程序 `setup.exe`，请务必显式传入客户业务程序名 `"MyApp.exe"`）。
+  - Windows 按文件名不区分大小写匹配崩溃进程；不同安装目录下同名的 `.exe` 在同一注册表视图中共享该项配置。
+- **默认配置项（`options = NULL`）**：
+  - **转储类型**：完整转储（`HX_OS_LOCAL_DUMPS_FULL`，包含进程全部内存数据，比 Windows 系统自带默认的紧凑小转储更利于离线还原复杂现场）。
+  - **保留份数**：最多保留 `3` 份（超过后由 Windows 自动滚动覆盖最旧的转储文件）。
+  - **注册表视图**：跟随当前调用进程的位数视图（`HX_OS_LOCAL_DUMPS_VIEW_DEFAULT`）。
+  - **保存目录**：字面量 `"%LOCALAPPDATA%\\CrashDumps"`（以 `REG_EXPAND_SZ` 写入注册表，待实际发生崩溃时由 Windows 按**崩溃进程所属运行账号**动态展开，而非在安装阶段展开成管理员自己的目录）。
+- **权限与安全边界**：
+  - 函数仅修改 `HKLM\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps\<MyApp.exe>` 子项，不触碰全局 WER 配置，不自动创建磁盘文件夹或修改目录 ACL，也不会自行弹窗请求提权。若当前进程没有管理员权限，调用会明确返回 `HX_OS_ACCESS_DENIED` 并在 `hx_os_error` 中保留原生 Win32 错误码。
+  - **隐私提醒**：完整内存转储（`FULL`）体积较大，且可能包含崩溃时刻内存中的口令、密钥或用户文档内容；同时，文件份数上限不等于磁盘字节配额上限，请在产品隐私说明与运维清理策略中妥善规划。切勿在 `DllMain`、信号处理函数或崩溃异常处理函数内部调用本配置接口。
 
 ## 2. 修改目录、份数、现场类型和注册表视图
+
+如果需要自定义转储目录、保留份数、转储类型（`HX_OS_LOCAL_DUMPS_MINI` 或 `HX_OS_LOCAL_DUMPS_FULL`）或显式指定 32/64 位注册表视图，请先用 `hx_os_local_dumps_options_init` 初始化选项结构体：
 
 ```c
 hx_os_local_dumps_options options;
@@ -57,23 +68,30 @@ if (status == HX_OS_OK) {
 }
 ```
 
-先初始化 options，再修改需要的字段。版本 1 支持 MINI 或 FULL、正数份数，以及 DEFAULT／VIEW32／VIEW64；不提供自定义现场位标志。自定义目录使用严格 UTF-8，必须是 Windows 绝对路径，或以 `%变量名%` 开头、最终展开为绝对路径的形式。目录以 `REG_EXPAND_SZ` 保存，配置时不展开；上限为 32,767 个 UTF-16 单元。自定义目录由安装程序或运维准备，并确保运行程序的账号可以写入，不要为了省事把客户现场开放给所有人读取。
-
-DEFAULT 跟随调用配置函数的进程，而不是自动识别目标 EXE 的架构。安装程序如果配置另一种架构的程序，应明确选择对应视图。在 64 位 Windows 上需要覆盖 x86／x64 收集路径时，可以明确分别配置 VIEW32 和 VIEW64，再对各目标验证；这是两次独立操作，不是两边一起成功或一起撤销的事务。实现不硬编码 `Wow6432Node`，也不修改进程的全局视图。查询和移除时使用相同的视图。
+- **自定义目录要求**：`dump_folder` 必须为严格 UTF-8 编码的 Windows 绝对路径，或以 `%环境变量%` 开头且展开后为绝对路径的字符串（最长 `32,767` 个 UTF-16 码元，按原样写入 `REG_EXPAND_SZ`，配置时不提前展开）。若指定了固定自定义目录，安装程序或管理员需提前创建该文件夹并赋予业务运行账号写权限（**切勿为了省事将崩溃转储目录设为所有用户可读**）。
+- **32 位与 64 位注册表视图选择**：`HX_OS_LOCAL_DUMPS_VIEW_DEFAULT` 使用调用进程自身的注册表视图，并不会去探测磁盘上 `MyApp.exe` 的 PE 架构。如果使用 32 位安装程序去配置 64 位业务程序（或反之），请显式指定 `HX_OS_LOCAL_DUMPS_VIEW64` 或 `HX_OS_LOCAL_DUMPS_VIEW32`。在 64 位 Windows 上若需同时覆盖 32 位与 64 位子程序，可分别对两个视图各调用一次 `enable`（后续执行 `query` 和 `remove` 时也请传入相同的视图枚举）。
 
 ## 3. 不覆盖已有设置，移除时也先检查
 
-模块不会静默覆盖已经存在的应用子项。新建时写入三个 WER 值：`DumpFolder`、`DumpCount`、`DumpType`，并以私有 DWORD `HxLocalDumpsVersion=1` 标识本库管理的布局。重复开启只有在完整配置与请求完全相同、没有额外值和子项时才成功。其他已有配置一律返回 `EXISTS` 并保持原样，包括别人手动建立、数值恰好相同但没有本库标识的配置。
+为防止破坏系统管理员或其他运维工具手动配置好的策略，本模块遵循**绝不静默覆盖外部已有设置**的原则：
+
+- **管理标记与幂等开启**：新建应用子项时，库会写入三个标准 WER 键值（`DumpFolder`、`DumpCount`、`DumpType`）以及一个私有的标记值 `HxLocalDumpsVersion = 1`（`REG_DWORD`）。如果目标子项已存在，只有当它带有 `HxLocalDumpsVersion = 1` 标记、三个配置值与本次请求完全一致、且不包含任何额外键值或嵌套子项时，重复调用 `enable` 才会幂等返回 `HX_OS_OK`；否则一律返回 `HX_OS_EXISTS` 并保持注册表原样不变。
+- **安全移除（`hx_os_local_dumps_remove`）**：
 
 ```c
 hx_os_status status = hx_os_local_dumps_remove("MyApp.exe", NULL, &error);
 ```
 
-这会移除本库建立且仍符合默认值的配置；应用子项已经不存在时也成功。如果之前使用自定义配置，应传回原来的 options，而不是 NULL。遇到其他工具创建、不完整、已修改或增加内容的配置，返回 `BUSY`，不删除。目录按字面字符串匹配，不是展开后指向同一位置就算相同。移除不递归删除，不删除已有 `.dmp` 文件，不删除父项或全局设置。移除应用的单独设置以后，可能重新使用全局 WER 设置，因此**不等于保证彻底关闭所有现场收集**。
+调用 `remove` 时，若传入 `options = NULL`，则仅移除由本库创建且仍保持默认值的配置（若之前使用的是自定义 `options`，移除时也必须传入相同的 `options`；若该应用子项本来就不存在，也直接返回 `HX_OS_OK`）。如果检测到注册表项是由外部工具创建的、缺少本库标记、值被手工修改过（其中 `DumpFolder` 按未展开的字面字符串严格比对）或包含额外键值/子键，函数会拒绝删除并返回 `HX_OS_BUSY`。
 
-安装／移除期间，调用方必须排除其他进程或线程同时修改这个应用的注册表项。多个值的写入不是事务，安装期间不应让目标程序同时进行崩溃测试。写入失败时，实现尝试删除自己这次新建的子项；清理失败会把 Windows 错误码放在 `error.cause_code`，重试前应检查现场设置。进程在配置中途被中断，也可能留下不完整设置。接口没有隐藏的“强制覆盖／强制删除”模式。原生关闭失败可能在设置已经改变后才返回，不能仅凭非零返回值就认定没有变化，应先查询。
+> [!NOTE]
+> **移除与回滚边界**
+> - `remove` 只删除注册表中的 `<MyApp.exe>` 策略子键，**不会**删除磁盘上已经生成的 `.dmp` 文件，也不会删除父级 `LocalDumps` 键或全局 WER 设置。请注意：移除针对单个应用的设置后，如果机器上配置了全局 WER `LocalDumps` 策略，Windows 仍可能按全局策略收集转储。
+> - 注册表多值写入不是原子事务。在安装或卸载期间，请避免多个进程并发修改同一应用的注册表项。若写入中途出错，库会尝试回滚删除刚刚新建的子项（若回滚清理本身也失败，会将清理阶段的 Win32 错误码记录在 `error.cause_code` 中；重试前建议先调用 `query` 检查当前状态）。
 
 ## 4. 只查询，不修改 Windows
+
+使用 `hx_os_local_dumps_query` 可以无副作用地检查某个应用在指定注册表视图下的当前配置：
 
 ```c
 hx_os_local_dumps_info info;
@@ -91,15 +109,12 @@ if (status == HX_OS_OK)
 hx_string_destroy(&folder);
 ```
 
-`fields` 中的 HAS_TYPE／HAS_COUNT／HAS_FOLDER 表示哪些值确实存在。缺失的数字字段为零，缺失目录为空字符串。目录原样返回、不展开；为了检查其他配置，查询也接受 REG_SZ／REG_EXPAND_SZ。值类型错误、编码错误或超过大小限制时明确失败。失败保持两份输出不变；成功只写已知大小的 info，字符串使用自己的 context。
-
-`managed` 表示配置带有本库标识、布局完整且没有额外值或子项。它不是安全凭据，也不证明已知值从未被修改。移除时还会对照调用方传入的期望值。查询只是当时的观察，不保证和其他注册表编辑形成原子快照。
-
-`NOT_FOUND` 只表示这个程序在所选视图中没有单独设置，**不表示 Windows 已经停止收集现场**：这个查询不合并全局 WER 设置和 Windows 默认值。`available()`、配置成功或查询成功，都不能证明目录权限、程序的崩溃处理方式以及 Windows 最终落盘一定正常。
+- **字段存在性掩码（`info.fields`）**：通过位掩码 `HX_OS_LOCAL_DUMPS_HAS_TYPE`、`HX_OS_LOCAL_DUMPS_HAS_COUNT` 和 `HX_OS_LOCAL_DUMPS_HAS_FOLDER` 标明注册表子项中实际存在哪些键值（缺失的数值字段填 `0`，缺失的目录填为空字符串 `""`）。为方便检视外部配置，查询接口同时接受 `REG_EXPAND_SZ` 和 `REG_SZ` 类型的目录值并按字面原样返回。
+- **`info.managed` 与 `HX_OS_NOT_FOUND` 的含义**：`info.managed` 为真表示该子项包含完整的本库标记且无多余键值/子键。当该应用在所选视图下没有专属子键时，查询返回 `HX_OS_NOT_FOUND`（这仅代表没有应用级单独配置，不代表全局 WER 转储也处于关闭状态）。
 
 ## 5. C++11 和不会默认改设置的命令行示例
 
-包含 `<hx/LocalDumps.hpp>` 后，在返回 `hx_os_status` 的函数中调用：
+在 C++11 中包含 `<hx/LocalDumps.hpp>`，即可通过 `hx::LocalDumps` 命名空间调用 `enable`、`query` 和 `remove`（均返回 `hx::Result`，且 `query` 返回的结果对象离开作用域析构时不会撤销系统注册表中的持久化设置）：
 
 ```cpp
 auto enabled = hx::LocalDumps::enable("MyApp.exe");
@@ -113,9 +128,7 @@ if (!settings)
 return HX_OS_OK;
 ```
 
-`LocalDumps::options()` 返回初始化好的 C options。enable、query、remove 复用 C 实现，通过 Result 返回结果；query 的结果自己持有目录字符串，析构不会撤销 Windows 中的持久设置。
-
-完整公开示例 [local_dumps.c](../examples/local_dumps.c) 在不带参数时只显示帮助，不改设置，也不故意制造崩溃。现有 MSVC 构建开启 examples 后：
+仓库提供的公开命令行工具 [local_dumps.c](../examples/local_dumps.c) 在不带参数运行时仅打印用法说明，绝不会自动修改系统设置或故意触发崩溃。在开启了 `HX_OS_BUILD_EXAMPLES=ON` 的 MSVC 构建目录中，可以先以普通权限编译并执行只读查询：
 
 ```powershell
 cmake --build build-shared-msvc --config Release --target hx_os_local_dumps
@@ -123,27 +136,24 @@ cmake --build build-shared-msvc --config Release --target hx_os_local_dumps
 .\build-shared-msvc\bin\Release\hx_os_local_dumps.exe query MyApp.exe 64
 ```
 
-只有明确执行 enable 或 remove 才写设置。对你有权管理的程序，在获得授权的管理员终端中执行：
+只有在**管理员权限的终端**中显式传入 `enable` 或 `remove` 子命令时，示例才会写入或移除注册表配置（程序名传入 `-` 表示选择 `hx_os_local_dumps.exe` 自身；末尾还可追加可选的自定义目录参数）：
 
 ```powershell
 .\build-shared-msvc\bin\Release\hx_os_local_dumps.exe enable MyApp.exe 64
 .\build-shared-msvc\bin\Release\hx_os_local_dumps.exe remove MyApp.exe 64
 ```
 
-最后可以额外传目录参数，enable／remove 都使用完整现场、3 份。程序名传 `-` 是明确选择示例自身的 EXE。命令行示例通过 SYSTEM_UTILS 取得 UTF-8 参数，LocalDumps 库接口本身不依赖该模块。
-
 ## 6. 客户出问题后，收集什么
 
-开发者保存每次实际发布的 EXE／DLL／PDB 和对应源码。客户通常只需要运行文件，Windows 保存现场不要求客户安装 PDB。发生崩溃后，收集 `.dmp`、完整软件版本、发生时间、日志和复现步骤。默认文件通常在运行程序的那个用户的 `%LOCALAPPDATA%\CrashDumps`，服务账号使用自己的用户目录。现场文件走私有传递渠道，并制定保留、清理规则。
-
-在 Visual Studio 或 WinDbg 中使用匹配的 PDB 查看出错位置。空指针访问可能较直观，内存损坏却可能在第一次写错很久之后才导致崩溃。现场文件是一次快照，不是完整历史；仍需结合内存检查构建和复现测试。
-
-程序卡死通常需要另行手动保存现场，例如在强制关闭前，使用任务管理器“详细信息”中的创建转储命令。没有崩溃的内存写坏、泄漏、正常退出、强制终止和断电，不会由这个模块自动诊断。程序自己的崩溃报告处理、自动启动调试器等情况，可能阻止 LocalDumps 收集。LocalDumps 与普通 WER 报告提交相互独立，本接口不会开启向 Microsoft 上传报告。
+1. **构建端归档符号（PDB）**：每次发布正式版本时，开发团队应在内部归档好完全匹配的 `.exe`、`.dll`、`.pdb` 符号文件及对应源码提交号。Windows 生成 `.dmp` 文件并不要求客户电脑上安装 `.pdb` 符号，因此只需向客户分发运行二进制即可。
+2. **故障后收集信息**：当客户反馈闪退时，请客户从默认目录 `%LOCALAPPDATA%\CrashDumps`（若为 Windows 服务进程则位于对应服务账号的配置目录下）取回 `.dmp` 文件，并附上软件版本号、发生时间、运行日志与复现步骤。
+3. **使用 Visual Studio 或 WinDbg 定位**：在开发机上用 Visual Studio 或 WinDbg 打开 `.dmp` 并配置好匹配的 `.pdb` 路径，即可直接看到崩溃线程的调用栈与局部变量。如果崩溃是由早先的堆内存越界破坏引起的，崩溃点可能滞后于第一案发现场，此时可结合[可选的 CPU 与内存分析](ANALYSIS.zh-CN.md)中的内存检查工具定位根因。
+4. **卡死（Hang）与拦截注意事项**：进程死锁或界面卡死不会自动触发崩溃转储，通常需要在强行结束进程前通过任务管理器“详细信息 -> 创建转储文件”手动抓取。此外，如果应用程序自身安装了吞掉异常的顶层异常过滤器，或系统注册了抢先接管的 JIT 调试器（`AeDebug`），可能会阻止 WER `LocalDumps` 生成文件。
 
 ## 7. 验证范围要分开记录
 
-“能正确配置”与“客户电脑确实产生文件”是两种验证。维护者回归只在独立测试进程内，把 HKLM 指向自己独占创建的临时 HKCU 测试树，使用真正的 Windows 注册表调用检查中文、冲突、清理、权限、视图和失败时输出保留，不配置实际业务程序。静态构建测试还注入写入／回滚失败；非 Windows 和关闭模块时验证 `NOT_SUPPORTED`。这些回归不等于客户电脑已经通过真实崩溃落盘验收。
+在工程质量保障中，建议将“注册表配置逻辑单元测试”与“目标机器真实崩溃落盘验收”分开执行：
+- 库自带的自动化回归测试仅在隔离的测试进程内将句柄重定向到独享的临时 `HKCU` 测试子树，验证 Unicode 路径、冲突保护、权限拒绝、32/64 位视图切换与回滚清理，不触碰宿主机的真实 `HKLM` 设置。
+- 在产品正式发版前，请在目标 Windows 版本、目标架构（x86/x64）与实际运行账号权限下，使用专门编写的可丢弃测试小工具验证一次真实的崩溃 `.dmp` 落盘，测试完毕后立即用 `remove` 清理测试配置（切勿拿存有未保存业务数据的生产程序做强制崩溃试验）。
 
-发布前，还要在目标 Windows 版本、程序架构、运行账号和目录权限下，用可丢弃的测试程序以及明确授权的系统配置，单独验证真实崩溃收集。测试文件保持私有，只撤销本次测试创建的设置。不要拿带有未保存工作的生产程序故意制造崩溃。
-
-参考：[Microsoft LocalDumps 配置说明](https://learn.microsoft.com/en-us/windows/win32/wer/collecting-user-mode-dumps)、[注册表视图访问说明](https://learn.microsoft.com/en-us/windows/win32/winprog64/accessing-an-alternate-registry-view)。
+更多底层细节可参阅微软官方文档：[Collecting User-Mode Dumps (LocalDumps)](https://learn.microsoft.com/en-us/windows/win32/wer/collecting-user-mode-dumps) 与 [Accessing an Alternate Registry View](https://learn.microsoft.com/en-us/windows/win32/winprog64/accessing-an-alternate-registry-view)。

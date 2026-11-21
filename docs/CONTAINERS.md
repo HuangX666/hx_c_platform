@@ -2,87 +2,94 @@
 
 [简体中文](CONTAINERS.zh-CN.md) · [README](../README.md)
 
-**Start with a complete program.** Start with vector or queue to store values or process them in insertion order in C.
+When a C99 project needs growable arrays, double-ended queues, doubly linked lists, binary heaps, ordered trees (AVL or red-black), or hash maps—with explicit element-count and memory-budget caps so untrusted or bursty workloads cannot exhaust the heap—include `<hx_container.h>` (or the C umbrella header `<hx_os.h>`). Every container is implemented in pure C99 behind opaque handles and typed option structs, requiring no C++ runtime and no global initialization.
 
-Open [containers.c](../examples/containers.c). Initialize element size → create bounded queue → push an integer → pop into local storage → destroy.
+A minimal runnable program is provided in [containers.c](../examples/containers.c): it initializes container options for an `int`, creates a bounded FIFO queue (`hx_os_queue`), pushes `42`, pops it into local storage, and destroys the container. Follow the [example run instructions](../examples/README.md#run) to configure with `-DHX_OS_BUILD_EXAMPLES=ON` and build the `hx_os_containers` target (no arguments or input files are needed):
 
-Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_containers`. This program needs no arguments or input files.
+```text
+Queue result: 42
+```
 
-**Expected result:** It prints `Queue result: 42`. For ordered keys, ordered_map.c traverses a red-black tree as a, b, b while retaining both values associated with b.
+For sorted key lookup and duplicate keys, build and run `hx_os_ordered_map` ([ordered-map program](../examples/ordered_map.c)), which traverses a red-black tree in key order (`a`, `b`, `b`) while retaining both values associated with `b`. If you are new to the library, start with [storing two integers and taking items in order](USAGE.md#containers), or drop the example source into the [minimal project](USAGE.md#c-project).
 
-Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
-
-Start with [storing two integers and taking items in order](USAGE.md#containers). A vector is a growable array; a queue removes the oldest item first. Both introductory examples include complete programs and expected output. This page then covers strings, structures, maps and resource ownership.
-
-Include `hx_container.h`, or the C umbrella `hx_os.h`. The implementation is C99 and exposes only C types and opaque handles. No C++ runtime is required. `HX_OS_ENABLE_CONTAINERS=ON` is the default. OFF excludes sequence, tree and uthash implementation code; constructors return `HX_OS_NOT_SUPPORTED` and `HX_OS_CAP_CONTAINERS` is cleared. No global initialization is needed.
-
-Related tools: [LRU caches](CACHE.md) reuse hash storage and recency links; [dynamic bitsets](BITSET.md) provide word-based counting, search and set operations; [fixed byte rings](RING.md) borrow caller storage. These share the CONTAINERS switch. For complete messages across threads, use the independent [message/ring queues](QUEUES.md), controlled by `HX_OS_ENABLE_QUEUES` without a coroutine runtime.
+> [!NOTE]
+> The container module is controlled by `HX_OS_ENABLE_CONTAINERS` (`ON` by default). Setting it to `OFF` excludes the sequence, tree, and `uthash` implementations from the build, clears `HX_OS_CAP_CONTAINERS`, and causes container constructors to return `HX_OS_NOT_SUPPORTED`.
+>
+> **Related data structures**:
+> - Bounded recency eviction and TTL expiry: [LRU caches](CACHE.md)
+> - Dense boolean flags and word-wise set operations: [dynamic bitsets](BITSET.md)
+> - Zero-allocation fixed byte buffers with two-span borrowing: [fixed byte rings](RING.md)
+> - Cross-thread message passing (controlled independently by `HX_OS_ENABLE_QUEUES` without a coroutine runtime): [message/ring queues](QUEUES.md)
 
 ## Available containers
 
-For mixed values, use the independent [variant module](VARIANT.md): it can own numbers, strings and custom structures. hx_variant_container_options_init supplies deep-copy/drop operations for vector, queue/deque and map values. Owning hx_variant values support byte relocation; live hx::Variant C++ objects must not be stored through a raw byte-copy container API. The variant's nested allocations remain outside max_bytes.
+When a single container needs to hold heterogeneous values (numbers, strings, and custom structs side by side), pair it with the [variant module](VARIANT.md): `hx_variant_container_options_init` populates deep-copy and drop callbacks for `vector`, `queue`/`deque`, and `map` values. Owning C `hx_variant` structs can be bitwise-relocated by these containers, whereas C++ `hx::Variant` wrapper objects must not be passed to raw byte-copy C container APIs.
 
-| Container | Representation and operations |
+| Container | Underlying representation and complexity |
 |---|---|
-| vector | Contiguous array; indexed access O(1), amortized append O(1) |
-| deque | Circular array; indexed access and reserved end operations O(1) |
-| queue | FIFO names over deque; push at back, pop at front |
-| stack | LIFO names over vector; push/pop at back |
-| list | Doubly linked nodes; end operations and iterator steps O(1) |
-| heap | Max-heap; push/pop O(log n), top at index zero |
-| ordered map/set | Existing AVL or opt-in red-black tree; O(log n) find/insert/erase, sorted iteration |
-| multimap/multiset | Add `HX_OS_MAP_MULTI` to AVL, red-black or hash kind; duplicate keys retained |
-| hash map/set | uthash 2.4.0; expected O(1) lookup, insertion-order iteration |
+| `vector` | Contiguous dynamic array; indexed access `O(1)`, amortized back append `O(1)`, middle insert/erase `O(n)` |
+| `deque` | Circular array; indexed access `O(1)` and front/back push/pop `O(1)` when capacity is available |
+| `queue` | FIFO convenience alias over `deque` (push at back, pop at front) |
+| `stack` | LIFO convenience alias over `vector` (push and pop at back) |
+| `list` | Doubly linked list; front/back operations and iterator steps `O(1)`, indexed lookup `O(n)` |
+| `heap` | Contiguous max-heap; push and pop-top `O(log n)`, maximum element always at index `0` |
+| ordered `map` / `set` | AVL tree by default or opt-in red-black tree (`HX_OS_MAP_RED_BLACK`); `O(log n)` find/insert/erase, sorted iteration |
+| `multimap` / `multiset` | Bitwise-OR `HX_OS_MAP_MULTI` with AVL, red-black, or hash map kinds to retain duplicate keys |
+| hash `map` / `set` | `uthash 2.4.0`; expected `O(1)` lookup/insert/erase (`O(n)` worst-case under hash collisions), insertion-order iteration |
 
-Complexities exclude element/key byte costs and callbacks. A list's indexed access/insertion/removal needs O(n) traversal; iterate with the iterator API for linear total traversal. Vector/deque middle operations are O(n). Growth moves live bytes and may allocate. Hash collisions can make operations O(n); the current hash is not a defense against deliberately colliding input.
-
-The sequence types share `hx_os_sequence_*` operations. Queue/stack aliases are convenience names, not separate runtime implementations or DLL exports. A heap accepts insertion at the end and removal at index zero; arbitrary indexed changes return NOT_SUPPORTED. `hx_os_vector_sort` is an in-place, unstable heapsort. `hx_os_vector_lower_bound` requires an already sorted vector using the same strict weak ordering comparator.
-
-These are C container and algorithm building blocks. These containers do not reproduce the C++ template type system or complete iterator-category/ranges framework. Shared sequences/maps require external synchronization. Concurrent queues are separate APIs; see [queue contracts](QUEUES.md).
+Key operational characteristics:
+- Complexities count element operations and exclude key/value byte copies and custom callbacks. Because indexed operations on a `list` require `O(n)` traversal, always use the iterator API for linear `O(n)` full scans.
+- All sequence types share the `hx_os_sequence_*` functions; `queue` and `stack` are readable aliases rather than separate runtime types or DLL exports.
+- A `heap` allows insertion at the back and removal at index `0`; arbitrary indexed modifications return `HX_OS_NOT_SUPPORTED` to protect the heap invariant.
+- `hx_os_vector_sort` runs an in-place, unstable heapsort, and `hx_os_vector_lower_bound` requires the vector to be sorted with the same strict weak ordering comparator.
+- Sequences and maps contain **no internal mutexes**. Synchronize shared access externally, or use the dedicated concurrent queues documented in [queue contracts](QUEUES.md).
 
 ## Options, allocation and bounds
 
-Initialize `hx_os_container_options` with `hx_os_container_options_init(&options, sizeof(element_type))`. The options are copied at creation and cannot be changed through the original structure. Default limits are 1,048,576 elements and 16 MiB per container. Set smaller limits for an embedded workload. Both limits must be nonzero.
-
-`element_alignment=0` requests normal fundamental allocation alignment. An explicit alignment must be a power of two, and element size must be a multiple of it. Use an appropriate alignment for over-aligned types. Vector stride is exactly `element_size`; passing `sizeof(T)` maintains T's stride. All values must support bitwise relocation, including during growth/sort. Self-referential values and live C++ objects requiring move constructors cannot be stored as values by this API. Store stable external pointers when their ownership model requires that.
-
-`max_bytes` bounds the library's live allocation requests, including the container object, node/bucket metadata, alignment overhead, temporary values and simultaneous old/new buffers during growth. `sequence_memory` and `map_memory` report this same accounting. They do not include a custom allocator's own bookkeeping, allocations made by copy/drop callbacks, or heap graphs behind stored pointers. In particular, cloned hx_string contents are outside the container's byte budget. A replacement can fail LIMIT while the previous value remains valid because transactional copying needs space.
-
-The supplied context owns allocation policy and remains busy while its container allocations exist. There is no global allocator replacement. Callback `user` data and any different callback context are borrowed and must remain valid through destruction. The allocator must support calls/releases on whichever threads the consumer uses. Containers themselves have no locks; exclude readers during mutation and externally serialize mutations/destroy. Different containers can be used independently, subject to callback safety.
-
-Reserve is supported by arrays, including deque/heap; list returns NOT_SUPPORTED. Clear keeps array capacity and releases list/map nodes. Destroy releases all remaining values/storage and clears the owner's pointer; destroying an already NULL owner succeeds. No automatic shrinking is used.
+Initialize `hx_os_container_options` with `hx_os_container_options_init(&options, sizeof(element_type))`. The container copies the options struct at creation time, so later edits to the local struct have no effect on existing containers.
+- **Default bounds**: Each container defaults to at most `1,048,576` elements (`max_items`) and `16 MiB` of live library allocations (`max_bytes`). Both limits must be non-zero; tune them downward for memory-constrained embedded targets.
+- **Alignment and bitwise relocation**: `element_alignment = 0` selects standard fundamental allocation alignment. Any explicit alignment must be a power of two that evenly divides `element_size`. Every stored element must support bitwise relocation (`memcpy`/`memmove` during growth or sorting). Self-referential structs and C++ objects requiring non-trivial move constructors cannot be stored by value—store stable pointers with explicit ownership instead.
+- **Byte budget accounting (`max_bytes`)**: `max_bytes` caps the live bytes requested by the container from its `hx_os_context`, including the container header, node/bucket metadata, alignment padding, temporary staging values, and the simultaneous old and new buffers held during array growth. `hx_os_sequence_memory()` and `hx_os_map_memory()` report this exact accounting.
+  - Note: Bookkeeping inside a custom allocator, heap allocations performed inside user `copy`/`drop` callbacks (such as the character buffer inside a deep-copied `hx_string` or `hx_variant`), and external object graphs behind stored pointers are **outside** `max_bytes`.
+  - Replacing an element stages the new copy before retiring the old value so failures leave the container intact; consequently, an update can return `HX_OS_LIMIT` even when the element count does not grow.
+- **Allocator context and destruction**: A container holds a lease on its `hx_os_context` while any container allocations remain alive (causing `hx_os_context_destroy` to return `HX_OS_BUSY`). Callback `user` pointers are borrowed and must outlive the container. Array-backed sequences (`vector`, `deque`, `heap`) support `hx_os_sequence_reserve`, whereas `list` returns `HX_OS_NOT_SUPPORTED`. `clear` drops all elements (keeping array capacity while freeing list/map nodes); `destroy` drops all remaining elements, frees all storage, and sets the caller's handle pointer to `NULL` (destroying an already `NULL` handle succeeds with `HX_OS_OK`).
 
 ## Copy, transfer and borrowed access
 
-| Operation | Ownership on success | On failure |
+Containers support plain byte copies, deep resource management via `copy`/`drop` callbacks, and zero-copy ownership transfer via `_take` operations:
+
+| Operation | Ownership on success | Behavior on failure |
 |---|---|---|
-| Insert without copy/drop | Copies plain bytes | Source unchanged |
-| Insert with copy callback | Constructs an independent owned value | Source retained |
-| Insert with drop but no copy | NOT_SUPPORTED | Source retained |
-| `_take` insertion | Transfers the release obligation | Caller still owns value |
-| Pop/erase with non-NULL output | Transfers bytes/ownership to caller | Output unchanged |
-| Pop/erase with NULL output | Calls drop and removes value | Old value retained |
-| Clear/destroy | Drops all retained values | BUSY preserves container |
+| Insert without `copy`/`drop` | Copies plain element bytes into the container | Source and container unchanged |
+| Insert with `copy` and `drop` | Calls `copy` to construct an independent owned value | Source remains with caller; container unchanged |
+| Insert with `drop` but no `copy` | Rejected with `HX_OS_NOT_SUPPORTED` | Source remains with caller |
+| `_take` insert (e.g., `push_back_take`) | Transfers bytes and the future `drop` obligation to the container | Caller retains ownership of the source value |
+| `pop` / `erase` with non-`NULL` output | Moves element bytes and ownership into caller storage without calling `drop` | Output buffer unchanged; element stays in container |
+| `pop` / `erase` with `NULL` output | Calls `drop` on the element and removes it | Element stays in container |
+| `clear` / `destroy` | Calls `drop` on every remaining element | Container preserved if reentrant access returns `HX_OS_BUSY` |
 
-A successful `_take` does not zero its source bytes. Treat the source as moved-from and do not drop it a second time. The source cannot be a value already owned by that container. A pop/erase output must be suitably sized, uninitialized external storage, outside all storage owned by the container. Overlap checks catch common errors but are not a complete pointer validator. Pointer elements are copied as pointers unless copy/drop implement deep ownership. Callbacks must clean their own partial destination on copy failure; the container calls drop only for successfully constructed live values.
-
-Callbacks must not throw, longjmp or mutate the same container, including from a comparison used for a read. Comparators must remain consistent. Mutation paths reject reentrant writes with BUSY; this is not a lock or a general callback reentry guarantee. A callback may use a different container if it does not create recursion back into the active one.
-
-`sequence_at`, map lookup and iterator entries return borrowed pointers. `vector_data` exposes a contiguous mutable array only for vector/stack; other representations return NULL. Direct edits must preserve valid owned values and ordering preconditions. Conservatively discard borrowed pointers after mutation. All successful structural operations, replacement, sort, clear and reserve invalidate iterators; a stale generation returns INVALID while the owner still exists. Iterators never retain the owner: using one after container destruction is invalid. Iterator begin/next return EOF at the end; empty pop/missing key returns NOT_FOUND, not EOF. Outputs are only usable on OK. Failed mutations preserve logical contents, although capacity or hash metadata can change.
+> [!WARNING]
+> **Critical ownership and iterator invalidation rules:**
+> 1. **Handling moved-from `_take` sources**: A successful `_take` insertion does not zero the caller's source struct. Treat the source as moved-from (for example, reset a transferred `hx_string` to `HX_STRING_INIT`) and **never** call its destructor a second time. Never pass an element pointer borrowed from a container back into a `_take` call on the same container.
+> 2. **External `pop` / `erase` buffers**: The destination buffer passed to `pop` or `erase` must be uninitialized external storage that does not overlap container memory. If a `copy` callback fails mid-construction, it must clean up its own partially constructed target; the container invokes `drop` only on values whose construction succeeded.
+> 3. **No callback reentry**: `copy`, `drop`, and comparator callbacks must never throw exceptions, `longjmp`, or mutate the active container (even inside a comparator called during a read). Reentrant mutations are rejected with `HX_OS_BUSY`.
+> 4. **Borrowed pointers and iterator invalidation**: `hx_os_sequence_at`, map lookups, and iterators return **borrowed pointers** (`hx_os_vector_data` returns a contiguous mutable array only for `vector`/`stack` and `NULL` for other containers). Any successful structural mutation, value replacement, sort, `clear`, or `reserve` invalidates borrowed pointers and iterators: using a stale iterator while the container is still alive returns `HX_OS_INVALID`, and using an iterator after container destruction is undefined (iterators do not keep the container alive). Stepping to the end of a sequence or map returns `HX_OS_EOF`, whereas popping an empty container or looking up a missing key returns `HX_OS_NOT_FOUND`.
 
 ## Keys and sets
 
-Create maps with `HX_OS_MAP_HASH` or `HX_OS_MAP_ORDERED`. Keys are copied byte sequences, with explicit byte lengths; embedded NUL and zero-length keys are valid. The common maximum key length is UINT_MAX. No locale, UTF-8 validation, normalization or character conversion is applied to keys. Use hx_string and text conversion before insertion when these semantics are needed.
-
-Hash keys compare by exact bytes and reject a custom key comparator. Ordered maps use a supplied comparator or unsigned-byte lexicographic ordering. Integer binary keys therefore need a comparator for numeric sorting. Keys have only byte alignment: read a typed key with memcpy, not an aligned cast. The comparator receives the options' borrowed user data. Replacing a value preserves the original key bytes and iteration position.
-
-Set `element_size=0`, with no copy/drop and NULL values, for a set. Use the same map operations; successful set lookup returns OK with a NULL value. `replace=0` rejects an existing key with EXISTS. `replace!=0` permits upsert. Map values follow the same copy/take/drop contracts as sequence values.
+Create maps with `HX_OS_MAP_HASH`, `HX_OS_MAP_ORDERED` (AVL tree), or `HX_OS_MAP_RED_BLACK`:
+- **Binary key semantics**: Keys are copied byte sequences with an explicit length up to `UINT_MAX`; embedded `NUL` bytes and zero-length keys are valid. The map performs no UTF-8 validation, character encoding conversion, Unicode normalization, or locale collation—normalize text with `hx_string` before insertion when needed.
+- **Key comparison rules**:
+  - `HX_OS_MAP_HASH` compares keys by exact byte equality and rejects custom key comparators.
+  - Ordered maps (`HX_OS_MAP_ORDERED` and `HX_OS_MAP_RED_BLACK`) use the supplied `key_compare` callback, or default to unsigned-byte lexicographic order (`memcmp` style) when `key_compare` is `NULL`. Supply a comparator when using binary integers as ordered keys so they sort numerically. Because stored keys have only byte alignment, copy typed keys into a local variable with `memcpy` inside your comparator rather than casting the unaligned key pointer directly.
+- **Using a map as a `set`**: Set `options.element_size = 0`, leave `copy`/`drop` as `NULL`, and pass `NULL` for `value` on insertion. A successful lookup returns `HX_OS_OK` and sets the output value pointer to `NULL`.
+- **Insert vs. upsert (`replace`)**: In single-key maps, `replace = 0` rejects existing keys with `HX_OS_EXISTS`, while `replace != 0` replaces the stored value while preserving the original key bytes and iteration order.
 
 ## Examples
 
-The standalone [queue example](../examples/containers.c) is compiled as C99 and is also built by the installed-consumer checks. For strings, use the supplied deep-copy preset rather than a byte copy of an owning hx_string:
+The standalone [queue example](../examples/containers.c) is compiled as C99 and verified in installed-package builds. When storing dynamic strings (`hx_string`) in a container, initialize the options with `hx_os_string_container_options_init` so the container deep-copies and destroys each string properly rather than making shallow byte copies:
 
-~~~c
+```c
 hx_os_container_options options;
 hx_os_vector *names = NULL;
 hx_string source = HX_STRING_INIT;
@@ -98,18 +105,20 @@ if (status == HX_OS_OK)
 if (status == HX_OS_OK)
 	status = hx_os_sequence_push_back(names, &source, NULL);
 
-// On OK the vector owns an independent copy. Inspect status in the host.
+// On HX_OS_OK the vector owns an independent copy of the string.
 hx_string_destroy(&source);
 (void)hx_os_sequence_destroy(&names, NULL);
-~~~
+```
 
-For a custom context, pass the same context to the preset and constructor. Extracting a string into external storage transfers its ownership; call `hx_string_destroy` on the extracted value when finished. If transferring a string into the container with `_take`, reset the source to `HX_STRING_INIT` without destroying the transferred contents.
+When using a custom `hx_os_context`, pass the same context pointer to both `hx_os_string_container_options_init` and `hx_os_vector_create`. If you later extract an `hx_string` into caller storage via `pop` or `erase`, call `hx_string_destroy` on that extracted value when finished.
 
 ## Red-black maps and duplicate keys
 
-Select `HX_OS_MAP_RED_BLACK` at creation; `HX_OS_MAP_ORDERED` keeps its existing AVL implementation. No old enum value or public structure layout changed. OR the kind with `HX_OS_MAP_MULTI` for duplicate keys. `replace=0` inserts another equivalent entry in multi mode; `replace=1` replaces one. Ordered duplicates keep insertion order, and find/erase select the first equivalent entry. Hash duplicate lookup order is unspecified.
+Pass `HX_OS_MAP_RED_BLACK` to `hx_os_map_create` to select a red-black tree, or `HX_OS_MAP_ORDERED` to keep the AVL tree implementation. Bitwise-OR the map kind with `HX_OS_MAP_MULTI` to allow duplicate keys (`multimap` / `multiset`):
+- In `HX_OS_MAP_MULTI` mode, `replace = 0` inserts an additional entry for the same key, while `replace = 1` updates one matching entry.
+- Ordered trees keep duplicate keys in insertion order, and `hx_os_map_find` / `hx_os_map_erase` target the first matching entry. Lookup order among duplicate keys in a hash multimap is unspecified.
 
-The complete [ordered-map program](../examples/ordered_map.c) inserts `b:20`, `a:10`, `b:21` and prints:
+The complete [ordered-map program](../examples/ordered_map.c) inserts `b: 20`, `a: 10`, and `b: 21`, printing:
 
 ```text
 a: 10
@@ -117,7 +126,7 @@ b: 20
 b: 21
 ```
 
-The two important calls are:
+Creating the multimap and inserting duplicate keys requires only:
 
 ```c
 hx_os_map_create(NULL, HX_OS_MAP_RED_BLACK | HX_OS_MAP_MULTI,
@@ -125,18 +134,21 @@ hx_os_map_create(NULL, HX_OS_MAP_RED_BLACK | HX_OS_MAP_MULTI,
 hx_os_map_insert(map, "b", 1, &value, 0, &error);
 ```
 
-`hx_os_map_lower_bound`, `upper_bound` and `equal_range` operate on ordered trees. `count` works on all backends; `erase_all` removes every equivalent key, including when the supplied key borrows map storage. `erase_at` removes the current entry and refreshes that iterator to the next one; other iterators are invalidated. `last` and `previous` support reverse traversal. `validate` checks AVL/RB invariants and list/tree consistency without allocating; it is not a validator for arbitrary corrupted pointers.
+Additional lookup and maintenance operations:
+- **Ordered range queries**: `hx_os_map_lower_bound`, `hx_os_map_upper_bound`, and `hx_os_map_equal_range` operate on ordered trees (AVL and red-black).
+- **Counting and bulk removal**: `hx_os_map_count` works across all backends; `hx_os_map_erase_all` removes every entry matching a key, even when the key slice borrows storage from inside the map itself.
+- **Erase while iterating**: `hx_os_map_erase_at` (and `hx_os_sequence_erase_at` for sequences) removes the current entry and advances the supplied iterator to the next entry while invalidating other iterators.
+- **Reverse iteration and validation**: `hx_os_map_last` and `hx_os_map_previous` traverse entries in reverse order; `hx_os_map_validate` verifies AVL/red-black tree invariants and node links without allocating memory.
 
 ## Traversal and algorithms
 
-Declare iterator and status variables before the loops. These macros evaluate the container once, stop at EOF and retain errors. `break` leaves status OK. A mutation invalidates ordinary iterators, so use `erase_at` explicitly for erase-while-iterating.
+Declare your iterator and `hx_os_status` variables before invoking `HX_OS_SEQUENCE_FOR_EACH` or `HX_OS_MAP_FOR_EACH` (or their `_REVERSE` counterparts). Each macro evaluates the container pointer once, stops cleanly at `HX_OS_EOF` (setting `status` to `HX_OS_OK`), and preserves any error status; breaking out of the loop early leaves `status` as `HX_OS_OK`.
 
 ```c
 hx_os_sequence_iterator iterator;
 hx_os_status status;
 
 HX_OS_SEQUENCE_FOR_EACH(iterator, values, status)
-
 {
 	const void *value;
 
@@ -148,30 +160,24 @@ HX_OS_SEQUENCE_FOR_EACH(iterator, values, status)
 }
 ```
 
-There are matching `HX_OS_MAP_FOR_EACH` and reverse variants for both families. The callback interfaces are useful when the caller needs early stop, failure details or an accumulator.
+The container module also provides sequence algorithms directly on container handles. For example, finding a single rank or the smallest `k` items does not require sorting the entire vector. In the table below, `n` and `m` are input lengths, `k` is a prefix length, `s` is `element_size`, and abbreviated function names omit the `hx_os_sequence_` prefix:
 
-Choose the operation for the result you need: finding one rank or the smallest `k` values does not require sorting the whole vector. The following table describes the current implementations, not measured speedups. `n` and `m` are input lengths, `k` is a prefix length, and `s` is the element size in bytes. Time bounds count element operations; comparator, key-byte, copy and drop costs are additional. These C APIs can also be called directly from C++.
-
-| Actual algorithm | API | Useful when | Time and additional storage |
+| Algorithm | API | When to use | Time and scratch storage |
 | --- | --- | --- | --- |
-| In-place heapsort, unstable | `hx_os_vector_sort` | Sort a vector without allocating scratch memory | Worst O(n log n); O(1) scratch |
-| Bottom-up stable merge sort | `hx_os_sequence_stable_sort` | Equal keys must retain their original order | O(n log n); vector/deque O(n × s) scratch; list O(1) scratch by relinking |
-| Bounded max-heap selection and prefix sort | `hx_os_vector_partial_sort` | Obtain the smallest `k` entries in sorted order | O(n log(k + 1)) for k > 0; O(1) scratch; k = 0 does no work |
-| Three-way rank partition, depth-limited heapsort fallback | `hx_os_vector_nth_element` | Find a median or threshold without requiring full order | Typically linear on ordinary inputs, worst O(n log n); one element of scratch; only vector |
-| Binary search | `hx_os_vector_lower_bound`, `hx_os_vector_upper_bound` | Query sorted values or find an insertion position | O(log n); O(1) scratch; input must use the same comparator |
-| Linear predicate scan | `hx_os_sequence_find_if`, `count_if`, `any_of`, `all_of`, `none_of` | Find/count matching devices or check a condition | O(n) worst; O(1) scratch; find/any/all/none stop when decided |
-| Stable filtering and adjacent duplicate removal | `hx_os_sequence_remove_if`, `hx_os_sequence_unique` | Remove unwanted entries or compact equal neighbors | O(n); O(1) scratch; unique does not remove separated duplicates |
-| Reverse, rotation, predicate partition | `hx_os_sequence_reverse`, `rotate`, `partition` | Rearrange work or group matches before other entries | O(n); O(1) scratch; list partition is stable, array partition is not guaranteed stable |
-| Copy/filter/transform | `hx_os_sequence_clone`, `copy_if`, `transform` | Build an independent result without changing the source | O(n); up to O(n × output element size) result storage, plus callback allocations |
-| Predicate replacement | `hx_os_sequence_replace_if` | Replace every matching value | O(n); two elements of scratch; copy failure keeps earlier successful replacements |
-| Visit and fold | `hx_os_sequence_visit`, `hx_os_sequence_fold` | Process entries or accumulate totals | O(n); O(1) internal scratch; first failure retains callback effects and reports progress |
-| Two-input sorted merge/set operations | `hx_os_sequence_merge` | Merge sorted records; union/intersect/subtract sorted sets | O(n + m); up to O((n + m) × s) result storage; multiset duplicate counts preserved |
-| Indexed list-range splice | `hx_os_list_splice` | Transfer existing nodes between compatible lists | O(n + m) worst to locate endpoints, then O(1) relinking; no node allocation, value copies or drops |
+| In-place unstable heapsort | `hx_os_vector_sort` | Sort a `vector` without allocating scratch memory | Worst-case `O(n log n)`; `O(1)` scratch |
+| Bottom-up stable merge sort | `hx_os_sequence_stable_sort` | Sort while preserving the relative order of equal keys | `O(n log n)`; `vector`/`deque` use `O(n × s)` scratch, `list` relinks nodes in `O(1)` scratch |
+| Bounded max-heap prefix sort | `hx_os_vector_partial_sort` | Obtain the smallest `k` entries in ascending order | `O(n log(k + 1))` for `k > 0` (`k == 0` is a no-op); `O(1)` scratch |
+| Three-way rank selection with heapsort fallback | `hx_os_vector_nth_element` | Partition around a median or percentile without full sorting | Average linear, worst-case `O(n log n)`; 1 element of scratch (`vector` only) |
+| Binary search | `hx_os_vector_lower_bound`, `hx_os_vector_upper_bound` | Locate keys or insertion indices in a sorted `vector` | `O(log n)`; `O(1)` scratch (must use the same comparator) |
+| Linear predicate scan | `find_if`, `count_if`, `any_of`, `all_of`, `none_of` | Find/count matching items or test a predicate across the sequence | `O(n)` worst case; `O(1)` scratch; `find_if`/`any_of`/`all_of`/`none_of` short-circuit |
+| Stable filter and adjacent deduplication | `remove_if`, `unique` | Erase unwanted entries or compact adjacent duplicates in place | `O(n)`; `O(1)` scratch; discarded elements invoke `drop` |
+| Reverse, rotate, and predicate partition | `reverse`, `rotate`, `partition` | Reverse order, rotate left, or group matching items at the front | `O(n)`; `O(1)` scratch; `list` partition is stable, array partition is unstable |
+| Clone, filter copy, and transform | `clone`, `copy_if`, `transform` | Produce a new independent `vector` without mutating the source | `O(n)`; up to `O(n × output element size)` in the result vector |
+| Conditional replacement | `replace_if` | Replace every matching element with a new value | `O(n)`, 2 elements of scratch; copy failure preserves earlier replacements |
+| Sequential visit and fold | `visit`, `fold` | Run a callback on each element or accumulate a summary | `O(n)`, `O(1)` internal scratch; stops on first failure and reports completed count |
+| Two-input sorted merge and set operations | `merge` (`HX_OS_MERGE` and 4 `HX_OS_SET_*` modes) | Merge sorted sequences or compute multiset union/intersection/difference | `O(n + m)`; up to `O((n + m) × s)` in the result vector |
+| Indexed list-range splice | `hx_os_list_splice` | Move existing nodes between compatible `list` containers without copying | `O(n + m)` to reach endpoints, then `O(1)` pointer relinking; zero allocation or `copy`/`drop` calls |
 
-Only the `hx_os_sequence_` prefix is omitted from abbreviated sequence entries in the table. Merge accepts `HX_OS_MERGE`, `HX_OS_SET_UNION`, `HX_OS_SET_INTERSECTION`, `HX_OS_SET_DIFFERENCE`, and `HX_OS_SET_SYMMETRIC_DIFFERENCE`. Rank selection and partial sorting do not promise stability or a sorted suffix.
-
-For dense numbered flags, the [bitset algorithms](BITSET.md) provide `hx_os_bitset_count`, `find_next`, `apply`, `intersects`, and `is_subset`. They inspect 32-bit words: O(ceil(bit_count / 32)) worst and O(1) operation scratch, with early exit for searches and relations. Single-bit set/test is O(1). Use the hash/tree lookup operations above when identifiers are sparse or keys are not integer positions.
-
-Unless documented otherwise, structural algorithms reject heaps to preserve heap invariants. Predicates must not mutate the same container. A successful reorder invalidates iterators; allocation failure before sorting does not. Temporary container scratch is charged to its byte budget. For transform/copy callbacks, a failed element construction must release its own partial resources. Result vectors inherit source context/limits; sorted merge requires matching element/callback/user policies. A list splice requires compatible context and value policy, checks destination limits and transfers accounted node bytes. Self-splice into its own moved range is a no-op.
-
-AVL and red-black trees provide ordered-key semantics. Choose using the actual workload, allocation cost and access pattern; node size alone does not establish which is faster.
+> [!TIP]
+> - For dense integer flags (such as job IDs `0..N`), the [bitset algorithms](BITSET.md) (`hx_os_bitset_count`, `find_next`, `apply`, `intersects`, `is_subset`) process 32-bit words at a time in `O(ceil(bit_count / 32))` with `O(1)` scratch.
+> - Temporary scratch memory used by sequence algorithms counts toward the container's `max_bytes` budget. If scratch allocation fails before sorting begins, the container contents and existing iterators remain valid. `hx_os_list_splice` checks that both lists share compatible contexts and element policies and transfers the accounted node bytes to the destination list.

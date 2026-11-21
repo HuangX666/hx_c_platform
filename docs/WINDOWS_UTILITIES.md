@@ -2,13 +2,13 @@
 
 [简体中文](WINDOWS_UTILITIES.zh-CN.md) · [WER LocalDumps](LOCAL_DUMPS.md) · [README](../README.md)
 
-**Use this module to display Windows version resources or GPU identity.** Build `hx_os_windows_info` and follow the [run instructions](../examples/README.md#run). No argument enumerates GPUs; supplying a DLL/EXE with version resources also queries that file first.
+Use the Windows utilities module (`<hx_os.h>` / `<hx/Windows.hpp>`) when your application needs to inspect PE version resources inside a `.dll` or `.exe` (such as four-part file/product versions, `FileDescription`, or `ProductName`), query an existing `HWND` window's geometry and monitor, or enumerate the system's DXGI GPU adapters.
 
-[windows_info.c](../examples/windows_info.c) prints GPU names, LUIDs, memory and the chosen file's `File version`. Values depend on hardware and files. The program demonstrates version/GPU queries; the window-handle APIs below need a real window supplied by your application. Non-Windows platforms report unsupported.
+To see the queries in action, build `hx_os_windows_info` from [windows_info.c](../examples/windows_info.c) following the [run instructions](../examples/README.md#run). Running it with no arguments enumerates the machine's GPUs (printing adapter names, LUIDs, and memory capacities); passing the path to a `.dll` or `.exe` that embeds version resources also prints that file's version metadata first. On non-Windows platforms, these entry points return `HX_OS_NOT_SUPPORTED`.
 
 ## 1. Read a DLL or executable version
 
-Pass a UTF-8 file path. The library resolves relative paths against the current directory, converts the Windows path, bounds the resource allocation and releases it before returning. This reads the resource without executing the target file. It does not use DLL search paths.
+Pass any UTF-8 file path to `hx_os_windows_version_query`. Internally, the library resolves relative paths against the current working directory (without searching DLL load paths), converts the path to UTF-16, reads the bounded version resource block, and frees temporary storage before returning—**inspecting the file passively without loading or executing the binary**:
 
 ```c
 hx_os_windows_version_info version;
@@ -23,9 +23,10 @@ if (status == HX_OS_OK) {
 }
 ```
 
-Include `<hx_os.h>` and `<stdio.h>`. The four components are major/minor/build/revision; `product` contains the corresponding product version. Flags, type and subtype retain Windows resource meanings. `size` and `version` describe the written v1 record. All structure queries require enough caller capacity, write only the current record and leave both the output and extra trailing bytes unchanged on failure.
+Include `<hx_os.h>` and `<stdio.h>`:
 
-For text such as `FileDescription`, `CompanyName`, `ProductName` or `FileVersion`, write directly into a string:
+- **Four-part version numbers and struct sizing**: `version.file` holds `[major, minor, build, revision]`, and `version.product` holds the corresponding four-part product version. `flags`, `type`, and `subtype` preserve the native Windows `VS_FIXEDFILEINFO` fields. Every struct query validates the caller-supplied buffer size and leaves the destination struct and any extra trailing bytes untouched on failure.
+- **Named version strings (`hx_os_windows_version_string`)**: To read text fields such as `FileDescription`, `CompanyName`, `ProductName`, or `FileVersion`, query directly into an `hx_string`:
 
 ```c
 hx_string description = HX_STRING_INIT;
@@ -38,11 +39,13 @@ if (status == HX_OS_OK)
 hx_string_destroy(&description);
 ```
 
-The default searches translations in resource order and returns the first containing the field, without changing the process locale. `_string_ex` selects a language/code-page pair; `0x0804, 1200` selects Simplified Chinese with Unicode storage, when present. Pair `0, 0` requests the default search. Missing fields or absent resources return `NOT_FOUND`; invalid resources, permission failures and allocation errors remain explicit. Resource bytes are limited to 16 MiB and translation entries to 256. A field name is 1–64 ASCII letters/digits/underscores. Native errors are preserved in `hx_os_error`.
+By default, `hx_os_windows_version_string` searches the resource's translation table (`VarFileInfo\Translation`) in resource order and returns the first non-empty match without altering the process locale. Use `hx_os_windows_version_string_ex` to select a specific `(language, code_page)` pair (for example, `0x0804, 1200` for Simplified Chinese Unicode when present, or `0, 0` for the default search).
+
+Missing fields or files without version resources return `HX_OS_NOT_FOUND`. Version resource blocks are capped at `16 MiB` with up to `256` translation entries, and field names consist of `1–64` ASCII letters, digits, or underscores.
 
 ## 2. Inspect an existing window
 
-The library does not create a GUI or depend on Qt. Cast an existing Windows `HWND` to `uintptr_t` and query it. These handles are borrowed; the caller controls the window lifetime. Windows can reuse a destroyed handle.
+`hx_c_platform` does not create GUI windows or depend on toolkits like Qt. Instead, cast an existing Windows `HWND` from your host application to `uintptr_t` to query its geometry, title, class name, or owning process path (the handle is borrowed for the call; window lifetime remains owned by the caller):
 
 ```c
 hx_os_windows_window_info info;
@@ -61,23 +64,23 @@ if (status == HX_OS_OK)
 hx_string_destroy(&title);
 ```
 
-`existing_hwnd` comes from the host application. Include its native Windows headers in that integration code; the public library header does not expose those types. Qt code may pass its existing window ID on Windows. For a window in the current process, call the title query on that window's owning thread. A different thread gets `WOULD_BLOCK` before a message is sent. The owning-thread operation can reenter its window procedure and has no hard deadline. For another process the native API reads the caption; it does not retrieve arbitrary remote control text. [Microsoft documents these title-reading differences](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwindowtextw).
-
-The window record includes process/thread IDs, nearest monitor, bounds and visible/minimized/maximized flags. A visible style does not prove that the window is unobscured. Bounds use Windows screen coordinates, right/bottom exclusive; native DPI virtualization and invisible resize borders can affect them. No DPI mode is changed. These are observations of changing UI state, not an atomic desktop snapshot.
-
-`hx_os_windows_window_class` returns the UTF-8 class name. `hx_os_windows_window_process_path` returns the owning executable path with normal access checks, without elevation. Text buffers start small and grow within a 32,767 UTF-16-unit limit; truncation reports `LIMIT`, never a successful shortened string. String outputs use their own context and remain unchanged on failure. Serialize access to each destination string.
+- **Window geometry and state (`hx_os_windows_window_query`)**: Reports `process_id`, `thread_id`, nearest `monitor` handle, screen-coordinate bounds (right/bottom exclusive; subject to OS DPI virtualization and invisible resize borders without altering the process's DPI awareness mode), and visible/minimized/maximized flags (note that a `WS_VISIBLE` style bit does not guarantee the window is unobscured on screen).
+- **Same-process vs. cross-process window titles (`hx_os_windows_window_title`)**:
+  - As [Microsoft documents for `GetWindowTextW`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwindowtextw), querying a window owned by the **current process** sends a synchronous `WM_GETTEXT` message to its window procedure. To avoid cross-thread UI deadlocks, **call `hx_os_windows_window_title` on a same-process window only from its owning thread**; calling from another thread in the same process returns `HX_OS_WOULD_BLOCK` before any message is sent.
+  - For a window owned by **another process**, the native OS call reads the window caption without retrieving arbitrary child-control text.
+- **Window class and owning executable path**: `hx_os_windows_window_class` queries the UTF-8 window class name, and `hx_os_windows_window_process_path` queries the owning process's executable path using normal access rights without privilege elevation. Text buffers grow on demand up to `32,767` UTF-16 code units; potential truncation returns `HX_OS_LIMIT` rather than a silently shortened string.
 
 ## 3. Identify monitors and GPUs
 
-Pass `info.monitor` to `hx_os_windows_monitor_query` for monitor/work-area rectangles, a native device name and the primary flag. Pass the same handle to `hx_os_windows_monitor_gpu_query` to find the adapter owning that display output. On hybrid systems this does not necessarily identify the GPU rendering an application's content.
-
-`hx_os_windows_gpu_query(index, &gpu, sizeof(gpu), &error)` enumerates current adapters starting at zero; `NOT_FOUND` ends enumeration. It returns UTF-8 description, LUID, vendor/device/subsystem/revision IDs, memory capacities and a software-adapter flag. Names need not be unique. Memory values are native capacities, not current free memory. LUIDs are comparable within the current OS session, not permanent IDs across reboot; enumeration indices can change after hot-plug. A new call creates a fresh factory, so repeated index calls do not form an atomic snapshot.
-
-The adapter uses DXGI 1.1, available on Windows 7. It creates no rendering device or COM apartment, starts no worker, and releases each DXGI reference before returning. Do not invoke it from `DllMain`. Native graphics work has no hard deadline. Lookup is bounded to 256 adapters and 256 outputs per adapter. A headless/service/remote environment can return an explicit unsupported, unavailable or not-found result. [CreateDXGIFactory1 contract](https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-createdxgifactory1).
+- **Monitor geometry and display-output GPU**: Pass `info.monitor` to `hx_os_windows_monitor_query` to retrieve the monitor rectangle, work-area rectangle, native device name, and primary-monitor flag. Pass the same handle to `hx_os_windows_monitor_gpu_query` to identify the DXGI adapter driving that display output (note that on hybrid-graphics laptops, the adapter driving the display panel is not necessarily the discrete GPU rendering a given application's 3D workload).
+- **Enumerating GPUs by index (`hx_os_windows_gpu_query`)**:
+  - Call `hx_os_windows_gpu_query(index, &gpu, sizeof(gpu), &error)` starting from `index = 0` until it returns `HX_OS_NOT_FOUND`.
+  - Each `hx_os_windows_gpu_info` record reports the UTF-8 adapter description, session-unique `LUID` (comparable within the current OS boot session, though not persistent across reboots), vendor/device/subsystem/revision PCI IDs, total dedicated and shared memory capacities (hardware/driver capacity rather than current free memory), and a software-adapter flag.
+  - **DXGI 1.1 scope**: Uses DXGI 1.1 ([CreateDXGIFactory1](https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-createdxgifactory1), available since Windows 7), creating no D3D rendering device, COM apartment state, or background worker thread, and releasing all DXGI references before returning (bounded to `256` adapters and `256` outputs per adapter). **Never call GPU queries from `DllMain`**; headless, service, or remote sessions may return `HX_OS_NOT_SUPPORTED` or `HX_OS_NOT_FOUND`.
 
 ## 4. C++11 and a runnable example
 
-Include `<hx/Windows.hpp>`. In a function returning `hx_os_status`:
+Include `<hx/Windows.hpp>` in C++11 to access `hx::Result<T>` wrappers without exceptions:
 
 ```cpp
 auto version = hx::Windows::fileVersion("plugin.dll");
@@ -92,12 +95,20 @@ std::puts(description.value().c_str());
 return HX_OS_OK;
 ```
 
-Include `<cstdio>` for `std::puts`. The facade also provides `window`, `windowTitle`, `windowClass`, `windowProcessPath`, `monitor`, `gpu` and `monitorGpu`, returning `Result` without exceptions. It reuses the C implementation and preserves native error details.
+(Include `<cstdio>` for `std::puts`.) The `hx::Windows` namespace also provides `window`, `windowTitle`, `windowClass`, `windowProcessPath`, `monitor`, `gpu`, and `monitorGpu`.
 
-Build `hx_os_windows_info` and run `build/bin/Release/hx_os_windows_info.exe build/bin/Release/hx_os_test_windows_util.exe` with the Visual Studio generator. [windows_info.c](../examples/windows_info.c) is the complete program. The fixture has version `1.2.345.678` and description `Window helper fixture`; GPU output depends on the machine. The CLI example uses SYSTEM_UTILS for UTF-8 command-line arguments, so Chinese paths do not depend on the Windows ANSI code page. The query library itself does not require SYSTEM_UTILS.
+After building `hx_os_windows_info` with the Visual Studio generator, run it from the repository root:
+
+```powershell
+.\build\bin\Release\hx_os_windows_info.exe
+```
+
+You can also pass the path to any `.exe` or `.dll` containing version resources on the command line to print its version numbers and `FileDescription` alongside the machine's GPU list (note: the CLI example uses `HX_OS_ENABLE_SYSTEM_UTILS` to read native UTF-8 arguments so non-ASCII paths do not depend on the Windows ANSI code page, while the Windows query library itself does not depend on `SYSTEM_UTILS`).
 
 ## 5. Modules and verification
 
-`HX_OS_ENABLE_WINDOWS_VERSION` and `HX_OS_ENABLE_WINDOWS_DESKTOP` both default to ON and can be disabled independently. Version queries link the system Version library; desktop queries link User32/DXGI/DXGUID. CMake exports and pkg-config static dependencies carry these links. Other operating systems keep the declarations and return `NOT_SUPPORTED`. Availability queries indicate a compiled adapter, not the presence of a particular window, display, resource or GPU.
+Two independent CMake options control these adapters (both `ON` by default):
+- `HX_OS_ENABLE_WINDOWS_VERSION`: Enables PE version-resource queries and links `Version.lib`.
+- `HX_OS_ENABLE_WINDOWS_DESKTOP`: Enables window, monitor, and DXGI GPU queries and links `User32.lib`, `DXGI.lib`, and `DXGUID.lib` (propagated automatically through CMake exports and static `pkg-config` metadata).
 
-See [platform support](PLATFORMS.md) for target build/deployment requirements and limits. Public examples are independent of private maintainer regressions.
+Non-Windows builds and builds with these options turned `OFF` retain the declarations and return `HX_OS_NOT_SUPPORTED`. See [platform support](PLATFORMS.md) for compiler and OS baseline details.

@@ -2,19 +2,23 @@
 
 [简体中文](ENCODING.zh-CN.md)
 
-**Start with a complete program.** Use Base64 or hexadecimal to represent binary bytes, including NUL, in JSON strings or text protocols.
+When embedding raw binary data—including `NUL` (`\0`) bytes or non-ASCII bytes—inside JSON strings, configuration files, URL parameters, or text-based protocols, treating the payload as a NUL-terminated C string will truncate data or fail UTF-8 validation. This module provides dependency-free Base64, Base64URL, and hexadecimal encoding and decoding in pure C99 and C++11.
 
-Open [encoding.c](../examples/encoding.c). Prepare 00 01 fe ff → base64_encode_string → base64_decode into an array → use the actual byte count → destroy the string.
+To see a complete round-trip in action, open [encoding.c](../examples/encoding.c). The program encodes the four-byte sequence `00 01 fe ff` into an `hx_string` with `hx_os_base64_encode_string()`, decodes it back into a caller-supplied byte array with `hx_os_base64_decode()`, and inspects the decoded byte count. Follow the [example run instructions](../examples/README.md#run) to enable examples and build `hx_os_encoding` (no command-line arguments or input files are required):
 
-Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_encoding`. This program needs no arguments or input files.
+```text
+Base64: AAH+/w==
+Decoded 4 bytes; last byte: 255
+```
 
-**Expected result:** It prints `Base64: AAH+/w==` and `Decoded 4 bytes; last byte: 255`. This is reversible representation, not secrecy; use cryptography for confidentiality.
+You can also drop the example source into the [minimal project](USAGE.md#c-project) as `main.c`.
 
-Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+> [!NOTE]
+> Base64 and hexadecimal are **reversible byte representations**, not encryption—anyone can decode them. When your data requires confidentiality or tamper protection, pair this module with the cryptography interfaces.
 
 ## 1. Encode bytes without OpenSSL
 
-Enable `HX_OS_ENABLE_ENCODING` for Base64, Base64URL and hexadecimal conversion. These are representations of bytes, not encryption. No OpenSSL, network initialization or container module is required. Disabled builds retain the functions and return `HX_OS_NOT_SUPPORTED`.
+Enable the CMake option `HX_OS_ENABLE_ENCODING` (enabled by default) to use Base64, Base64URL, and hexadecimal conversions. The implementation is self-contained C99: it requires no OpenSSL, no network initialization, and no container module. When built with `HX_OS_ENABLE_ENCODING=OFF`, the entry points remain present and return `HX_OS_NOT_SUPPORTED`.
 
 ```c
 #include <hx_encoding.h>
@@ -35,33 +39,42 @@ int main(void)
 }
 ```
 
-Output: `aGVsbG8=`. Use `hx_os_hex_encode_string` instead for `68656c6c6f`. The [encoding example](../examples/encoding.c) round-trips bytes containing NUL and values above 127. Build target `hx_os_encoding` in your existing examples-enabled directory.
+This program prints `aGVsbG8=`. Calling `hx_os_hex_encode_string()` instead produces `68656c6c6f`. See the [encoding example](../examples/encoding.c) for a complete round-trip with embedded `NUL` bytes and byte values above `127`.
 
 ## 2. Choose the exact Base64 representation
 
-| Flags | Alphabet | Padding |
+Use the `flags` parameter to select the exact Base64 alphabet and `=` padding behavior required by your protocol:
+
+| `flags` value | Alphabet | `=` Padding rule |
 |---|---|---|
-| `0` | Standard `A-Z a-z 0-9 + /` | Required when the final group needs it. |
-| `HX_OS_BASE64_URL` | URL-safe, replacing `+ /` with `- _` | Required when needed. |
-| `HX_OS_BASE64_NO_PADDING` | Standard | Omitted on encode, rejected on decode. |
-| Both flags | URL-safe | Omitted on encode, rejected on decode. |
+| `0` | Standard `A-Z a-z 0-9 + /` | Emitted when the final group needs padding; required on decode. |
+| `HX_OS_BASE64_URL` | URL-safe (`-` and `_` instead of `+` and `/`) | Emitted when needed; required on decode. |
+| `HX_OS_BASE64_NO_PADDING` | Standard `A-Z a-z 0-9 + /` | Omitted on encode; rejected on decode. |
+| `HX_OS_BASE64_URL \| HX_OS_BASE64_NO_PADDING` | URL-safe | Omitted on encode; rejected on decode. |
 
-Decoding rejects spaces, newlines, mixed alphabets, extra or missing padding, impossible lengths and nonzero unused tail bits. For example, padded `Zg==` and unpadded `Zg` represent `f` under their respective modes; `Zh==` is rejected because its unused bits are nonzero. Inputs are explicit byte ranges: do not include the C string terminator.
-
-Hexadecimal output is lowercase by default; `HX_OS_HEX_UPPERCASE` selects uppercase. Decode accepts either case and rejects odd-length input, `0x` prefixes, whitespace and separators.
+> [!IMPORTANT]
+> **Strict Validation Rules:**
+> - **Base64 decoding**: Rejects whitespace, newlines, mixed standard/URL alphabets, missing or superfluous `=` padding, impossible remainder lengths, and non-canonical encodings where unused trailing bits are non-zero. For example, `'f'` encodes as `Zg==` (padded) or `Zg` (unpadded), whereas `Zh==` is rejected with `HX_OS_INVALID` because its unused tail bits are non-zero.
+> - **Hexadecimal conversion**: Hex encoding outputs lowercase `0-9a-f` by default, or uppercase `0-9A-F` when `HX_OS_HEX_UPPERCASE` is passed. Hex decoding accepts both upper- and lowercase characters, but rejects odd character counts, `0x` prefixes, whitespace, and separators.
+> - **Explicit byte lengths**: All APIs take an explicit byte length. Do not include a C string's trailing `\0` terminator in the input length unless you intentionally want that `NUL` byte encoded.
 
 ## 3. Buffer and ownership rules
 
-All four buffer functions first validate the entire input and calculate output size. Every failure preserves the output buffer. Valid input sets `required` on `HX_OS_OK` or `HX_OS_OUTPUT_FULL`; malformed input leaves it unchanged.
+The four buffer-level functions (`hx_os_base64_encode`, `hx_os_base64_decode`, `hx_os_hex_encode`, and `hx_os_hex_decode`) validate the entire input and compute the exact output size before modifying the destination. Any failure leaves the output buffer untouched:
 
-- Encoding `required` includes the terminating NUL.
-- Decoding `required` is the exact number of binary bytes, without a terminator.
-- `output=NULL, capacity=0` queries the required size. Encoding an empty range still requires one NUL byte; decoding an empty range succeeds with zero bytes.
-- Input, output and the `required` object must be separate storage. In-place conversion is not provided.
-- Buffer functions do not allocate. Allocate the reported decode size with `hx_os_memory_alloc`, decode, then release with `hx_os_memory_free`, or supply an existing array.
-- String convenience functions use the output string's context, accept input borrowed from that string, and preserve it on failure. They limit encoded payload to 16 MiB. Use the buffer functions for a larger caller-managed result.
+- **Reporting `required` size**: When the input is valid and the function returns `HX_OS_OK` or `HX_OS_OUTPUT_FULL`, `*required` is updated with the required output capacity. If the input itself is malformed (for example, returning `HX_OS_INVALID`), `*required` is left unchanged.
+- **Terminators on encode vs. decode**:
+  - **Encoding**: `required` **includes** the trailing `\0` terminator written at the end of the encoded ASCII text.
+  - **Decoding**: `required` is the exact count of decoded binary bytes, **without** any trailing terminator.
+- **Querying output size**: Pass `output = NULL` and `capacity = 0` to query the required capacity before allocating. Note that encoding an empty input (`length = 0`) still requires `1` byte for the trailing `\0`, whereas decoding an empty input succeeds immediately with `0` required bytes.
+- **Non-overlapping storage**: Input, output, and the `required` size variable must occupy separate, non-overlapping memory regions; in-place conversion is not supported.
+- **Allocation & payload limits**:
+  - Buffer functions **never allocate heap memory**. You can decode into a fixed array or allocate the queried size with `hx_os_memory_alloc()` and free it later with `hx_os_memory_free()`.
+  - String convenience functions (`*_encode_string`) allocate through the destination `hx_string`'s bound context, allow the input slice to borrow from that same `hx_string`, and preserve the original string contents on failure. They enforce a **16 MiB** encoded payload ceiling; use the buffer functions when working with larger caller-managed buffers.
 
 ## 4. C++11 results
+
+In C++11, include `<hx/Encoding.hpp>` to encode into `hx::Result<hx::String>` or decode into `hx::Result<hx::Buffer>`:
 
 ```cpp
 #include <hx/Encoding.hpp>
@@ -80,4 +93,6 @@ int main()
 }
 ```
 
-`Encoding::hex` returns `Result<String>`; `fromHex` and `fromBase64` return `Result<Buffer>`. `Buffer` owns arbitrary bytes and releases them automatically. C++ owning results use a 16 MiB result limit, require no exceptions, and retain the underlying status/native-error mechanism. Check success before accessing `.value()`.
+- `hx::Encoding::base64()` and `hx::Encoding::hex()` return `hx::Result<hx::String>`.
+- `hx::Encoding::fromBase64()` and `hx::Encoding::fromHex()` return `hx::Result<hx::Buffer>`, which owns the decoded byte buffer and frees it automatically on destruction.
+- C++11 owning helpers enforce the same **16 MiB** result limit, use no C++ exceptions, and preserve full status and native error details. Always verify `if (result)` before calling `.value()`.

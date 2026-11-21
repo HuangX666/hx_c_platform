@@ -2,33 +2,42 @@
 
 [简体中文](ALGORITHMS.zh-CN.md) | [Containers](CONTAINERS.md)
 
-**Start with a complete program.** Use the algorithms on an existing C array or structure array to sort, search or filter without moving it into another container.
+When your program already holds data in plain C arrays or arrays of custom structs, you can sort, binary-search, filter, transform, and fold those records in place with `<hx_algorithm.h>`—without copying them into an `hx_os_vector` first. For C++11 codebases, `<hx/Algorithms.hpp>` exposes matching generic algorithms in the `hx::algo` namespace that operate on standard iterator ranges and node-based list containers.
 
-Open [algorithms.c](../examples/algorithms.c). Sort by device ID → lower_bound locates 23 → count_if counts pending records → copy_if copies them → fold totals work.
+To see the workflow in action, inspect [algorithms.c](../examples/algorithms.c). The program sorts an array of device records by ID, locates device `23` with `hx_os_array_lower_bound`, counts and copies devices with pending work using `hx_os_array_count_if` and `hx_os_array_copy_if`, and sums the total pending work via `hx_os_array_fold`.
 
-Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_algorithms`. This program needs no arguments or input files.
+Follow the [example run instructions](../examples/README.md#run) to configure with `-DHX_OS_BUILD_EXAMPLES=ON` and build the `hx_os_algorithms` target. Running the executable (no command-line arguments or input files required) produces:
 
-**Expected result:** IDs appear as 17, 23, 31; device 23 is found, with two pending devices and two total work items. Adapt comparators and predicates with the record fields.
+```text
+Device 17, pending=0
+Device 23, pending=1
+Device 31, pending=1
+Found device 23
+Devices needing work: 2
+Copied work items: 2
+Pending work total: 2
+```
 
-Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+You can also drop the example source directly into the [minimal project](USAGE.md#c-project) as `main.c` to experiment with your own record types.
 
 ## 1. Use the data you already have
 
-The C99 functions in `<hx_algorithm.h>` work directly on ordinary arrays, including arrays of your structures. Creating an `hx_os_vector` is unnecessary. The C++11 header `<hx/Algorithms.hpp>` provides standard algorithm names in `hx::algo` and works with compatible standard iterators.
+The C99 functions in `<hx_algorithm.h>` operate directly on contiguous C arrays, while `<hx/Algorithms.hpp>` provides standard algorithm names in `hx::algo` for compatible C++11 iterators.
 
-| Input | Entry style |
+| Existing data | Recommended entry point |
 | --- | --- |
-| Common integer array | `hx_os_sort_i32(values, count, error)`; also u32/i64/u64 |
-| C array of integers or structures | `hx_os_array_sort(data, count, sizeof(data[0]), compare, user, error)` |
-| C++ array, `std::array`, vector or another random-access range | `hx::algo::sort(first, last, compare)` |
-| C++ list or forward_list | `hx::algo::sort(list, compare)` uses the container's stable node sort |
-| Existing C library vector | Existing `hx_os_vector_sort` remains available and shares the array sorting implementation |
+| Fixed-width integer array (`int32_t` / `uint32_t` / `int64_t` / `uint64_t`) | `hx_os_sort_i32(values, count, error)` (plus `_u32`, `_i64`, `_u64` variants) |
+| C array of scalars or custom structs | `hx_os_array_sort(data, count, sizeof(data[0]), compare, user, error)` |
+| C++ raw array, `std::array`, `std::vector`, or random-access range | `hx::algo::sort(first, last, compare)` |
+| C++ `std::list` or `std::forward_list` | `hx::algo::sort(list, compare)` (delegates to the container's stable node sort) |
+| Existing `hx_os_vector` container | `hx_os_vector_sort` (shares the underlying array sorting implementation) |
 
-Enable `HX_OS_ENABLE_CONTAINERS` for the C functions and link `hx_c_platform::hx_c_platform`. When disabled, they return `HX_OS_NOT_SUPPORTED`. The C++ standard-algorithm header is independent of that switch; `hx_c_platform::cpp` supplies the installed include path when using the package.
+> [!NOTE]
+> The C algorithm functions require `HX_OS_ENABLE_CONTAINERS=ON` and linking against `hx_c_platform::hx_c_platform`. When that option is disabled, the C entry points return `HX_OS_NOT_SUPPORTED`. The header-only C++ templates in `<hx/Algorithms.hpp>` do not depend on that CMake switch; link `hx_c_platform::cpp` when consuming an installed package to obtain the include path.
 
 ## 2. Sort a C array
 
-This complete program prints `1 2 3 8`. Common integer arrays need no comparator callback: `i32`, `u32`, `i64`, and `u64` each have sorting and binary-search shortcuts.
+For 32-bit and 64-bit signed and unsigned integer arrays, built-in shortcuts handle sorting and binary search without requiring a custom comparator callback. This minimal program sorts four integers and prints `1 2 3 8`:
 
 ```c
 #include <hx_algorithm.h>
@@ -52,50 +61,51 @@ int main(void)
 }
 ```
 
-For records, the comparator reads the desired field and returns negative/zero/positive; use `(a > b) - (a < b)` for integers rather than subtracting potentially overflowing values. The algorithm moves the whole record, keeping its fields together. The [device example](../examples/algorithms.c) sorts `{id, pending}` records by ID, finds device 23 with a lower-bound query, filters pending devices into a work array, and sums their pending counts. Build target `hx_os_algorithms` using the existing example configuration. It prints:
+When sorting custom struct arrays, your comparator callback inspects the target field and returns a negative, zero, or positive `int`. The algorithm relocates entire `sizeof(record)` blocks so all fields stay together. The [device example](../examples/algorithms.c) uses this pattern to sort `{id, pending}` structs by ID before querying and filtering them.
 
-```text
-Device 17, pending=0
-Device 23, pending=1
-Device 31, pending=1
-Found device 23
-Devices needing work: 2
-Copied work items: 2
-Pending work total: 2
-```
+> [!TIP]
+> Inside integer comparators, prefer `(a > b) - (a < b)` over `a - b` to prevent signed subtraction overflow from flipping the comparison sign.
 
 ## 3. Choose an operation
 
-Names below have the common `hx_os_array_` prefix. `n` is the input count, `k` is a selected prefix length, and `s` is the complete element size. Complexity counts element operations; comparison and byte-movement costs are additional.
+The table below summarizes the sorting, selection, and search functions in `<hx_algorithm.h>` (all names share the `hx_os_array_` prefix). Here `n` is the element count, `k` is the selected prefix length, and `s` is the element stride in bytes (`sizeof(element)`). Time complexities count element operations; comparator and byte-movement costs are additional.
 
-| Entry | Result | Current implementation and cost |
+| Function (`hx_os_array_*`) | Behavior | Implementation and space cost |
 | --- | --- | --- |
-| `sort` | Fully ordered array, unstable | In-place heapsort; O(n log n), no allocation |
-| `stable_sort` | Equal keys retain their input order | Bottom-up merge sort; O(n log n), O(n × s) scratch |
-| `lower_bound` / `upper_bound` | First not-less / first greater insertion index | Sorted input required; O(log n) comparisons, no allocation |
-| `binary_search` | `found` is 0 or 1 | Sorted input required; O(log n), no allocation |
-| `find_if` / `count_if` | First matching index / match count | O(n); find stops at the first match |
-| `minmax` | First minimum and first maximum indices | One traversal, O(n), no allocation |
-| `is_sorted` | Whether the range is nondecreasing | O(n) worst; stops at the first inversion |
-| `reverse` / `rotate` | Reverse records / rotate left by a count | O(n), no allocation; rotation count is reduced modulo n |
-| `partition` | Matches form a prefix; returns its length | O(n), no allocation, not stable |
-| `unique` | Compact adjacent equivalents; return new length | O(n), no allocation; separated duplicates remain |
-| `partial_sort` | The smallest k records sorted at the front | O(n log(k + 1)) for k > 0, no allocation |
-| `nth_element` | Record of one sorted rank in its final position | Three-way partition with heapsort fallback; worst O(n log n), one aligned record of scratch |
+| `sort` | Full in-place sort (unstable) | In-place heapsort; `O(n log n)` time, zero heap allocation |
+| `stable_sort` | Stable full sort (equal keys keep their relative input order) | Bottom-up merge sort; `O(n log n)` time, `O(n × s)` scratch memory |
+| `lower_bound` / `upper_bound` | First not-less / first greater insertion index in a sorted array | Binary search; requires sorted input, `O(log n)` comparisons, zero allocation |
+| `binary_search` | Sets `found` to `1` if an equivalent key exists, or `0` otherwise | Binary search; requires sorted input, `O(log n)` time, zero allocation |
+| `find_if` / `count_if` | First matching index / total number of matching elements | Linear scan `O(n)`; `find_if` stops at the first match |
+| `minmax` | Indices of the first minimum and first maximum elements | Single-pass paired scan `O(n)`, zero allocation |
+| `is_sorted` | Checks whether the array is in non-decreasing order | Linear scan stopping at the first inversion (`O(n)` worst case; true for empty arrays) |
+| `reverse` / `rotate` | Reverse elements in place / rotate left by a given count | In-place swaps `O(n)`, zero allocation; rotation count is reduced modulo `n` |
+| `partition` | Moves matching elements to the front and returns the prefix length | In-place two-pointer partition (unstable), `O(n)` time, zero allocation |
+| `unique` | Compacts adjacent duplicate elements and returns the new length | Linear compaction `O(n)`, zero allocation; non-adjacent duplicates remain |
+| `partial_sort` | Places the smallest `k` elements in sorted order at the front | Max-heap selection; `O(n log(k + 1))` for `k > 0` (`k == 0` is a no-op), zero allocation |
+| `nth_element` | Places the element of rank `nth` in its final sorted position | Three-way partition with heapsort fallback; worst-case `O(n log n)`, 1 aligned element of scratch |
 
-Bounds can return `count`; that is a valid insertion position, not a matching record. Check the returned position and key before dereferencing, or use `binary_search` when only membership is needed. Missing `find_if` and empty `minmax` return `HX_OS_NOT_FOUND` without changing outputs. `minmax` requires distinct output variables. Empty `is_sorted` is true. Invalid selection indices return `HX_OS_RANGE`; a zero prefix for `partial_sort` does no work. Neither selection operation promises a sorted suffix or stable ordering.
+> [!IMPORTANT]
+> **Boundary and return-code rules:**
+> - `lower_bound` and `upper_bound` can return `count` when every element is smaller than the query key. Always verify `index < count` and check key equality before dereferencing, or call `hx_os_array_binary_search` when you only need a membership check.
+> - `find_if` on a missing item and `minmax` on an empty array return `HX_OS_NOT_FOUND` without modifying output variables. The two index outputs passed to `minmax` must be distinct variables.
+> - Out-of-range selection indices in `partial_sort` or `nth_element` return `HX_OS_RANGE`. Neither selection algorithm orders the remaining suffix or guarantees stability.
 
 ## 4. Scratch memory and record ownership
 
-`stable_sort` and `nth_element` accept `context` and `max_scratch_bytes`. Pass `NULL` for the default allocator and `0` for the default 16 MiB scratch budget. The budget includes library allocation headers and alignment overhead; the allocator's own bookkeeping is additional. Scratch is released before return. `HX_OS_LIMIT` and `HX_OS_NO_MEMORY` leave the array unchanged. A singleton rank selection needs no allocation. The pivot preserves the alignment common to the array address and element stride.
+`hx_os_array_stable_sort` and `hx_os_array_nth_element` accept an `hx_os_context *context` and `size_t max_scratch_bytes`:
+- Pass `NULL` for the default allocator and `0` for the default 16 MiB scratch budget.
+- The budget covers library allocation headers and alignment slack (allocator-internal bookkeeping is separate), and all scratch memory is freed before the function returns.
+- If the required scratch space exceeds the budget (`HX_OS_LIMIT`) or allocation fails (`HX_OS_NO_MEMORY`), the input array is left unchanged. Singleton `nth_element` calls allocate nothing; for larger inputs, the temporary pivot buffer preserves the alignment common to the array base address and element stride.
 
-Use the complete element stride, normally `sizeof(array[0])`. The caller supplies a valid contiguous range; the library checks multiplication and pointer-range overflow but cannot verify the allocation behind a pointer. All records must support byte relocation. No constructors, destructors, copy/drop callbacks or resource transfers are inferred. C++ objects with nontrivial move/destruction belong in the C++ iterator interfaces.
-
-`unique` compacts plain records and returns the live prefix length. The tail is unspecified; it can contain duplicate byte representations and must not be treated as additional owned values. For owning values that must release discarded resources, use the existing `hx_os_sequence_unique` with its drop policy. Sorting itself preserves every record.
-
-Comparators must define a strict weak order, predicates must not mutate the input, and callbacks must not throw or longjmp. Floating-point NaN values need an explicitly suitable comparison policy. Access is synchronous, with no worker or internal lock. Serialize mutations externally, keep callback user data alive, and keep result outputs outside the input range.
+When calling the C array algorithms, keep these ownership and safety contracts in mind:
+1. **Bitwise relocatable records**: Pass the full element stride, normally `sizeof(array[0])`. Every element must support raw byte relocation (`memcpy` / `memmove`). The C array APIs do not invoke C++ constructors, destructors, or container `copy`/`drop` callbacks. Use the C++ iterator algorithms in Section 5 for objects with non-trivial move or destruction semantics.
+2. **Compacted tails in `unique`**: `hx_os_array_unique` overwrites plain records forward and returns the live prefix length `new_count`. Bytes in the `[new_count, count)` tail are unspecified and may still hold duplicate bit patterns—never treat the tail as additional live owned resources. If discarded elements own heap memory or handles that must be released, use the container API `hx_os_sequence_unique` with a `drop` callback instead.
+3. **Comparator and concurrency rules**: Comparators must define a strict weak ordering (if floating-point data can contain `NaN`, handle it explicitly in the comparator). Comparators and predicates must not mutate the input array, throw C++ exceptions, or `longjmp`. All calls run synchronously on the calling thread without internal locks; synchronize shared mutations externally.
 
 ## 5. C++ calls follow standard iterator rules
+
+Include `<hx/Algorithms.hpp>` to use the generic algorithms in `hx::algo`. Ranges use the standard half-open `[first, last)` convention and return standard types (`find` returns an iterator, `binary_search` returns `bool`, `sort` returns `void`):
 
 ```cpp
 #include <hx/Algorithms.hpp>
@@ -107,42 +117,40 @@ hx::algo::sort(std::begin(values), std::end(values));
 auto found = hx::algo::find(std::begin(values), std::end(values), 3);
 ```
 
-The range is `[first, last)`. Return values are the standard results: `find` returns an iterator, `binary_search` a bool, and `sort` returns void. The wrapper does not catch exceptions or translate them into `Result`. Element comparisons, moves, swaps, assignments, and output-iterator operations must satisfy this project's no-exception contract.
-
-| Operation | Iterator requirement |
+| Operation | Iterator requirement and behavior |
 | --- | --- |
-| `sort`, `partial_sort`, `nth_element` | Random access; list iterators cannot be used |
-| `lower_bound`, `upper_bound`, `binary_search`, `equal_range` | At least forward iterators and correctly ordered input; non-random-access traversal can still take O(n) iterator increments |
-| `reverse` | Bidirectional |
-| `rotate`, `partition`, `unique`, `remove_if` | At least forward iterators; values must support the required modification |
-| `find`, `find_if`, `count`, `count_if` | Input iterators |
+| `sort`, `partial_sort`, `nth_element` | Random-access iterators (`RandomAccessIterator`); cannot be called on `std::list` iterators |
+| `lower_bound`, `upper_bound`, `binary_search`, `equal_range` | Forward iterators (`ForwardIterator`) over a range ordered by the same comparator; non-random-access iterators still require `O(n)` increments |
+| `reverse` | Bidirectional iterators (`BidirectionalIterator`) |
+| `rotate`, `partition`, `unique`, `remove_if` | Forward iterators whose value types support move/swap assignment |
+| `find`, `find_if`, `count`, `count_if` | Input iterators (`InputIterator`) |
 
-The header also exposes `min_element`, `max_element`, `minmax_element`, `is_sorted`, `copy_if`, `transform`, and `equal`, subject to their C++11 requirements. `unique` and `remove_if` return a logical new end; erase the tail when using a resizable container. Ensure output capacity for `copy_if`/`transform`. The C++11 three-iterator `equal` overload requires a sufficiently long second range.
-
-For `std::list` and `std::forward_list`, use `hx::algo::sort(items, compare)`. This specific overload delegates to the stable member sort, relinking existing nodes without copying values or allocating nodes. It does not make arbitrary list iterator pairs random-access sortable.
-
-There is currently no `hx::algo::stable_sort` or `inplace_merge` alias, avoiding an implicit temporary allocation path with no allocation-error result. C arrays have the explicitly budgeted stable-sort function above. The [C++ device example](../examples/algorithms_cpp.cpp), target `hx_os_algorithms_cpp`, shows array sorting/search and list sorting. These facilities provide direct calls and shared implementations; no general performance advantage over the standard library is claimed.
+`<hx/Algorithms.hpp>` also provides `min_element`, `max_element`, `minmax_element`, `is_sorted`, `copy_if`, `transform`, and `equal`:
+- Like `std::unique` and `std::remove_if`, `hx::algo::unique` and `hx::algo::remove_if` return the new logical end iterator; call `container.erase(new_end, container.end())` to shrink a resizable container, or use `hx::algo::erase_if` (Section 8).
+- Ensure the destination range has sufficient room when calling `copy_if` or `transform`, and ensure the second range is at least as long as the first when calling the three-iterator `equal(first1, last1, first2)` overload.
+- To sort a `std::list` or `std::forward_list`, pass the container directly to `hx::algo::sort(items, compare)`. That overload calls the container's stable node-relinking sort without copying values or allocating nodes.
+- Because `hx::algo` follows the library's no-exception policy and avoids hidden heap allocations that cannot report `hx_os_status`, it does not expose `stable_sort` or `inplace_merge` iterator wrappers. Use `hx_os_array_stable_sort` when you need a budgeted stable sort on a contiguous array. See the [C++ device example](../examples/algorithms_cpp.cpp) (target `hx_os_algorithms_cpp`) for a complete demonstration.
 
 ## 6. Filter, transform, compare, and accumulate C records
 
-These operations also work on ordinary arrays; they do not create a library container. Names below omit `hx_os_array_`.
+These functions in `<hx_algorithm.h>` also operate directly on plain C arrays without allocating library containers (the `hx_os_array_` prefix is omitted in the table):
 
-| Entry | Typical job | Result and cost |
+| Function (`hx_os_array_*`) | Typical use case | Behavior and time cost |
 | --- | --- | --- |
-| `copy_if` | Copy offline devices to a work list | Stable selected prefix in caller storage, O(n) |
-| `transform` | Convert device records into upload records | Different input/output strides supported, O(n) |
-| `remove_if` | Remove completed entries in place | Stable valid prefix; returns remaining count, O(n) |
-| `replace_if` | Reset all matching plain records to one value | Returns replacement count, O(n) |
-| `any_of` / `all_of` / `none_of` | Is any device offline? Have all jobs completed? | Bool output with short circuit, O(n) worst |
-| `fold` | Sum bytes or update a statistics structure | Sequential callbacks update caller accumulator, O(n) |
-| `equal` / `mismatch` | Compare device lists or locate their first difference | Both input lengths are explicit, O(min(n,m)) |
-| `equal_range` | Find all occurrences of a key in sorted input | Half-open range `[first,last)`, O(log n) |
-| `merge` with MERGE/SET_* modes | Merge sorted data; determine added/deleted IDs | O(n+m), preserves the existing multiset rules |
-| `scan` | Calculate every packet's starting offset or running total | Inclusive/exclusive accumulator snapshots, O(n) |
+| `copy_if` | Copy offline devices into a work buffer | Writes matching elements in order into caller storage, `O(n)` |
+| `transform` | Convert raw device structs into upload structs | Supports different input and output element strides, `O(n)` |
+| `remove_if` | Compact out completed entries in place | Preserves order of kept entries and returns the remaining count, `O(n)` |
+| `replace_if` | Overwrite matching plain records with a replacement value | Copies the replacement value over each match and returns the count, `O(n)` |
+| `any_of` / `all_of` / `none_of` | Check whether any device is offline or all jobs finished | Writes `0` or `1` and short-circuits as soon as the answer is known, `O(n)` worst case |
+| `fold` | Sum byte counts or update a summary struct | Invokes a callback sequentially to update the caller's accumulator, `O(n)` |
+| `equal` / `mismatch` | Compare two record arrays or find their first difference | Takes explicit lengths for both arrays, `O(min(n, m))` |
+| `equal_range` | Find all occurrences of a key in a sorted array | Returns the half-open index range `[first, last)`, `O(log n)` |
+| `merge` (`HX_OS_MERGE` / `HX_OS_SET_*`) | Merge sorted arrays or compute union/intersection/difference | Linear merge `O(n + m)` preserving multiset duplicate semantics |
+| `scan` | Compute packet starting offsets (prefix sums) or running totals | Writes inclusive or exclusive accumulator snapshots into caller storage, `O(n)` |
 
-All these functions avoid library allocations. Record copies and snapshots are shallow byte copies, with no implicit clone/drop. For discarded owning values, use the container APIs and their ownership callbacks. `replace_if` requires its replacement record outside the input array. `equal`/`mismatch` use the comparator's logical equality, rather than comparing structure padding bytes. `mismatch` returns the common-prefix length when one or both inputs end; different lengths make `equal` false. Empty any/all/none results are false/true/true.
+None of these functions perform heap allocations inside the library. Record copies and `scan` snapshots are shallow byte copies, and the replacement value passed to `replace_if` must reside outside the input array. `equal` and `mismatch` determine equality through the comparator rather than comparing struct padding bytes; `equal` returns false when array lengths differ, and `mismatch` returns the common prefix length when either array ends. On an empty array, `any_of`, `all_of`, and `none_of` produce `0`, `1`, and `1`, respectively.
 
-Integer lookup is similarly direct:
+Fixed-width integer binary search is equally direct:
 
 ```c
 int found = 0;
@@ -152,25 +160,31 @@ if (status == HX_OS_OK && found)
 	puts("Found 3");
 ```
 
-The array must already be sorted numerically. The unsigned and 64-bit variants have the same argument order and handle the complete ranges of their integer types.
+The input array must already be sorted in ascending numerical order. The `_u32`, `_i64`, and `_u64` variants take the same arguments.
 
 ## 7. Capacity, progress, and callback failures
 
-`copy_if`, `transform`, `merge`, and `scan` require a destination capacity in **records** and an `hx_os_array_progress`. Its `left_consumed`, `right_consumed`, and `written` fields reset to zero on entry, even when validation fails. Single-input operations leave `right_consumed` zero. `fold` likewise resets its `completed` output; other ordinary queries change outputs only on success.
+Functions that write variable or multi-element output (`copy_if`, `transform`, `merge`, and `scan`) take an output capacity measured in **records** alongside an `hx_os_array_progress` output struct:
+- On entry, `left_consumed`, `right_consumed`, and `written` are reset to `0` (even if argument validation fails; single-input algorithms leave `right_consumed` at `0`). `fold` similarly resets its `completed` output to `0` on entry.
+- **Resuming after `HX_OS_OUTPUT_FULL`**: When an operation returns `HX_OS_OUTPUT_FULL` with `progress.written == capacity`, the destination buffer is full and all `written` prefix elements are valid. Advance each input pointer by its reported `consumed` count and supply a fresh output buffer to continue. Because `copy_if` may inspect several non-matching elements before writing a match, an element that requires a new output slot is not marked consumed when the buffer fills; its predicate will be evaluated again when you resume.
+- **Distinguishing callback `HX_OS_OUTPUT_FULL`**: If `transform` or `scan` returns `HX_OS_OUTPUT_FULL` while `progress.written < capacity`, that status code was returned by your callback rather than by destination buffer exhaustion—handle it using the callback-failure rules below.
 
-`HX_OS_OUTPUT_FULL` with `progress.written == capacity` means the destination filled; the completed prefix is retained. Resume by advancing each input by its consumed count and providing space for the remaining output. Filtering can consume more records than it writes. No record requiring another output slot is consumed when the buffer fills; callbacks for a retried filtered record may be evaluated again. If transform/scan returns OUTPUT_FULL with `written < capacity`, the status came from its callback; use the callback-failure rules below instead of assuming buffer exhaustion. Neither capacity exhaustion nor validation failure triggers hidden allocation.
+> [!WARNING]
+> **Non-overlapping buffers and callback failure recovery:**
+> - **No overlapping buffers**: Output buffers, accumulators, and progress structs must never overlap the input arrays. The single exception is exact in-place `transform`, where the input and output share the exact same base address and element stride, and the callback is written to tolerate identical source and destination pointers.
+> - **Partial effects on callback failure**: If a `transform` callback fails on an element, that element is not counted in `progress`, but its destination slot (or input slot during in-place transform) may have been partially modified; the callback must clean up any partial resources it created for that element. In `fold` and `scan`, accumulator changes made prior to (or during) the failing callback remain in place, while `progress` counts only completed callbacks. Resolve these partial effects before retrying.
 
-Output must not overlap input. The one exception is `transform` with the exact same base address and element size; its callback must tolerate identical input and destination addresses. Partial overlap is rejected. Scan's accumulator must be separate from both the input and output. Progress/count objects must be outside all data buffers.
+`hx_os_array_scan` supports two snapshot modes:
+- `HX_OS_SCAN_EXCLUSIVE`: Copies the accumulator into the output slot **before** invoking the fold callback for each element.
+- `HX_OS_SCAN_INCLUSIVE`: Copies the accumulator into the output slot **after** invoking the fold callback for each element.
 
-A failing transform record is excluded from progress, but its destination may have been modified; the callback must clean up its partial construction. With exact in-place transformation this can also modify the failing input record. Successful earlier outputs remain usable. Fold/scan preserve the accumulator changes already made, including partial changes by the failing callback. Their progress counts successful callbacks only. Native error details supplied by callbacks are retained. Retrying after a callback error requires the caller to resolve these partial effects; it is not the automatic resume case provided for OUTPUT_FULL.
-
-`scan` copies the accumulator before each fold in `HX_OS_SCAN_EXCLUSIVE` mode and after each fold in `HX_OS_SCAN_INCLUSIVE` mode. For lengths `[2,3,5]` and initial sum zero, the outputs are `[0,2,5]` or `[2,5,10]`, and the final accumulator is 10. The fold callback defines overflow/error behavior; it should check `value > UINT64_MAX - sum` before adding unsigned byte counts. Snapshots of pointer fields borrow their pointees and are not independent deep copies.
+For input lengths `[2, 3, 5]` and an initial accumulator of `0`, `HX_OS_SCAN_EXCLUSIVE` writes packet offsets `[0, 2, 5]`, `HX_OS_SCAN_INCLUSIVE` writes running totals `[2, 5, 10]`, and the final accumulator is `10` in both cases. To guard against integer overflow during accumulation, check bounds inside your fold callback (for example, return `HX_OS_RANGE` if `value > UINT64_MAX - sum`).
 
 ## 8. Additional C++11 conveniences
 
-`hx::algo` also exposes `any_of`, `all_of`, `none_of`, `mismatch`, `merge`, the four `set_*` operations, `replace_if`, and the C++11 numeric algorithms `accumulate`, `inner_product`, `partial_sum`, `adjacent_difference`, and `iota`. These preserve standard signatures and preconditions. In particular, C++11 three-iterator `mismatch` needs a sufficiently long second range, sorted set operations require sorted inputs, and numeric algorithms use the selected type's arithmetic rather than providing checked overflow.
+`hx::algo` also includes `any_of`, `all_of`, `none_of`, `mismatch`, `merge`, the four sorted set operations (`set_union`, `set_intersection`, `set_difference`, `set_symmetric_difference`), `replace_if`, and the C++11 numeric algorithms (`accumulate`, `inner_product`, `partial_sum`, `adjacent_difference`, `iota`) with standard signatures and preconditions.
 
-For removing elements rather than just computing a logical new end, use the explicit `erase_if` overloads for `std::vector`, `std::list`, and `std::forward_list`:
+When you want to physically erase matching elements from a container instead of only computing a new logical end iterator, use the `hx::algo::erase_if` overloads provided for `std::vector`, `std::list`, and `std::forward_list`:
 
 ```cpp
 std::vector<int> finished = {0, 4, 0, 8};
@@ -182,8 +196,8 @@ auto removed = hx::algo::erase_if(finished, [](int pending) noexcept {
 auto total = hx::algo::accumulate(finished.begin(), finished.end(), 0);
 ```
 
-Here `removed` is 2, `finished` contains `[4,8]`, and `total` is 12. These overloads return the erased count, perform the container's normal destruction, and allocate no result array. Iterator invalidation follows the specific container. Predicates, element movement/assignment, destruction and iterator operations must not throw; no exception-to-status conversion is installed. Arbitrary container types are not accepted by guessing their erase behavior.
+Here `removed` is `2`, `finished` retains `[4, 8]`, and `total` is `12`. These overloads invoke normal element destruction on the container and return the number of erased elements without allocating a temporary array. Predicates, element moves/assignments, and destructors must all satisfy `noexcept`.
 
 ## 9. Randomization and specialized searches
 
-C shuffle/sample and stable integer radix sorting, C++11 iterator sampling, binary KMP, multi-pattern matching and Bloom filters are documented in [binary/search tools](FAST_TOOLS.md). They supplement the general comparison algorithms; callers retain the same arrays or iterator ranges.
+For Fisher–Yates array shuffling, reservoir/order-preserving sampling, stable LSD radix sorting for fixed-width integers, binary KMP search, Aho–Corasick multi-pattern matching, and Bloom filters, see [Binary buffers and search algorithms](FAST_TOOLS.md).

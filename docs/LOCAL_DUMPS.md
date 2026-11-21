@@ -2,15 +2,17 @@
 
 [简体中文](LOCAL_DUMPS.zh-CN.md) · [Windows utilities](WINDOWS_UTILITIES.md) · [Analysis tools](ANALYSIS.md) · [README](../README.md)
 
-**Use this module to explicitly ask Windows to save a local `.dmp` file after an application crashes.** It configures Windows; it does not catch exceptions, write a dump itself, diagnose memory corruption, recover a damaged process, monitor hangs or upload customer data. Enabling/building/linking the module changes no Windows settings.
+When a Windows application crashes on a customer machine due to an unhandled exception, a local `.dmp` crash dump is often the fastest way to pinpoint the root cause. The `WER LocalDumps` module (`<hx_os_local_dumps.h>` / `<hx/LocalDumps.hpp>`) provides an explicit API for configuring Windows Error Reporting (WER) to save a local `.dmp` file whenever a specified `.exe` crashes.
 
-The C99 API is in `<hx_os_local_dumps.h>` and `<hx_os.h>`; the exception-free C++11 facade is `<hx/LocalDumps.hpp>`. `HX_OS_ENABLE_LOCAL_DUMPS` defaults ON and is independent of REGISTRY, PROCESS and SYSTEM_UTILS. Windows links the system Advapi32 library. Other platforms and module-off builds retain the functions and return `HX_OS_NOT_SUPPORTED`; `hx_os_local_dumps_available()` reports only compiled support.
+Keep the module's scope in mind: **it configures, queries, and removes per-application Windows `LocalDumps` registry settings**. It does not install an in-process exception handler, write minidumps itself, detect memory corruption prior to a crash, monitor hung processes, or upload customer data to Microsoft or any remote server. Simply compiling, linking, or loading the library never modifies Windows settings automatically.
+
+`HX_OS_ENABLE_LOCAL_DUMPS` defaults to `ON` and is independent of `REGISTRY`, `PROCESS`, and `SYSTEM_UTILS` (linking `Advapi32.lib` on Windows). On non-Windows targets or when built with the module disabled, all functions remain linkable and return `HX_OS_NOT_SUPPORTED`; call `hx_os_local_dumps_available()` to check whether compiled Windows support is present.
 
 ## 1. Configure the customer application during installation
 
-The usual place for this call is an authorized, elevated installer. Ordinary customers should not need to run the business application as administrator on every launch. Settings persist after the installer/process exits; there is no RAII owner whose destruction removes them.
+Because WER `LocalDumps` settings live under `HKEY_LOCAL_MACHINE` (`HKLM`), configuring them requires administrator privileges. The standard practice is to call `hx_os_local_dumps_enable` once from an **authorized, elevated installer or deployment script**. Because the registry setting persists across reboots, end users can run the application under a standard non-elevated user account on every launch.
 
-This complete C program configures **MyApp.exe**, not the installer itself. Replace that basename before running it. Build using the [C project setup](USAGE.md#c-project).
+The complete C program below configures local crash dumps for **`MyApp.exe`** (replace `"MyApp.exe"` with your application's executable basename before running; build using the [C project setup](USAGE.md#c-project)):
 
 ```c
 #include <hx_os_local_dumps.h>
@@ -29,18 +31,27 @@ int main(void)
 		return 1;
 	}
 
-	puts("Configured. Verify actual crash collection on the target system.");
+	puts("LocalDumps configured for MyApp.exe.");
 	return 0;
 }
 ```
 
-`application=NULL` selects the current **host EXE**, including when the call originates in a DLL. An installer should normally pass the customer's EXE name explicitly. Only a single UTF-8 basename ending in `.exe` is accepted, not a path, wildcard or DLL. The limit is 255 UTF-16 units. Windows matches application names without case sensitivity; different installations with the same basename share the setting in that registry view.
-
-`options=NULL` selects full dumps, count 3, the calling process's registry view, and the literal folder `%LOCALAPPDATA%\CrashDumps`. Windows expands that folder for the crashing account, not the installer account. Defaults are intentionally more diagnostic than Windows' own mini-dump/count-10 defaults. A full dump can be large and contain passwords, documents or other sensitive application data. Count limits file quantity, not total disk bytes.
-
-The function writes only this application's child key under `HKLM\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps`. It does not change global WER values, adjust permissions, elevate the process or create directories. `ACCESS_DENIED` means the call lacked rights; native details remain in `hx_os_error`. Do not call from `DllMain`, a signal handler or an exception handler.
+- **Target executable basename (`application`)**:
+  - Accepts a single UTF-8 filename ending in `.exe` (up to `255` UTF-16 code units)—**never a directory path, wildcard, or `.dll` name**.
+  - Passing `application = NULL` selects the current **host `.exe` basename** (even if called from inside a DLL). An external installer (`setup.exe`) should therefore always pass the target application's `.exe` basename explicitly.
+  - Windows matches executable names case-insensitively; two installations with the same `.exe` basename share the setting in that registry view.
+- **Default settings (`options = NULL`)**:
+  - **Dump type**: Full dump (`HX_OS_LOCAL_DUMPS_FULL`), chosen intentionally over Windows' built-in mini-dump default so engineers have complete memory state during post-mortem debugging.
+  - **Dump count**: Up to `3` retained dump files.
+  - **Registry view**: The calling process's native registry view (`HX_OS_LOCAL_DUMPS_VIEW_DEFAULT`).
+  - **Dump folder**: The literal string `"%LOCALAPPDATA%\\CrashDumps"` (written as `REG_EXPAND_SZ` so Windows expands it at crash time under the **crashing process's user account**, rather than expanding it to the administrator's profile during installation).
+- **Permissions and security boundaries**:
+  - Writes only the `<MyApp.exe>` subkey under `HKLM\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps`, without altering global WER values, changing folder ACLs, elevating privileges, or creating directories on disk. Insufficient privileges return `HX_OS_ACCESS_DENIED` with native Win32 details preserved in `hx_os_error`.
+  - **Data sensitivity**: Full dumps can be large and may contain sensitive in-memory data (credentials, tokens, or open documents), and limiting file count does not cap total disk bytes. Document dump handling in your privacy policy, and never call these configuration APIs from `DllMain`, a signal handler, or an exception handler.
 
 ## 2. Choose folder, count, dump type and registry view
+
+To customize the dump folder, maximum file count, dump type (`HX_OS_LOCAL_DUMPS_MINI` or `HX_OS_LOCAL_DUMPS_FULL`), or 32/64-bit registry view, initialize `hx_os_local_dumps_options` with `hx_os_local_dumps_options_init`:
 
 ```c
 hx_os_local_dumps_options options;
@@ -57,23 +68,30 @@ if (status == HX_OS_OK) {
 }
 ```
 
-Initialize the options before changing fields. Version 1 accepts MINI or FULL, positive counts, and DEFAULT/VIEW32/VIEW64. Custom dump flags are not exposed. A custom folder is a strict UTF-8 absolute Windows path or a leading `%VARIABLE%` reference that expands to one. It is stored as `REG_EXPAND_SZ`, without expansion during configuration. Paths are bounded to 32,767 UTF-16 units. Provision a custom directory with write access for the application account; do not solve access failures by making customer dumps publicly readable.
-
-DEFAULT uses the configuring process's registry view. This is not automatic discovery of the target EXE architecture. An installer targeting another architecture must select the intended view. On 64-bit Windows, a deployment supporting x86/x64 collection can explicitly configure both VIEW32 and VIEW64 and verify collection for each target; these are separate operations, not an atomic two-view change. No hardcoded `Wow6432Node` path or process-global view change is used. Reuse the same selected view for query and removal.
+- **Custom folder format**: `dump_folder` must be a strict UTF-8 absolute Windows path or start with a `%VARIABLE%` reference that expands to one (up to `32,767` UTF-16 code units, stored unexpanded as `REG_EXPAND_SZ`). When provisioning a custom directory, grant write permissions to the account that runs the application without making customer crash dumps readable by untrusted users.
+- **Selecting 32-bit vs. 64-bit registry views**: `HX_OS_LOCAL_DUMPS_VIEW_DEFAULT` uses the calling process's architecture rather than inspecting a target binary on disk. If a 32-bit installer configures a 64-bit application (or vice versa), select `HX_OS_LOCAL_DUMPS_VIEW64` or `HX_OS_LOCAL_DUMPS_VIEW32` explicitly. On 64-bit Windows, if you ship both x86 and x64 binaries with the same name, you can call `enable` once for `VIEW32` and once for `VIEW64`, and pass the same view when querying or removing.
 
 ## 3. Existing settings and safe removal
 
-The module never silently overwrites an existing application key. It creates three WER values (`DumpFolder`, `DumpCount`, `DumpType`) and a private DWORD `HxLocalDumpsVersion=1` marker. Repeating enable succeeds only when that complete managed key exactly matches the requested values, with no extra values or child keys. Any other existing key returns `EXISTS` unchanged, including an identical unmarked configuration created by someone else.
+To avoid clobbering policies configured by system administrators or other tools, the module **never silently overwrites an existing application subkey**:
+
+- **Managed marker and idempotent `enable`**: When creating a subkey, the library writes `DumpFolder`, `DumpCount`, `DumpType`, and a private marker value `HxLocalDumpsVersion = 1` (`REG_DWORD`). Repeating `hx_os_local_dumps_enable` succeeds (`HX_OS_OK`) only if the existing subkey carries `HxLocalDumpsVersion = 1`, matches all requested values, and has no extra values or subkeys. Any other pre-existing key returns `HX_OS_EXISTS` untouched.
+- **Safe removal (`hx_os_local_dumps_remove`)**:
 
 ```c
 hx_os_status status = hx_os_local_dumps_remove("MyApp.exe", NULL, &error);
 ```
 
-This removes a default configuration created by this module, or succeeds if the application key is absent. For custom settings, pass the original options instead of NULL. If the configuration is foreign, incomplete, edited or extended, removal returns `BUSY` and preserves it. The literal folder string must match, not merely expand to the same directory. Removal is not recursive and does not delete existing `.dmp` files or parent/global keys. Removing a per-application override can expose global WER settings, so it does **not** prove all collection is disabled.
+Passing `options = NULL` removes a default configuration created by this module (or succeeds immediately if the subkey is already absent). If you enabled custom `options`, pass those same `options` to `remove`. If the key was created by another tool, lacks the library marker, has been modified (the unexpanded `DumpFolder` string must match literally), or contains extra values/subkeys, `remove` returns `HX_OS_BUSY` and leaves the key intact.
 
-Serialize installation/removal and exclude other registry writers for this application, including other processes. The multi-value writes are not a transaction and the target should not be crashing during installation. On a write failure the implementation attempts to delete only its newly created leaf. A cleanup failure is retained as a Win32 `error.cause_code`; inspect the key before retrying. A process interruption can also leave partial settings. There is no hidden force-overwrite or force-delete mode. A native close failure can be reported after settings have changed; query before deciding how to retry.
+> [!NOTE]
+> **Removal and Rollback Boundaries**
+> - `remove` deletes only the per-application registry subkey; it does **not** delete existing `.dmp` files on disk or parent/global WER keys. Because global WER `LocalDumps` settings may still be configured on the machine, removing a per-application key does not guarantee that all crash dump collection is disabled system-wide.
+> - Multi-value registry writes are not atomic transactions. Serialize installation/removal across processes. If a write fails mid-creation, the implementation attempts to delete its newly created subkey and records any rollback cleanup error in `error.cause_code` (query the key before deciding how to retry).
 
 ## 4. Query without changing Windows
+
+Use `hx_os_local_dumps_query` to inspect an application's current setting in a chosen registry view without modifying the system:
 
 ```c
 hx_os_local_dumps_info info;
@@ -91,15 +109,12 @@ if (status == HX_OS_OK)
 hx_string_destroy(&folder);
 ```
 
-`fields` contains HAS_TYPE/HAS_COUNT/HAS_FOLDER for values actually present. Missing numeric fields are zero and a missing folder is empty. Folder text is returned literally; REG_SZ/REG_EXPAND_SZ are accepted for inspection. Invalid types, encoding and excessive sizes fail explicitly. Both outputs remain unchanged on failure; a successful query writes only the known info structure and uses the string's own context.
-
-`managed` identifies a complete library-marked layout with no additional values/subkeys. It is not a security credential or proof that the known values have not been edited. Removal additionally checks the expected values. Query is an observation, not a transaction against external edits.
-
-`NOT_FOUND` means no key for this application in this view. It does **not** mean Windows collection is disabled: global WER settings and Windows defaults are not merged into this query. Neither `available()` nor successful configuration/query proves dump delivery, folder permissions or compatible application crash handling.
+- **Present-field bitmask (`info.fields`)**: Combines `HX_OS_LOCAL_DUMPS_HAS_TYPE`, `HX_OS_LOCAL_DUMPS_HAS_COUNT`, and `HX_OS_LOCAL_DUMPS_HAS_FOLDER` to indicate which values exist in the subkey (missing numeric fields report `0`, and a missing folder reports `""`). Both `REG_EXPAND_SZ` and `REG_SZ` folder values are accepted and returned literally.
+- **`info.managed` and `HX_OS_NOT_FOUND`**: `info.managed` is non-zero when the subkey carries the complete library marker layout with no extra values or subkeys. When no subkey exists for that application in the selected view, the query returns `HX_OS_NOT_FOUND` (which means no per-application override is present, not that global WER settings are disabled).
 
 ## 5. C++11 and the safe command-line example
 
-Include `<hx/LocalDumps.hpp>`, then inside a function returning `hx_os_status`:
+Include `<hx/LocalDumps.hpp>` in C++11 to call `enable`, `query`, and `remove` via `hx::Result` without exceptions (destroying a `query` result releases its `hx::String` memory without removing persistent OS registry settings):
 
 ```cpp
 auto enabled = hx::LocalDumps::enable("MyApp.exe");
@@ -113,9 +128,7 @@ if (!settings)
 return HX_OS_OK;
 ```
 
-`LocalDumps::options()` returns initialized C options. `enable`, `query` and `remove` reuse the C functions and return `Result`; `query` owns its folder string. Destruction does not remove persistent settings.
-
-The complete public [local_dumps.c](../examples/local_dumps.c) defaults to usage text, with no changes and no deliberate crash. With examples enabled in your existing MSVC build:
+The public command-line example [local_dumps.c](../examples/local_dumps.c) prints usage text when run without arguments, making no registry changes and triggering no crash. From an MSVC build directory with `HX_OS_BUILD_EXAMPLES=ON`, you can build and run a read-only query from a normal shell:
 
 ```powershell
 cmake --build build-shared-msvc --config Release --target hx_os_local_dumps
@@ -123,27 +136,24 @@ cmake --build build-shared-msvc --config Release --target hx_os_local_dumps
 .\build-shared-msvc\bin\Release\hx_os_local_dumps.exe query MyApp.exe 64
 ```
 
-Only an explicit `enable` or `remove` command writes settings. In an authorized elevated terminal, for a program you manage:
+Only an explicit `enable` or `remove` command writes to the registry. From an elevated administrator PowerShell, for an application you manage (passing `-` selects the example's own `.exe`, and an optional trailing argument sets a custom folder):
 
 ```powershell
 .\build-shared-msvc\bin\Release\hx_os_local_dumps.exe enable MyApp.exe 64
 .\build-shared-msvc\bin\Release\hx_os_local_dumps.exe remove MyApp.exe 64
 ```
 
-An optional final folder argument applies to enable/remove; both use full dumps/count 3. `-` as the application explicitly selects the example's own EXE. The CLI uses SYSTEM_UTILS for UTF-8 arguments; the underlying LocalDumps API does not require it.
-
 ## 6. What to collect from customers
 
-Keep the exact released EXE/DLL/PDB files and matching source on the developer side. The customer normally needs only the runtime files; Windows can save a dump without PDBs installed. After a crash, request the `.dmp`, full application version, time, logs and reproduction steps. Default files are normally under the crashing user's `%LOCALAPPDATA%\CrashDumps`; service accounts have their own profiles. Transfer dumps privately and define retention/deletion policy.
-
-Use Visual Studio or WinDbg with matching PDBs to inspect the crash location. An access violation can be straightforward, but a heap-corruption crash may occur long after the original bad write. A dump is a snapshot, not a complete history. Complement it with memory-checking builds and reproduction tests.
-
-A hang normally needs a separate live/manual dump, for example Task Manager's process-details dump command before terminating the application. Silent corruption, leaks, normal exit, forced termination and power failure are not automatically diagnosed by LocalDumps. Applications with their own crash reporting and automatic debugger launch can prevent this collection mechanism. LocalDumps operates independently of ordinary WER report submission; it does not enable uploading reports to Microsoft.
+1. **Archive matching binaries and PDBs at release time**: Keep the exact released `.exe`, `.dll`, and `.pdb` symbol files alongside the source commit on the engineering side. End users only need the runtime binaries—Windows writes `.dmp` files without needing `.pdb` symbols on the customer's machine.
+2. **Collect crash artifacts**: After a crash, ask the user for the `.dmp` file from `%LOCALAPPDATA%\CrashDumps` (service accounts use their own profile directories), together with the exact software version, timestamp, logs, and reproduction steps.
+3. **Open in Visual Studio or WinDbg**: Load the `.dmp` with matching `.pdb` symbols to inspect the faulting stack and variables. Because heap corruption can crash long after the invalid write occurred, pair post-mortem dumps with the memory-checking workflows in [Optional CPU and memory analysis](ANALYSIS.md).
+4. **Hangs and crash-handler interactions**: Hung processes do not trigger `LocalDumps` automatically; capture a live dump manually (for example, via Task Manager's *Details -> Create dump file* command) before terminating the process. Also note that custom in-process crash reporters that swallow unhandled exceptions or registered JIT debuggers (`AeDebug`) can prevent WER `LocalDumps` from running.
 
 ## 7. Verification boundaries
 
-Test configuration and collection separately. Maintainer regressions redirect HKLM only inside an isolated test process to a uniquely owned temporary HKCU tree. They exercise real Windows registry calls, Unicode, conflicts, cleanup, permissions, views and unchanged outputs without configuring any actual application. Static tests additionally inject write/rollback failures. Non-Windows/module-off tests verify `NOT_SUPPORTED`. These tests do not prove that a customer machine produces a `.dmp`.
+Verify registry configuration and end-to-end OS crash dump delivery as separate steps:
+- Automated unit tests redirect `HKLM` inside an isolated test process to a temporary `HKCU` test tree to verify Unicode handling, conflict detection, permissions, registry views, and rollback cleanup without touching machine-wide settings.
+- Before shipping, verify actual `.dmp` creation on your target Windows versions, architectures, user accounts, and output folders using a disposable test executable, and remove the test setting afterward (never force a crash in a production application with unsaved work).
 
-Before release, separately verify real crash collection on the target Windows versions, application architectures/accounts and folders, using a disposable test program and explicitly authorized machine settings. Keep crash-test files private and remove only settings created for that test. Do not induce a crash in a production application with unsaved work.
-
-References: [Microsoft LocalDumps configuration](https://learn.microsoft.com/en-us/windows/win32/wer/collecting-user-mode-dumps), [registry redirection and views](https://learn.microsoft.com/en-us/windows/win32/winprog64/accessing-an-alternate-registry-view).
+References: [Microsoft LocalDumps configuration](https://learn.microsoft.com/en-us/windows/win32/wer/collecting-user-mode-dumps) and [Accessing an Alternate Registry View](https://learn.microsoft.com/en-us/windows/win32/winprog64/accessing-an-alternate-registry-view).

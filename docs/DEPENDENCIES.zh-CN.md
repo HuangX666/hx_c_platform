@@ -1,103 +1,122 @@
-# 第三方源码管理与可选依赖构建
+# 第三方源码管理与可选原生依赖构建指南
 
-[English](DEPENDENCIES.md) · [首页](../README.zh-CN.md) · [许可证说明](../THIRD_PARTY_NOTICES.zh-CN.md)
+[English](DEPENDENCIES.md) · [返回首页](../README.zh-CN.md) · [第三方许可证声明](../THIRD_PARTY_NOTICES.zh-CN.md)
 
-## 1. 目录怎么放
+`hx_c_platform` 的基础能力（文件、字符串、内置配置解析、容器、线程池、基础网络等）仅需子模块源码即可直接编译；而密码学（OpenSSL）、归档压缩（libarchive / zlib / lzma / zstd）、HTTP（libcurl）、Unicode 高级变换（utf8proc）等重度模块则通过统一的依赖构建工程（`tools/dependencies`）预先编译为原生 SDK。
 
-第三方源码统一放在 `deps/`。本项目自己的适配逻辑放在 `cmake/`、`tools/`、`src/`；生成文件和依赖构建产物放在 Git 忽略的构建目录，不修改上游源码。
+本文说明 `deps/` 目录结构、子模块初始化方式，以及如何在桌面端、嵌入式 Linux 与 Android 上一键构建所需的原生依赖 SDK。
+
+---
+
+## 1. `deps/` 目录布局
+
+所有第三方上游源码统一存放在 `deps/` 下，并且**保持上游源码完全不修改**；本项目自己的构建适配、符号隔离与包装逻辑均位于 `cmake/`、`tools/` 和 `src/` 中，构建产物均输出到 Git 忽略的构建目录：
 
 ```text
 deps/
-  openssl/          Git 子模块
-  libarchive/       Git 子模块
-  zlib/             Git 子模块
-  xz/               Git 子模块
-  zstd/             Git 子模块
-  curl/             libcurl SDK 子模块
-  c-ares/           可取消 DNS 子模块（1.34.8）
-  utf8proc/         Unicode SDK 子模块
-  7zip/             独立可选原生后端子模块
-  cjson/            可选解析器子模块
-  libyaml/          可选解析器子模块
-  minixml/          可选解析器子模块
-  inih/             可选解析器子模块
-  tomlc/            可选解析器子模块
+  openssl/          Git 子模块（OpenSSL 3.5.9）
+  libarchive/       Git 子模块（libarchive 3.8.9）
+  zlib/             Git 子模块（zlib 1.3.2）
+  xz/               Git 子模块（XZ / liblzma 5.8.4）
+  zstd/             Git 子模块（zstd 1.5.7）
+  curl/             Git 子模块（libcurl SDK）
+  c-ares/           Git 子模块（可取消 DNS 1.34.8）
+  utf8proc/         Git 子模块（Unicode 变换 2.12.0）
+  7zip/             Git 子模块（独立可选 7-Zip 动态后端 26.04）
+  cjson/            Git 子模块（可选 JSON 解析后端）
+  libyaml/          Git 子模块（可选 YAML 解析后端）
+  minixml/          Git 子模块（可选 XML 解析后端）
+  inih/             Git 子模块（可选 INI 解析后端）
+  tomlc/            Git 子模块（可选 TOML 解析后端）
   kcp/upstream/     当前使用的 KCP 子模块
   uthash/upstream/  当前使用的 uthash 子模块
-  kcp/<commit>/     原样保留的旧快照，当前构建不使用
-  uthash/v2.4.0/    原样保留的旧快照，当前构建不使用
-  minicoro/v0.1.3/  仅保留早期评估副本，不参与构建
-  .fetchcontent/   忽略的备选下载缓存
-  .cache/          忽略的旧解析器／iconv 发布包缓存
+  kcp/<commit>/     保留的旧快照（不参与当前构建）
+  uthash/v2.4.0/    保留的旧快照（不参与当前构建）
+  minicoro/v0.1.3/  保留的早期评估副本（不参与任何构建）
+  .fetchcontent/    Git 忽略的 FetchContent 下载缓存目录
+  .cache/           Git 忽略的旧版归档缓存目录
 ```
 
-原有 `.deps/` 和 `deps/.cache/` 可通过显式源码路径继续使用。新构建统一经过 `cmake/HxDependencySources.cmake`；旧 Python 准备命令也委托给它，不再单独维护下载地址和版本表。
+所有固定版本号、Git 提交哈希与发布包 SHA256 均集中定义在 [cmake/HxDependencySources.cmake](../cmake/HxDependencySources.cmake) 中（旧版 Python 准备脚本也直接委托给该 CMake 模块）。
 
-## 2. 默认使用 Git submodule
+---
+
+## 2. 方式一（默认推荐）：使用 Git Submodule
+
+克隆仓库时带上 `--recurse-submodules`，或在已有仓库中拉取全部子模块：
 
 ```sh
 git clone --branch dev --recurse-submodules \
   https://github.com/HuangX666/hx_c_platform.git
 cd hx_c_platform
-# 已有仓库补齐子模块：
+
+# 若已克隆主仓库，补齐子模块：
 git submodule update --init --recursive
 ```
 
-主工程和可选依赖构建器都会校验固定 Git 提交，缺失或版本不符会明确失败，不会跟随分支最新提交。当前开发分支是 `dev`。16 个 Git 子模块的 URL 见 [.gitmodules](../.gitmodules)，版本、提交及 iconv／SQLite 归档散列统一见 [HxDependencySources.cmake](../cmake/HxDependencySources.cmake)。
+主工程和 `tools/dependencies` 在配置阶段都会严格校验子模块的 Git 提交号：如果子模块未初始化或停留在其他提交，CMake 会立即报错停止，绝不会静默使用未知分支的代码。
 
-默认开启的容器、KCP 需要初始化对应子模块。五种可选解析后端仍默认关闭，开启时不再要求逐个填写源码路径；既有集成仍可传入 `HX_OS_<PARSER>_SOURCE_DIR`，显式提供的源码树由集成方管理。
+### 两个官方归档包例外（`libiconv` 与 `SQLite`）
 
-GNU libiconv 是来源例外之一：其官方 Git 仓库缺少发布包中的生成转换表。因此 `HX_OS_ENABLE_ICONV=ON` 默认通过 FetchContent 获取官方 1.18 发布包，校验 SHA256，缓存于 `deps/.fetchcontent/iconv/`。这样 Windows 和交叉构建不必额外准备转换表生成工具。显式设置 `HX_OS_ICONV_USE_SYSTEM=ON` 才选择系统 iconv；仍支持已有 `HX_OS_ICONV_SOURCE_DIR`。模块保持可选，LGPL 条件不变。
+1. **GNU libiconv（`HX_OS_ENABLE_ICONV=ON`，默认关闭）**：由于 GNU libiconv 官方 Git 仓库不包含发布包中预生成的编码转换表，开启源码版 `ICONV` 时会通过 `FetchContent` 自动下载官方 `1.18` 发布包、校验 SHA256 并缓存到 `deps/.fetchcontent/iconv/`（无需在 Windows 或交叉编译宿主机上安装转换表生成工具）。若设置 `HX_OS_ICONV_USE_SYSTEM=ON` 则改用系统自带的 `iconv`。
+2. **SQLite（`HX_OS_ENABLE_PERSISTENT_QUEUE=ON`，默认开启）**：通过 `FetchContent` 下载 SQLite 官方 `3.54.0` Amalgamation 合并源码包、校验 SHA256 并缓存到 `deps/.fetchcontent/sqlite/`，直接编译为 `hx_c_platform::sqlite` 目标并随安装包导出头文件和库。
 
-SQLite 是另一个发布包例外：通过 FetchContent 下载官方 3.54.0 amalgamation，校验 SHA256，并缓存于 `deps/.fetchcontent/sqlite/`。这样不需要采用无关的第三方 Git 镜像，也不用每台构建电脑生成合并源码。PERSISTENT_QUEUE 开启时把原样源码编译为本库的 SQLite 目标，安装包包含对应头文件和库。
+> [!TIP]
+> **如果不需要外部原生 SDK 模块**：
+> 可以直接关闭 `CRYPTO`、`TLS`、`ARCHIVE`、`COMPRESSION`、`HTTP`、`URL`、`UNICODE` 和 `PERSISTENT_QUEUE`，或者在配置 CMake 时使用 `-C cmake/minimal.cmake` 预设。此时核心 UTF-8 校验/转换与内置配置解析器仍然可用。
 
-默认开启的 CRYPTO／TLS、ARCHIVE、COMPRESSION、HTTP／URL、UNICODE 使用准备好的 SDK。SDK 现在包含动态 libcurl、utf8proc、OpenSSL 和静态压缩编解码库。不需要这些依赖时关闭对应开关及 PERSISTENT_QUEUE，或采用 `cmake/minimal.cmake`。核心 UTF-8 验证／转换和内置配置解析仍可使用，完整 Unicode 变换需要 utf8proc。内存压缩可以独立于文件归档启用。见[底层调用](NATIVE_DEPENDENCIES.zh-CN.md)、[常用工具](UTILITY_EXTENSIONS.zh-CN.md)、[加密](CRYPTO.zh-CN.md)、[TLS](TLS.zh-CN.md)和[归档](ARCHIVE.zh-CN.md)。
+---
 
-## 3. 备选使用 FetchContent
+## 3. 方式二（备选）：使用 CMake `FetchContent`
 
-主工程、`tools/dependencies`、`tools/sevenzip` 均支持 `-DHX_OS_DEPENDENCY_PROVIDER=FETCHCONTENT`，取得相同固定提交，默认缓存于 `deps/.fetchcontent/<名称>/<提交号>`。首次准备需要网络，之后复用缓存；下载失败终止配置。按源码缓存加锁，已准备的源码不会在另一个构建正在编译时被重新展开。
+如果你不希望使用 Git Submodule，可以在主工程、`tools/dependencies` 或 `tools/sevenzip` 配置时传入 `-DHX_OS_DEPENDENCY_PROVIDER=FETCHCONTENT`。CMake 会自动拉取完全一致的固定提交并缓存到 `deps/.fetchcontent/<名称>/<提交号>`（支持并发文件锁，只读源码树可通过 `-DHX_OS_DEPENDENCY_CACHE_DIR=...` 指定外部可写缓存目录）。
 
-源码目录只读时，可用 `HX_OS_DEPENDENCY_CACHE_DIR` 指向可写缓存。支持 CMake 的 `FETCHCONTENT_SOURCE_DIR_HX_DEP_<名称>`，Git 源码仍需符合固定提交。SUBMODULE 模式不会下载 Git 源码；启用源码版 iconv 时仍可能下载前述官方归档。离线构建前可集中准备：
+需要在离线构建前预先拉取源码时，可运行 `tools/sources` 辅助工程：
 
 ```sh
+# 校验默认 submodule 源码：
 cmake -S tools/sources -B build-sources
 
-# 替代来源，版本不变：
+# 或通过 FetchContent 预下载固定版本源码：
 cmake -S tools/sources -B build-sources-fetch \
   -DHX_OS_DEPENDENCY_PROVIDER=FETCHCONTENT
 ```
 
-`HX_OS_DEPENDENCIES` 接受用分号隔开的名称列表，默认准备五种解析器、KCP、uthash、iconv。`tools/fetch_parsers.py` 和 `tools/fetch_iconv.py` 保留为这个 CMake 工程的兼容入口，不改写第三方源码。
+---
 
-## 4. 构建依赖
+## 4. 构建桌面端原生依赖 SDK（`tools/dependencies`）
 
-核心项目仍以 CMake 3.16 为基线。**此可选依赖构建器及其检查工程需要 CMake 3.20**，原因是所选上游 XZ 的构建要求。OpenSSL 还需要 Perl；Windows 默认启用的汇编优化需要 NASM。这些是构建电脑的工具，不是业务程序运行时的依赖。
+虽然 `hx_c_platform` 核心库仅要求 CMake 3.16+，但**编译 `tools/dependencies` 原生依赖工程需要 CMake 3.20+**（上游 XZ 的 CMake 构建要求）。此外，编译 OpenSSL 需要构建机安装 **Perl**（Windows 默认启用汇编优化时还需安装 **NASM** 并加入 `PATH`，这些仅是编译期工具，非运行时依赖）。
 
-Linux：
+### 4.1 Linux 构建命令
 
 ```sh
 cmake -S tools/dependencies -B build-deps -DCMAKE_BUILD_TYPE=Release
 cmake --build build-deps --parallel 2
 ```
 
-Windows 在 Visual Studio x64 Developer Command Prompt 中运行。默认优化构建需要安装 NASM 并加入 PATH；也可以显式选择不使用汇编的可移植构建：
+### 4.2 Windows（MSVC x64）构建命令
+
+打开 **x64 Native Tools Command Prompt for VS 2022** 执行（若未安装 NASM，可附加 `-DHX_DEPS_OPENSSL_ASM=OFF` 使用可移植 C 实现构建）：
 
 ```bat
 cmake -S tools/dependencies -B build-deps -G "Visual Studio 17 2022" -A x64 -DHX_DEPS_OPENSSL_ASM=OFF
 cmake --build build-deps --config Release --parallel 2
 ```
 
-默认安装位置为 `build-deps/prefix`，可通过 `CMAKE_INSTALL_PREFIX` 指定。构建器在独立目录编译，默认使用 Release 配置：OpenSSL 默认动态链接，压缩依赖静态链接并启用位置无关代码。传入 `HX_DEPS_OPENSSL_SHARED=OFF` 可构建静态 OpenSSL，主库同时选择 `HX_OS_OPENSSL_STATIC=ON`；外部线程需遵守[线程清理约定](CRYPTO.zh-CN.md#5-线程内存与插件卸载)。不构建 OpenSSL 测试套件、旧 provider／engine、归档命令行工具和未选择的压缩后端。`HX_DEPS_JOBS` 限制每个子构建的并行量，外层 `--parallel` 限制同时构建的依赖数量。
+### 4.3 依赖 SDK 输出与配置说明
 
-MSVC Debug 消费者应为压缩 SDK 指定 `-DHX_DEPS_CONFIGURATION=Debug`。Debug 与 Release SDK 使用不同 prefix，避免混用 `/MDd` 与 `/MD` 静态库；OpenSSL 动态运行库保持独立构建。
+- **默认输出路径**：安装在 `build-deps/prefix`（可通过 `-DCMAKE_INSTALL_PREFIX=...` 自定义）。随后构建主工程时，通过 `-DCMAKE_PREFIX_PATH=/absolute/path/to/build-deps/prefix` 或 `-DHX_OS_DEPENDENCY_PREFIX=...` 传入该路径即可。
+- **动态与静态组合**：默认情况下，OpenSSL、libcurl、utf8proc 编译为动态库（DLL / `.so`），zlib、liblzma、zstd、libarchive 编译为启用位置无关代码（PIC）的静态库。
+- **静态链接 OpenSSL**：如需静态 OpenSSL，请在构建依赖时传入 `-DHX_DEPS_OPENSSL_SHARED=OFF`，并在主工程传入 `-DHX_OS_OPENSSL_STATIC=ON`（外部自建线程需遵守 [OpenSSL 线程清理约定](CRYPTO.zh-CN.md#5-线程内存与插件卸载)）。
+- **MSVC Debug 工程注意**：如果你的业务工程使用 MSVC `Debug`（`/MDd`），请使用独立的构建目录并传入 `-DHX_DEPS_CONFIGURATION=Debug` 生成 Debug 版 SDK prefix，切勿将 `/MDd` 与 `/MD` 静态库混用。
+- **并行度控制**：外层 `--parallel` 控制同时编译几个依赖库，`-DHX_DEPS_JOBS=N` 控制单个子库内部的编译并发数。
 
-Windows libarchive 配置以 WIN7 为目标，并显式链接选定依赖。交叉构建会把编译器、sysroot、工具链和 Android ABI/API 传给各依赖。Android SDK 需要 POSIX 宿主／WSL、Linux NDK、make 和 Perl；直接使用 Windows 宿主会明确拒绝。旧系统及实体设备的兼容要求见[平台支持](PLATFORMS.zh-CN.md)。
+---
 
-SDK 保留已弃用的 ENGINE ABI 入口，因为其他 OpenSSL 3 消费者可能引用它们；动态加载的 engine 模块仍不构建。同一进程不要混用不兼容的 OpenSSL 构建。
+## 5. 验证编译好的原生依赖 SDK
 
-## 5. 验证实际压缩和密码能力
-
-构建完之后，使用绝对 prefix 路径执行检查：
+依赖构建完成后，可运行内置的自检工程验证全部归档格式与加密算法是否正常工作（请使用 `prefix` 的绝对路径）：
 
 ```sh
 cmake -S tools/dependencies/check -B build-deps-check \
@@ -106,15 +125,21 @@ cmake --build build-deps-check --config Release
 ctest --test-dir build-deps-check -C Release --output-on-failure
 ```
 
-检查程序在内存中写入并读回 ZIP、AES-256 密码 ZIP、普通 7z、TAR、TAR.GZ、TAR.XZ、TAR.Zstd，核对二进制内容、加密标志，并验证 ZIP 错误密码会失败。启用过滤器必须直接成功，不能退回外部命令行工具。这些依赖探针不能代替[压缩教程](ARCHIVE.zh-CN.md)中的公共 API、文件系统与失败路径测试。
+该检查程序会在内存中实际执行 ZIP、AES-256 加密 ZIP、普通 7z、TAR、TAR.GZ、TAR.XZ 与 TAR.Zstd 的打包与解包，核对二进制载荷并确认错误密码会被正确拒绝。
 
-默认组合为 libarchive、OpenSSL、zlib、liblzma、zstd。独立可选的 7-Zip 动态后端提供密码和文件名加密，见[构建与部署](ARCHIVE.zh-CN.md#4-7z-的密码与文件名加密)。适配模块同样使用所选依赖来源和固定的 `deps/7zip` 头文件；原生运行库通过 `tools/sevenzip` 单独构建，不属于默认 SDK，也不会隐式复制到核心安装目录。分发时保留实际组件的完整许可证材料。
+> [!NOTE]
+> 如需支持 **7z 密码加密与文件名加密**，可按 [压缩教程第 4 节](ARCHIVE.zh-CN.md#4-7z-的密码与文件名加密) 通过独立的 `tools/sevenzip` 工程构建可选的 `7-Zip` 动态后端。
 
-## 6. Linux ARM 与 Android 交叉构建
+---
 
-以下在 Linux／WSL shell 执行，使用绝对路径，每种目标和 API 单独保留 SDK。请替换成实际板卡 SDK 的编译器及 sysroot。
+## 6. 嵌入式 Linux ARM 与 Android 交叉编译
+
+交叉编译应在 Linux 或 WSL 环境下执行，并为每个目标架构/API 单独维护一套依赖 SDK prefix。
+
+### 6.1 嵌入式 Linux（AArch64 / ARMv7）
 
 ```sh
+# 1. 交叉编译 AArch64 依赖 SDK
 cmake -S tools/dependencies -B build-deps-aarch64 -G Ninja \
   -DCMAKE_TOOLCHAIN_FILE="$PWD/cmake/toolchains/embedded-linux.cmake" \
   -DHX_OS_TARGET_PROCESSOR=aarch64 \
@@ -122,6 +147,7 @@ cmake -S tools/dependencies -B build-deps-aarch64 -G Ninja \
   -DHX_DEPS_OPENSSL_TARGET=linux-aarch64
 cmake --build build-deps-aarch64 --parallel 2
 
+# 2. 交叉编译主工程
 cmake -S . -B build-arm64 -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_TOOLCHAIN_FILE="$PWD/cmake/toolchains/embedded-linux.cmake" \
   -DHX_OS_TARGET_PROCESSOR=aarch64 \
@@ -131,7 +157,11 @@ cmake -S . -B build-arm64 -G Ninja -DCMAKE_BUILD_TYPE=Release \
 cmake --build build-arm64 --parallel 4
 ```
 
-本机 ARMv7 hard-float GNU 工具链对应参数为 `armv7`、`arm-linux-gnueabihf-`、OpenSSL `linux-armv4`、`qemu-arm;-L;/usr/arm-linux-gnueabihf`。浮点 ABI 由工具链确定，不由 OpenSSL 目标名推断。QEMU 系统调用转换的限制与库缺陷分别记录，运行这些命令不能替代板卡验收。
+若目标为 32 位 **ARMv7 hard-float**，只需将对应参数替换为 `armv7`、`arm-linux-gnueabihf-`、OpenSSL 目标 `linux-armv4` 以及 `qemu-arm;-L;/usr/arm-linux-gnueabihf`。
+
+### 6.2 Android NDK（`arm64-v8a` / `armeabi-v7a`）
+
+构建 Android 依赖 SDK 需要 Linux / WSL 宿主环境、Linux 版 Android NDK、`make` 与 `Perl`（编译生成的 SDK 包可重定位，之后也可直接在 Windows 下配合相同 ABI/API 的 Windows NDK 消费）：
 
 ```sh
 hx_android_toolchain="$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake"
@@ -143,33 +173,32 @@ cmake -S tools/dependencies -B build-deps-android-arm64 -G Ninja \
 cmake --build build-deps-android-arm64 --parallel 2
 ```
 
-Android ARMv7 改为 `armeabi-v7a`／`android-arm`；x86_64 原生模拟器改为 `x86_64`／`android-x86_64`。这里 `ANDROID_NDK_ROOT` 指向**构建宿主的 Linux NDK**。准备好的 SDK 也能由 Windows NDK 消费，但必须是相同 ABI/API；CMake 包支持重定位。把 prefix 传给 [Android 脚本](ANDROID.zh-CN.md)，它同时部署核心、实际选择的 `libssl` 和 `libcrypto`。
+- 32 位 ARMv7 使用 `-DANDROID_ABI=armeabi-v7a` 与 `-DHX_DEPS_OPENSSL_TARGET=android-arm`；x86_64 模拟器使用 `x86_64` 与 `android-x86_64`。
+- **Android OpenSSL SONAME 隔离**：为了避免与 Android 系统内置的同名 BoringSSL 冲突，本项目通过 `openssl-android.conf` 的 `shlib_variant` 将运行库 SONAME 设置为 `libssl-hx.so` 和 `libcrypto-hx.so`，详见 [Android 构建指南](ANDROID.zh-CN.md)。
 
-自有 `openssl-android.conf` 配置使用 OpenSSL 官方支持的 `shlib_variant`。Android 运行库 SONAME 为 `libssl-hx.so`、`libcrypto-hx.so`，避开系统 BoringSSL 和模拟器转译启动器的同名依赖；SDK 仍保留常规链接别名。部署时读取生成的运行库清单，不猜测桌面平台的文件名；脚本部署实际 SONAME 文件，排除与系统 BoringSSL 冲突的链接别名，不修改 OpenSSL 源码。同一 ABI 下，较低最低 API 构建的 SDK 也可供较高最低 API 的应用使用，反过来则不允许。
+---
 
-独立 `tools/sevenzip` 在 POSIX 宿主接受相同工具链、ABI、sysroot 参数，不需要 `HX_DEPS_OPENSSL_TARGET`。Android 构建在该运行库内静态包含 C++ 运行时，线程符号从 Bionic libc 取得。将对应产物 `runtime/7z.so` 传给 `HX_OS_TEST_7ZIP_LIBRARY` 或 Android 的 `--sevenzip-library`。它仍是可选后端，不混入默认压缩 SDK。
+## 7. 导出的原生 SDK CMake 目标
 
-## 7. 新 SDK 的部署细节
+当主工程启用对应模块并安装后，除了导出 `hx_c_platform::hx_c_platform` 与 `hx_c_platform::cpp` 外，还会自动导出以下底层原生目标供业务直接调用（详见 [底层依赖调用](NATIVE_DEPENDENCIES.zh-CN.md)）：
 
-Curl 固定到 `curl-8_22_0` 标签，该提交原始头文件报告 `8.22.0-DEV`，保留上游版本文字。构建使用 OpenSSL，关闭命令行工具、线程 DNS、libpsl、SSH、IDN2、GSSAPI 和隐式内容压缩。默认使用系统 DNS，HTTP 截止时间不能打断其阻塞调用；可取消 SDK 配置见第 8 节。URL 的 IDNA 能力也服从所选后端，不暗中增加依赖。Utf8proc 固定为 2.12.0，两个组件的头文件和许可证都随 SDK 安装。
+- 单项原生目标：`hx_c_platform::sqlite`、`hx_c_platform::openssl`、`hx_c_platform::curl`、`hx_c_platform::utf8proc`、`hx_c_platform::archive`、`hx_c_platform::zlib`、`hx_c_platform::lzma`、`hx_c_platform::zstd`、`hx_c_platform::cares`。
+- 汇总目标：`hx_c_platform::native`（一次性链接核心库与所有已启用的底层原生 SDK）。
 
-启用时提供 `hx_c_platform::sqlite`、`::openssl`、`::curl`、`::utf8proc`、`::archive`、`::zlib`、`::lzma`、`::zstd`；`hx_c_platform::native` 汇总核心及已启用的底层目标。消费者可直接调用原生 SDK，同时使用便利接口。安装包从自己的前缀解析匹配依赖并导出原始头文件；Windows 运行时 DLL 放在 `bin`，Unix 保留共享库名称链和相对库目录的查找路径。同一进程不要混用不兼容的 SDK 版本。
+---
 
-## 8. 可选的可取消 DNS
+## 8. 可选的可取消 DNS（`c-ares`）配置
 
-启用网络时，`HX_OS_ENABLE_CARES` 默认开启。未修改的 c-ares 1.34.8 源码随工程直接构建为 PIC 静态库，不需要额外 DNS DLL。初始化 `deps/c-ares`，或按上文选择 FetchContent。固定提交为 `c7a3138dcfe3bb0eaaf10c0c24c36dc66dc790ab`。设置 `-DHX_OS_ENABLE_CARES=OFF` 可保留系统 DNS 并移除这个后端；显式 resolver 入口此时返回 `NOT_SUPPORTED`。
+本库包含两个彼此独立的 `c-ares` 开关：
 
-安装包含 c-ares 头文件、静态库、CMake 包及 MIT 许可证。直接调用原生 API 时链接 `hx_c_platform::cares`。适配层持有 c-ares 全局初始化的使用权；同时使用原生 API 的应用需要协调全局清理，不能在适配层 resolver 存活时清理 c-ares。该后端用于显式 resolver／TCP 拨号／TLS、loop 解析及协程解析。它不会改变单独构建的 libcurl DNS 后端。
+1. **核心网络模块（`HX_OS_ENABLE_CARES`，默认 `ON`）**：
+   直接将 `deps/c-ares`（1.34.8）编译为 PIC 静态库链入核心库，无需额外 DLL，用于显式 DNS Resolver、TCP 拨号、TLS、事件循环 DNS 与协程 DNS。传入 `-DHX_OS_ENABLE_CARES=OFF` 则回退为仅使用系统 DNS，显式 Resolver 接口返回 `HX_OS_NOT_SUPPORTED`。
+2. **`libcurl` HTTP SDK（`HX_DEPS_CURL_CARES`，默认 `OFF`）**：
+   默认构建的 `libcurl` 使用系统原生 DNS（HTTP 超时截止时间无法强行打断阻塞中的系统 DNS 解析）。如果你的 HTTP/HTTPS 请求在 DNS 无响应时也必须支持按截止时间立即取消，可在已有 `build-deps` 目录中开启 `HX_DEPS_CURL_CARES=ON` 并重新编译 `curl`：
 
-HTTP SDK 单独使用 `HX_DEPS_CURL_CARES` 开关，默认 **OFF**，保留系统 DNS。需要可取消 HTTP／HTTPS 时，在原有 SDK 目录启用它，再构建 curl 目标：
+   ```sh
+   cmake -S tools/dependencies -B build-deps -DHX_DEPS_CURL_CARES=ON
+   cmake --build build-deps --config Release --target hx_dep_build_curl
+   ```
 
-```sh
-cmake -S tools/dependencies -B build-deps -DHX_DEPS_CURL_CARES=ON
-cmake --build build-deps --config Release --target hx_dep_build_curl
-```
-
-把 `build-deps` 替换成已有的 SDK 构建目录；Windows 在原来的 VS 开发者终端运行，配置必须与消费者 CRT 一致。重新构建本库和示例，使它们使用更新后的 SDK／运行库。这个配置复用 `deps/c-ares` 的固定版本，把 c-ares 静态链接到 libcurl 动态库，不增加 DNS DLL；分发时包含安装的 `cares-LICENSE.md`。第三方源码不修改。默认 submodule／可选 FetchContent 仍由 `HX_OS_DEPENDENCY_PROVIDER` 控制。
-
-`HX_OS_ENABLE_CARES` 控制本库 resolver；`HX_DEPS_CURL_CARES` 控制 libcurl SDK，两个开关彼此独立。HTTP 客户端显式调用 `hx_os_http_use_cancellable_dns`，协程服务调用 `hx_os_coro_http_use_cancellable_dns`，以确认实际加载的 SDK 支持该能力，避免仅凭头文件或构建目录名称判断。普通 SDK 返回 `NOT_SUPPORTED`，不会静默退回阻塞解析。旧的 HTTP 调用方式在两种 SDK 中都可使用，但启用 c-ares 的 SDK 按 c-ares 的规则解析；要保留系统解析规则，应选择默认 SDK，不能靠省略启用调用来切换同一个 libcurl 的编译后端。
-
-改回 `-DHX_DEPS_CURL_CARES=OFF` 并重新构建、部署 curl 即恢复系统 DNS 配置。跨编译沿用原有工具链参数；仅构建成功不代表 Android、ARM 或企业 VPN 环境已经运行验收。
+   该选项会将 `c-ares` 静态编入 `libcurl` 动态库中（不产生额外 DLL）。随后重新编译主库，并在代码中调用 `hx_os_http_use_cancellable_dns()`（或协程端 `hx_os_coro_http_use_cancellable_dns()`）即可显式校验并启用可取消 HTTP DNS（若当前加载的是普通系统 DNS 版 `libcurl`，该调用会明确返回 `HX_OS_NOT_SUPPORTED`）。

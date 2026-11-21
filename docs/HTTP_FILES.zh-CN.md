@@ -2,27 +2,32 @@
 
 [English](HTTP_FILES.md) · [JSON HTTP 请求](UTILITY_EXTENSIONS.zh-CN.md) · [协程教程](COROUTINES.zh-CN.md)
 
+在下载大体积固件包、图片资产或导出数据报表时，如果把整个 HTTP 响应体先全部读进内存再写盘，很容易在嵌入式或桌面端造成内存峰值暴涨；而且一旦网络中途断开，直接覆盖目标路径还会留下损坏的半截文件。`hx_c_platform` 的 HTTP 文件与流式接口通过**同目录随机临时文件分块落盘 + 校验 HTTP 2xx 后原子发布**，让你无需把大文件塞进内存即可安全完成下载、上传与自定义流式分块处理。
+
 ## 1. 下载文件，不必先把全部内容放入内存
 
-下载固件、图片或导出文件时，可以使用 `hx_os_http_download_file`。它在目标所在目录创建随机临时文件，分块写入，收到成功的 HTTP 2xx 响应并关闭文件后再发布到目标路径。默认保留已有目标文件，只有明确传入 `replace=1` 才替换。
+使用 `hx_os_http_download_file()` 下载文件时，库会先在目标文件所在的目录下创建一个随机命名的临时文件，边接收数据块边写入磁盘；只有当收到成功的 **HTTP 2xx** 响应并正常关闭临时文件后，才会将其正式发布（重命名/链接）到目标路径。默认情况下（`replace = 0`），如果目标文件已存在，函数会拒绝覆盖并保留原文件；只有显式传入 `replace = 1` 时才会替换已有文件。
 
-编译完整的 [http_file.c](../examples/http_file.c) 示例：
+在已有构建目录中编译完整的 [http_file.c](../examples/http_file.c) 示例：
 
 ```sh
 cmake --build build --config Release --target hx_os_http_file
 ```
 
-本机演示可以先在一个目录放入内容为 `hello` 的 `hello.txt`，在该目录运行 `python -m http.server 8080 --bind 127.0.0.1`。Python 只是可选的演示服务端，不是 C 库的运行依赖。然后在另一个终端切换到另一个可写目录，运行：
+为了在本机快速验证，你可以新建一个包含文本 `hello` 的 `hello.txt` 文件，并在该目录下启动一个临时 HTTP 服务（例如执行 `python -m http.server 8080 --bind 127.0.0.1`；注意 Python 仅作为本机演示用的临时文件服务器，并非 C 库的运行依赖）。随后在另一个终端切换到另一个可写目录，执行下载命令：
 
 ```sh
-# Linux；切换目录后，请使用示例程序的实际绝对路径。
+# Linux；切换工作目录后，请使用编译出的示例程序实际路径
 /path/to/build/bin/hx_os_http_file download \
   http://127.0.0.1:8080/hello.txt downloaded.txt
 ```
 
-Windows 使用 `build/bin/Release/hx_os_http_file.exe`。成功时输出 `HTTP 200: download downloaded.txt`，新文件内容为 `hello`。再次指定同一目标运行，会报告 `exists` 并保留已有文件。HTTPS 可以通过最后一个可选参数指定 CA 文件。
+（Windows 下使用 `build/bin/Release/hx_os_http_file.exe`。）
+- **首次运行**：输出 `HTTP 200: download downloaded.txt`，生成的 `downloaded.txt` 内容为 `hello`。
+- **再次对同一路径运行**：报告 `exists` 错误并完好保留已有的 `downloaded.txt`。
+- **HTTPS 支持**：访问 HTTPS 地址时，可通过命令行最后一个可选参数传入自定义 CA 证书路径。
 
-创建好可复用的 `hx_os_http *http` 后，C 语言下载动作就是：
+在 C 代码中，创建好可复用的 `hx_os_http *http` 客户端后，下载文件的典型调用如下：
 
 ```c
 hx_os_http_response response = HX_OS_HTTP_RESPONSE_INIT;
@@ -35,37 +40,47 @@ if (status == HX_OS_OK)
 hx_os_http_response_destroy(&response);
 ```
 
-默认流式内容上限为 1 GiB，沿用普通 HTTP 的五秒等待预算。按需要调整 `hx_os_http_stream_options.request.timeout_ms` 和 `max_download_bytes`；完整示例使用 30 秒。接口不隐含磁盘同步或断点续传保证。如果目标文件系统无法提供要求的“不覆盖发布”，返回 `NOT_SUPPORTED`；WSL 的 Windows 盘挂载可能出现这种情况，不能用“先判断存在、再重命名”这种有竞态的方式冒充同一保证。
+### 超时、文件系统限制与失败清理契约
 
-失败时会尝试删除临时文件。如果清理本身失败，HTTP 客户端继续持有资源：通过 `hx_os_http_pending_file(http)` 查看路径，再重试 `hx_os_http_close(&http, &error)`。关闭失败保留客户端，不能丢掉最后一个 owner；清理未完成时新请求返回 `BUSY`。收到的 HTTP 错误响应可供检查，但不会把错误页面发布成要求的文件。
+- **默认限额与超时**：流式下载默认允许最大 `1 GiB` 的响应体，并沿用普通 HTTP 请求默认 5 秒的总超时预算。实际工程中可通过 `hx_os_http_stream_options.request.timeout_ms` 和 `max_download_bytes` 按需调整（例如完整示例设为 30 秒）。注意该接口不隐含 `fsync` 落盘同步或断点续传保证。
+- **不覆盖发布的原子性边界**：如果目标文件系统不支持原子性的“不覆盖发布”原语（例如在 WSL 中直接挂载访问某些 Windows 盘符路径时可能遇到限制），函数会明确返回 `HX_OS_NOT_SUPPORTED`，绝不会退化为有竞态漏洞的“先 `stat` 检查不存在、再 `rename` 覆盖”。
+- **临时文件清理与重试**：当下载失败或收到非 2xx 错误响应（如 HTTP 404/500）时，库绝不会把错误页面发布成目标文件，而是自动尝试删除临时文件。如果删除临时文件本身因系统占用而失败，HTTP 客户端会继续持有该待清理路径：此时后续新请求会返回 `HX_OS_BUSY`，你可以通过 `hx_os_http_pending_file(http)` 查看残留路径，并再次调用 `hx_os_http_close(&http, &error)` 重试清理（关闭失败时请保留 `http` 句柄，切勿直接丢弃指针）。
 
 ## 2. 上传文件与自行处理数据块
 
-`hx_os_http_upload_file` 分块读取普通文件，使用文件的已知长度。调用期间不要修改文件。示例的 `upload` 模式使用 HTTP PUT：
+- **分块上传普通文件（`hx_os_http_upload_file`）**：
+  - 按固定分块大小读取本地普通文件并带上已知的文件总长度发送（在调用期间请勿从外部修改该文件）。示例程序的 `upload` 模式使用 HTTP `PUT` 方法：
 
 ```sh
 build/bin/hx_os_http_file upload http://your-server/upload firmware.bin
 ```
 
-该 URL 必须实现 PUT；上面的 Python 简单文件服务器不支持上传。普通上传会正常返回已完成的 HTTP 4xx／5xx 响应，所以还要检查 `response.status_code`。上传不跟随重定向，也不默默倒回并重发请求内容。
-
-需要自定义存储或边接收边处理时，使用 `hx_os_http_request_stream`。提供 `write(user, data, bytes, error)` 消费每个完整的借用数据块，或提供 `read(user, buffer, capacity, completed, error)` 并指定 `upload_bytes`。声明的长度尚未读完就返回零字节，会报告 `TRUNCATED_INPUT`。已经执行的回调效果不能回滚。不提供 write 回调时，仍按原有内存上限收集响应。
-
-回调在调用线程同步执行，不能重入同一客户端，也不能保存块指针供以后使用。进度回调可返回错误来请求停止。一起设置 `low_speed_bytes_per_second` 和 `low_speed_seconds` 可以启用 libcurl 的低速超时。可选 metrics 返回实际收发数量，以及从传输开始累计的 DNS、连接、TLS、首字节和总耗时，单位为毫秒。取消请求不证明远端上传操作已经撤销。
+  - 注意：第 1 节中的 Python `http.server` 不支持 `PUT` 上传，测试上传时请指向支持 `PUT` 的服务端地址。只要 HTTP 传输完整结束，即便服务端返回 HTTP 4xx / 5xx 状态码，函数也会正常返回 `HX_OS_OK` 并填充 `response.status_code` 供你检查。为保证安全，文件上传**不会自动跟随 HTTP 重定向，也不会暗中倒回文件游标重发请求体**。
+- **自定义流式读写回调（`hx_os_http_request_stream`）**：
+  - 如果你想边接收数据块边做流式哈希/解压，或者从内存生成器流式上传数据，请使用 `hx_os_http_request_stream()`：
+    - 提供 `write(user, data, bytes, error)` 回调：逐块消费借用的响应数据（不提供 `write` 回调时，响应体仍按常规内存上限收集到 `response` 中）。
+    - 提供 `read(user, buffer, capacity, completed, error)` 回调并指定总长度 `upload_bytes`：逐块提供上传数据。如果在达到声明的 `upload_bytes` 之前 `read` 回调就提前返回 `0` 字节，函数会立即中止并返回 `HX_OS_TRUNCATED_INPUT`。
+  - **回调执行约束**：所有读写与进度回调均在当前调用线程上同步执行；回调内部**不得重入同一个 `hx_os_http` 客户端，也不得将借用的数据块指针保存下来延后使用**。进度回调可通过返回非零错误码主动请求中止传输。
+  - **低速保护与耗时指标（Metrics）**：同时设置 `low_speed_bytes_per_second` 与 `low_speed_seconds` 可开启 `libcurl` 的低速防卡死超时；传入可选的 `metrics` 结构体指针还能获取实际收发字节数以及累计的 DNS、TCP 建连、TLS 握手、首字节（TTFB）与总耗时（毫秒）。
 
 ## 3. C++11 和协程调用
 
-包含 `<hx/Http.hpp>`。`hx::Http::create()` 返回 `Result<Http>`；复用客户端，调用 `downloadFile(url, path)` 或 `uploadFile(url, path)`，检查结果和 HTTP 状态即可。`pendingFile()` 和显式 `close()` 保留同样的失败清理契约，不使用异常。
+在 C++11 中，包含 `<hx/Http.hpp>` 并调用 `hx::Http::create()` 即可获得 `hx::Result<hx::Http>`（零异常设计）。复用该客户端实例直接调用 `downloadFile(url, path)` 或 `uploadFile(url, path)`，随后检查返回状态与 HTTP 状态码即可；`pendingFile()` 与显式 `close()` 遵循与 C 接口完全相同的清理契约。
 
-协程场景先显式创建一个 `hx_os_coro_http`。默认使用两个独立的 I/O 线程、最多十六个已接纳请求，以及 64 MiB 的输入／响应容量预留；这些上限可以调整，不会为每个请求新建线程。`hx_os_coro_http_request` 在挂起前复制请求；常用 GET 有直接入口。C++ 有栈协程可以包含 `<hx/CoroutineNetwork.hpp>`，调用 `hx::coro::Http(service).get(url, response)`。
+### 在协程中发起非阻塞 HTTP 请求
 
-完成、超时或取消会唤醒协程，不占用协程工作线程。若原生 DNS 仍未退出，只保留任务自己持有的缓冲区。必须持有 I/O service，直到 `hx_os_coro_http_close_until` 成功；关闭超时可重试。使用协程取消，或把外部取消 token 绑定到协程；复制的 HTTP options 要求 `cancel=NULL`。从普通 owner 线程关闭 HTTP service，再关闭协程运行时。这一层继续采用有界 I/O 池。启用可取消 DNS 后，每个工作线程通过 libcurl multi 驱动一条传输，在有界等待之间检查取消；不是让全部请求共用一个调度线程，也不承诺无限并发传输。
+如果在协程（Coroutine）内部直接调用上面的同步 HTTP 函数，会阻塞底层的协程调度工作线程。因此在协程场景下，请先显式创建一个 **`hx_os_coro_http` 异步桥接服务**：
+- **有界线程池与预留预算**：`hx_os_coro_http` 默认启动 **2 个独立的后台 I/O 线程**、最多同时接纳 **16 个请求**，并限制 **64 MiB 的输入与响应总内存预留预算**（均可配置，绝不会为每个请求新建线程）。
+- **如何发起调用**：C 协程调用 `hx_os_coro_http_request()`（或常用的 `get` 快捷入口），它会在挂起当前协程前先拷贝请求参数；C++ 有栈协程可包含 `<hx/CoroutineNetwork.hpp>` 并调用 `hx::coro::Http(service).get(url, response)`。当请求完成、超时或被取消时，协程会自动恢复执行，挂起期间完全不占用协程工作线程。
 
-每个已接收请求按配置的最大响应大小预留预算，不是只计算当前已经收到的字节。因此字节预算可能先于请求条数用完：默认每份响应上限 16 MiB，加上输入和响应头开销后，64 MiB 的服务可同时接收三份请求。小型 JSON 响应可以把 `options.max_body_bytes` 设为合适的值，例如 64 KiB；也可以显式提高服务预算。容器扩容峰值及 curl／TLS 原生分配另计。
+> [!IMPORTANT]
+> **协程 HTTP 服务的内存预算核算与关闭顺序**
+> - **按最大响应上限预留预算**：为了严格防止多个并发大图/大文件响应同时到达时撑爆内存，每个被接纳的请求都会**按其配置的 `max_body_bytes` 上限预先扣除服务预算**，而不是只按当前已收到的字节数计账！由于单个请求的默认响应上限为 `16 MiB`（外加请求体与响应头开销），默认的 `64 MiB` 服务预算同时最多接纳 3 个默认上限的并发请求。如果你在协程里发送的是小型 JSON 请求，建议将 `options.max_body_bytes` 显式调小（例如设为 `64 KiB`），或者在创建服务时调大总预算。
+> - **取消与关闭**：在协程 HTTP 中请使用协程自身的取消机制（传入的 HTTP `options.cancel` 必须保持为 `NULL`）。退出时，先在普通所有者线程上调用 `hx_os_coro_http_close_until()` 关闭 HTTP 服务（若超时则保留句柄重试），成功后再关闭协程运行时。
 
 ## 4. 连 DNS 无响应也需要取消时
 
-默认 SDK 继续使用系统 DNS，以保留系统解析兼容性。需要可取消 DNS 时，先按[依赖教程](DEPENDENCIES.zh-CN.md#8-可选的可取消-dns)在 SDK 构建中显式设置 `HX_DEPS_CURL_CARES=ON`，再在客户端创建成功后启用：
+默认构建的依赖 SDK 使用操作系统原生 DNS 解析器，以便最大程度兼容系统解析规则，但系统同步 DNS 查询在遇到无响应 DNS 服务器时无法被中途取消。如果你要求**即使卡在 DNS 解析阶段也必须严格响应超时与取消令牌**，请先按[依赖构建指南](DEPENDENCIES.zh-CN.md#8-可选的可取消-dns)开启 `-DHX_DEPS_CURL_CARES=ON` 重新构建依赖 SDK，然后在创建好 HTTP 客户端后调用 `hx_os_http_use_cancellable_dns()`：
 
 ```c
 hx_os_status status = hx_os_http_use_cancellable_dns(http, NULL, &error);
@@ -74,17 +89,14 @@ if (status == HX_OS_OK)
 		0, NULL, &response, &error);
 ```
 
-`NULL` 采用 c-ares 读取到的平台 DNS 配置；需要自己的服务器时可传 `"127.0.0.1:5353"` 等数字地址列表。库复制配置，只影响这个客户端。SDK 没有 c-ares 时，启用立即返回 `NOT_SUPPORTED`，不要忽略它再把请求当作可取消。重新配置成功会清空这个客户端的连接／DNS 缓存。
+- **参数与生效范围**：第二个参数传 `NULL` 表示使用 `c-ares` 自动读取的本机平台 DNS 配置；你也可以传入 `"127.0.0.1:5353"` 这样的数字 DNS 服务器列表（配置会被拷贝并仅作用于当前 `http` 客户端，成功后会自动清空该客户端既有的连接与 DNS 缓存）。如果当前链接的 `libcurl` 未编译 `c-ares` 支持，该函数会立即返回 `HX_OS_NOT_SUPPORTED`。
+- **协程 HTTP 服务开启方式**：对于协程 HTTP 服务，请在 `hx_os_coro_http` 创建成功后、提交任何请求前调用一次 `hx_os_coro_http_use_cancellable_dns(service, NULL, &error)`（若已有在途任务则返回 `HX_OS_BUSY`）。C++11 中对应普通客户端与 `hx::coro::Http` 的 `.useCancellableDns()` 方法。
 
-配置适用于普通请求、JSON、流式上传／下载和重定向，HTTPS 证书、主机名校验及代理仍交给 libcurl。它不会修改系统 DNS，也不能替代企业 VPN 的全部解析规则。网络等待中最多每隔 50 ms 检查取消和截止时间，实际响应受调度影响；配置文件读取、文件 I/O 和业务回调仍可能阻塞，因此不是硬实时保证。远端代理自己解析的名称，不受本地 DNS 配置控制。
-
-协程 HTTP 服务创建成功后，在提交任务前调用 `hx_os_coro_http_use_cancellable_dns(service, NULL, &error)`。之后的所有请求沿用该配置；不要与提交、关闭或其他配置调用并发。已有任务时返回 `BUSY`。取消会让底层 DNS 查询停止等待，服务关闭仍沿用有截止时间、超时可重试的规则。C++ 对应普通客户端和 `hx::coro::Http` 的 `.useCancellableDns()`。
-
-已有示例无需额外目标：
+你可以直接复用前面编译好的示例程序，在末尾加上 `--cancellable-dns` 标志进行验证（请先启动第 1 节中的本地 8080 端口服务）：
 
 ```sh
 ./build/bin/hx_os_http_file download http://127.0.0.1:8080/hello.txt downloaded.txt --cancellable-dns
 ./build/bin/hx_os_coroutine_http http://127.0.0.1:8080/hello.txt --cancellable-dns
 ```
 
-先启动第 1 节的本地服务。文件示例输出 `HTTP 200` 并保存文件，协程示例输出 `HTTP 200` 及 `hello`。普通 SDK 加这个标志会报告 `not supported`；去掉标志保留原来的用法。数字地址演示验证接口接入，实际 DNS 取消需要使用域名及无响应 DNS 服务器验证。
+如果链接的是未启用 `c-ares` 的默认 SDK，加上 `--cancellable-dns` 会如实打印 `not supported`；去掉该标志即可按默认系统 DNS 运行。

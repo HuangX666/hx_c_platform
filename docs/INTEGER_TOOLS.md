@@ -2,19 +2,25 @@
 
 [简体中文](INTEGER_TOOLS.zh-CN.md) · [README](../README.md)
 
-**Start with a complete program.** Use Varint/ZigZag for compact protocol integers and UUID v7 when a record ID should carry a timestamp.
+When a binary protocol or storage format needs compact variable-length integers (unsigned Varints and signed ZigZag encoding), or when database and log records need timestamp-prefixed unique identifiers (UUID v7) alongside strict UUID parsing and formatting, use `<hx_os_varint.h>` and `<hx_os_random.h>` (both included by `<hx_os.h>`).
 
-Open [integer_tools.c](../examples/integer_tools.c). varint_encode 300 → decode → zigzag_encode -1 → uuid_v7_generate_string → destroy the string.
+To see a complete working example, inspect [integer_tools.c](../examples/integer_tools.c): the program encodes `300` into 2 bytes with `hx_os_varint_encode`, decodes it back with `hx_os_varint_decode`, maps `-1` to unsigned `1` via `hx_os_zigzag_encode`, and generates a textual UUID v7 with `hx_os_uuid_v7_generate_string`.
 
-Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_integer_tools`. This program needs no arguments or input files.
+Follow the [example run instructions](../examples/README.md#run) to configure with `-DHX_OS_BUILD_EXAMPLES=ON` and build `hx_os_integer_tools` (no arguments or input files are required). The first two lines of output are deterministic, while the final UUID v7 line changes on every run:
 
-**Expected result:** The first lines are `300 uses 2 bytes; decoded: 300` and `ZigZag -1: 1`; the UUID varies. Respect the consumed-byte count when decoding multiple fields.
+```text
+300 uses 2 bytes; decoded: 300
+ZigZag -1: 1
+018f... (UUID v7)
+```
 
-Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+You can also use the example source as `main.c` in the [minimal project](USAGE.md#c-project).
 
 ## 1. Compact integers
 
-Include `hx_os.h` or `hx_os_varint.h`. Buffer operations need no initialization or optional dependency. Varints store unsigned 64-bit values in 1–10 bytes, using the shortest base-128 representation. `300` encodes as `ac 02`. ZigZag maps signed values to unsigned values: `0 → 0`, `-1 → 1`, `1 → 2`, and `-2 → 3`. This is an integer encoding utility, not a complete Protocol Buffers implementation.
+Include `<hx_os_varint.h>` (or `<hx_os.h>`) to encode and decode integers in memory buffers without global initialization or external dependencies:
+- **Unsigned Varints**: Store `uint64_t` values in `1..10` bytes using the shortest canonical base-128 representation (`300` encodes as the 2-byte sequence `0xac 0x02`).
+- **Signed ZigZag mapping**: Because negative two's-complement numbers have leading `1` bits that would always expand to a full 10-byte unsigned Varint, `hx_os_zigzag_encode` and `hx_os_zigzag_decode` map signed integers of small magnitude to small unsigned integers (`0 → 0`, `-1 → 1`, `1 → 2`, `-2 → 3`) before Varint encoding.
 
 ```c
 unsigned char data[10];
@@ -27,9 +33,12 @@ if (status == HX_OS_OK)
 	status = hx_os_varint_decode(data, written, &value, &consumed, NULL);
 ```
 
-Check `status` before using `value`. Encoding reports the required size on `OUTPUT_FULL` without modifying the buffer. Decoding leaves the value unchanged and sets consumed to zero on failure. Truncated input is `TRUNCATED_INPUT`, overflow is `RANGE`, and a nonminimal representation is `SYNTAX`. Bytes after a complete integer are left unread. Output fields must not overlap byte spans or each other.
+> [!IMPORTANT]
+> **Buffer encoding and decoding contracts:**
+> - **Encoding (`hx_os_varint_encode`)**: If the destination buffer is too small, the call returns `HX_OS_OUTPUT_FULL`, writes the required byte count to `*written`, and leaves the destination buffer untouched.
+> - **Decoding (`hx_os_varint_decode`)**: On `HX_OS_OK`, `*consumed` reports the exact number of bytes read for this integer, leaving any subsequent bytes in the buffer unread for the next field. Incomplete input returns `HX_OS_TRUNCATED_INPUT`, values exceeding `UINT64_MAX` return `HX_OS_RANGE`, and non-minimal encodings (redundant trailing zero groups) return `HX_OS_SYNTAX`. On any failure, `*value` is unchanged and `*consumed` is set to `0`. Output pointers must not overlap the byte buffer or each other.
 
-The existing stream also provides `hx_os_stream_read_varuint/write_varuint` and signed `read_varint/write_varint` using ZigZag. These require STREAM. Reads preserve the value on failure but can consume a partial field; EOF inside a field is truncated input. Writes report the actual byte prefix. Do not retry an entire field after partial I/O without repairing stream state.
+When `HX_OS_ENABLE_STREAM=ON`, `hx_os_stream` (and C++ `hx::Stream`) also provides `hx_os_stream_read_varuint` / `write_varuint` and ZigZag-encoded signed `hx_os_stream_read_varint` / `write_varint`:
 
 ```cpp
 auto stream = hx::Stream::memory();
@@ -44,11 +53,17 @@ if (!number)
 	return 1;
 ```
 
+If a stream Varint read encounters mid-field `EOF` or invalid bytes, the caller's output variable is preserved and `HX_OS_TRUNCATED_INPUT` (or `HX_OS_RANGE` / `HX_OS_SYNTAX`) is returned, but the stream position may have advanced past the bytes already read—reposition or recover the stream before retrying.
+
 ## 2. Parse or create a UUID
 
-`hx_os_uuid_parse` accepts exactly 36 bytes in the `8-4-4-4-12` form, with either hexadecimal case. It accepts all versions/variants and nil UUIDs; braces, prefixes and whitespace are rejected. Failure preserves the 16-byte output. `hx_os_uuid_format` writes canonical lowercase text to 37 bytes, including NUL.
-
-`hx_os_uuid_v7_generate_string(&id, &error)` generates directly into an initialized `hx_string`. For binary IDs use `hx_os_uuid_v7_generate`; `generate_at` accepts an explicit Unix timestamp in milliseconds for controlled clocks. `hx_os_uuid_v7_time` extracts that timestamp and rejects other versions or variants.
+- **Canonical parsing and formatting (`hx_os_uuid_parse` / `hx_os_uuid_format`)**:
+  - `hx_os_uuid_parse` accepts an exact 36-byte `8-4-4-4-12` hexadecimal string (uppercase or lowercase, any UUID version/variant, and the all-zero nil UUID) and rejects braces, `urn:uuid:` prefixes, or surrounding whitespace. Failed parses leave the caller's 16-byte output array unchanged.
+  - `hx_os_uuid_format` writes canonical lowercase 36-character text plus a trailing `NUL` into a 37-byte destination buffer.
+- **Generating timestamp-prefixed UUID v7**:
+  - `hx_os_uuid_v7_generate_string(&id, &error)` writes a newly generated UUID v7 string directly into an initialized `hx_string`.
+  - For 16-byte binary IDs, call `hx_os_uuid_v7_generate` (which samples the current Unix wall clock) or `hx_os_uuid_v7_generate_at` (which accepts an explicit 48-bit Unix millisecond timestamp for deterministic tests or custom clocks).
+  - `hx_os_uuid_v7_time` extracts the 48-bit Unix millisecond timestamp from a binary UUID v7 and rejects other UUID versions or variants.
 
 ```c
 hx_string id = HX_STRING_INIT;
@@ -60,8 +75,19 @@ if (status == HX_OS_OK)
 hx_string_destroy(&id);
 ```
 
-UUID v7 requires RANDOM and uses the existing OS cryptographic random source. Its timestamp is limited to 48 bits. The generator is stateless: values within a millisecond are not generation-ordered, wall clocks can move backwards, and uniqueness is probabilistic. It does not establish global business-event ordering. Existing UUID v4 behavior is unchanged. C++11 offers `hx::Random::uuidV7`, `parseUuid` and `uuidV7Time` with Result values.
+> [!NOTE]
+> UUID v7 generation requires `HX_OS_ENABLE_RANDOM=ON` and fills its random bits from the OS cryptographic random source. Because the generator is stateless, multiple IDs generated within the same millisecond are not monotonically ordered, and wall clocks can step backward; do not treat UUID v7 alone as a strict global sequence number across machines. Existing UUID v4 APIs remain unchanged. In C++11, `<hx/Random.hpp>` provides `hx::Random::uuidV7()`, `parseUuid()`, and `uuidV7Time()` returning `hx::Result`.
 
 ## 3. Run the example
 
-In an existing build directory configured with `HX_OS_BUILD_EXAMPLES=ON`, build `--target hx_os_integer_tools`, then run `bin/hx_os_integer_tools` (`bin/Debug/hx_os_integer_tools.exe` for a Debug Visual Studio build). The first two lines show `300 uses 2 bytes; decoded: 300` and `ZigZag -1: 1`; the final UUID varies each run. Source: [integer_tools.c](../examples/integer_tools.c).
+In an examples-enabled build directory (`-DHX_OS_BUILD_EXAMPLES=ON`), build and run `hx_os_integer_tools` ([integer_tools.c](../examples/integer_tools.c)):
+
+```sh
+cmake --build build --config Release --target hx_os_integer_tools
+# Linux / macOS:
+./build/bin/hx_os_integer_tools
+# Windows / Visual Studio:
+./build/bin/Release/hx_os_integer_tools.exe
+```
+
+The first two lines print `300 uses 2 bytes; decoded: 300` and `ZigZag -1: 1`, followed by a freshly generated UUID v7 string.

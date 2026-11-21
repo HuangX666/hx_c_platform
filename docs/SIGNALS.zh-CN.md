@@ -2,29 +2,41 @@
 
 [English](SIGNALS.md) · [README](../README.zh-CN.md)
 
-**先运行一个完整例子。** 一个模块完成动作，需要通知当前进程中多个订阅者时，使用信号。回调在 emit 调用线程同步执行。
+当你的模块完成某个动作（如配置加载完毕、数据已保存或状态发生变化），需要向当前进程内的一个或多个订阅者广播通知时，可以使用信号处理器（`hx_os_signal_handler`）。所有订阅回调均在调用 `emit` 的线程上**同步执行**，不引入隐藏的后台线程或全局事件总线。
 
-打开 [signal_observer.c](../examples/signal_observer.c)。create handler → connect_all 订阅所有名称 → calldata 写 items=42 → emit ready 和 saved → close_until。
+### 快速运行示例
 
-按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_signal_observer`。此例无命令行参数、无需输入文件。
+完整示例位于 [signal_observer.c](../examples/signal_observer.c)：创建一个信号处理器，调用 `hx_os_signal_connect_all()` 订阅所有信号名称，构造包含 `items = 42` 的参数包，依次发出 `ready` 和 `saved` 两个信号，最后通过 `hx_os_signal_handler_close_until()` 安全关闭处理器。
 
-**会得到什么：**输出 `ready: 42 items` 和 `saved: 42 items`。只关注某一种事件时改用具名订阅；允许修改参数的完整例子是 signal_mutable.c，会把 volume 从 80 改为 60。
+按[示例运行方法](../examples/README.zh-CN.md#run)启用示例后，构建并运行 `hx_os_signal_observer`（无需命令行参数或输入文件）：
 
-下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+```sh
+cmake --build build --config Release --target hx_os_signal_observer
+```
+
+预期输出：
+
+```text
+ready: 42 items
+saved: 42 items
+```
+
+如果你只需要关注某一种特定事件，可改用按名称订阅；如果你希望回调在通知过程中原地修改参数（例如将 `volume` 从 `80` 限幅到 `60`），请参看第 6 节的 [完整音量示例](../examples/signal_mutable.c)。你也可以按[最小工程配置](USAGE.zh-CN.md#c-project)直接把完整示例作为自己的 `main.c`。
 
 ## 1. 订阅一个名称，或订阅全部名称
 
-信号处理器属于你的某个组件，负责保存订阅，在组件发出信号时同步调用回调。它不会创建工作线程、消息队列或进程级全局事件总线。
+信号处理器隶属于你的业务组件实例：
 
-| 需求 | C | C++11 |
+| 常见需求 | C 接口 | C++11 接口 |
 | --- | --- | --- |
-| 接收一个指定名称 | `hx_os_signal_connect` | `SignalHandler::connect` |
-| 接收一个处理器的所有名称 | `hx_os_signal_connect_all` | `SignalHandler::connectAll` |
-| 发出通知 | `hx_os_signal_emit` | `SignalHandler::notify` |
-| 取消订阅，并等它的回调结束 | `hx_os_signal_disconnect_until` | `SignalHandler::disconnectUntil` |
-| 停止处理器，并等所有回调结束 | `hx_os_signal_handler_close_until` | `SignalHandler::closeUntil` |
+| 订阅某个指定名称的信号 | `hx_os_signal_connect` | `SignalHandler::connect` |
+| 订阅该处理器发出的全部信号 | `hx_os_signal_connect_all` | `SignalHandler::connectAll` |
+| 发出信号通知 | `hx_os_signal_emit` | `SignalHandler::notify` |
+| 取消单条订阅并等待其在途回调结束 | `hx_os_signal_disconnect_until` | `SignalHandler::disconnectUntil` |
+| 关闭处理器并等待所有在途回调结束 | `hx_os_signal_handler_close_until` | `SignalHandler::closeUntil` |
 
-订阅全部信号后，注册时尚未出现的名称也能收到。一次订阅占一个连接名额，不按信号名称数量计算。按名称订阅 `"*"` 仍然只接收名称恰好为 `"*"` 的信号，不是通配符。
+- **全量观察（`connect_all`）**：调用 `connect_all` 后，即使某个信号名称在注册时尚未出现过，后续发出时也能收到。一次 `connect_all` 只占用 1 个连接槽位。
+- **字面量名称匹配**：按名称订阅 `"*"` 只会接收名称恰好为字面量 `"*"` 的信号，不会作为通配符匹配所有信号。
 
 ```mermaid
 flowchart LR
@@ -33,11 +45,11 @@ flowchart LR
     H --> A["全部：观察回调收到名称和参数"]
 ```
 
-三类回调统一按注册顺序排列。发出 `ready` 时，调用它的指定名称回调和全部信号观察回调，不调用 `saved` 的指定名称回调。
+指定名称回调与全量观察回调统一按注册先后顺序排列：当发出 `ready` 信号时，所有 `ready` 的指定名称回调与全量观察回调会按注册顺序依次执行，而 `saved` 的指定名称回调不会被触发。
 
 ## 2. 运行 C 示例
 
-[signal_observer.c](../examples/signal_observer.c) 是完整程序：注册一个观察回调，然后依次发出 `ready` 和 `saved`，两次都带整数参数 `items = 42`。回调写法如下：
+在完整的 [signal_observer.c](../examples/signal_observer.c) 中，全量观察回调接收信号名称与只读参数视图 `const hx_os_signal_arguments *`：
 
 ```c
 static hx_os_status HX_OS_CALL on_signal(const char *name,
@@ -56,42 +68,39 @@ static hx_os_status HX_OS_CALL on_signal(const char *name,
 }
 ```
 
-按普通方式配置工程并开启示例后，构建：
+配置工程并开启示例后构建：
 
 ```sh
 cmake --build build --config Release --target hx_os_signal_observer
 ```
 
-Visual Studio 生成器运行 `build/bin/Release/hx_os_signal_observer.exe`；Linux 单配置生成器运行 `./build/bin/hx_os_signal_observer`。预期输出：
+Visual Studio 生成器运行 `build/bin/Release/hx_os_signal_observer.exe`，Linux 单配置生成器运行 `./build/bin/hx_os_signal_observer`，输出为：
 
 ```text
 ready: 42 items
 saved: 42 items
 ```
 
-发出通知的函数会在所选回调都完成后才返回，因此回调应尽量简短。需要把后续工作提交给线程池时，应先复制参数，再处理有界提交和失败，不能直接把借用视图交给后台任务。
+由于 `hx_os_signal_emit()` 会在所有匹配的回调执行完毕后才返回，请保持回调函数简短。若需要将耗时工作转交线程池异步处理，请先在回调内调用第 3 节的 `copy()` 复制出独立的参数包，切勿直接将借用的参数视图指针传给后台线程。
 
 ## 3. 读取参数，或复制后继续使用
 
-全部信号回调接收 `hx_os_signal_arguments`，它是借用的只读视图。指定名称回调继续接收已有的 `const hx_os_calldata *`，原有固定参数包 ABI 不变。
+全量观察回调和通用只读观察回调接收 `const hx_os_signal_arguments *` 只读视图（原有的具名回调继续接收 `const hx_os_calldata *`，固定参数包 ABI 保持不变）：
 
-| 操作 | 含义 |
+| 函数（省去 `hx_os_signal_arguments_` 前缀） | 功能与行为 |
 | --- | --- |
-| `count()` | 参数数量；空视图返回零 |
-| `get_bool/i64/u64/double/string/bytes/pointer()` | 按准确类型读取，不隐式转换数字或字符串 |
-| `get()` | 返回带类型标记的 `hx_os_param_value`，适合运行时判断类型 |
-| `at()` | 按从零开始的下标遍历，不应依赖字段顺序长期固定 |
-| `copy()` | 创建独立的 `hx_os_params`，使用 `hx_os_params_destroy` 释放 |
+| `count()` | 返回参数个数（空视图返回 `0`） |
+| `get_bool` / `i64` / `u64` / `double` / `string` / `bytes` / `pointer()` | 按精确类型读取字段，不做隐式数值或字符串转换 |
+| `get()` | 读取带类型标签的 `hx_os_param_value`，适合运行期动态判断类型 |
+| `at()` | 按 `0..count-1` 下标遍历字段（请勿假定字段顺序跨版本固定不变） |
+| `copy()` | 深拷贝创建独立的 `hx_os_params *`，用完后通过 `hx_os_params_destroy()` 释放 |
 
-表中 C 函数名省略了 `hx_os_signal_arguments_` 前缀。缺少字段返回 `HX_OS_NOT_FOUND`，类型不同返回 `HX_OS_TYPE_MISMATCH`，下标越界返回 `HX_OS_RANGE`；读取失败保留原输出。读取视图不分配内存。字符串长度保留内部 NUL；名称仍是带结尾 NUL 的 UTF-8。
-
-视图对象、信号名称、字段名称和字符串片段只保证在本次回调内有效。不要保存视图地址、销毁它或强转成可写参数包。发起方必须让输入 calldata 在整个通知期间保持有效且不变，包括分配器回调期间。指针参数仍然借用原对象，其生命周期和并发访问由应用负责。
-
-需要延后处理时，在回调内调用 `hx_os_signal_arguments_copy(arguments, context, &owned, &error)`。名称和字符串会复制，原始指针仍借用；失败时 `owned` 为 null，部分分配会释放。复制需要开启 `HX_OS_ENABLE_PARAMETERS`，使用[参数包的容量约定](PARAMETERS.zh-CN.md)：固定 calldata 使用默认容量，可增长输入保留自己的容量设置。关闭该模块仍可订阅、观察和读取。旧通知入口保留固定 calldata ABI；新增 `emit_params` 可以携带全部七种可增长参数类型。
+- **错误码约定**：字段不存在返回 `HX_OS_NOT_FOUND`，字段类型不匹配返回 `HX_OS_TYPE_MISMATCH`，下标越界返回 `HX_OS_RANGE`（读取失败时保持输出变量原值不变）。读取视图不产生内存分配；字符串长度完整保留内嵌的 `\0`（NUL）字节，字段名仍为以 `\0` 结尾的 UTF-8 字符串。
+- **借用生命周期与异步复制**：视图指针、信号名称、字段名及字符串切片**仅在当前这次回调执行期间有效**。如果需要把参数留到回调返回后异步处理，请在回调内部调用 `hx_os_signal_arguments_copy(arguments, context, &owned, &error)`：它会复制所有字段名、字符串和字节数组（注：原始指针字段 `pointer` 仍仅复制指针值，其指向对象的生命周期由应用层管理）。复制功能需要启用 `HX_OS_ENABLE_PARAMETERS` 并遵循[参数包的容量约定](PARAMETERS.zh-CN.md)。
 
 ## 4. C++11 写法
 
-包含 `<hx/Signal.hpp>`。对于已有的 `hx::SignalHandler handler`，可以在返回 `hx_os_status` 的函数中这样订阅：
+包含 `<hx/Signal.hpp>` 后，可以在无异常的 C++11 代码中直接注册 lambda 或函数对象：
 
 ```cpp
 auto connected = handler.connectAll(
@@ -110,49 +119,48 @@ if (!connected)
 	return connected.status();
 ```
 
-打印需要包含 `<cstdio>`。需要单独取消这次订阅时，保存 `connected.value()`；成功关闭整个处理器也会回收它的订阅。回调捕获的应用对象必须覆盖在途回调的生命周期，继续遵循 `SignalHandler` 原有的显式截止时间关闭契约。
-
-`args.stringView()` 借用字符串，`args.string()` 返回独立字符串，`args.copy()` 返回拥有独立参数包的 `Result<Parameters>`；`value()`、`at()` 对应 C 的带类型值查询。回调可以返回 `void`、`hx_os_status` 或 `Result<void>`，遵循不使用异常的既有约定。
-
-Qt 项目使用 `notify()`，可以避开 Qt 的 `emit` 宏。旧的 `emit()` 别名仍保留；头文件只在声明别名时临时屏蔽宏，随后立即恢复调用方的宏。两种写法都不依赖 Qt。
+- **取消订阅与生命周期**：若后续需要单独取消该条订阅，请保存 `connected.value()` 连接句柄并调用 `disconnectUntil()`；关闭整个 `SignalHandler` 时也会自动回收所有下属订阅。回调捕获的外部业务对象必须活过所有在途回调。
+- **参数读取方法**：`args.stringView()` 返回借用视图，`args.string()` 返回独立拥有的 `Result<hx::String>`，`args.copy()` 返回独立拥有的 `Result<Parameters>`；`unsignedInteger()` 和 `bytesView()` 分别读取无符号 64 位整数与二进制字节切片。
+- **与 Qt `emit` 宏无冲突**：建议在 C++ 代码中优先调用 `handler.notify()` 发出通知；原有的 `handler.emit()` 别名同样保留（头文件在声明处临时保护并立即恢复调用方的 `emit` 宏，无需担心与 Qt 冲突）。
 
 ## 5. 顺序、失败、关闭和成本
 
-- 每次通知按注册顺序快照选中的连接。回调中新增的订阅从下一次通知开始参与；回调尚未启动就被取消时，本次跳过它。
-- 只读回调失败时保留第一个错误，继续通知其它符合条件的订阅者。`called` 返回实际启动的回调数。
-- 多个线程同时发出信号时，同一个回调可能并行执行。回调在内部互斥锁外执行，应用自行保护状态。递归通知仍受已有深度上限约束。
-- 成功取消订阅后阻止后续启动；`disconnect_until` 还会等待在途回调和清理结束。超时后处理器及借用对象继续保留，可以重试。回调等待自己或上层回调结束会返回 `HX_OS_DEADLOCK`。
-- 注册成功后，库接管可选的 cleanup 动作；注册失败不调用它。连接回收时清理一次；不能在仍有其它回调执行时卸载其代码。
-- 创建处理器时预分配有上限的连接槽。C 注册和参数读取不新增分配；匹配订阅不超过 16 个时，使用每次调用独立的局部快照数组（128 字节），更多订阅使用一次有界分配。嵌套或并发通知各自持有快照。这只减少快照分配，回调、参数修改和显式复制仍可能分配内存。参数视图使用栈内存，C++ 注册分配捕获对象空间。
-
-关闭 `HX_OS_ENABLE_SIGNALS` 后保留明确的不支持入口。命名过程仍遵循自己的单回调和成功后发布返回参数的契约。下面的可写派发还需要开启 PARAMETERS。
+- **派发快照**：每次发出信号时，处理器会按注册顺序对当前匹配的订阅做一次快照。在回调执行期间新注册的订阅从下一次通知开始生效；若某条订阅在排到它执行之前已被取消，则本次自动跳过。
+- **首个错误保留并继续派发**：当某个只读回调返回错误时，处理器会记录下第一个错误，但仍会继续调用本次快照中其余匹配的回调；输出参数 `called` 统计实际已启动执行的回调数量。
+- **锁外并发执行**：回调函数在信号处理器的内部互斥锁之外执行，因此如果多个线程同时对同一处理器调用 `emit`，同一个回调函数可能会在多个线程上并发运行，业务状态请自行加锁保护。
+- **安全退订与死锁保护**：`hx_os_signal_disconnect_until()` 会阻止该连接被后续通知启动，并等待正在执行中的回调返回（若超时则保留处理器与借用数据以便重试；在回调内部等待自身或外层祖先回调退订会返回 `HX_OS_DEADLOCK`）。
+- **栈上小快照优化**：处理器创建时一次性预分配连接槽位。当单次通知匹配的订阅数不超过 `16` 个时，直接使用栈上的 `128` 字节局部数组保存快照，零堆内存分配；超过 `16` 个时才执行一次有界堆分配。
 
 ## 6. 在通知过程中修改参数
 
-用 `hx_os_signal_connect_mutable` 订阅一个名称，或用 `hx_os_signal_connect_all_mutable` 订阅全部名称。发起方持有 `hx_os_params`，调用 `hx_os_signal_emit_params(handler, name, parameters, &called, &error)`。这些订阅与只读观察者共用同一个处理器、连接上限、注册顺序和取消／关闭规则。`hx_os_signal_connect_observer` 可以让通用只读视图只观察一个指定名称。
+如果希望订阅者不仅能读取参数，还能在通知链路上原地修改参数（例如参数校验、限幅或补充默认值），可以使用 `hx_os_signal_connect_mutable()`（按名称）或 `hx_os_signal_connect_all_mutable()`（全量），并由发起方持有可增长的 `hx_os_params *`，调用 `hx_os_signal_emit_params(handler, name, parameters, &called, &error)` 发出通知。
 
-[完整音量示例](../examples/signal_mutable.c) 从 80 开始，由回调限制到 60，再分别从观察者和发起方打印。构建 `hx_os_signal_mutable`，按第 2 节相同的方式运行对应程序，预期输出：
+构建并运行 [完整音量示例](../examples/signal_mutable.c)（目标名 `hx_os_signal_mutable`）：发起方传入初始音量 `volume = 80`，可写回调将其限制为 `60`，随后的只读观察者与发起方都会看到修改后的值：
 
 ```text
 Observer: volume = 60
 Caller: volume = 60
 ```
 
-修改立即生效。如果某个回调把 80 改为 60 后返回错误，后续有效回调仍会运行并读到 60，最后返回第一个错误。若后续回调再次修改，发起方读到最后的值。单次 setter 失败会保留该字段的旧值，但不会撤销此前已经成功的 setter。需要同时检查返回状态和业务状态，失败不代表回滚。第一个回调开始前的分配失败不会改变参数包。
-
-库在整个同步调用期间借用 owner；回调里尝试销毁会返回 BUSY，并保留指针。不要在派发期间移动／销毁 C++ owner，也不要在回调结束后继续保留借用引用。并行通知使用不同参数包；回调捕获的业务状态也需要自行同步。递归调用同步执行，并受深度限制。先取得字符串／字节视图，再直接修改参数包或递归发出通知，会使该视图失效；应重新读取或提前复制。可写派发会先复制信号名称，因此名称即使来自参数值，也允许回调替换该字段。
+> [!IMPORTANT]
+> **可写信号的“原地立即生效、不自动回滚”语义**
+> - **修改立即对后续回调可见**：如果回调 A 将 `volume` 从 `80` 改为 `60` 后返回了错误状态，后续匹配的回调依然会执行并读到 `60`，整个 `emit_params` 最终返回回调 A 的错误状态。
+> - **失败不等于事务回滚**：单个字段 setter 失败时会保留该字段修改前的值，但此前已经成功的字段修改**不会**被撤销。发起方应同时检查返回状态与参数包中的最终业务值。
+> - **借用保护**：在整个同步 `emit_params` 调用期间，参数包 `parameters` 由处理器借用；如果在回调内部尝试调用 `hx_os_params_destroy()` 销毁它，会立即返回 `HX_OS_BUSY`。此外，若在回调中先获取了 `string` / `bytes` 借用视图，随后又修改了参数包或发起了递归通知，原视图会失效，请重新读取或提前复制。
 
 ## 7. 与已有回调一起使用
 
-| 订阅类型 | 原有固定 calldata 的 `emit` | 新的 `emit_params` |
+同一个信号处理器上可以同时挂载旧版固定参数（`hx_os_calldata`）回调、通用只读观察者（`hx_os_signal_arguments`）和可写参数（`hx_os_params`）回调，它们在不同发送入口下的兼容规则如下：
+
+| 已注册的订阅类型 | 调用旧版 `hx_os_signal_emit`（固定 `calldata`） | 调用新版 `hx_os_signal_emit_params`（可增长 `params`） |
 | --- | --- | --- |
-| 既有固定参数只读回调 | 保持原有借用 calldata | 数据能完整表示时，收到临时固定参数副本 |
-| `connect_observer`／`connect_all` | 借用只读视图 | 借用支持全部七种类型的只读视图 |
-| 可写回调 | 返回 TYPE_MISMATCH，不启动该回调 | 借用并原地修改可增长参数包 |
+| 既有固定参数只读回调 | 直接借用传入的 `hx_os_calldata` | 当所有字段均可无损表示为固定参数时，自动生成临时固定参数副本传入 |
+| `connect_observer` / `connect_all` | 借用只读视图 | 借用支持全部 7 种类型的只读视图 |
+| 可写回调（`*_mutable`） | 不启动该回调，记录 `HX_OS_TYPE_MISMATCH` | 直接借用并原地修改传入的 `hx_os_params` |
 
-固定参数副本不会丢字段或强转类型。bytes／u64 返回 UNREPRESENTABLE，字段数量或文本超过固定参数容量返回 LIMIT。受影响的固定回调不启动，派发保留第一个错误并继续其它有效订阅。需要接收大参数或二进制数据时，用通用观察者。`called` 不计入没有启动的不兼容回调。名称 `"*"` 仍然按普通字面量处理。
+如果 `emit_params` 传入的参数包中含有 `bytes` 或 `u64` 字段（固定 `calldata` 不支持这两种类型），固定参数回调将无法启动并记录 `HX_OS_UNREPRESENTABLE`；若字段数量或文本长度超出固定 `calldata` 容量上限，则记录 `HX_OS_LIMIT`。受影响的固定参数回调会被跳过（不计入 `called`），其余兼容的回调仍正常执行。
 
-C++11 对应接口为：`observe(name, callback)` 接收通用只读视图；`connectMutable(name, callback)` 接收 `ParametersRef`；`connectAllMutable(callback)` 接收 `(StringView, ParametersRef)`；`notifyMutable(name, parameters)` 发出可写通知。均沿用无异常回调和 Result 错误机制。例如，在返回 `hx_os_status` 的函数中，已有创建成功的 handler 和参数 owner 时：
+C++11 对应提供 `observe(name, callback)`、`connectMutable(name, callback)`、`connectAllMutable(callback)` 以及 `notifyMutable(name, parameters)`：
 
 ```cpp
 auto connected = handler.connectMutable("volume",
@@ -172,14 +180,9 @@ if (!notified)
 	return notified.status();
 ```
 
-通知 Result 在回调报错时仍保留实际启动的回调数，读取前检查 `hasValue()`。`SignalArguments::unsignedInteger` 和 `bytesView` 用于读取新增的无符号整数和字节类型。
-
 ## 8. 用可增长参数调用命名过程
 
-使用 `hx_os_proc_add_params` 注册，再调用 `hx_os_proc_call_params(handler, name, input, &result, &error)`。result 是独立 owner，最后用 `hx_os_params_destroy` 释放；input 为 null 时创建空参数包。库使用处理器的 context 复制输入及其容量设置，回调修改这份私有副本。只有返回 OK 才交付结果；任何失败都会释放部分副本并让 result 保持 null。调用期间输入必须有效且不变；输出 owner 变量不能覆盖另一个尚未释放的 owner。
-
-这与可写信号有意区分：命名过程在成功时返回一个结果，通知允许多个订阅者逐步修改共享参数。借用指针指向的对象、文件或设备上的副作用，都不能靠这两个接口自动回滚。
-
-固定和可增长过程共用唯一名称空间。用不匹配的参数包类型调用，返回 TYPE_MISMATCH，不执行用户回调。创建、回收、截止时间和自有分配器重入保护沿用已有过程机制。回调可以使用普通参数 setter，但不能在调用期间销毁借用副本。
-
-C++11 使用 `ProcedureHandler::addParams(name, callback)`，回调接收 `ParametersRef`；`callParams(name, input)` 返回 `Result<Parameters>`，结果在处理器关闭后仍有效。C/C++ 调用见上面的示例，参数生命周期见[参数包说明](PARAMETERS.zh-CN.md)。
+命名过程（Procedure）用于“一对一调用并返回结果”的场景。使用 `hx_os_proc_add_params()` 注册过程，再通过 `hx_os_proc_call_params(handler, name, input, &result, &error)` 发起调用：
+- **私有副本与全有或全无交付**：库会先使用处理器的 `context` 将 `input`（传 `NULL` 则创建空参数包）复制出一份私有副本交给过程回调修改。**只有当过程回调返回 `HX_OS_OK` 时**，这份结果才会通过 `result` 交付给调用方（调用方用完后需调用 `hx_os_params_destroy()` 释放）；如果回调返回任何错误，库会自动销毁半成品副本并将 `result` 保持为 `NULL`。
+- **与可写信号的核心区别**：可写信号允许多个订阅者逐步原地修改共享参数包（中途报错仍保留已生效的修改）；而命名过程只绑定单一回调，且仅在成功时发布独立的结果副本。
+- **名称空间与类型检查**：固定参数过程与可增长参数过程共享同一个名称空间；若用不匹配的调用入口调用同名过程，会直接返回 `HX_OS_TYPE_MISMATCH` 而不会启动回调。C++11 对应接口为 `ProcedureHandler::addParams(name, callback)` 与 `callParams(name, input)`（返回 `Result<Parameters>`，详见[参数包说明](PARAMETERS.zh-CN.md)）。

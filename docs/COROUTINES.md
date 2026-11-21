@@ -2,9 +2,13 @@
 
 [简体中文](COROUTINES.zh-CN.md) · [README](../README.md)
 
-**Let a background task calculate 42, then receive it on the main thread.** Start with the complete C++11 program [go.cpp](../examples/go.cpp), then try the C99 and C++20 forms. Coroutines suit many tasks waiting on channels, timers or coroutine I/O; an ordinary blocking SDK call still occupies its worker.
+Use the cooperative coroutine module when you want to run many concurrent tasks waiting on channels, timers, or asynchronous network I/O without dedicating an OS thread to every task. When a coroutine waits on a channel, timer, or coroutine I/O operation, it suspends and yields its underlying worker thread so other ready tasks can run.
 
-Run from the library checkout root after the [example setup](../examples/README.md#run). Replace `build` with your existing build directory. For Debug, change both the build configuration and the executable path from Release to Debug.
+### Quick Start: Run Your First Coroutine Program
+
+Start with the complete C++11 program [go.cpp](../examples/go.cpp), which computes `42` inside a background coroutine and sends the answer back to the main thread over a channel.
+
+From the repository root after completing the [example setup](../examples/README.md#run), build and run `hx_os_go` (replace `build` with your build directory; for Debug builds, change `Release` to `Debug` in both the build command and executable path):
 
 ```sh
 cmake --build build --config Release --target hx_os_go
@@ -22,36 +26,40 @@ Linux / WSL:
 ./build/bin/hx_os_go
 ```
 
-No files, arguments or manually started thread are needed. Success prints `Answer: 42` and exits. The program performs these steps:
+No arguments, external files, or manually created threads are required. The program prints `Answer: 42` and exits. Internally, `go.cpp` performs these steps:
 
 | Step | Purpose |
 | --- | --- |
-| `Runtime::create(owner)` | Create the runtime and its managed workers; the application need not start scheduler threads |
-| `Scope::enter(runtime)` | Select where the current main thread submits subsequent `go` tasks |
-| `co_chan<int> answers(1)` | Reserve one integer slot so the task can store 42 before it is received |
-| `go ...` | Submit an ordinary lambda; the runtime owns and reclaims the task |
-| `waitUntil(...)` | Wait on the main thread and check submission/execution errors |
-| `receive(NOW)` | Take the integer already in the channel, then print it |
-| `shutdownUntil(...)` | Close the runtime and wait for its own threads to exit |
+| `Runtime::create(owner)` | Creates the coroutine runtime and its managed worker threads |
+| `Scope::enter(runtime)` | Binds the current host thread so subsequent `go` statements know which runtime to target |
+| `co_chan<int> answers(1)` | Creates a buffered channel with capacity `1` so the task can store `42` before exiting |
+| `go ...` | Submits an ordinary lambda as a stackful coroutine owned and reclaimed by the runtime |
+| `waitUntil(...)` | Waits on the main thread for active tasks to finish and checks submission/execution errors |
+| `receive(HX_OS_DEADLINE_NOW)` | Reads the buffered integer from the channel and prints it |
+| `shutdownUntil(...)` | Closes the runtime and waits for its worker threads to exit cleanly |
 
-The short snippets explain individual steps. For your first copy, use the complete go.cpp as `main.cpp` and link it with the [minimal C++ project](USAGE.md#cpp-project). Section 8 lists additional complete examples.
+The short snippets below focus on individual APIs. When starting a new project, copy the full [go.cpp](../examples/go.cpp) as your `main.cpp` and link it using the [minimal C++ project](USAGE.md#cpp-project) setup. Section 8 lists all runnable C99, C++11, and C++20 example targets.
 
 ## 1. Choose a calling style
 
-A coroutine is a task that can pause while waiting and let its worker run another task. This library owns its scheduler, queues, timers, channel/select logic and lifetime rules. It uses Windows fibers as an operating-system primitive and its own CPU context switch on POSIX. It does not use minicoro, Boost.Context or another coroutine library.
+This library implements its own coroutine scheduler, queues, timers, channel/`select` engine, and lifetime management. It uses native OS fibers on Windows and a first-party CPU context switch on POSIX—without depending on `minicoro`, `Boost.Context`, or any third-party coroutine library.
 
-| Style | Start work | Wait | Values across a wait |
+Choose the style that fits your language standard and memory model:
+
+| Style | How to start work | How to wait | Where state lives across suspensions |
 | --- | --- | --- | --- |
-| C99 stackful | `hx_os_coro_spawn(..., HX_OS_CORO_STACKFUL, ...)` | Ordinary calls, including nested functions | Remain on the coroutine's fixed stack |
-| C++11 stackful | `runtime.spawn(function, arguments...)` or optional `go lambda;` | `hx::coro::sleepFor`, `channel.receive`, stream methods | Ordinary local variables and RAII |
-| C99/C++11 stackless | `HX_OS_CORO_STACKLESS` callback | Repeat an operation after `WOULD_BLOCK`; optional state macros | Put them in persistent user state |
-| Optional C++20 stackless | `runtime.go(namedCoroutine(arguments))` | `co_await hx::coro::async::...` | Compiler-generated frame |
+| **C99 stackful** | `hx_os_coro_spawn(..., HX_OS_CORO_STACKFUL, ...)` | Ordinary function calls (including nested functions) | The coroutine's fixed-size private stack |
+| **C++11 stackful** | `runtime.spawn(function, arguments...)` or optional `go lambda;` | `hx::coro::sleepFor`, `channel.receive`, `Stream` methods | Ordinary local variables with full C++ RAII |
+| **C99 / C++11 stackless** | `HX_OS_CORO_STACKLESS` callback | Repeat the operation after `HX_OS_WOULD_BLOCK` (with optional state-machine macros) | Caller-owned persistent state struct |
+| **Optional C++20 stackless** | `runtime.go(namedCoroutine(arguments))` | `co_await hx::coro::async::...` | Compiler-generated coroutine frame |
 
-This is cooperative scheduling. Sleep, channel waits, task waits and library coroutine I/O release the worker. A long computation must periodically call `yield`. A normal blocking file call, mutex wait or third-party blocking function still occupies that worker. There is no system-call interception, preemptive interruption, garbage collector, growing stack or Go language keyword. C++11 functions and callbacks remain exception-free; they return `Result<T>`.
+> [!NOTE]
+> **Cooperative scheduling boundary**
+> Coroutine sleep, channel waits, coroutine synchronization primitives, and library coroutine I/O suspend the coroutine and free its worker thread for other tasks. Long CPU-bound loops must call `yield` periodically. Ordinary blocking file I/O, OS mutex waits, or blocking third-party SDK calls still block the underlying worker thread. All C++11 functions and callbacks remain exception-free and return `hx::Result<T>`.
 
 ## 2. Ordinary C++11 tasks without task handles
 
-Create the runtime once, as in [go.cpp](../examples/go.cpp). Include `hx/GoKeywords.hpp` **last** to opt into libgo-like spelling. Then enter a scope on the native host thread:
+Create the runtime once as shown in [go.cpp](../examples/go.cpp). If you want `libgo`-style syntax, include `hx/GoKeywords.hpp` **after** all other headers and enter a `Scope` on the host thread:
 
 ```cpp
 auto scope = hx::coro::Scope::enter(runtime);
@@ -71,19 +79,13 @@ if (!done)
 auto answer = answers.receive(HX_OS_DEADLINE_NOW);
 ```
 
-This excerpt belongs in a function returning `Result<void>`. `go` submits a task, the runtime retains it through cleanup, and the task sends 42 to a buffered channel. No per-task handle or task group is required. `done` checks completion and the runtime's stored task errors; check `answer` before reading `answer.value()`. The complete program prints `Answer: 42` and demonstrates creation and explicit shutdown.
+- **Automatic task management**: `go` submits a task that the runtime retains through execution and cleanup—you do not need to hold a `Task` handle or create a task group for fire-and-forget work.
+- **Why does `answers` use capacity `1` here?** Because the main thread calls `runtime.waitUntil()` before calling `receive()`. With capacity `0` (an unbuffered rendezvous channel), the sender would wait for a receiver while the main thread waits for the sender to finish. For an unbuffered channel, either run a concurrent receiver coroutine or call `receive()` on the main thread before `waitUntil()`.
+- **Using explicit macros or methods instead of global keywords**: If you prefer not to define the `go` keyword macro, include `hx/Go.hpp` and use `hx_go(runtime) lambda;`, `hx_go_here lambda;`, or the regular method `runtime.spawn(function, args...)`. When `hx/GoKeywords.hpp` is included, it also provides `co_chan<T>`, `co_sleep(milliseconds)`, and (outside C++20) `co_yield`; use `.submit()` instead of `.go()` when you need a typed `Task<T>` handle.
+- **`Scope` lifetime rules**: `Scope` selects an existing runtime for the current host thread without creating threads or a global singleton. Nested scopes must close in LIFO order on the same host thread that created them. Inside a running coroutine, `go` automatically inherits that coroutine's runtime.
+- **Error tracking and `waitUntil()`**: Managed tasks may return `void` or `Result<void>` (return the `Result` from the callback if you want failures recorded by the runtime). The runtime stores the first complete `hx_os_error` along with a saturating failure count; inspect it with `runtime.errors()` or read-and-clear with `runtime.errors(true)`. `runtime.waitUntil()` waits until the runtime becomes idle and then returns the first recorded failure without clearing it (use `Group` in Section 10 when you need isolated batch waiting).
 
-The capacity `1` matters: the main thread waits before receiving, so the task needs one slot to send and finish. With capacity `0`, sending needs a receiver while the main thread is waiting for the sender to finish. Run a concurrent receiver, or receive on the main thread before waiting; do not change only the capacity.
-
-`Scope` selects an existing runtime; it does not create workers or a global singleton. Bindings nest in LIFO order and must close on their creating native thread. They retain the runtime but do not stop it. Never move a scope to another thread or destroy outer bindings first. Inside a coroutine, `go` automatically uses that coroutine's runtime. With no scope/current coroutine, submission returns an error, and there is no runtime in which to retain it; do not discard that result.
-
-Without global keyword macros, include `hx/Go.hpp` and use `hx_go(runtime) lambda;` or `hx_go_here lambda;`. `runtime.spawn(function, args...)` offers the same ownership using a regular method. The optional keyword header also defines `co_chan<T>`, `co_sleep(milliseconds)` and, outside C++20, `co_yield`. These are C++ helpers, not new language keywords. `go` is a macro and can collide with unrelated identifiers, including the old `.go()` method; use `.submit()` for typed tasks when opting in.
-
-Ordinary tasks may return void or `Result<void>`. Return an operation's failure from the task if it should appear in the runtime report; ignoring an error inside a void callback cannot make it observable. Non-void values from ordinary spawn are discarded after cleanup; use `runtime.submit(...)` to obtain `Task<T>` when a value is needed. The existing `runtime.go(...)` contract is preserved for code that does not enable the keyword header.
-
-Admission failures and terminal task failures are stored as the first complete `hx_os_error` plus a saturating count. `runtime.errors()` reads the snapshot; `runtime.errors(true)` reads and clears it. This bounded record is not an unlimited error queue. `waitUntil` waits for idle and then reports the first recorded failure without clearing it; later waits continue to report it until cleared. It does not reject new submissions or wait only for a frozen batch. Stop external producers before using idle as a completion boundary; tasks already running may submit children. A timeout leaves work alive. For a named batch use optional `Group` as described below.
-
-Create a runtime explicitly:
+Always create and shut down the runtime through an explicit host-owned `owner` pointer:
 
 ```cpp
 hx_os_coro_runtime *owner = NULL;
@@ -98,13 +100,11 @@ if (!created) {
 auto &runtime = created.value();
 ```
 
-In this snippet, return code 1 means creation failed and cleanup completed; 2 means cleanup is still pending. A long-running host must keep owner and retry instead of discarding it.
-
-The C pointer is the durable owner; `Runtime` is a borrowed facade and never waits in its destructor. Finish with `runtime.shutdownUntil(deadline)`. On `TIMEOUT`, `BUSY` or `NOT_SUPPORTED`, retain the owner and retry according to the host's policy. Runtime close does not replace checking task errors. Borrowed captures must outlive task execution and cleanup, and plugins/context cannot be unloaded while dependent work remains.
+`hx::coro::Runtime` is a non-owning view whose destructor never blocks. Call `runtime.shutdownUntil(deadline)` before teardown; if it returns `HX_OS_TIMEOUT`, `HX_OS_BUSY`, or `HX_OS_NOT_SUPPORTED`, keep `owner`, borrowed captures, the allocator `context`, and loaded plugins alive and retry shutdown according to your host policy.
 
 ## 3. C++20 without a private stack
 
-Include `hx/Coroutines20.hpp` and link the optional `hx_c_platform::cpp20` target. The C library remains C99, and other consumers can keep C++11.
+When building with a C++20 compiler, include `hx/Coroutines20.hpp` and link the optional `hx_c_platform::cpp20` target (the core library remains C99, and other targets can stay on C++11):
 
 ```cpp
 hx::coro::Routine<int> answer()
@@ -121,13 +121,13 @@ hx::coro::Routine<int> answer()
 auto task = runtime.go(answer());
 ```
 
-[The complete C++20 program](../examples/coroutine20.cpp) also prints `Answer: 42`. `Routine<>` represents a void result and finishes with `co_return hx::Result<void>();`. Frame allocation can fail; `go` then returns `NO_MEMORY`. Frames use the immutable default C allocator; scheduler objects and admitted task result storage use the runtime's context. Creating a routine creates its frame before admission. Rejected admission normally leaves the routine available; rejection after successful prepare during a concurrent close has already transferred and cleaned it.
-
-Use named coroutine functions with value parameters and `runtime.go(function(arguments))`. Submitting a routine-producing factory as an ordinary stackful callable is rejected at compile time. Invoking a temporary capturing coroutine lambda can leave a dangling closure pointer in the compiler frame. Library awaiters retain their channel/stream handles. Buffer pointers still borrow their storage, which must remain valid through the await. The frame accepts the library's awaiters; an external executor cannot resume it on a different thread. Native callables must never throw; the required compiler `unhandled_exception` hook does not make exceptions a supported error path.
+[The complete C++20 program](../examples/coroutine20.cpp) prints `Answer: 42`. `Routine<>` represents a `void` coroutine and finishes with `co_return hx::Result<void>();`.
+- **Frame allocation**: Compiler coroutine frames allocate through the default C allocator (`runtime.go()` returns `HX_OS_NO_MEMORY` if frame allocation fails), while scheduler structures and result slots use the runtime's `context`.
+- **Prefer named coroutine functions with value arguments**: Always invoke `runtime.go(namedFunction(args...))` and pass inputs by value. Avoid temporary capturing coroutine lambdas, because the temporary closure object may be destroyed at the first suspension point while the compiler frame still references `this`.
 
 ## 4. Send and receive values
 
-`Channel<int>::create(runtime)` creates a rendezvous channel: a send waits for a receiver. Pass a positive capacity for bounded buffering. Native host threads can also send and receive; they block while coroutine callers suspend. Coroutine send/receive/select must use the owning runtime. Native-thread select is unsupported. `NOW` never blocks.
+`Channel<int>::create(runtime)` creates an unbuffered rendezvous channel (capacity `0`) where each send waits for a matching receiver; pass a positive capacity to create a bounded buffered channel. Both native host threads and coroutines can send and receive on the same channel (host threads block while coroutines suspend; `HX_OS_DEADLINE_NOW` is always nonblocking).
 
 ```cpp
 auto created = hx::coro::Channel<int>::create(runtime, 8);
@@ -148,11 +148,11 @@ auto consumer = runtime.go([channel]() noexcept {
 });
 ```
 
-Check both submission results, wait for both tasks and close the runtime as in the complete examples. Closing rejects future sends with `CLOSED`, allows buffered values to drain, then receivers get `EOF`. It does not discard buffered values. Releasing the final channel reference drops remaining values. Suspended operations hold their own channel references.
-
-C++ `Channel<T>` supports plain values and owning C++ objects with nonthrowing move construction/destruction. Plain values use byte transport and nonthrowing default receive storage. Owning values such as `hx::String` use a stable reference-counted box and proper constructors/destructors; self-pointers remain valid through moves. Box storage is charged to the runtime channel-byte budget; nested payload storage remains separately owned. Lvalue sends additionally require nonthrowing copy construction. Use `send(std::move(value))` for move-only objects; once box allocation succeeds, a later send failure may already have consumed the source. Use the C channel's existing container copy/drop policy for owning `hx_string`, `hx_variant` or custom C values. Copy runs before scheduling and may fail; drop runs exactly once for retained values. Callbacks must not suspend or reenter channel operations. Receiving constructs a fresh output and transfers the value's release obligation. The C policy still requires byte-relocatable stored representations; the C++ owning path avoids relocating the object itself. `channel << value` sends, and `channel >> output` receives using nonthrowing move assignment; both return an explicit result.
-
-C++20 uses the same channels:
+- **Close and drain**: Calling `channel.close()` rejects subsequent sends with `HX_OS_CLOSED`, while values already in the buffer remain readable until drained, after which receivers get `HX_OS_EOF`. Remaining buffered values are dropped when the final channel reference (including any suspended operation) is released.
+- **Plain values and resource-owning objects**:
+  - C++ `Channel<T>` supports both trivially copyable values and resource-owning C++ types (such as `hx::String`) that have `noexcept` move constructors and destructors. Resource-owning C++ objects are transported in stable reference-counted boxes charged to the runtime's channel-byte budget so self-pointers remain valid across moves. Stream operators `channel << value` and `channel >> output` are also available.
+  - The C channel API supports container `copy`/`drop` callbacks for owning `hx_string`, `hx_variant`, or custom C structs.
+- **C++20 channel awaiters**: C++20 coroutines use the exact same `Channel<T>` with `co_await`:
 
 ```cpp
 auto sent = co_await hx::coro::async::send(channel, 42);
@@ -160,11 +160,11 @@ auto sent = co_await hx::coro::async::send(channel, 42);
 auto received = co_await hx::coro::async::receive(channel);
 ```
 
-C++ offers `hx::coro::select` and `co_await hx::coro::async::select`. Use `hx_os_coro_select` to wait on up to 64 send/receive cases. Exactly one commits. Ready cases rotate between calls; this is not a strict fairness guarantee. `NOW` returns `WOULD_BLOCK` if none can commit. Other elapsed deadlines return `TIMEOUT`. A selected index is meaningful on a selected `OK`, `EOF` or `CLOSED` result. Cancellation/timeouts unlink every losing case; a select cannot rendezvous with itself.
+- **Multi-channel `select`**: Use `hx_os_coro_select`, C++11 `hx::coro::select`, or C++20 `co_await hx::coro::async::select` inside a coroutine to wait on up to `64` send/receive cases simultaneously. Exactly one ready case commits per call (the starting inspection index rotates across calls). `HX_OS_DEADLINE_NOW` returns `HX_OS_WOULD_BLOCK` if no case can commit immediately; expired finite deadlines return `HX_OS_TIMEOUT`. The `selected` output index is valid when the chosen branch returns `HX_OS_OK`, `HX_OS_EOF`, or `HX_OS_CLOSED`.
 
 ## 5. C99 state machines
 
-[The complete C program](../examples/coroutine.c) prints `Count: 1`, `Count: 2`, `Count: 3`. The important pattern is:
+For pure C99 or memory-constrained builds without private coroutine stacks, use stackless state-machine callbacks. [The complete C program](../examples/coroutine.c) prints `Count: 1`, `Count: 2`, `Count: 3`:
 
 ```c
 typedef struct counter_state {
@@ -194,86 +194,88 @@ static hx_os_status count(hx_os_coro *self, void *user, hx_os_error *error)
 }
 ```
 
-Start with `step=0`. Put each `AWAIT` on its own source line. Values and buffers used across suspension belong in persistent state. These macros use switch/case and cannot cross a VLA declaration or an unrelated nested switch. They pause execution but do not silently handle failures. `hx_os_coro_complete` distinguishes a final `WOULD_BLOCK` error from a callback asking to be scheduled again. A raw stackless callback can implement the same protocol without macros.
-
-Returning `WOULD_BLOCK` without a registered wait puts the task back on its worker's ready queue. Repeating this can consume a CPU core; it does not wait for an external event. Use the coroutine sleep, channel, synchronization or I/O entries with `AWAIT` to suspend until their result is ready. Keep `yield` for deliberately sharing the worker during computation. Existing explicit requeue behavior is preserved.
+- **Store cross-suspension variables in `user` state**: Initialize `step = 0` and keep all variables or buffers that must survive suspension inside your persistent state struct rather than stack locals.
+- **Macro rules**: Place each `HX_OS_CORO_AWAIT` on its own line. Because the macros expand to a `switch`/`case` statement, do not jump across variable-length array (VLA) declarations or nest them inside another `switch`. Use `hx_os_coro_complete(status, error)` when returning a terminal error so the scheduler can distinguish a terminal `HX_OS_WOULD_BLOCK` error from a suspension request.
+- **Avoid busy-spinning**: Returning `HX_OS_WOULD_BLOCK` without registering a wait (such as sleep, channel, sync, or I/O) immediately requeues the coroutine onto its worker's ready queue and will spin a CPU core if repeated in a tight loop.
 
 ## 6. Network and pipe I/O
 
-The C entries are `hx_os_coro_listen`, `dial`, `accept`, `read`, `write`, `resolve` and `pipe_pair`. Addresses use existing `hx_os_address`; DNS returns an owned `hx_os_address_list`. `listen` can return an ephemeral bound port. Address reuse is explicitly selected, never silently enabled. Dial uses one numeric address; DNS results can be tried by the caller under one absolute deadline.
-
-C++11 uses `Stream::dial`, `Stream::listen`, `stream.accept/read/write` and `Stream::pipePair`. `Addresses::resolve` and `async::resolve` own their DNS results. C++20 has `async::listen/dial/accept/read/write/pipePair` awaiters. Receive buffers belong to the caller; write buffers are borrowed until the operation completes. Reads return some bytes or `EOF`; writes attempt the entire buffer and preserve partial byte counts on failure. Inspect `Result<size_t>::hasValue()` to access progress even when `ok()` is false.
+Coroutine I/O integrates sockets and pipes with a dedicated event-loop dispatcher:
+- **C API**: `hx_os_coro_listen`, `hx_os_coro_dial`, `hx_os_coro_accept`, `hx_os_coro_read`, `hx_os_coro_write`, `hx_os_coro_resolve`, and `hx_os_coro_pipe_pair`.
+- **C++11 API**: `Stream::dial`, `Stream::listen`, `stream.accept()` / `read()` / `write()`, `Stream::pipePair`, and `Addresses::resolve`.
+- **C++20 API**: `hx::coro::async::listen` / `dial` / `accept` / `read` / `write` / `pipePair` / `resolve` awaiters.
 
 ```mermaid
 flowchart LR
-    A[Stackful or stackless task] -->|submit and suspend| Q[Bounded I/O requests]
-    Q --> L[One dispatcher and native loop]
-    L --> W[Original worker ready queue]
-    W -->|resume with status and progress| A
+  A[Stackful or stackless task] -->|submit and suspend| Q[Bounded I/O requests]
+  Q --> L[One dispatcher and native loop]
+  L --> W[Original worker ready queue]
+  W -->|resume with status and progress| A
 ```
 
-The dispatcher owns all native socket/pipe calls. Its stream wrappers can cross runtime workers, with one read and one write per socket; conflicting operations return `BUSY`. A pipe endpoint accepts one operation. Cancellation requests native retirement and does not release a borrowed buffer early. Completion becomes visible after the native callback returns. Stream release does not wait for I/O retirement; the dispatcher closes the native resource. Successful runtime close retires every native stream, while retained wrappers remain releasable. No native handle escapes this ownership boundary.
+All native socket and pipe operations run on the runtime's I/O dispatcher thread:
+- A socket `Stream` supports one concurrent read and one concurrent write across runtime workers (conflicting operations return `HX_OS_BUSY`); a pipe endpoint accepts one operation at a time.
+- Reads return as soon as bytes are available or on `HX_OS_EOF`; writes attempt the entire buffer and preserve partial byte progress via `Result<size_t>` (`hasValue()`) on failure.
+- Caller buffers remain borrowed until the underlying native I/O operation retires; even on cancellation or timeout, the coroutine resumes only after the native completion callback finishes, preventing premature buffer reuse.
 
 ### 6.1 Receive UDP without blocking a worker
 
-Use `hx_os_coro_udp_bind` to bind a UDP address and obtain the same retained `hx_os_coro_stream` handle. Port zero asks the system for an available port; `bound` returns the actual address. Send one datagram with `hx_os_coro_send_to`, and receive one with `hx_os_coro_receive_from`. Both go through the runtime's existing I/O dispatcher and native loop; they suspend the task, without a polling loop or a new thread per request. In C++11 stackful tasks, the corresponding methods are `Stream::bindUdp`, `sendTo` and `receiveFrom`. Call them inside a coroutine, not directly on the application's main thread.
+Call `hx_os_coro_udp_bind` (or C++11 `Stream::bindUdp`) to bind a local UDP address and obtain a retained `hx_os_coro_stream` handle (passing port `0` selects an ephemeral port and writes the actual address to `bound`). Then call `hx_os_coro_send_to` and `hx_os_coro_receive_from` (C++11 `sendTo` and `receiveFrom`) inside a coroutine to send and receive datagrams without blocking the worker thread.
 
-Try [coroutine_udp.c](../examples/coroutine_udp.c), a complete C99 state-machine program. It binds an ephemeral loopback UDP port, sends a JSON status message to that port, receives the message and releases its handle. All values needed after suspension live in the task's state; the cleanup callback also handles cancellation.
+Build and run the complete C99 state-machine example [coroutine_udp.c](../examples/coroutine_udp.c) (requires examples, `HX_OS_ENABLE_NETWORK`, `HX_OS_ENABLE_LOOP`, `HX_OS_ENABLE_COROUTINES`, and `HX_OS_ENABLE_COROUTINE_IO`):
 
 ```sh
 cmake --build build --config Release --target hx_os_coroutine_udp
 ```
 
-Run `./build/bin/hx_os_coroutine_udp` on Linux/WSL, or `.\build\bin\Release\hx_os_coroutine_udp.exe` with Visual Studio. Reuse your existing build directory; the target needs examples, NETWORK, LOOP, COROUTINES and COROUTINE_IO enabled. No server or arguments are needed. The expected output is:
+Run `./build/bin/hx_os_coroutine_udp` on Linux/WSL or `.\build\bin\Release\hx_os_coroutine_udp.exe` on Windows with Visual Studio. Expected output:
 
 ```text
 UDP JSON: {"type":"status","device_id":7}
 ```
 
-Each receive consumes one datagram. An empty datagram succeeds with zero bytes; it is not EOF. A small receive buffer returns `LIMIT`, the copied byte count and sender address, and discards the remainder. Do not parse that prefix as a complete JSON message. Timeout/cancellation keeps borrowed buffers until native I/O retires; stackless `WOULD_BLOCK` still requires persistent buffers and another `AWAIT` call. Successful send is local acceptance, not a delivery acknowledgment. These UDP entries do not add reliability or packet-info/multicast controls; ordinary UDP loss, duplicate and reordering rules still apply. The existing coroutine handle/request/byte budgets are shared.
+Each receive consumes one UDP datagram. An empty datagram succeeds with `HX_OS_OK` and `0` bytes (not `HX_OS_EOF`). If the receive buffer is smaller than the datagram, the call returns `HX_OS_LIMIT` along with the copied byte count and sender address, discarding the remaining bytes of that datagram (never parse a truncated prefix as a complete JSON message).
 
 ## 7. Bounds, cancellation and lifetime
 
-| Setting or operation | Contract |
+| Setting or operation | Default and contract |
 | --- | --- |
-| Default workers | 2, fixed after creation; no global runtime |
-| `max_coroutines` | 1,024 live handles, including completed tasks still retained |
-| Stackful stack | 128 KiB payload; 64 MiB aggregate reservation budget including guard/native rounding |
-| Channels and coroutine sync objects | Shared 128-object limit; shared 16 MiB object/buffer/waiter/owning-box budget |
-| I/O | 1,024 stream wrappers; 16 MiB native loop request/byte budget; one dispatcher |
-| `max_io_handles=0` | CPU/channel runtime without I/O dispatcher or network initialization |
-| DNS | Existing bounded pool; `resolve` keeps system DNS, `resolve_cancellable` cancels c-ares queries |
-| `cancel` | Cooperative flag plus wake/cancel of an outstanding wait; never kills a thread or forcibly unwinds a C++ stack |
-| `wait_until` | Native caller blocks, coroutine caller suspends; self-wait is `DEADLOCK`, cross-runtime coroutine wait is `NOT_SUPPORTED` |
-| `drain_until` | Reject new tasks, let accepted tasks finish; a later close can escalate to cancellation |
-| `close_until` | Reject new tasks, cancel accepted tasks, wait and join within the caller's monotonic deadline |
-| `destroy` | Requires successful close; `BUSY` preserves the owner otherwise |
+| Default workers | `2`, fixed at creation; no hidden global runtime |
+| `max_coroutines` | `1,024` live handles (including completed tasks whose handles are still retained) |
+| Stackful stack budget | `128 KiB` usable stack per coroutine; `64 MiB` aggregate reservation budget (including guard pages and OS page rounding) |
+| Channels and coroutine sync objects | Shared `128`-object limit; shared `16 MiB` budget for objects, buffers, waiters, and owning boxes |
+| Coroutine I/O budget | `1,024` stream wrappers; `16 MiB` native loop request/byte budget; `1` dispatcher thread |
+| `max_io_handles = 0` | CPU/channel-only runtime without an I/O dispatcher thread or network initialization |
+| DNS resolution | Shared bounded resolver pool; `resolve` uses system DNS, `resolve_cancellable` cancels `c-ares` queries |
+| `cancel` | Sets the cooperative cancellation flag and wakes/cancels active waits; never kills threads or unwinds C++ stacks |
+| `wait_until` | Blocks native callers and suspends coroutine callers; waiting on oneself returns `HX_OS_DEADLOCK`, cross-runtime coroutine wait returns `HX_OS_NOT_SUPPORTED` |
+| `drain_until` | Rejects new tasks and lets accepted tasks finish (a subsequent `close_until` can escalate to cancellation) |
+| `close_until` | Rejects new tasks, cancels accepted tasks, and waits/joins workers within the caller's monotonic deadline |
+| `destroy` | Requires a prior successful close; otherwise returns `HX_OS_BUSY` and preserves `owner` |
 
-Lazy native stack creation may fail after admission; wait/get reports that failure. Callback self/current pointers are borrowed; retain before taking ownership. An accepted task's cleanup runs once, including cancellation before its first instruction. Completion includes cleanup. Scheduler cleanup and I/O dispatcher callbacks get DEADLOCK when waiting for unfinished tasks; runtime close from scheduler/dispatcher threads also returns DEADLOCK. Timeouts leave objects and background storage valid for retry. No operation promises a hard real-time deadline. A coroutine that never yields can prevent close from completing. The owner is not a shared mutable global allocator/configuration.
+> [!WARNING]
+> **Thread-local storage (TLS) and native mutex rules**
+> - **Coroutines stay pinned to their worker**: Child coroutines spawned from a coroutine inherit the same worker thread, while native-thread submissions use round-robin assignment; there is no cross-worker migration.
+> - **OS TLS is not coroutine-local**: On POSIX, all coroutines sharing a worker thread share the same OS TLS; on Windows, FLS follows native fibers. Use `hx::coro::Local<T>` (or the C local-key API in Section 9) for portable coroutine-local storage.
+> - **Never hold an OS mutex across a suspension point**: Suspending a coroutine while holding a native `hx_os_mutex` can deadlock the worker thread if another coroutine scheduled onto that same worker tries to acquire the same native lock. Use coroutine synchronization primitives (Section 9) instead.
 
-Runtime creation can fail with a non-NULL owner if worker/I/O rollback cannot finish. This runtime is closing and accepts no tasks. Retry `close_until`, then destroy after successful close; preserve its context until then. A failed C++ factory Result leaves the caller's owner variable available: construct `hx::coro::Runtime(owner)` solely to call `shutdownUntil(deadline)`. Coroutine HTTP service creation follows the same rule if its pool rollback fails; close the service before the runtime. See [shared lifetime rules](CONTRACTS.md#shared-rules).
-
-Tasks remain pinned to one worker. Child tasks submitted from a coroutine inherit that worker; native-thread submissions use round robin. There is no work stealing or automatic load migration. Thread-local storage is not coroutine-local storage: POSIX TLS is shared by tasks on the worker, while Windows FLS follows native fibers. Use `Local<T>` or the C local-key API for portable coroutine-local values, or keep state in user data/the frame. Never hold a native mutex across a coroutine suspension. Library signal/profiler/hash reentry state is switched explicitly. Profiler interval stacks are also isolated per coroutine, so interleaving is not mistaken for nesting. Up to 64 local slots, shared by profiler instances and application coroutine-local keys, may be associated with one coroutine; exit frees caches and aborts unfinished intervals, while max_threads still bounds all profiling contexts. Close a profiler from the native host after its tasks finish; its close API remains synchronous. This does not make arbitrary third-party TLS-based APIs coroutine-safe.
-
-Module byte budgets count their direct backing storage. User callbacks, nested value allocations, C++ frames/results and native worker stacks have separate costs and lifetimes. Fixed stack exhaustion is an OS fault, not a recoverable status. Stack reservations are not resident-memory measurements. Shutdown includes worker TLS cleanup and native thread joining. Android API 21 supports finite join: the Bionic adapter observes the kernel-cleared thread ID through `pthread_gettid_np` before final reclamation, including TLS cleanup. A timeout preserves the thread for retry. This is a monotonic deadline, not forced cancellation or a hard real-time bound. Coordinate caller-created submitting threads and exclude in-flight API calls before destroying the owner; library close does not join those threads. Retained tasks/channels/streams can retain context allocations after close, so release them before context destruction. Before plugin unload, release every handle, frame, result and callback table that depends on its code, even after runtime close. Cycles in user-owned values require user cleanup; there is no tracing collector.
+If runtime creation (or coroutine HTTP service creation) fails and worker/I/O rollback cannot finish within the deadline, the factory returns an error with a non-NULL closing `owner`. Do not submit tasks; retry cleanup via `hx::coro::Runtime(owner).shutdownUntil(deadline)` until it succeeds (see [shared lifetime rules](CONTRACTS.md#shared-rules)).
 
 ## 8. Build, trim and verify
 
-Choose one target; building all four is unnecessary. None needs arguments or input files:
+You can build and run any individual example target below without command-line arguments or input files:
 
-| Target | Complete source | Result |
+| Target | Complete source | Expected output |
 | --- | --- | --- |
-| `hx_os_go` | [go.cpp](../examples/go.cpp) | C++11 channel returns `Answer: 42` |
-| `hx_os_cpp_coroutine` | [coroutine.cpp](../examples/coroutine.cpp) | C++11 Task returns `Answer: 42` |
-| `hx_os_coroutine` | [coroutine.c](../examples/coroutine.c) | C99 prints `Count: 1`, `Count: 2`, `Count: 3` in order |
-| `hx_os_coroutine_udp` | [coroutine_udp.c](../examples/coroutine_udp.c) | C99 sends and receives a JSON UDP datagram |
-| `hx_os_cpp_coroutine20` | [coroutine20.cpp](../examples/coroutine20.cpp) | C++20 returns `Answer: 42` after co_await |
+| `hx_os_go` | [go.cpp](../examples/go.cpp) | C++11 channel example printing `Answer: 42` |
+| `hx_os_cpp_coroutine` | [coroutine.cpp](../examples/coroutine.cpp) | C++11 `Task<int>` example printing `Answer: 42` |
+| `hx_os_coroutine` | [coroutine.c](../examples/coroutine.c) | C99 stackless state machine printing `Count: 1`, `Count: 2`, `Count: 3` |
+| `hx_os_coroutine_udp` | [coroutine_udp.c](../examples/coroutine_udp.c) | C99 coroutine sending and receiving a JSON UDP datagram |
+| `hx_os_cpp_coroutine20` | [coroutine20.cpp](../examples/coroutine20.cpp) | C++20 `co_await` example printing `Answer: 42` |
 
-For example, run `cmake --build build --config Release --target hx_os_coroutine`, then `.\build\bin\Release\hx_os_coroutine.exe` on Windows or `./build/bin/hx_os_coroutine` on Linux. Stay in the library checkout root.
+When examples are enabled, CMake probes `<coroutine>` (`HX_OS_HAVE_CPP20_COROUTINES`) and defines `hx_os_cpp_coroutine20` automatically when supported; the C99 and C++11 examples do not require C++20.
 
-With examples enabled, CMake finds a C++ compiler and probes `<coroutine>`. It creates `hx_os_cpp_coroutine20` only when that probe succeeds; there is no separate C++20 example switch to enable. If the target is missing, inspect the configuration's C++ compiler and `HX_OS_HAVE_CPP20_COROUTINES` result instead of forcing the internal variable. C99 and C++11 examples do not require C++20.
-
-In your installed-package project, create an executable first, then select one matching link target:
+In an installed consumer project, link the target that matches your language level:
 
 ```cmake
 find_package(hx_c_platform CONFIG REQUIRED)
@@ -283,45 +285,40 @@ target_link_libraries(my_cpp11_app PRIVATE hx_c_platform::cpp)
 target_link_libraries(my_cpp20_app PRIVATE hx_c_platform::cpp20)
 ```
 
-`HX_OS_ENABLE_COROUTINES`, `HX_OS_ENABLE_STACKFUL_COROUTINES` and `HX_OS_ENABLE_COROUTINE_IO` default ON. Turning off the core removes its scheduler/channel/native implementation. Turning off stackful support retains C state machines and C++20. I/O requires NETWORK and LOOP; if either is disabled, coroutine I/O reports `NOT_SUPPORTED`. Closing unused I/O lifecycle state still succeeds because there are no resources to retire. The embedded minimal cache disables the module explicitly; selectively re-enable it after `-C cmake/minimal.cmake`.
-
-POSIX stack switching has x86_64, i386/SSE, ARMv7/VFP and AArch64 backends. An unadapted CPU fails clearly; use stackless-only configuration until it is adapted. Active Linux x86 shadow stacks are detected and stackful entry reports unsupported without disabling host protection; see the [Linux kernel interface](https://www.kernel.org/doc/html/latest/arch/x86/shstk.html). Windows uses native fiber context preservation. Apple implementation paths are present, with target builds/runs pending. See [platform support](PLATFORMS.md) for other target limits.
+`HX_OS_ENABLE_COROUTINES`, `HX_OS_ENABLE_STACKFUL_COROUTINES`, and `HX_OS_ENABLE_COROUTINE_IO` default to `ON`:
+- Disabling `HX_OS_ENABLE_STACKFUL_COROUTINES` keeps C99 state machines and C++20 stackless coroutines available.
+- POSIX stackful context switching includes `x86_64`, `i386/SSE`, `ARMv7/VFP`, and `AArch64` backends. On Linux x86 systems with hardware shadow stacks enabled (see the [Linux kernel interface](https://www.kernel.org/doc/html/latest/arch/x86/shstk.html)), stackful entry points detect active shadow stacks and return `HX_OS_NOT_SUPPORTED` without weakening host protection. See [platform support](PLATFORMS.md) for target details.
 
 ## 9. Coroutine synchronization and local values
 
-Include `hx/CoroutineSync.hpp`. `Mutex::create(runtime)`, `Semaphore::create(runtime, initial, maximum)`, `Event::create(runtime, manualReset, initiallySet)`, `RwLock::create(runtime)` and `Condition::create(runtime)` return explicit results. Their C counterparts live in `hx_os_coroutine.h`; they also support C99 stackless retry/consume semantics.
+Include `hx/CoroutineSync.hpp` (or `hx_os_coroutine.h` in C) for synchronization primitives that suspend contending coroutines instead of blocking worker threads:
 
-| Primitive | Contract |
+| Primitive | Factory and contract |
 | --- | --- |
-| Mutex | Nonrecursive; ownership belongs to a coroutine identity or native thread. Same-owner relock reports `DEADLOCK`. `acquireUntil` returns an RAII `Lock`. |
-| Semaphore | Bounded count; post beyond the maximum reports `LIMIT` without changing it. |
-| Event | Manual reset releases all waiters and remains set; auto reset releases one waiter or retains one notification. Repeated set is not a counter. |
-| Read/write lock | Concurrent readers or one writer; queued writers prevent reader bypass. No upgrade, downgrade or recursive-read guarantee. Caller must own each read share it releases. |
-| Condition | Wait atomically releases the supplied owned mutex; notification is not retained. Recheck the predicate in a loop. |
+| **Mutex (`Mutex`)** | `Mutex::create(runtime)`. Nonrecursive; ownership tracks coroutine identity or native thread. Relocking from the same owner returns `HX_OS_DEADLOCK`. `acquireUntil` returns an RAII `Lock`. |
+| **Semaphore (`Semaphore`)** | `Semaphore::create(runtime, initial, maximum)`. Bounded count; posting past `maximum` returns `HX_OS_LIMIT` without modifying the count. |
+| **Event (`Event`)** | `Event::create(runtime, manualReset, initiallySet)`. Manual-reset wakes all waiters and stays set; auto-reset wakes a single waiter. |
+| **Read/write lock (`RwLock`)** | `RwLock::create(runtime)`. Concurrent readers or one exclusive writer; queued writers block new readers. No recursive read locking or read-to-write upgrade. |
+| **Condition variable (`Condition`)** | `Condition::create(runtime)`. Atomically releases the caller's held coroutine mutex while waiting; recheck your predicate in a loop upon waking. |
 
-Uncontended acquisition uses the runtime lock without allocating a waiter. Contention allocates a bounded waiter. Native hosts block and coroutines suspend; cross-runtime coroutine waits return `NOT_SUPPORTED`. `NOW` reports `WOULD_BLOCK` when unavailable. Objects must remain referenced for a call; accepted waits retain what they use. Closing rejects/wakes waits, while owned locks can still be unlocked. Closing a mutex is not a way to forcibly revoke its owner.
+> [!IMPORTANT]
+> **Condition waits always reacquire the mutex before returning, and task exit never auto-unlocks**
+> - **Mutex reacquisition guarantee**: A `Condition` wait **always reacquires its mutex before returning**, including on timeout, cancellation, or condition close. Because reacquisition waits for the current lock holder and cannot be skipped, the caller is guaranteed to hold the lock on return and must unlock it before finishing.
+> - **Unlock before exiting a coroutine**: Coroutine exit does **not** automatically unlock a held `Mutex` or `RwLock` (auto-unlocking would expose partially mutated state). Ensure every C exit path unlocks acquired locks, and keep C++ RAII `Lock` guards inside the acquiring coroutine so they unlock before the coroutine completes.
 
-A condition wait reacquires its mutex **before returning**, including after timeout, cancellation or condition close. Reacquisition can pass the deadline and is not interrupted by repeated cancellation; the mutex must eventually be released by its owner. This is a mutex-ownership guarantee, not a hard cutoff. Keep guards in the acquiring coroutine/thread, unlock before completing the task, and never copy a guard to a different execution context. Destruction of a guard unlocks without blocking.
+C++20 provides matching awaiters: `async::acquire(mutex)`, `async::wait(event/semaphore)`, `async::readLock(lock)` / `async::writeLock(lock)`, and `async::wait(condition, guard)`.
 
-Task exit does not automatically unlock a coroutine mutex or write lock. An owner that exits without unlocking can leave other callers blocked indefinitely; another thread or coroutine cannot unlock an owner-checked mutex on its behalf. Automatic unlock could expose partially updated shared data. C callbacks must unlock on every exit path after acquisition; C++ guards must stay in the owning execution context and cover error/cancellation returns.
-
-Closing a runtime or synchronization object does not interrupt condition-wait reacquisition or revoke the current lock owner. A caller-owned native thread can still be reacquiring after runtime close succeeds, because runtime close joins only its own workers. Let the lock owner finish and unlock, join the host thread, release synchronization handles, then destroy the runtime. A hard deadline for this whole sequence is not provided by the current return-with-lock contract.
-
-C++20 adds `async::acquire(mutex)`, `async::wait(event/semaphore)`, `async::readLock/writeLock(lock)` and `async::wait(condition, guard)`. The guard used with a condition must remain alive across the await. These waits use the same C scheduler; they do not create one thread per wait.
-
-`Local<T>::create(context)` creates a key; copying the wrapper shares that key. `set(value)` creates coroutine-owned storage; `get()` borrows a pointer in the current coroutine and `clear()` destroys its value. Another coroutine on the same worker sees its own value. Replacement and thread-of-execution cleanup destroy each owned value once; releasing the last external key reference does not invalidate live stored values. The C API accepts a borrowed value pointer and optional cleanup callback, transferring that value's cleanup responsibility only on successful set. Cleanup runs on the finishing coroutine's worker and must not yield or mutate local slots. Host threads have no coroutine-local slot. Stored values/callbacks can retain a plugin; finish tasks and release keys before unloading it.
+**Coroutine-local storage (`Local<T>`)**: Call `Local<T>::create(context)` to allocate a key (copies of the wrapper share the same key). `set(value)` stores a coroutine-owned value, `get()` borrows a pointer to the current coroutine's value, and `clear()` destroys it. Different coroutines on the same worker thread see independent values, and each stored value is destroyed once on replacement or coroutine exit (up to `64` local slots are shared between application keys and internal profiler state; native host threads do not have coroutine-local slots).
 
 ## 10. Optional groups and results
 
-`Group group(runtime, capacity)` collects a bounded batch of void/`Result<void>` tasks. `group.spawn(...)` retains task handles; `group.waitUntil(deadline)` waits and consumes completed entries, keeps unfinished entries on timeout, and reports the first stored submission/execution failure. Task failure does not skip waiting for the rest. `group.cancel()` requests cooperative cancellation. The group is used by one serialized caller; it is not concurrent Go `WaitGroup.Add`. Destruction only releases handles, with no hidden wait or cancellation, so referenced application data still needs its execution lifetime. Its error remains sticky for that group; construct a new group for a new error scope.
-
-Use `runtime.submit(function, args...)` for typed results. `Task<T>::getUntil` consumes the handle only after task completion. A timeout keeps it usable; releasing a task handle never kills the task. The complete typed examples remain [C++11](../examples/coroutine.cpp) and [C++20](../examples/coroutine20.cpp). Ordinary managed tasks, optional groups and typed handles all share the same task/stack budgets and scheduler.
+- **Bounded task batches (`Group`)**: `Group group(runtime, capacity)` collects a bounded batch of `void` / `Result<void>` tasks. Launch work with `group.spawn(...)`, wait with `group.waitUntil(deadline)` to consume completed entries and inspect the first recorded error, or call `group.cancel()` to request cooperative cancellation. `Group` is operated serially by a single caller and does not block or cancel in its destructor.
+- **Typed return values (`Task<T>`)**: Call `runtime.submit(function, args...)` when you need a `Task<T>` handle, and retrieve the outcome via `Task<T>::getUntil(deadline)` (see the complete [C++11](../examples/coroutine.cpp) and [C++20](../examples/coroutine20.cpp) typed examples).
 
 ## 11. Suspend while TLS or HTTP is waiting
 
-For an existing TLS owner, replace synchronous readiness/send/receive/flush with `hx_os_coro_tls_wait_ready`, `hx_os_coro_tls_send_until`, `hx_os_coro_tls_receive_until` or `hx_os_coro_tls_flush_until`. They register with that owner's existing worker, without adding a polling thread. C++11 stackful tasks may use the borrowed `hx::coro::Tls` facade in `<hx/CoroutineNetwork.hpp>`. Raw TLS still needs your framing and explicit endpoint close.
-
-HTTP uses an explicitly created `hx_os_coro_http` service with a separate bounded I/O pool. Defaults are two threads, sixteen accepted requests and 64 MiB reserved for copied inputs and maximum response data. Container growth peaks and native curl/TLS allocations are additional; this is an admission budget, not a process RSS limit. Inputs are copied; the response changes only on success.
+- **Coroutine TLS operations**: For an existing TLS session `owner`, replace synchronous readiness, send, receive, and flush calls with `hx_os_coro_tls_wait_ready`, `hx_os_coro_tls_send_until`, `hx_os_coro_tls_receive_until`, or `hx_os_coro_tls_flush_until` (or use the borrowed `hx::coro::Tls` facade in `<hx/CoroutineNetwork.hpp>` from C++11 stackful coroutines). These register directly with the TLS owner's worker without adding polling threads (see [TLS](TLS.md) for certificate trust and profiles).
+- **Coroutine HTTP client**: Create an explicit `hx_os_coro_http` service backed by a dedicated bounded I/O pool (defaulting to `2` worker threads, `16` in-flight requests, and a `64 MiB` admission budget for copied request/response payloads):
 
 ```mermaid
 flowchart LR
@@ -341,8 +338,6 @@ cmake --build build --config Release --target hx_os_coroutine_http
 build/bin/hx_os_coroutine_http http://127.0.0.1:8080/hello.txt
 ```
 
-On Visual Studio use `build/bin/Release/hx_os_coroutine_http.exe`. With `hello.txt` containing `hello`, output is `HTTP 200` followed by `hello`. The program shows creation, `HX_OS_CORO_AWAIT`, response cleanup and closing the I/O service before the runtime. Inside a stackful task the operation is one `hx_os_coro_http_get(service, url, NULL, &response, &error)` call. C++ uses `hx::coro::Http(service).get(url, response)`.
+On Visual Studio, run `build/bin/Release/hx_os_coroutine_http.exe`. When `hello.txt` contains `hello`, the program prints `HTTP 200` followed by `hello`. Inside a stackful coroutine, a GET request is a single `hx_os_coro_http_get(service, url, NULL, &response, &error)` call (or `hx::coro::Http(service).get(url, response)` in C++11). Always close the HTTP service from a host thread with `close_until` before closing the coroutine runtime (see [HTTP transfers](HTTP_FILES.md) for streaming file downloads).
 
-Stackless tasks keep arguments, buffers and deadlines in persistent state and repeat the pending operation after `WOULD_BLOCK`. TLS sends preserve cumulative partial bytes. Coroutine cancellation wakes a suspended call; unfinished HTTP background work retains its own copied data. Close HTTP from a native owner thread using `close_until`; timeout retains the service for retry, including a worker blocked in system DNS. Do not destroy the runtime first or assume HTTP cancellation undoes a server operation. See [HTTP transfers](HTTP_FILES.md) for ordinary streaming files and [TLS](TLS.md) for trust and profiles.
-
-Use `hx_os_coro_resolve_cancellable` when DNS network waits must also respond to cancellation. C++11 exposes `Addresses::resolveCancellable`; C++20 exposes `async::resolveCancellable`. Inputs are copied before the initial suspension, successful results belong to the caller, and native callbacks retire before resolution completes. Existing resolve retains system DNS. The [DNS example](NETWORK_OPTIONS.md#123-use-an-event-loop-or-coroutine) has a runnable `--coro` mode. Coroutine HTTP separately needs a c-ares-enabled libcurl SDK and `hx_os_coro_http_use_cancellable_dns` before submission; see [HTTP configuration](HTTP_FILES.md#4-cancel-even-when-dns-receives-no-reply). These are distinct build switches.
+When DNS resolution itself must respond to cancellation while waiting for an unresponsive server, use `hx_os_coro_resolve_cancellable` (`Addresses::resolveCancellable` in C++11, `async::resolveCancellable` in C++20; see the `--coro` mode in the [DNS example](NETWORK_OPTIONS.md#123-use-an-event-loop-or-coroutine)). For coroutine HTTP requests, link a `c-ares`-enabled `libcurl` SDK and enable `hx_os_coro_http_use_cancellable_dns` before submitting requests (see [HTTP configuration](HTTP_FILES.md#4-cancel-even-when-dns-receives-no-reply)).

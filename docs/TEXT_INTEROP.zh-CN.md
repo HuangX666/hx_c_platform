@@ -2,17 +2,18 @@
 
 [English](TEXT_INTEROP.md) · [README](../README.zh-CN.md)
 
-**这页有两份可直接保存为 main.c 的程序。** 按[最小 C 工程](USAGE.zh-CN.md#c-project)分别运行，每次选择一份。
+在跨平台 C/C++ 开发中，应用内部统一使用 UTF-8 最为省心，但总会遇到两类平台边界问题：一是第三方库强制要求传入标准 C 的 `FILE *`，而在 Windows 上直接把含中文的 UTF-8 路径传给 `fopen()` 会按本地 ANSI 代码页解析导致乱码或打开失败；二是操作系统原生 API 返回了 `wchar_t *` 宽字符串，需要安全地与 `hx_string` 互转。本模块专门提供这两类互操作辅助函数以及与区域设置无关的 ASCII 忽略大小写比较。
 
-第 1 份在当前工作目录创建或覆盖 `message-中文.txt`，成功时退出码为 0，文件内容是 `Hello, 中文!` 加换行；它不在控制台打印成功提示。第 2 份把原生 wchar_t 文字转成 UTF-8，正常显示 `中文😀`；控制台也要能按 UTF-8 显示。
+> [!TIP]
+> 如果你只是想直接读写整个 UTF-8 文本文件，无需手动绕道 `FILE *` 或 `wchar_t`，直接使用 `hx_os_file_read_text()`／`hx::Files::readText()` 等文件便利接口即可。
 
-前者适用于第三方接口要求 FILE* 的场合，后者适用于系统接口给出宽字符串的场合。普通读取 UTF-8 文件可直接使用文件便利入口，无需自己经过宽字符串。
-
-当已有原生接口需要 `wchar_t`，或者第三方接口需要标准 `FILE *` 时，使用这些辅助函数。普通整文件文本读取仍使用 `hx_os_file_read_text()` / `hx::Files::readText()`。
+下面第 1 节与第 2 节各提供了一份完整的 C99 程序，你可以任选一份保存为 `main.c`，并按[最小 C 工程](USAGE.zh-CN.md#c-project)直接编译运行：
+- **第 1 份程序**：在当前工作目录下创建或覆盖名为 `message-中文.txt` 的文件，写入 `Hello, 中文!` 加换行符，成功时进程退出码为 `0`。
+- **第 2 份程序**：将原生 `wchar_t` 宽字符串 `L"中文😀"` 转换为 UTF-8 并打印到终端（在支持 UTF-8 的终端上会输出 `中文😀`）。
 
 ## 1. 用 UTF-8 文件名打开标准 FILE
 
-下面是完整 C99 程序，写入一段 UTF-8 文本，不转换换行符。路径和模式仅在打开期间借用。打开函数转换的是文件名，不会转换文件内容。
+当第三方库接口要求传入 `FILE *` 时，使用 `<hx_os_stdio.h>` 中的 `hx_os_fopen_utf8()` 可以在所有平台上用 UTF-8 文件名打开标准文件流，最后用 `hx_os_fclose()` 关闭。注意：`hx_os_fopen_utf8()` 仅负责把**文件名路径**转换为宿主系统要求的形式（如 Windows UTF-16 及长路径格式），不会对文件内部读写的数据字节做编码转换。
 
 ```c
 #include <hx_os_stdio.h>
@@ -36,13 +37,16 @@ int main(void)
 }
 ```
 
-模式以 `r`、`w` 或 `a` 开头，后面可选 `b` 和 `+`，两者顺序不限，例如 `rb`、`wb`、`ab`、`r+b` 或 `rb+`。重复标记和运行库专用扩展在调用 CRT 前返回 INVALID。Windows 上使用 `b` 保持原始字节。这些同步操作可能阻塞；`fclose` 还会冲刷 CRT 的用户态缓冲，但这不等于持久化保证。
+- **受支持的模式字符串**：必须以 `r`、`w` 或 `a` 开头，后接可选的 `b` 和 `+`（两者顺序不限，即支持 `rb`、`wb`、`ab`、`r+b`、`rb+` 等标准写法）。若包含重复标志或特定编译器的非标准 CRT 模式扩展，函数会在调用底层 CRT 前直接拒绝并置状态为 `HX_OS_INVALID`。在 Windows 上建议显式加上 `b` 以保持原始换行字节不被转换。
+- **关闭与 CRT 边界契约**：`hx_os_fclose(&file, &error)` 会通过打开该文件的运行库关闭流（同时冲刷 CRT 用户态缓冲，但不等同于调用 `fsync` 落盘持久化），且无论关闭是否成功都会将 `file` 指针置为 `NULL`。
 
-`hx_os_fclose()` 通过打开文件的运行库关闭流，关闭失败也清空指针。调用者直接使用 `fread`、`fwrite` 等标准接口时，双方需要使用兼容的共享 CRT。尤其在 Windows 上，分别静态链接各自 CRT 的 DLL 不能安全地交换这些流；这种边界应使用不透明的 `hx_os_file` 接口。Windows 路径复用现有文件接口的 UTF-8 校验及长路径转换。
+> [!WARNING]
+> **Windows 动态库（DLL）的 CRT 一致性要求：**
+> 当你的代码拿到 `FILE *` 并直接调用 `fread()`、`fwrite()` 等标准库函数时，调用方必须与 `hx_c_platform` 共享同一个 C 运行库（CRT）实例。特别是在 Windows 上，如果两个模块分别静态链接了各自独立的 CRT（`/MT`），切勿跨模块边界直接传递 `FILE *`；跨独立 CRT 边界时请改用不透明句柄 `hx_os_file` 系列接口。
 
 ## 2. 把原生宽字符串直接写入 hx_string
 
-下面是完整的 C99 程序，创建、使用并释放输出字符串：
+当系统原生接口返回 `wchar_t *` 时，可以使用 `hx_string_assign_wide()` 将其严格转换为 UTF-8 并存入 `hx_string`：
 
 ```c
 #include <hx_string.h>
@@ -65,13 +69,13 @@ int main(void)
 }
 ```
 
-`units` 表示 `wchar_t` 元素数量，不是字节数，也不是 Unicode 码点数。Windows 上补充平面字符占两个 UTF-16 单元；已适配的 POSIX 目标使用 UTF-32 原生宽字符单元。转换严格且不依赖进程区域设置，孤立代理项和越界码点会报错，失败保留原有 `hx_string`。
-
-缓冲区入口 `hx_os_text_to_wide()`、`hx_os_text_from_wide()` 接受显式长度并保留嵌入的 NUL。容量与所需大小均以目标元素为单位，包含末尾 NUL。输出为 NULL 且容量为零时测量长度并返回 OUTPUT_FULL。输入无效或容量不足时不修改输出缓冲区。输入、输出以及保存所需大小的位置不得重叠。
+- **注意 `units` 参数的单位**：`units` 表示 **`wchar_t` 元素的个数**，既不是字节数，也不是 Unicode 码点数。在 Windows 上，`wchar_t` 为 16 位 UTF-16 编码单元，像 `😀` 这样的增补平面字符会占用 **2 个** `wchar_t` 单元；而在受支持的 POSIX 平台上，`wchar_t` 为 32 位 UTF-32 单元。
+- **严格校验与失败保护**：转换过程完全独立于进程的全局 locale。遇到孤立代理项（Unpaired Surrogates）或越界码点时会明确返回 `HX_OS_INVALID`，并保持目标 `hx_string` 原有内容不变。
+- **底层缓冲区互转接口**：`hx_os_text_to_wide()` 与 `hx_os_text_from_wide()` 接受显式元素长度，并原样保留内嵌的 `\0` 字符。其 `capacity` 与输出的 `required` 长度均以**目标元素类型**（`wchar_t` 或 `char`）为单位，且**包含末尾终止符**。传入 `output = NULL, capacity = 0` 可预先测量所需元素个数（此时返回 `HX_OS_OUTPUT_FULL` 并填写 `required`）。输入、输出与 `required` 变量所在的内存区域不得重叠。
 
 ## 3. 不使用异常的 C++11 便利入口
 
-包含 `<hx/Text.hpp>`。下面的函数先把原生字符串转换成 UTF-8，再转换回来；返回的宽字符串自己持有内存：
+在 C++11 中，包含 `<hx/Text.hpp>` 即可使用 `hx::Text::fromWide()` 与 `hx::Text::toWide()`，两者均返回 `hx::Result` 且不依赖 C++ 异常：
 
 ```cpp
 hx::Result<hx::WideString> make_native_title() noexcept
@@ -84,8 +88,15 @@ hx::Result<hx::WideString> make_native_title() noexcept
 }
 ```
 
-检查结果后，在结果对象仍然存活时使用 `result.value().c_str()`。`WideString::size()` 不含结束符，以原生宽字符单元计数。`fromWideUnits(pointer, units, context)` 通过显式长度保留嵌入的 NUL；`toWide()` 也可指定持有结果的 context。自有接口均使用 `Result`，支持关闭异常的编译配置。
+- 先检查 `if (result)`，再在结果对象存活期间访问 `result.value().c_str()`。
+- `hx::WideString::size()` 返回不含末尾终止符的原生 `wchar_t` 单元数。
+- 若宽字符串包含内嵌 `L'\0'`，可使用 `hx::Text::fromWideUnits(pointer, units, context)` 按显式长度转换；`hx::Text::toWide()` 也支持传入自定义的 `hx_context` 内存上下文。
 
 ## 4. ASCII 忽略大小写比较和查找
 
-`hx_string_compare_ascii_nocase()` 返回 -1、0 或 1；`hx_string_find_ascii_nocase()` 返回字节偏移或 `HX_STRING_NOT_FOUND`。C++ `String` 对应方法是 `compareAsciiNoCase()` 和 `findAsciiNoCase()`。它们不分配内存，保留嵌入的 NUL，也不依赖进程区域设置。仅把 A-Z 按 a-z 比较，其他 UTF-8 字符保持精确匹配，因此不会把 `ß` 与 `ss` 视为相同，也不做 Unicode 规范化。查找沿用现有 find 契约：无效查找串或落在 UTF-8 码点内部的起始位置返回 NOT_FOUND。
+当协议字段、HTTP 头或配置键名只需要按 ASCII 规则（`A-Z` 映射为 `a-z`）忽略大小写比较或搜索时，可以使用：
+
+- **C 接口**：`hx_string_compare_ascii_nocase()`（返回 `-1`、`0` 或 `1`）与 `hx_string_find_ascii_nocase()`（返回匹配的字节偏移，未找到返回 `HX_STRING_NOT_FOUND`）。
+- **C++11 接口**：`hx::String::compareAsciiNoCase()` 与 `hx::String::findAsciiNoCase()`。
+
+这两个操作零堆内存分配、保留内嵌 `\0`、且不受系统 locale 影响。它们仅折叠 ASCII 范围内的 `A-Z` 与 `a-z`，对所有非 ASCII 的 UTF-8 字节保持精确比较（因此不会把德语 `ß` 与 `ss` 视为相等，也不做 Unicode 规范化；若需要完整 Unicode 大小写折叠，请使用 [Unicode 模块](UNICODE.zh-CN.md)）。查找接口遵循统一的 `find` 契约：若搜索词本身不是合法 UTF-8，或者传入的起始偏移落在了多字节 UTF-8 字符的中间字节上，将直接返回 `HX_STRING_NOT_FOUND`。

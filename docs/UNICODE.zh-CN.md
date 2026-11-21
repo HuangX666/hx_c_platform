@@ -2,37 +2,59 @@
 
 [English](UNICODE.md) · [README](../README.zh-CN.md)
 
-**先运行一个完整例子。** 需要按统一 Unicode 大小写规则匹配用户输入时，先转换比较用的副本，再比较；展示文字可以保留原样。
+在处理跨平台文件名、用户搜索词或国际化标识符时，同一个视觉字符在 UTF-8 中可能存在多种编码形式（例如预组合字符 `é` 与 `e + 组合重音符`），不同语言的大小写转换规则也远不止 ASCII 的 `A-Z`（例如德语 `ß` 在大小写折叠后会变成两个字母 `ss`）。如果直接做字节级 `strcmp` 或按字节转小写，往往会导致漏匹配。本模块基于固定版本的 `utf8proc` 提供标准 Unicode 规范化（NFC／NFD／NFKC／NFKD）与语言环境无关的大小写折叠（Case Folding）。
 
-打开 [unicode_tools.c](../examples/unicode_tools.c)。提供 UTF-8 视图 Straße → unicode_casefold 写入 hx_string → 使用结果 → destroy。需要 UNICODE 和对应 utf8proc SDK。
+在实际业务中，推荐**保留原始展示文本不变，仅对用于比较或索引的副本执行转换**。你可以先运行 [unicode_tools.c](../examples/unicode_tools.c) 体验这一过程：程序将 UTF-8 字符串 `"Straße"` 传入 `hx_os_unicode_casefold()`，把折叠结果写入 `hx_string` 并打印。确保构建时启用了 `HX_OS_ENABLE_UNICODE` 及对应的 `utf8proc` SDK，然后按[示例运行方法](../examples/README.zh-CN.md#run)编译并运行 `hx_os_unicode_tools`（无需命令行参数或输入文件）：
 
-按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_unicode_tools`。此例无命令行参数、无需输入文件。
+```text
+strasse
+```
 
-**会得到什么：**输出 `strasse`。它展示 ß 可以变成两个字母 ss，长度不一定保持不变。不要自动把这一步应用于密码或要求精确区分的业务 ID。
-
-下面的短片段用于解释接口；复制运行时以完整示例为准。使用[安装包接入](USAGE.zh-CN.md#installed-project)时，也必须保留对应 SDK 模块。
+可以看到，单个字符 `ß` 折叠后展开成了两个字母 `ss`，因此转换前后的字节长度与字符数都可能发生变化。若通过[安装包接入](USAGE.zh-CN.md#installed-project)使用本功能，请确保安装包同样保留了对应的 SDK 模块。
 
 ## 1. 选择转换
 
-hx_os_unicode_normalize(input, form, out, error) 支持 NFC、NFD、NFKC、NFKD；hx_os_unicode_casefold(input, out, error) 做 Unicode 大小写折叠，并输出 NFC。out 是已初始化的 hx_string，使用自己的分配器；失败保留原值，input 可以借用 out。
+C 语言接口包含在 `<hx_os.h>` 中，核心函数有两个：
+
+- `hx_os_unicode_normalize(input, form, out, error)`：按指定的规范化形式（`HX_OS_UNICODE_NFC`、`HX_OS_UNICODE_NFD`、`HX_OS_UNICODE_NFKC` 或 `HX_OS_UNICODE_NFKD`）转换输入文本。
+- `hx_os_unicode_casefold(input, out, error)`：执行与语言环境（locale）无关的 Unicode 大小写折叠，并将结果规范化为 NFC 形式输出。
+
+输出参数 `out` 必须是已初始化的 `hx_string`（例如 `HX_STRING_INIT`）。函数会使用 `out` 自身绑定的分配器申请内存；若转换失败，`out` 保持原有内容不变。输入视图 `input` 允许借用 `out` 当前持有的缓冲区（支持安全的自引用更新）。
 
 ```c
-hx_string result = HX_STRING_INIT;
+#include <hx_os.h>
+#include <stdio.h>
 
-hx_os_status status = hx_os_unicode_casefold(
-	hx_string_view_from_cstr("Straße"), &result, NULL);
-if (status == HX_OS_OK)
-	puts(hx_string_c_str(&result));
+int main(void)
+{
+	hx_string result = HX_STRING_INIT;
 
-hx_string_destroy(&result);
+	hx_os_status status = hx_os_unicode_casefold(
+		hx_string_view_from_cstr("Straße"), &result, NULL);
+	if (status == HX_OS_OK)
+		puts(hx_string_c_str(&result));
+
+	hx_string_destroy(&result);
+	return status == HX_OS_OK ? 0 : 1;
+}
 ```
 
-包含 hx_os.h、stdio.h，结果为 strasse。C++11 使用 hx::Unicode::normalize／casefold，返回 Result<String>。完整程序：[unicode_tools.c](../examples/unicode_tools.c)。
+在 C++11 中，包含 `<hx/Unicode.hpp>`（或 `<hx/Os.hpp>`）即可调用 `hx::Unicode::normalize()` 与 `hx::Unicode::casefold()`，两者均返回 `hx::Result<hx::String>`。完整用法见 [unicode_tools.c](../examples/unicode_tools.c)。
 
 ## 2. 含义与边界
 
-NFC 合并规范等价字符，NFD 分解它们；NFKC／NFKD 还会转换兼容字符。大小写折叠与 locale 无关，可能改变文本长度；它不是语言排序，也不是土耳其语等语言的特定大小写规则。
+不同规范化形式与大小写折叠的适用场景如下：
 
-输入是严格 UTF-8，可以按长度包含 NUL，最多 1 MiB；转换暂存和输出限制为 16 MiB。不会修改全局 locale，不会自动规范化路径、密码或业务 ID，也不启动后台工作。业务按字段显式选择转换方式。
+- **NFC（规范分解后再规范组合）**：将等价的组合序列合并为标准预组合字符，适合作为文本存储、网络传输和常规相等性比较的统一格式。
+- **NFD（规范分解）**：将预组合字符拆分为基础字符与组合附加符号，适合需要单独检查或剥离重音符号的场景。
+- **NFKC／NFKD（兼容分解与组合）**：除规范等价外，还会将全角字母数字、上标数字、连字（如 `ﬁ` → `fi`）等兼容字符统一替换为标准字符，适合全文搜索或宽松匹配。
+- **大小写折叠（Case Folding）**：旨在消除大小写差异以供不区分大小写的匹配使用。它与系统的全局 locale 无关，但可能改变字符串的字节数和码点数；它既不是按语言习惯排序（Collation），也不处理土耳其语点号 `I`/`ı` 等特定语言专属的大小写规则。
 
-UNICODE 使用固定版本的 utf8proc SDK，可以关闭；关闭后明确返回 NOT_SUPPORTED。实现用输出 context 管理暂存，不替换 utf8proc 全局分配器。需要原生能力时，可通过[底层依赖目标](NATIVE_DEPENDENCIES.zh-CN.md)直接调用 utf8proc。
+> [!WARNING]
+> **切勿盲目自动转换密码与精确业务 ID：**
+> 本模块不会在底层自动改写文件路径、用户密码或业务主键。对于密码哈希、区分大小写的令牌（Token）或要求字节级精确匹配的业务 ID，应明确保留原始字节或仅按协议要求选用 NFC，切勿自动套用 `NFKC` 或 `casefold`。
+
+**输入上限与模块裁剪：**
+- **严格 UTF-8 与容量限制**：输入必须是合法的 UTF-8 字节序列（支持按显式长度包含内嵌 `\0`），单次输入上限为 **1 MiB**；转换过程中的暂存区与最终输出上限为 **16 MiB**。超出上限返回 `HX_OS_LIMIT`，非法 UTF-8 返回 `HX_OS_INVALID`。
+- **无全局状态污染**：转换过程绝不修改进程 locale，也不替换 `utf8proc` 的全局分配器，所有临时缓冲区均通过输出 `hx_string` 绑定的内存上下文管理。
+- **可选裁剪与原生访问**：CMake 选项 `HX_OS_ENABLE_UNICODE` 可单独关闭；关闭后调用上述函数会明确返回 `HX_OS_NOT_SUPPORTED`。如果业务需要直接调用 `utf8proc` 的底层字符属性查询接口，可通过[底层依赖目标](NATIVE_DEPENDENCIES.zh-CN.md)直接链接并调用原生 `utf8proc` API。

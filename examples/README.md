@@ -1,252 +1,265 @@
-# Runnable examples: start with a concrete task
+# Runnable Examples: Start with a Concrete Task
 
-[简体中文](README.zh-CN.md) · [Usage tutorial](../docs/USAGE.md) · [Library README](../README.md)
+[简体中文](README.zh-CN.md) · [Getting-Started Guide](../docs/USAGE.md) · [Back to README](../README.md)
 
-Programs are organized by task and show inputs, calls, results and cleanup; their guides identify supporting headers and plugin sources. Pick the closest task, read and run it, then substitute your data and processing. These are public usage examples and do not require private maintainer regressions.
+Every example in this directory is built around a specific engineering task and shows the complete lifecycle: **preparing inputs → calling the API → checking status/errors → releasing resources**. Pick the example closest to what you are building, run it to verify the output, and then substitute your own data and application logic.
 
-The installed SDK includes these public sources and guides in `share/doc/hx_c_platform/examples`. When reading an installed package, use the [installed consumer setup](../docs/INSTALL.md), copying the selected source and its local headers. The target-build commands below apply to a full source checkout.
+> [!NOTE]
+> In an installed SDK package, these public example sources and guides are located under `share/doc/hx_c_platform/examples`. If you are working from a prebuilt SDK rather than a full source checkout, follow the [Installed SDK Guide](../docs/INSTALL.md) to copy the selected `.c` / `.cpp` source and its companion headers into your project.
 
 <a id="run"></a>
 
-## 1. Build only the program you want
+## 1. Build Only the Example You Need
 
-Start in the library checkout. `build` means an **existing build directory for the matching toolchain**; replace it with your path, such as `build-shared-msvc` or `build-shared-linux`. For a first build, complete [dependency setup](../docs/DEPENDENCIES.md); the default SDK modules need matching providers. For a small C-only start, use the [trimmed source setup](../README.md#section-2) with the selected example as main.
+Run the commands below from the root of the repository checkout (replace `build` with your existing build directory for the active toolchain, such as `build-msvc` or `build-linux`):
+
+- **Full SDK builds**: Prepare the required native dependency SDKs first following the [Dependency Build Guide](../docs/DEPENDENCIES.md).
+- **Minimal C-only builds**: If you only want to run a basic core C example without building external SDKs, you can also use the [starter CMake configuration](../README.md#section-2) and compile the selected example file as `main.c`.
 
 ```sh
 cmake -S . -B build -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build --config Release --target hx_os_binary_stream
 ```
 
-If your existing configuration is Debug, change both the build option and executable path to Debug. Do not share Windows/WSL build directories. With examples enabled, CMake finds a C++ compiler automatically and adds the C++20 example only if its `<coroutine>` probe succeeds; no separate switch is needed. Without a C++ compiler, only the C examples are generated.
+> [!TIP]
+> - When `HX_OS_BUILD_EXAMPLES=ON` is enabled, CMake automatically checks for a C++ compiler and adds the C++20 coroutine example if `<coroutine>` is supported—no extra switch is required. If no C++ compiler is present, only the C examples are generated.
+> - For Debug builds, change `Release` to `Debug` in both the build command and the executable path below. Keep Windows and WSL build directories separate.
 
-Run inside that build directory so generated demo files remain there. Windows Visual Studio:
+Enter the build directory before running the executable so any temporary files created by the demo stay inside `build/`:
 
 ```powershell
+# Windows (Visual Studio multi-config generator)
 cd build
 .\bin\Release\hx_os_binary_stream.exe
 ```
 
-Linux/WSL:
-
 ```sh
+# Linux / WSL (or Windows Ninja single-config generator)
 cd build
 ./bin/hx_os_binary_stream
 ```
 
-No input file is needed. Output is `device=42 temperature=23.5`: the program writes an ID and temperature, then reads them using the same byte order. Replace both target and executable names with the selected item below. Windows Ninja normally places executables directly in `bin`.
-
-Complete programs include creation and cleanup; shorter topic snippets may show only one step. Do not combine multiple main functions or omit error cleanup. Read the reported status on failure; disabled modules explicitly report unsupported.
+`hx_os_binary_stream` requires no input files and prints `device=42 temperature=23.5` (writing a device ID and temperature in big-endian byte order and reading them back). To run any other example below, substitute its CMake target name and executable name.
 
 <a id="inputs"></a>
 
-## 2. Prepare input files and understand writes
+## 2. Prepare Input Files for File and Configuration Examples
 
-Run these commands inside the build directory entered above. Prepare a demo file containing only `0123456789`:
+Run the commands below inside the `build` directory entered above. First, create a 10-byte ASCII test file named `demo.txt` containing `0123456789`:
 
 ```powershell
+# Windows PowerShell
 Set-Content -LiteralPath demo.txt -Value '0123456789' `
     -NoNewline -Encoding ascii
 ```
 
-On Linux/WSL:
-
 ```sh
+# Linux / WSL
 printf '0123456789' > demo.txt
 ```
 
-Pass `demo.txt` to `text_file`, `read_lines`, `positioned_read`, `mapped_file` or `native_file`. Windows example: `.\bin\Release\hx_os_positioned_read.exe demo.txt`; Linux: `./bin/hx_os_positioned_read demo.txt`. Output is `34 35 36 37`, the bytes of 4567 starting at offset 4.
+Pass `demo.txt` to the file examples. For instance, running `hx_os_positioned_read demo.txt` (`.\bin\Release\hx_os_positioned_read.exe demo.txt` on Windows or `./bin/hx_os_positioned_read demo.txt` on Linux) prints `34 35 36 37`—the hexadecimal bytes for `4567` starting at byte offset 4.
 
-| Program | Input/arguments | Changes made |
+| Target Name | Command-Line Arguments | What It Does |
 | --- | --- | --- |
-| `hx_os_text_file` | `demo.txt` or `demo.txt copied.txt` | A second path saves a copy and can replace that destination |
-| `hx_os_read_lines` | `demo.txt` | Read-only; add several lines to observe line iteration |
-| `hx_os_file_attributes` | `demo.txt` | Updates this demo file's modification time |
-| `hx_os_find_files` | `../examples "*.c"` | Read-only scan; quote the pattern to prevent shell expansion |
-| `hx_os_watch_directory` | An existing directory | Watches for five seconds; edit a file from another terminal |
-| `hx_os_config_save` | No arguments, or `saved.json` | Prints JSON without a path; otherwise saves there |
-| `hx_os_config_edit` | No arguments, or `--restore` | Uses preferences.ini here; backs up an existing original |
-| `hx_os_buffered_file` | No arguments | Writes samples.jsonl |
-| `hx_os_persistent_queue` | `publish records.db`, then `consume records.db` | Creates/updates SQLite storage; acknowledgments remove messages |
+| `hx_os_text_file` | `demo.txt` or `demo.txt copied.txt` | Prints the file text; when a second path is given, saves a copy to that path (overwriting any existing file) |
+| `hx_os_read_lines` | `demo.txt` | Read-only line-by-line scan; add multiple lines to `demo.txt` to observe line iteration |
+| `hx_os_file_attributes` | `demo.txt` | Updates `demo.txt`'s modification timestamp while preserving its access time |
+| `hx_os_find_files` | `../examples "*.c"` | Read-only recursive directory scan; quote the glob pattern so the shell does not expand it early |
+| `hx_os_watch_directory` | Path to an existing directory | Watches the directory for 5 seconds; create or edit a file in another terminal to see events |
+| `hx_os_config_save` | No arguments, or `saved.json` | Prints JSON to stdout when run without arguments, or saves atomically to the given path |
+| `hx_os_config_edit` | No arguments, or `--restore` | Reads/writes `preferences.ini` in the current directory and backs up any existing file before overwriting |
+| `hx_os_buffered_file` | No arguments | Writes 3 JSONL records in the background to `samples.jsonl` |
+| `hx_os_persistent_queue` | `publish records.db`, then `consume records.db` | Creates/updates the SQLite queue file `records.db` and removes messages once acknowledged |
 
-Restoration needs a backup from a previous successful save. The first save to a new path has no old version to back up. Use demonstration files for write examples rather than live configuration.
+> [!WARNING]
+> - Before running `hx_os_config_edit --restore`, run `hx_os_config_edit` without arguments at least twice so an existing `preferences.ini` is backed up (saving a brand-new file for the first time has no prior version to back up).
+> - Always use disposable demo files such as `demo.txt` when running examples that modify files or timestamps.
 
 <a id="data"></a>
 
-## 3. Text, arrays and containers
+## 3. Text, Arrays, and Containers
 
-| When to use it | Source and build target | Main result |
+| When to Use It & Guide Link | Source & Build Target | Expected Output Summary |
 | --- | --- | --- |
-| [Encode bytes as Base64 and restore them](../docs/ENCODING.md) | [encoding.c](encoding.c) · `hx_os_encoding` | `Base64: AAH+/w==`; 4 bytes |
-| [Unicode case folding](../docs/UNICODE.md) | [unicode_tools.c](unicode_tools.c) · `hx_os_unicode_tools` | `strasse` |
-| [Split fields, parse integers, natural comparison](../docs/TEXT_UTILITIES.md) | [text_utilities.c](text_utilities.c) · `hx_os_text_utilities` | `Port: 443, offset: -42` |
-| [C99 brace formatting](../docs/FORMAT.md) | [format.c](format.c) · `hx_os_format` | `张三: 3.75` |
-| [FIFO integer storage](../docs/CONTAINERS.md) | [containers.c](containers.c) · `hx_os_containers` | `Queue result: 42` |
-| [Ordered red-black traversal with duplicate keys](../docs/CONTAINERS.md) | [ordered_map.c](ordered_map.c) · `hx_os_ordered_map` | `a: 10`, `b: 20`, `b: 21` |
-| [Sort, query, filter and total records](../docs/ALGORITHMS.md) | [algorithms.c](algorithms.c) · `hx_os_algorithms` | IDs 17, 23, 31; 2 pending |
-| [C++ array and list algorithms](../docs/ALGORITHMS.md) | [algorithms_cpp.cpp](algorithms_cpp.cpp) · `hx_os_algorithms_cpp` | Ordered IDs |
-| [Growable byte queue and two-span fixed ring](../docs/RING.md) | [byte_queue_ring.c](byte_queue_ring.c) · `hx_os_byte_queue_ring` | `ByteQueue: 5 bytes: hello`; `Ring: efxxxxxx` |
-| [Track numbered job completion](../docs/BITSET.md) | [bitset.c](bitset.c) · `hx_os_bitset` | `Completed: 11 of 100` |
-| [Cache recent results and expire entries](../docs/CACHE.md) | [lru_cache.c](lru_cache.c) · `hx_os_lru_cache` | sensor-b evicted; temporary expired |
-| [Sampling, radix sorting, multi-pattern matching](../docs/FAST_TOOLS.md) | [fast_algorithms.c](fast_algorithms.c) · `hx_os_fast_algorithms` | `First error: byte 16` |
-| [Varint, ZigZag and UUID v7](../docs/INTEGER_TOOLS.md) | [integer_tools.c](integer_tools.c) · `hx_os_integer_tools` | `300 uses 2 bytes; decoded: 300` |
-| [Capture fields and replace text](../docs/REGEX.md) | [regex.c](regex.c) · `hx_os_regex` | `Door_01: #42` |
-| [Store different types in one variable](../docs/VARIANT.md) | [variant.c](variant.c) · `hx_os_variant` | integer, text, structure |
+| [Encode bytes as Base64 and decode them back](../docs/ENCODING.md) | [encoding.c](encoding.c) · `hx_os_encoding` | `Base64: AAH+/w==`; 4 decoded bytes |
+| [Locale-independent Unicode case folding](../docs/UNICODE.md) | [unicode_tools.c](unicode_tools.c) · `hx_os_unicode_tools` | `strasse` (case-folds German `Straße`) |
+| [Zero-copy field splitting, strict integers, natural sort](../docs/TEXT_UTILITIES.md) | [text_utilities.c](text_utilities.c) · `hx_os_text_utilities` | `Port: 443, offset: -42` |
+| [C99 brace `{}` formatted printing](../docs/FORMAT.md) | [format.c](format.c) · `hx_os_format` | `张三: 3.75` |
+| [FIFO integer queue operations](../docs/CONTAINERS.md) | [containers.c](containers.c) · `hx_os_containers` | `Queue result: 42` |
+| [Ordered red-black tree map with duplicate keys](../docs/CONTAINERS.md) | [ordered_map.c](ordered_map.c) · `hx_os_ordered_map` | `a: 10`, `b: 20`, `b: 21` |
+| [Sort, binary-search, filter, and aggregate C structs](../docs/ALGORITHMS.md) | [algorithms.c](algorithms.c) · `hx_os_algorithms` | Sorted IDs `17, 23, 31`; 2 pending items |
+| [C++ array and list iterator algorithms](../docs/ALGORITHMS.md) | [algorithms_cpp.cpp](algorithms_cpp.cpp) · `hx_os_algorithms_cpp` | Ordered ID sequence |
+| [Growable byte queue and two-span fixed ring buffer](../docs/RING.md) | [byte_queue_ring.c](byte_queue_ring.c) · `hx_os_byte_queue_ring` | `ByteQueue: 5 bytes: hello`; `Ring: efxxxxxx` |
+| [Track numbered job completion with a dynamic bitset](../docs/BITSET.md) | [bitset.c](bitset.c) · `hx_os_bitset` | `Completed: 11 of 100` |
+| [Bounded LRU cache with per-entry TTL expiration](../docs/CACHE.md) | [lru_cache.c](lru_cache.c) · `hx_os_lru_cache` | `sensor-b` evicted; `temporary` expired |
+| [Random sampling, radix sort, and multi-pattern byte search](../docs/FAST_TOOLS.md) | [fast_algorithms.c](fast_algorithms.c) · `hx_os_fast_algorithms` | `First error: byte 16` |
+| [Varint, ZigZag integers, and UUID v7 generation](../docs/INTEGER_TOOLS.md) | [integer_tools.c](integer_tools.c) · `hx_os_integer_tools` | `300 uses 2 bytes; decoded: 300` |
+| [UTF-8 regex capture groups and text replacement](../docs/REGEX.md) | [regex.c](regex.c) · `hx_os_regex` | `Door_01: #42` |
+| [Hold heterogeneous types and structs in one Variant](../docs/VARIANT.md) | [variant.c](variant.c) · `hx_os_variant` | Stores integer, string, and custom struct |
 
 <a id="config"></a>
 
-## 4. Configuration, parameters and parsing
+## 4. Configuration, Parameter Packs, and Parsing
 
-| When to use it | Source and build target | Main result |
+| When to Use It & Guide Link | Source & Build Target | Expected Output Summary |
 | --- | --- | --- |
-| [Read a port from built-in TOML](../docs/CONFIGURATION.md) | [configuration.c](configuration.c) · `hx_os_configuration` | `Server port: 8080` |
-| [Print JSON or save to a supplied file](../docs/CONFIGURATION.md) | [config_save.c](config_save.c) · `hx_os_config_save` | Saved with a path |
-| [Create INI, save backup, restore explicitly](../docs/CONFIG_EDIT.md) | [config_edit.c](config_edit.c) · `hx_os_config_edit` | `Saved preferences.ini` |
-| [Round-trip structures and nested documents](../docs/SERIALIZATION.md) | [serialization.c](serialization.c) · `hx_os_serialization` | JSON by default |
-| [Declare structure and field mapping together](../docs/SERIALIZATION.md) | [codec_macros.c](codec_macros.c) · `hx_os_codec_macros` | JSON; `port = 8080` |
-| [Build a mixed-type nested tree](../docs/SERIALIZATION.md) | [nested_document.c](nested_document.c) · `hx_os_nested_document` | serialized JSON |
-| [Edit settings and obtain snapshots](../docs/COMMON_UTILITIES.md) | [settings.c](settings.c) · `hx_os_settings` | values and JSON |
-| [Pass named text, integer and byte fields](../docs/PARAMETERS.md) | [parameters.c](parameters.c) · `hx_os_parameters` | `Device 42 (camera): 4 binary bytes` |
-| [Read custom syntax and skip an extension block](../docs/PARSING.md) | [parse_script.c](parse_script.c) · `hx_os_parse_script` | `Title: Camera` |
-| [Expand runtime text constants and conditions](../docs/PREPROCESSING.md) | [preprocess_config.c](preprocess_config.c) · `hx_os_preprocess_config` | JSON: Camera, 8080, true |
+| [Read a server port from built-in TOML](../docs/CONFIGURATION.md) | [configuration.c](configuration.c) · `hx_os_configuration` | `Server port: 8080` |
+| [Print formatted JSON or save atomically to a file](../docs/CONFIGURATION.md) | [config_save.c](config_save.c) · `hx_os_config_save` | Prints JSON, or `Saved` when given a path |
+| [Generate INI files, save backups, and restore explicitly](../docs/CONFIG_EDIT.md) | [config_edit.c](config_edit.c) · `hx_os_config_edit` | `Saved preferences.ini` |
+| [Round-trip C structs and nested configuration documents](../docs/SERIALIZATION.md) | [serialization.c](serialization.c) · `hx_os_serialization` | JSON by default (or yaml/xml/toml) |
+| [Declare structs and field schemas together with macros](../docs/SERIALIZATION.md) | [codec_macros.c](codec_macros.c) · `hx_os_codec_macros` | Serialized JSON and `port = 8080` |
+| [Construct a mixed-type nested document tree in code](../docs/SERIALIZATION.md) | [nested_document.c](nested_document.c) · `hx_os_nested_document` | Serialized nested JSON |
+| [Mutate runtime settings and take immutable snapshots](../docs/COMMON_UTILITIES.md) | [settings.c](settings.c) · `hx_os_settings` | Read values and exported JSON |
+| [Pass named string, integer, and binary fields](../docs/PARAMETERS.md) | [parameters.c](parameters.c) · `hx_os_parameters` | `Device 42 (camera): 4 binary bytes` |
+| [Tokenize custom syntax and skip nested extension blocks](../docs/PARSING.md) | [parse_script.c](parse_script.c) · `hx_os_parse_script` | `Title: Camera` |
+| [Expand runtime constants and conditionals in config text](../docs/PREPROCESSING.md) | [preprocess_config.c](preprocess_config.c) · `hx_os_preprocess_config` | Expanded JSON (`Camera, 8080, true`) |
 
 <a id="threads"></a>
 
-## 5. Threads, coroutines and notifications
+## 5. Threads, Coroutines, Queues, and Notifications
 
-| When to use it | Source and build target | Main result |
+| When to Use It & Guide Link | Source & Build Target | Expected Output Summary |
 | --- | --- | --- |
-| [Submit background work and retrieve its result](../docs/CPP_POOL.md) | [thread_pool.cpp](thread_pool.cpp) · `hx_os_cpp_thread_pool` | `Task result: 42` |
-| [Start a coroutine and receive through a channel](../docs/COROUTINES.md) | [go.cpp](go.cpp) · `hx_os_go` | `Answer: 42` |
-| [C99 stackless state machine](../docs/COROUTINES.md) | [coroutine.c](coroutine.c) · `hx_os_coroutine` | successive Count values |
-| [Optional C++20 co_await syntax](../docs/COROUTINES.md) | [coroutine20.cpp](coroutine20.cpp) · `hx_os_cpp_coroutine20` | `Answer: 42` |
-| [Batched producer/consumer records](../docs/QUEUES.md) | [message_queue.c](message_queue.c) · `hx_os_message_queue` | 6 device samples |
-| [Cancel, wait and protect shared data](../docs/COORDINATION.md) | [coordination.c](coordination.c) · `hx_os_coordination` | `Processed ... records, then stopped cooperatively.` |
-| [Share one initialization across workers](../docs/ONCE.md) | [once.c](once.c) · `hx_os_once` | 1 initialization; 4 worker lines |
-| [Publish a result with release/acquire](../docs/ATOMICS.md) | [atomic_publication.c](atomic_publication.c) · `hx_os_atomic_publication` | `answer: 42` |
-| [Stopwatch, backoff and token bucket](../docs/CONTROL.md) | [control.c](control.c) · `hx_os_control` | 3 retry delays; elapsed time |
-| [Subscribe to every signal on a handler](../docs/SIGNALS.md) | [signal_observer.c](signal_observer.c) · `hx_os_signal_observer` | `ready: 42 items`; `saved: 42 items` |
-| [Mutate parameters before observers read them](../docs/SIGNALS.md) | [signal_mutable.c](signal_mutable.c) · `hx_os_signal_mutable` | Observer/Caller: volume = 60 |
-| [Interval statistics and approximate percentiles](../docs/PROFILER.md) | [profile_statistics.c](profile_statistics.c) · `hx_os_profile_statistics` | 12 samples; mean, deviation, P50/P95/P99 |
-| [Named procedures, text splitting and time conversion](../docs/COMMON_UTILITIES.md) | [common_tasks.c](common_tasks.c) · `hx_os_common_tasks` | `procedure result: 42` |
+| [Submit background work to a C++11 thread pool](../docs/CPP_POOL.md) | [thread_pool.cpp](thread_pool.cpp) · `hx_os_cpp_thread_pool` | `Task result: 42` |
+| [Launch a stackful coroutine and receive via a channel](../docs/COROUTINES.md) | [go.cpp](go.cpp) · `hx_os_go` | `Answer: 42` |
+| [Run a C99 stackless coroutine state machine](../docs/COROUTINES.md) | [coroutine.c](coroutine.c) · `hx_os_coroutine` | Successive `Count` values |
+| [Use optional C++20 `co_await` coroutines](../docs/COROUTINES.md) | [coroutine20.cpp](coroutine20.cpp) · `hx_os_cpp_coroutine20` | `Answer: 42` |
+| [Batch producer/consumer messages across threads](../docs/QUEUES.md) | [message_queue.c](message_queue.c) · `hx_os_message_queue` | 6 device sample records |
+| [Coordinate cancellation, `WaitGroup`, and RW locks](../docs/COORDINATION.md) | [coordination.c](coordination.c) · `hx_os_coordination` | `Processed ... records, then stopped cooperatively.` |
+| [Run one-time initialization across worker threads](../docs/ONCE.md) | [once.c](once.c) · `hx_os_once` | 1 init line; 4 worker lines |
+| [Publish shared data with `release` / `acquire` atomics](../docs/ATOMICS.md) | [atomic_publication.c](atomic_publication.c) · `hx_os_atomic_publication` | `answer: 42` |
+| [Stopwatch timing, exponential backoff, and token bucket](../docs/CONTROL.md) | [control.c](control.c) · `hx_os_control` | 3 retry delays and elapsed time |
+| [Observe all signals emitted on a handler](../docs/SIGNALS.md) | [signal_observer.c](signal_observer.c) · `hx_os_signal_observer` | `ready: 42 items`; `saved: 42 items` |
+| [Mutate shared signal arguments in callbacks](../docs/SIGNALS.md) | [signal_mutable.c](signal_mutable.c) · `hx_os_signal_mutable` | `Observer/Caller: volume = 60` |
+| [Record hierarchical interval stats and P50/P95/P99](../docs/PROFILER.md) | [profile_statistics.c](profile_statistics.c) · `hx_os_profile_statistics` | 12 samples with mean, stddev, and percentiles |
+| [Call named procedures, split text, and convert times](../docs/COMMON_UTILITIES.md) | [common_tasks.c](common_tasks.c) · `hx_os_common_tasks` | `procedure result: 42` |
 
 <a id="io"></a>
 
-## 6. Files, streams and platform objects
+## 6. Files, Binary Streams, and Platform Objects
 
-| When to use it | Source and build target | Main result |
+| When to Use It & Guide Link | Source & Build Target | Expected Output Summary |
 | --- | --- | --- |
-| [Check basic linking and UTF conversions](../docs/CONTRACTS.md) | [hello.c](hello.c) · `hx_os_hello` | Platform, byte/codepoint counts and UTF-16 units |
-| [Complete one asynchronous timer request](../docs/PLATFORM_UTILITIES.md) | [async_timer.c](async_timer.c) · `hx_os_async_timer` | `Timer completed through ...`, with the native backend |
-| [Read text and optionally save a copy](../docs/PLATFORM_UTILITIES.md) | [text_file.c](text_file.c) · `hx_os_text_file` | input text |
-| [Read text line by line](../docs/LINE_READER.md) | [read_lines.c](read_lines.c) · `hx_os_read_lines` | one output line per input line |
-| [Read four bytes at offset 4](../docs/PLATFORM_UTILITIES.md) | [positioned_read.c](positioned_read.c) · `hx_os_positioned_read` | demo.txt → `34 35 36 37` |
-| [Map an existing file read-only](../docs/PLATFORM_UTILITIES.md) | [mapped_file.c](mapped_file.c) · `hx_os_mapped_file` | mapped size and CRC32 |
-| [Explicitly update modification time](../docs/PLATFORM_UTILITIES.md) | [file_attributes.c](file_attributes.c) · `hx_os_file_attributes` | `Modification time updated; access time preserved.` |
-| [Stream paths during a recursive scan](../docs/FILE_SEARCH.md) | [find_files.c](find_files.c) · `hx_os_find_files` | paths and Files count |
-| [Watch a directory for five seconds](../docs/PLATFORM_UTILITIES.md) | [watch_directory.c](watch_directory.c) · `hx_os_watch_directory` | change events; Watch closed |
-| [Borrow a native handle to query file size](../docs/NATIVE_INTEROP.md) | [native_file.c](native_file.c) · `hx_os_native_file` | `Native query: ... bytes` |
-| [Write and read big-endian numbers](../docs/STREAMS.md) | [binary_stream.c](binary_stream.c) · `hx_os_binary_stream` | `device=42 temperature=23.5` |
-| [Frame JSON with a length prefix and read it](../docs/FRAMES.md) | [framed_messages.c](framed_messages.c) · `hx_os_framed_messages` | `{"device":"door-1","request":42}` |
-| [Write three JSONL records in the background](../docs/STREAMS.md) | [buffered_file.c](buffered_file.c) · `hx_os_buffered_file` | samples.jsonl; Saved 3 device readings |
-| [Query OS version and sampled process CPU usage](../docs/PLATFORM_UTILITIES.md) | [system_info.c](system_info.c) · `hx_os_system_info` | OS name, Process CPU |
-| [Explicit Windows crash-file configuration](../docs/LOCAL_DUMPS.md) | [local_dumps.c](local_dumps.c) · `hx_os_local_dumps` | No arguments: help only; query is read-only; enable/remove need explicit authorization |
-| [Measure elapsed time around a short wait](../docs/CONTROL.md) | [high_resolution_time.c](high_resolution_time.c) · `hx_os_high_resolution_time` | Requested 20 ms; measured value varies |
-| [Request sleep inhibition for a work interval](../docs/LINUX_DESKTOP.md) | [sleep_inhibit.c](sleep_inhibit.c) · `hx_os_sleep_inhibit` | requested/released or unsupported |
+| [Verify core linking and UTF-8 / UTF-16 conversion](../docs/CONTRACTS.md) | [hello.c](hello.c) · `hx_os_hello` | Platform name, UTF-8 byte/codepoint counts, UTF-16 bytes |
+| [Complete an asynchronous timer request on an event loop](../docs/PLATFORM_UTILITIES.md) | [async_timer.c](async_timer.c) · `hx_os_async_timer` | `Timer completed through ...` (native backend name) |
+| [Read a text file and optionally save a copy](../docs/PLATFORM_UTILITIES.md) | [text_file.c](text_file.c) · `hx_os_text_file` | Prints input file text |
+| [Read UTF-8 text line by line with bounded length](../docs/LINE_READER.md) | [read_lines.c](read_lines.c) · `hx_os_read_lines` | Prints each line without trailing newlines |
+| [Read 4 bytes at byte offset 4 without seeking](../docs/PLATFORM_UTILITIES.md) | [positioned_read.c](positioned_read.c) · `hx_os_positioned_read` | `demo.txt` → `34 35 36 37` |
+| [Memory-map a file read-only and compute CRC32](../docs/PLATFORM_UTILITIES.md) | [mapped_file.c](mapped_file.c) · `hx_os_mapped_file` | Mapped byte size and CRC32 |
+| [Update file modification time while preserving access time](../docs/PLATFORM_UTILITIES.md) | [file_attributes.c](file_attributes.c) · `hx_os_file_attributes` | `Modification time updated; access time preserved.` |
+| [Stream matching paths during a recursive directory scan](../docs/FILE_SEARCH.md) | [find_files.c](find_files.c) · `hx_os_find_files` | Matching paths and total `Files` count |
+| [Watch a directory for file changes for 5 seconds](../docs/PLATFORM_UTILITIES.md) | [watch_directory.c](watch_directory.c) · `hx_os_watch_directory` | Change events and `Watch closed` |
+| [Borrow a native file handle to query file size](../docs/NATIVE_INTEROP.md) | [native_file.c](native_file.c) · `hx_os_native_file` | `Native query: ... bytes` |
+| [Write and read big-endian numbers on a binary stream](../docs/STREAMS.md) | [binary_stream.c](binary_stream.c) · `hx_os_binary_stream` | `device=42 temperature=23.5` |
+| [Frame JSON messages with a length prefix and read them](../docs/FRAMES.md) | [framed_messages.c](framed_messages.c) · `hx_os_framed_messages` | `{"device":"door-1","request":42}` |
+| [Write 3 JSONL records asynchronously in the background](../docs/STREAMS.md) | [buffered_file.c](buffered_file.c) · `hx_os_buffered_file` | Writes `samples.jsonl`; prints `Saved 3 device readings` |
+| [Query OS version and sampled process CPU usage](../docs/PLATFORM_UTILITIES.md) | [system_info.c](system_info.c) · `hx_os_system_info` | OS name and `Process CPU` |
+| [Configure Windows WER LocalDumps for a customer EXE](../docs/LOCAL_DUMPS.md) | [local_dumps.c](local_dumps.c) · `hx_os_local_dumps` | No args: help; `query`: read-only; `enable`/`remove` require admin |
+| [Measure real elapsed time around a short sleep](../docs/CONTROL.md) | [high_resolution_time.c](high_resolution_time.c) · `hx_os_high_resolution_time` | Requests 20 ms wait; prints measured duration |
+| [Request scoped idle-sleep inhibition](../docs/LINUX_DESKTOP.md) | [sleep_inhibit.c](sleep_inhibit.c) · `hx_os_sleep_inhibit` | Prints acquired/released or `HX_OS_NOT_SUPPORTED` |
 
 <a id="sdk"></a>
 
-## 7. Crypto, compression and external services
+## 7. Cryptography, Compression, and External Services
 
-| When to use it | Source and build target | Main result |
+| When to Use It & Guide Link | Source & Build Target | Expected Output Summary |
 | --- | --- | --- |
-| [Encrypt and restore text with a password](../docs/CRYPTO.md) | [encrypt_text.c](encrypt_text.c) · `hx_os_encrypt_text` | `Decrypted: Hello, UTF-8!` |
-| [Compute SHA-256 incrementally](../docs/INCREMENTAL_HASH.md) | [incremental_hash.c](incremental_hash.c) · `hx_os_incremental_hash` | 64-character digest of abc |
-| [Compress bytes and restore JSON](../docs/UTILITY_EXTENSIONS.md) | [compress_memory.c](compress_memory.c) · `hx_os_compress_memory` | byte counts and original JSON |
-| [Pack, list or extract files/directories](../docs/ARCHIVE.md) | [archive_files.c](archive_files.c) · `hx_os_archive_files` | entries and processed counts |
-| [Encode URL query parameters](../docs/UTILITY_EXTENSIONS.md) | [url_query.c](url_query.c) · `hx_os_url_query` | URL and decoded name |
-| [Post JSON to your HTTP/HTTPS endpoint](../docs/UTILITY_EXTENSIONS.md) | [http_json.c](http_json.c) · `hx_os_http_json` | HTTP status and response |
-| [Store records and acknowledge successful handling](../docs/PERSISTENT_QUEUE.md) | [persistent_queue.c](persistent_queue.c) · `hx_os_persistent_queue` | 3 Handle recognition-... lines |
-| [Send a JSON line to a serial device and read its reply](../docs/UTILITY_EXTENSIONS.md) | [serial_message.c](serial_message.c) · `hx_os_serial_message` | device reply or timeout |
-| [Pass JSON between parent/child through shared memory](../docs/UTILITY_EXTENSIONS.md) | [shared_memory.c](shared_memory.c) · `hx_os_shared_memory` | `Child received: ...` |
-| [Call the same native SDKs directly](../docs/NATIVE_DEPENDENCIES.md) | [native_dependencies.c](native_dependencies.c) · `hx_os_native_dependencies` | native results |
+| [Encrypt and decrypt UTF-8 text with a password](../docs/CRYPTO.md) | [encrypt_text.c](encrypt_text.c) · `hx_os_encrypt_text` | `Decrypted: Hello, UTF-8!` |
+| [Compute SHA-256 incrementally across chunks](../docs/INCREMENTAL_HASH.md) | [incremental_hash.c](incremental_hash.c) · `hx_os_incremental_hash` | 64-character hex digest of `"abc"` |
+| [Compress bytes in memory and restore the original JSON](../docs/UTILITY_EXTENSIONS.md) | [compress_memory.c](compress_memory.c) · `hx_os_compress_memory` | Compressed/decompressed sizes and JSON |
+| [Pack, list, or extract files and directories](../docs/ARCHIVE.md) | [archive_files.c](archive_files.c) · `hx_os_archive_files` | Archive entry list and processed count |
+| [Parse URLs and percent-encode query parameters](../docs/UTILITY_EXTENSIONS.md) | [url_query.c](url_query.c) · `hx_os_url_query` | Encoded URL and decoded parameter |
+| [POST JSON to an HTTP/HTTPS endpoint](../docs/UTILITY_EXTENSIONS.md) | [http_json.c](http_json.c) · `hx_os_http_json` | HTTP status code and response body |
+| [Enqueue, consume, and ACK persistent SQLite messages](../docs/PERSISTENT_QUEUE.md) | [persistent_queue.c](persistent_queue.c) · `hx_os_persistent_queue` | 3 `Handle recognition-...` lines |
+| [Send a JSON line over a serial port and read a reply](../docs/UTILITY_EXTENSIONS.md) | [serial_message.c](serial_message.c) · `hx_os_serial_message` | Device reply (or timeout/error if no port attached) |
+| [Exchange JSON between parent and child via shared memory](../docs/UTILITY_EXTENSIONS.md) | [shared_memory.c](shared_memory.c) · `hx_os_shared_memory` | `Child received: ...` |
+| [Call the bundled SQLite, OpenSSL, curl, and utf8proc SDKs directly](../docs/NATIVE_DEPENDENCIES.md) | [native_dependencies.c](native_dependencies.c) · `hx_os_native_dependencies` | Native library call results |
 
 <a id="network"></a>
 
-## 8. Bidirectional JSON: choose a protocol
+## 8. End-to-End Client/Server JSON Examples
 
-For IP interface selection and a small multicast discovery datagram, build `hx_os_network_interfaces` and `hx_os_multicast_discovery`. The [network options guide](../docs/NETWORK_OPTIONS.md) shows the two-terminal commands, JSON payload and expected output, alongside keepalive, dual-stack and broadcast setup.
+To enumerate local IP network interfaces and send a multicast discovery datagram, build `hx_os_network_interfaces` and `hx_os_multicast_discovery` (see [Socket Options and Discovery](../docs/NETWORK_OPTIONS.md) for the two-terminal commands as well as keepalive, dual-stack, and broadcast setup).
 
-These programs include both endpoints and send/receive threads. Start locally, then adapt addresses and fields following the topic guide. Runners launch public programs, choose ports and check business results without private regression fixtures.
+The five business examples below include both server and client endpoints with dedicated send/receive threads. For convenient single-machine testing, each workflow has a companion Python runner script that spawns both endpoints on an available local port:
 
-| Need | Runner | Guide |
+| Business Workflow | Runner Script | Topic Guide |
 | --- | --- | --- |
-| Local processes exchanging device/request-tagged messages | run_ipc_business.py | [IPC business flow](../docs/IPC_BUSINESS.md) |
-| TCP orders and asynchronous receipts | run_tcp_business.py | [TCP business flow](../docs/TCP_BUSINESS.md) |
-| UDP measurements with missing/duplicate/late sequences | run_udp_business.py | [UDP business flow](../docs/UDP_BUSINESS.md) |
-| Reliable UDP transport using KCP | run_kcp_business.py | [KCP business flow](../docs/KCP_BUSINESS.md) |
-| Threaded sending and receiving on one TLS connection | run_tls_business.py | [TLS flow and certificates](../docs/TLS.md) |
+| Local IPC messages tagged with device and request IDs | `run_ipc_business.py` | [IPC Business Example](../docs/IPC_BUSINESS.md) |
+| TCP order submission and asynchronous receipts | `run_tcp_business.py` | [TCP Business Example](../docs/TCP_BUSINESS.md) |
+| UDP sensor samples with gap, duplicate, and late detection | `run_udp_business.py` | [UDP Business Example](../docs/UDP_BUSINESS.md) |
+| Reliable UDP block transfer over KCP | `run_kcp_business.py` | [KCP Business Example](../docs/KCP_BUSINESS.md) |
+| Multi-threaded JSON send/receive over one verified TLS connection | `run_tls_business.py` | [TLS Guide and Certificates](../docs/TLS.md) |
 
-Run scripts from the library checkout, for example `python examples/run_tcp_business.py --bin-dir build/bin/Release`. Linux uses `python3` and `build/bin`. Build the two endpoints listed in each guide first. TLS also needs a certificate, key and trusted CA. Supply a real HTTP service URL; example addresses do not provide a service.
+Build the two endpoint targets listed in the chosen guide, then run the script from the repository root:
 
-**Choose the API layer first.** Use IPC when the library should manage device/request IDs, sessions and message queues. Use the independent TCP, UDP or TLS examples when integrating an existing wire protocol. Adding JSON to a socket does not implement HXIP.
+```sh
+# Windows (MSVC Release)
+python examples/run_tcp_business.py --bin-dir build/bin/Release
 
-| Example | What the peer must send |
-| --- | --- |
-| IPC device control | HXIP v1 frames with JSON bodies; see the IPC protocol guide |
-| TCP orders | Two-byte big-endian body length, then UTF-8 JSON |
-| UDP samples | One UTF-8 JSON document per datagram, with no length prefix |
-| KCP blocks | One complete message-mode KCP message containing JSON; drive KCP continuously |
-| TLS readings | Four-byte big-endian body length, then UTF-8 JSON inside TLS |
+# Linux / WSL
+python3 examples/run_tcp_business.py --bin-dir build/bin
+```
 
-Python only replaces opening two terminals manually; it does not enter the business processes. For `Build the example first`, build the guide's two targets and check that the Windows Debug/Release path matches the configuration. `Listening:` means ready to accept; final success messages from both peers demonstrate the completed workflow. To move a C example into your own project, copy the companion headers listed in its guide along with main.
+> [!IMPORTANT]
+> **Choosing the Right Networking Layer and Wire Format**:
+> - Choose the **IPC module (`HXIP v1`)** when you want the library to manage device IDs, request correlation IDs, sessions, and bounded message queues automatically.
+> - Choose the **independent TCP, UDP, KCP, or TLS examples** when integrating with an existing wire protocol (copy both the `.c` file and the companion header listed in its guide):
+>
+> | Example | Peer Wire Format |
+> | --- | --- |
+> | **IPC Device Control** | `HXIP v1` frames carrying UTF-8 JSON bodies (see the [IPC Protocol Guide](../docs/IPC.md)) |
+> | **TCP Orders** | 2-byte big-endian body length followed by UTF-8 JSON |
+> | **UDP Samples** | One UTF-8 JSON document per UDP datagram (no length prefix) |
+> | **KCP Blocks** | One complete message-mode KCP message containing UTF-8 JSON (drive KCP continuously) |
+> | **TLS Readings** | 4-byte big-endian body length followed by UTF-8 JSON inside the TLS stream |
 
-The serial example uses 115200 baud, eight data bits, one stop bit and no parity. It sends `{"request":42}` plus newline and expects one response line. Connect a compatible device or virtual serial pair first; starting the program alone does not establish communication. Shared memory, desktop sleep inhibition and Windows GPU queries have their own platform/permission requirements.
+### Advanced Network I/O and Coroutine Examples
+
+| Task | Source & Build Target | Arguments & Expected Output |
+| --- | --- | --- |
+| Read UDP destination address and receiving interface index | [udp_packet.c](udp_packet.c) · `hx_os_udp_packet` | No arguments; prints loopback JSON payload, destination address, and interface index |
+| Resolve a hostname using cancellable DNS | [dns_lookup.c](dns_lookup.c) · `hx_os_dns_lookup` | `[--async\|--coro] HOST [DNS_IP:PORT]`; prints resolved numeric IP addresses |
+| Trusted-LAN KCP session request/reply | [kcp_session.c](kcp_session.c) · `hx_os_kcp_session` | Run `server IP:PORT` then `client IP:PORT`; prints JSON request and reply |
+| Stream a file over HTTP/HTTPS | [http_file.c](http_file.c) · `hx_os_http_file` | `download URL FILE [CA]` or `upload URL FILE [CA]`; prints HTTP status |
+| Suspend a C99 coroutine on UDP I/O | [coroutine_udp.c](coroutine_udp.c) · `hx_os_coroutine_udp` | No arguments; prints a JSON datagram sent to itself |
+| Suspend a C99 coroutine on an HTTP request | [coroutine_http.c](coroutine_http.c) · `hx_os_coroutine_http` | `URL`; prints HTTP status and response body |
+
+- `hx_os_dns_lookup --async 127.0.0.1` and `--coro 127.0.0.1` demonstrate event-loop and coroutine DNS resolution with identical output.
+- `hx_os_http_file` and `hx_os_coroutine_http` accept a trailing `--cancellable-dns` flag (requires building the `libcurl` SDK with `HX_DEPS_CURL_CARES=ON`; the default system-DNS SDK returns `HX_OS_NOT_SUPPORTED`). See [Socket Options](../docs/NETWORK_OPTIONS.md#123-use-an-event-loop-or-coroutine) and [HTTP Transfers](../docs/HTTP_FILES.md#4-cancel-even-when-dns-receives-no-reply) for complete commands.
 
 <a id="plugin"></a>
 
-## 9. A public plugin and its loader
+## 9. Dynamic Library Loading: Plugin and Loader
 
-From the library checkout, build these two targets only:
+From the repository root, build both the sample plugin (`hx_os_demo_plugin`) and the loader executable (`hx_os_load_plugin`):
 
 ```sh
-cmake --build build --config Release \
-  --target hx_os_demo_plugin hx_os_load_plugin
+cmake --build build --config Release --target hx_os_demo_plugin hx_os_load_plugin
 ```
 
-These continuations are for a POSIX shell; PowerShell can use one line or backtick continuations. Enter build, then on Windows run:
+Enter `build/` and pass the compiled shared library path to the loader:
 
 ```powershell
-.\bin\Release\hx_os_load_plugin.exe `
-    .\bin\Release\hx_os_demo_plugin.dll
+# Windows
+.\bin\Release\hx_os_load_plugin.exe .\bin\Release\hx_os_demo_plugin.dll
 ```
 
-On Linux:
-
 ```sh
+# Linux / WSL
 ./bin/hx_os_load_plugin ./bin/libhx_os_demo_plugin.so
 ```
 
-Output is `Compatible plugin: Example plugin 1.0`. Public [demo_plugin.c](demo_plugin.c) exports an ABI version and description. [load_plugin.c](load_plugin.c) opens it, checks the ABI, binds/calls the functions and unloads it. The library file is not an executable. Your replacement plugin must preserve agreed symbols and calling conventions; no private test module is required.
+**Expected output**: `Compatible plugin: Example plugin 1.0`
 
-## 10. Adapt an example to application code
+- [demo_plugin.c](demo_plugin.c) exports an ABI version constant and description function.
+- [load_plugin.c](load_plugin.c) loads the shared library at runtime, verifies the ABI version, binds and calls the exported symbols, and unloads the library cleanly.
 
-Replace inputs and values first, then the code that processes results. Preserve creation, error checks and release order. Stop new work and wait for workers before releasing active data; a timeout does not make that data safe to destroy. Times, UUIDs, ciphertext and CPU/GPU details vary by environment, so compare their meaning rather than fixed values.
+## 10. Adapting an Example into Application Code
 
-Outputs here describe expected usage, while actual target support follows the [platform boundaries](../docs/PLATFORMS.md). Detailed capacity, concurrency, cancellation and unloading contracts remain in the later sections of each topic guide.
+When moving an example into production code:
 
-## Network I/O additions
-
-Build the chosen target in the same configured directory; use `bin/Release` for Visual Studio or `bin` for single-configuration builds.
-
-| Task | Source / target | Inputs and expected result |
-| --- | --- | --- |
-| Receive UDP destination/interface metadata | [udp_packet.c](udp_packet.c) / `hx_os_udp_packet` | No arguments; prints a loopback JSON message, address and interface |
-| Look up a hostname using cancellable DNS | [dns_lookup.c](dns_lookup.c) / `hx_os_dns_lookup` | `[--async|--coro] HOST [DNS_IP:PORT]`; prints numeric addresses |
-| Request/reply over trusted-LAN KCP | [kcp_session.c](kcp_session.c) / `hx_os_kcp_session` | Run `server IP:PORT` then `client IP:PORT`; prints JSON request and reply |
-| Stream a file over HTTP | [http_file.c](http_file.c) / `hx_os_http_file` | `download URL FILE [CA]` or `upload URL FILE [CA]`; prints HTTP status |
-| Suspend a C99 coroutine on UDP | [coroutine_udp.c](coroutine_udp.c) / `hx_os_coroutine_udp` | No arguments; prints a JSON message sent to itself |
-| Suspend a C99 coroutine on HTTP | [coroutine_http.c](coroutine_http.c) / `hx_os_coroutine_http` | `URL`; prints HTTP status and response body |
-
-See [network I/O](../docs/NETWORK_IO.md), [HTTP files](../docs/HTTP_FILES.md) and [coroutine waiting](../docs/COROUTINES.md) for complete commands and ownership. DNS needs a reachable configured server; HTTP needs your service URL. The examples do not modify firewall settings or deploy external services.
-
-`hx_os_dns_lookup --async 127.0.0.1` and `--coro 127.0.0.1` demonstrate event-loop/coroutine DNS with the same address output. HTTP file and coroutine examples accept a final `--cancellable-dns` flag. This requires the opt-in c-ares SDK; the default system DNS SDK explicitly reports unsupported. See [network options](../docs/NETWORK_OPTIONS.md#123-use-an-event-loop-or-coroutine) and [HTTP transfers](../docs/HTTP_FILES.md#4-cancel-even-when-dns-receives-no-reply) for complete commands, output and failure handling.
+1. **Replace inputs and data first**, then substitute your application logic where the example prints results.
+2. **Preserve creation, status checks, and cleanup ordering**: Stop new work admission and wait for background workers before freeing shared state. Never destroy borrowed task data after a timeout (`HX_OS_TIMEOUT`) while background work may still be active.
+3. **Check platform and concurrency contracts**: Review [Platform Support](../docs/PLATFORMS.md) for OS-specific limits and the later sections of each topic guide for capacity, cancellation, and plugin-unloading rules.

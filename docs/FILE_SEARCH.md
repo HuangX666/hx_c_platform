@@ -2,11 +2,19 @@
 
 [简体中文](FILE_SEARCH.zh-CN.md) · [Home](../README.md) · [File API](../include/hx_os_file.h)
 
-**Start by finding files you can inspect.** Recursive search suits occasional scans that process each result immediately; it does not maintain a persistent index.
+Use the recursive file search API when your application needs to walk a directory tree, match regular files against a filename wildcard pattern (such as `*.json` or `config.json`), and either process matches as they arrive or grab the first matching file path. Rather than maintaining a persistent in-memory index or buffering an unbounded list of results, the scanner streams matches directly to your callback using bounded scratch memory. This makes it a natural fit for startup configuration discovery, asset scanning, and background queries dispatched to a thread pool.
 
-Build `hx_os_find_files`, then enter build as shown in the [run instructions](../examples/README.md#run). Linux: `./bin/hx_os_find_files ../examples "*.c"`; Windows: `.\bin\Release\hx_os_find_files.exe ..\examples "*.c"`. Quote the pattern; the input tree is the checkout's examples directory.
+To see it in action right away, build the `hx_os_find_files` target from [find_files.c](../examples/find_files.c) and run it from the `build` directory as described in the [example run instructions](../examples/README.md#run) (quote the wildcard pattern so your shell does not expand it early):
 
-Matching paths appear line by line, followed by `Files: count`; the count changes with the checkout. Replace printing in [find_files.c](../examples/find_files.c)'s print_file callback with your processing. The later pool example keeps work off a UI thread. Copy callback paths if you need to retain them.
+```sh
+# Linux / macOS:
+./bin/hx_os_find_files ../examples "*.c"
+
+# Windows PowerShell:
+.\bin\Release\hx_os_find_files.exe ..\examples "*.c"
+```
+
+The program prints each matching `.c` file under `examples/` line by line, followed by `Files: <count>`. In your own code, simply replace the `print_file` callback in [find_files.c](../examples/find_files.c) with your per-file logic. If you need to keep a GUI thread responsive during a large directory scan, see Section 4 for running queries on a thread pool.
 
 - [1. Choose an entry](#entry)
 - [2. Get the first matching path](#first)
@@ -20,23 +28,26 @@ Matching paths appear line by line, followed by `Files: count`; the count change
 
 ## 1. Choose an entry
 
-The module performs one live scan from a root directory, visiting descendants and matching regular filenames. It creates no file index, retained result list or automatic worker. Use it for occasional queries, initial scans and immediate per-match processing.
+This module performs a live traversal starting from a root directory, descending into subdirectories and matching regular filenames against a pattern. It does not build a background index, retain a full result list, or spawn worker threads behind your back. Pick the C99 or C++11 entry point that matches your task:
 
-| Need | C99 | C++11 |
+| Need | C99 Entry Point | C++11 Entry Point |
 | --- | --- | --- |
-| First matching path | hx_os_directory_find_first_file | Directory::findFirstFile |
-| Callback for every matching file | hx_os_directory_find_files | Directory::findFiles |
-| Explicit limits/completed callback count | hx_os_directory_find_files_ex | options and Result<size_t> |
-| Names in the current directory only | hx_os_directory_visit | Directory::forEach |
-| Matching known path levels | hx_os_path_glob | Corresponding C entry |
+| First matching file path | `hx_os_directory_find_first_file` | `hx::Directory::findFirstFile` |
+| Callback invoked for every matching file | `hx_os_directory_find_files` | `hx::Directory::findFiles` |
+| Custom traversal limits and completed callback count | `hx_os_directory_find_files_ex` | `hx::Directory::findFiles` with `options` (returns `hx::Result<size_t>`) |
+| Direct entries in a single directory (non-recursive) | `hx_os_directory_visit` | `hx::Directory::forEach` |
+| Wildcard expansion across known path levels (e.g., `logs/*/*.log`) | `hx_os_path_glob` | Corresponding C entry point |
 
-findFiles/forEach are functions. No general C foreach macro is currently provided. Existing containers expose begin/next/value or map_entry iteration; a loop macro alone does not reduce disk reads or change lookup complexity.
+> [!NOTE]
+> `findFiles` and `forEach` are callback-taking functions; the library does not define a generic C `foreach` macro. For in-memory containers, use their native `begin` / `next` / `value` or `map_entry` iterators directly.
 
 <a id="first"></a>
 
 ## 2. Get the first matching path
 
-Prepare this directory. The file may be deeper; contents do not participate in matching:
+When you only need to locate a single file (such as finding `config.json` somewhere under an `assets/` directory tree), call `hx_os_directory_find_first_file` or `hx::Directory::findFirstFile`.
+
+Suppose your working directory contains the following layout (file contents do not affect filename matching):
 
 ```text
 assets/
@@ -44,7 +55,7 @@ assets/
     └── config.json
 ```
 
-Save this C program as main.c and use the [tutorial's C configuration](USAGE.md#c-project):
+**C99 Example** (save as `main.c` and build with the [tutorial's C configuration](USAGE.md#c-project)):
 
 ```c
 #include <hx_os_file.h>
@@ -68,7 +79,7 @@ int main(void)
 }
 ```
 
-For C++11, save main.cpp and use the [configuration with exceptions disabled](USAGE.md#cpp-project):
+**C++11 Example** (save as `main.cpp` and build with the [configuration with exceptions disabled](USAGE.md#cpp-project)):
 
 ```cpp
 #include <hx/Files.hpp>
@@ -87,13 +98,19 @@ int main()
 }
 ```
 
-Both print assets/nested/config.json. The library opens directories, searches, copies the path and closes handles. With multiple candidates, first means native traversal order, not alphabetical order. No match reports NOT_FOUND; failure preserves the C output string. The C output uses its own context; a successful C++ result owns the path until destruction.
+Both programs print `assets/nested/config.json`. Internally, the library opens directories, walks down the tree, copies the matching path into `path`, and closes all directory handles before returning:
+
+- **Traversal order**: If multiple files match the pattern, the function returns the first match encountered in native filesystem traversal order (alphabetical order is not guaranteed).
+- **No match and failure semantics**: When no matching file exists anywhere under the root, the call returns `HX_OS_NOT_FOUND`. On any failure, the C output `hx_string` is left unmodified.
+- **Ownership**: The C API allocates the output buffer using the `hx_context` attached to `path` (destroy it with `hx_string_destroy(&path)`); the C++ API returns an owned `hx::String` inside `hx::Result<hx::String>` that cleans up automatically when it leaves scope.
 
 <a id="stream"></a>
 
 ## 3. Process matches as they arrive
 
-These complete programs search assets and descendants for regular files matching *.json. Paths are delivered individually without an ordering guarantee:
+To process every matching file in a directory tree, use `hx_os_directory_find_files` or `hx::Directory::findFiles`. Each match is delivered synchronously to your callback on the scanning thread.
+
+The complete C99 and C++11 programs below recursively find all regular files matching `*.json` under `assets`:
 
 ```c
 #include <hx_os_file.h>
@@ -119,6 +136,7 @@ int main(void)
 	return status == HX_OS_OK ? 0 : 1;
 }
 ```
+
 ```cpp
 #include <hx/Files.hpp>
 #include <cstdio>
@@ -141,17 +159,21 @@ int main()
 }
 ```
 
-With the single fixture above, C prints its path and C++ also prints Files: 1. path is borrowed only for the callback. Copy it into an owned hx_string/hx::String before retaining it in a list or sending it to another thread.
+With the single-file fixture from Section 2, the C program prints `assets/nested/config.json`, and the C++ program also prints `Files: 1`.
 
-C callbacks return OK to continue, EOF to stop successfully, or another status to fail with details. C++ bool callbacks use true/false to continue/stop, and void, hx_os_status and Result<void> are also supported. Callbacks run synchronously on the scanning thread; C++ callbacks follow noexcept rules.
-
-No matches is a successful zero-callback traversal. Limits/native failures can occur after callbacks have run; their external effects are not rolled back. C completed and C++ Result<size_t> count started callbacks, including one that stops/fails. Inspect hasValue() before reading partial C++ progress on failure.
+> [!IMPORTANT]
+> **Callback Path Lifetime and Return Conventions**
+> - **Borrowed view**: The `path` argument (`hx_string_view` / `hx::StringView`) points into the scanner's reusable scratch buffer and is **valid only until the callback returns**. Always copy it into an owned `hx_string` or `hx::String` before storing it in a list or sending it to another thread.
+> - **Continuing vs. stopping early**:
+>   - **C callbacks**: Return `HX_OS_OK` to continue scanning, `HX_OS_EOF` to stop early and treat the overall traversal as successful (`HX_OS_OK`), or any other `hx_os_status` code to abort immediately and propagate that error.
+>   - **C++ callbacks**: May return `void`, `bool` (`true` to continue, `false` to stop cleanly), `hx_os_status`, or `hx::Result<void>`. All C++ callbacks must be `noexcept`.
+> - **Zero matches and partial progress**: A scan with zero matches succeeds (`HX_OS_OK`) with a callback count of `0`. Because limits or native filesystem errors can occur after several callbacks have already run, side effects from earlier callbacks are not rolled back. The `completed` output parameter of `hx_os_directory_find_files_ex` and the `size_t` value inside C++ `hx::Result<size_t>` count **all started callbacks** (including a callback that requests an early stop or returns an error). In C++, check `found.hasValue()` before reading partial progress on failure.
 
 <a id="threads"></a>
 
 ## 4. Query on a thread pool
 
-A GUI submits a task to its existing pool and continues its event loop; a command-line tool can call synchronously. The default is one task scanning sequentially, with no worker per subdirectory. Whether parallel scans improve elapsed time depends on storage, directory distribution and filesystem, and needs measurement.
+While command-line utilities can scan synchronously on `main`, a GUI application or interactive service can submit the scan to an existing thread pool so the UI event loop stays responsive. By default, a submitted search runs sequentially on a single worker thread rather than spawning subtasks per subdirectory (whether parallel directory walks improve wall-clock time depends on storage media, directory fan-out, and filesystem locking, so measure on your target hardware first).
 
 ```mermaid
 flowchart LR
@@ -162,7 +184,7 @@ flowchart LR
     D -.->|"Application copies and posts data"| E["UI thread"]
 ```
 
-Assume pool has been created. Put this excerpt in a submitting function returning hx::Result<void>. The task receives an owned path so it remains valid after that function returns:
+Assuming `pool` is already initialized, the snippet below shows how to submit an asynchronous search from a function returning `hx::Result<void>`. Notice how we copy the root path into an owned `hx::String` and move it into the task closure so the worker owns valid memory after the submitting function returns:
 
 ```cpp
 auto root = hx::String::copy("assets");
@@ -176,42 +198,44 @@ auto submitted = pool.submit(
 	}, std::move(root).value());
 ```
 
-Then check submitted: propagate submitted.error() on failure, or move submitted.value() into persistent task state and return success. A GUI can check task.ready() and call getUntil(HX_OS_DEADLINE_NOW) after completion. Do not immediately block in a button handler. A worker callback cannot safely update UI objects directly: the application posts independently owned data through its event mechanism and checks receiver lifetime. Batch/bound large result delivery rather than creating unbounded UI messages.
+Check `submitted` right after submission: propagate `submitted.error()` if queueing failed, or move `submitted.value()` (the task handle) into persistent state managed by your window or controller. Your UI loop can then poll `task.ready()` and retrieve the completed result with `task.getUntil(HX_OS_DEADLINE_NOW)` without blocking a button click handler.
 
-Complete runnable programs: [C synchronous search](../examples/find_files.c) and [C++ pool search](../examples/find_files_async.cpp). They read native UTF-8 argument snapshots, avoiding Windows CRT narrow argv. Argument handling in these examples additionally needs SYSTEM_UTILS; the pool example also needs THREAD_POOL. After a default build, run from the source root:
+> [!WARNING]
+> **Cross-Thread UI Updates and Worker Lifetime**
+> - **Never touch UI widgets directly from a scan callback**: Callbacks run on the worker thread. Copy matched paths into owned storage and post them through your GUI toolkit's thread-safe event queue, verifying receiver lifetime when the UI thread processes the event. For large result sets, batch paths before posting so you do not flood the UI queue with one message per file.
+> - **A timed-out wait does not stop the worker**: Complete runnable programs are available in [C synchronous search](../examples/find_files.c) and [C++ pool search](../examples/find_files_async.cpp) (both read native UTF-8 argument snapshots rather than narrow Windows CRT `argv`, so they require `HX_OS_ENABLE_SYSTEM_UTILS`, and the async example also requires `HX_OS_ENABLE_THREAD_POOL`). The two-second wait and close budgets in `find_files_async.cpp` are caller-chosen demo timeouts, not built-in search deadlines. If a wait times out, the scan is still running—a long-lived application must keep the `task`, pool `owner`, and callback state alive and retry waiting or closing later. The library never forcibly kills or detaches an active scanning thread.
+> - **Cooperative stopping**: The scanner checks for early stop or error returns inside match callbacks; it does not poll a cancellation token on every directory entry. While queued tasks can be cancelled before they start, an active scan does not automatically poll `task.cancel()`. You can inspect a cooperative flag inside your match callback, but a scan traversing directories with zero matches has no immediate cancellation guarantee.
+
+After building with examples enabled, run the binaries from the repository root:
 
 ```powershell
+# Windows PowerShell:
 .\build\bin\Release\hx_os_find_files.exe assets "*.json"
 .\build\bin\Release\hx_os_cpp_find_files.exe assets "*.json"
 ```
 
-Linux single-configuration build:
-
 ```sh
+# Linux / macOS single-config build:
 ./build/bin/hx_os_find_files assets '*.json'
 ./build/bin/hx_os_cpp_find_files assets '*.json'
 ```
-
-The pool example is a command-line demonstration; its main-thread wait is for printing/exiting, not GUI event handling. Its two-second wait/close budgets are selected by that caller, not fixed search deadlines. A timed-out wait does not mean scanning stopped. A service retains task/owner/callback state and retries waiting/closing; the library never kills or detaches a scanning worker.
-
-The scan currently accepts stop/error through matching callbacks, with no per-directory-entry cancellation token. Queued task cancellation follows the pool's contract. An already running scan does not automatically poll task.cancel(); a match callback can inspect cooperative state, but no-match scans have no prompt-cancellation guarantee. Synchronous native directory calls and callbacks have no hard deadline guarantee.
 
 <a id="limits"></a>
 
 ## 5. Depth, count and memory limits
 
-Defaults from HX_OS_WALK_OPTIONS_INIT:
+To prevent deeply nested trees or massive directories from exhausting memory, every scan enforces explicit bounds initialized by `HX_OS_WALK_OPTIONS_INIT`:
 
-| Setting | Default | Meaning |
+| Field | Default | Meaning |
 | --- | ---: | --- |
-| max_depth | 64 | Simultaneously open directory levels, root = 1; configurable up to 256 |
-| max_entries | 1,000,000 | Processed directory entries, including directories/nonmatches |
-| max_results | 65,536 | Maximum started match callbacks |
-| max_bytes | 16 MiB | Stack/path/name allocation budget including metadata and old/new growth buffers |
+| `max_depth` | `64` | Maximum simultaneously open directory levels (root is level `1`; configurable up to `256`) |
+| `max_entries` | `1,000,000` | Maximum processed directory entries (including subdirectories and non-matching items) |
+| `max_results` | `65,536` | Maximum started match callbacks |
+| `max_bytes` | `16 MiB` | Scratch allocation budget for the traversal stack, path buffer, and filename buffers (including metadata and temporary buffers during reallocation) |
 
-Limits are positive. Depth exhaustion or excess entry/match counts report LIMIT, not truncated success. Exactly reaching a count limit can succeed if no further corresponding items exist. Native directory objects, libc/OS buffers, temporary Windows path conversions and callback allocations are outside the scratch budget; max_depth bounds open directories. Root/joined paths are limited to 32768 UTF-8 bytes, basename patterns to 4096 bytes, and the OS can impose lower limits.
+All limit fields must be positive. Exceeding `max_depth`, `max_entries`, or `max_results` returns `HX_OS_LIMIT` rather than silently returning a truncated list as `HX_OS_OK` (if a scan hits `max_entries` or `max_results` on the very last item and no further items exist, it still succeeds with `HX_OS_OK`).
 
-For a 96-level tree, retain finite bounds and adjust:
+To scan a deeper or larger tree—for example, a 96-level directory hierarchy—adjust `hx_os_walk_options` while keeping finite bounds:
 
 ```c
 hx_os_walk_options options = HX_OS_WALK_OPTIONS_INIT;
@@ -222,27 +246,33 @@ options.max_results = 200000;
 options.max_bytes = 4 * 1024 * 1024;
 ```
 
-Pass &options to the C _ex entry or C++ findFiles/findFirstFile optional parameter. Options, root, pattern, callback, user and custom context remain valid through the synchronous call; background tasks must own or copy necessary data and keep the context alive. Prefer an absolute root for background work. When using a relative path, the application must prevent other threads from changing the working directory during the scan.
+Pass `&options` to `hx_os_directory_find_files_ex` in C or to the optional `options` parameter of `hx::Directory::findFiles` / `findFirstFile` in C++.
+
+> [!NOTE]
+> **Scratch Budget Scope and Path Length Limits**
+> - `max_bytes` tracks allocations made through the query `hx_context` for the explicit traversal stack and path buffers. Native OS directory handles (`DIR*` / `HANDLE`), libc directory buffers, temporary UTF-16 path conversions on Windows, and allocations made inside your callback are outside this scratch budget (open native directory handles are bounded by `max_depth`).
+> - Root and joined file paths are capped at `32,768` UTF-8 bytes, and basename patterns are capped at `4,096` bytes (the underlying OS may enforce lower limits).
+> - During a synchronous call, `options`, the root path, pattern, callback, `user` pointer, and custom `hx_context` must remain valid. Background tasks must own or copy those inputs and keep their `hx_context` alive. Prefer passing an **absolute root path** to background tasks; if you pass a relative path, your application must ensure no other thread changes the process working directory while the scan is running.
 
 <a id="behavior"></a>
 
 ## 6. Matching and failure behavior
 
-- Patterns match a basename, not a relative path. Root assets plus *.json already recurses; do not pass **/*.json as a basename pattern.
-- Star matches zero or more characters; question mark matches one Unicode codepoint. Matching is case-sensitive on every platform. Bracket classes, path separators and backslash escaping are unsupported.
-- A leading-dot filename needs a literal leading dot in the pattern. Hidden directories are traversed; Windows hidden attributes are not treated as equivalent to dot names.
-- Only regular files are reported. Observed links/reparse points and special files are skipped instead of deliberately descending through them. The selected root is opened as an ordinary path.
-- Output joins the supplied root and descendant path, so relative roots produce relative paths. This is not a snapshot or security sandbox: concurrent renames/deletes/replacements can affect results and cause partial failure.
-- Permission, I/O, invalid UTF-8 and resource failures are explicit. They are not silently ignored while claiming a complete scan. Native details use hx_os_error/Result.
+- **Basename matching only**: Patterns match each file's basename, not its relative path from the root. Passing root `"assets"` and pattern `"*.json"` already searches all subdirectories recursively—do not pass `"**/*.json"` as a filename pattern.
+- **Wildcard syntax and case sensitivity**: `*` matches zero or more characters, and `?` matches a single Unicode code point. Character classes (`[...]`), path separators, and backslash escaping are not supported. Matching is **case-sensitive on every platform**.
+- **Dotfiles (leading `.`)**: A filename starting with `.` (such as `.gitignore`) is matched only if the pattern also starts with a literal `.` (such as `.*` or `.gitignore`). Hidden subdirectories are still traversed normally. This rule is purely name-based and does not map Windows `FILE_ATTRIBUTE_HIDDEN` to leading-dot behavior.
+- **Regular files only, no symlink following**: Only regular files are reported to callbacks. Symlinks, Windows reparse points/junctions, and special files (devices, FIFOs, sockets) encountered during enumeration are skipped without descending into them (the initial root directory itself is opened as a normal path).
+- **Joined output paths and concurrent modifications**: Reported paths join the caller-supplied root with the discovered relative subpath (so a relative root yields relative output paths). Traversal is a live scan, not an atomic filesystem snapshot or security sandbox—concurrent renames, deletions, or directory replacements can affect results or cause an error part-way through.
+- **Explicit error reporting**: Permission failures (`HX_OS_ACCESS_DENIED`), I/O errors, invalid UTF-8 filenames, and resource exhaustion stop the scan and return an explicit failure status (with native details preserved in `hx_os_error` / `hx::Result`) rather than silently skipping unreadable subtrees and claiming a complete scan.
 
-FILE_UTILS enables search and HX_OS_CAP_FILE_SEARCH. Disabling it returns NOT_SUPPORTED. Synchronous search does not need CONTAINERS, CONFIG, SETTINGS or a pool. With FILE_INFO enabled it reuses native entry types, letting the native adapter query unknown types only. Without FILE_INFO it falls back to name enumeration and non-following stat.
+**CMake Feature Flags**: Recursive search requires `HX_OS_ENABLE_FILE_UTILS=ON` (which advertises `HX_OS_CAP_FILE_SEARCH`; when disabled, search calls return `HX_OS_NOT_SUPPORTED`). Synchronous search does not depend on `HX_OS_ENABLE_CONTAINERS`, `HX_OS_ENABLE_CONFIG`, `HX_OS_ENABLE_SETTINGS`, or the thread pool. When `HX_OS_ENABLE_FILE_INFO=ON`, traversal reuses native directory-entry file types (`d_type` / `WIN32_FIND_DATAW`) and queries metadata only when the entry type is unknown; when `HX_OS_ENABLE_FILE_INFO=OFF`, it falls back to name enumeration plus non-following `lstat`/attribute checks.
 
 <a id="evidence"></a>
 
 ## 7. Performance and verification scope
 
-The implementation uses an explicit stack and reuses filename/path buffers without a string/list allocation per normal match. Nonmatching regular files need no full-path construction in the normal mode. Enumeration, UTF-8 checking, matching and callback work still cost time. There is no file index; a first complete query normally visits relevant entries.
+The scanner uses an explicit heap-allocated stack instead of call-stack recursion and reuses its filename and path buffers across entries. In normal operation, it does not allocate a new string or list node per matching file, and non-matching regular files do not even require constructing a full joined path. Native directory enumeration, UTF-8 validation, wildcard matching, and user callbacks still take time, and because there is no persistent index, a full scan must visit the relevant directory entries.
 
-Controlled Windows/WSL tests cover 2,052 matching files, 96 nested levels, Unicode, empty results, first match, stop/error callbacks, limits, allocation failure and cleanup. POSIX additionally covers cyclic/external links and invalid byte filenames. Query-context allocation counts/peaks do not grow with match count in the fixture comparison; this excludes native internals and separately allocated callback data. WSL uses native /tmp so Windows-mount name translation is not mistaken for POSIX byte-name semantics.
+Controlled regression suites on Windows and WSL verify 2,052 matching files, 96 nested directory levels, Unicode filenames, empty result sets, first-match short-circuiting, early-stop and error callbacks, quota exhaustion (`HX_OS_LIMIT`), fault-injected allocation failures, and full resource cleanup. POSIX suites additionally cover cyclic symlinks, external symlinks, and non-UTF-8 byte filenames (WSL tests run on native `/tmp` storage so Windows DrvFS mount translation is not mistaken for native POSIX byte-filename behavior). Across fixture comparisons where only the number of matching files increases, query-context (`hx_context`) allocation counts and peak memory remain constant.
 
-Recursive search streams results while scanning and does not maintain a file index. For in-memory sorting/searching or ordered sets, use [generic algorithms](ALGORITHMS.md) and [containers](CONTAINERS.md); see [platform support](PLATFORMS.md) for target requirements.
+For sorting, binary search, or storing collected paths in ordered containers, see [generic algorithms](ALGORITHMS.md) and [containers](CONTAINERS.md); for OS compiler and runtime requirements, see [platform support](PLATFORMS.md).

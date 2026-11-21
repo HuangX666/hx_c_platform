@@ -2,23 +2,35 @@
 
 [English](RING.md) · [ByteQueue](BYTE_QUEUE.zh-CN.md) · [README](../README.zh-CN.md)
 
-**先运行一个完整例子。** 已经有一块固定内存，希望循环使用，并直接写入可用空间时，使用固定环形缓冲。
+当工程中已经有一块固定大小的内存（例如栈上数组、静态全局数组或预分配的物理缓冲块），希望在**零堆内存分配**的前提下循环复用这块空间，或者希望直接借用内部空闲／可读的两个连续内存片段（Spans）进行原位填充与流式解析（省去中间临时缓冲区的拷贝）时，可以使用固定字节环形缓冲 `hx_os_ring`（C++11 对应 `<hx/Ring.hpp>` 中的 `hx::Ring`）。
 
-打开 [byte_queue_ring.c](../examples/byte_queue_ring.c)。`example_ring` 初始化 8 字节数组 → 写 abcdef → 消费 abcd → 借用两个空闲片段写 x → `commit` → 借用读取片段 → `consume`。
+完整可运行的示例位于 [byte_queue_ring.c](../examples/byte_queue_ring.c)：其中的 `example_ring` 函数使用一个 8 字节数组初始化环形缓冲，先写入 `"abcdef"` 并消费前 4 个字节 `"abcd"`（使剩余的 `"ef"` 停留在数组尾部），接着调用 `hx_os_ring_write_spans` 直接借用跨越数组末尾的两个空闲连续片段填入 `'x'` 并调用 `hx_os_ring_commit` 提交，最后通过 `hx_os_ring_read_spans` 借用两段可读数据打印并调用 `hx_os_ring_consume` 消费。
 
-按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_byte_queue_ring`。此例无命令行参数、无需输入文件。
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 `-DHX_OS_BUILD_EXAMPLES=ON` 并构建 `hx_os_byte_queue_ring` 目标即可直接运行（无需命令行参数或输入文件）。其中第二行输出即为固定环形缓冲的结果：
 
-**会得到什么：**Ring 部分输出 `Ring: efxxxxxx`。两个片段按顺序拼起来就是逻辑数据；commit 之前新字节不可读，consume 之后才能复用空间。
+```text
+ByteQueue: 5 bytes: hello
+Ring: efxxxxxx
+```
 
-下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+你也可以参照[最小工程配置](USAGE.zh-CN.md#c-project)将该示例源码作为自己工程的 `main.c`。
 
 ## 1. 选择存储方式
 
-`hx_os_ring` 使用调用者提供的数组。环形对象和字节数组都可以放在栈上或静态存储区。它不会分配内存、扩容、覆盖未读数据、启动线程或等待数据。模块复用 `HX_OS_ENABLE_CONTAINERS` 构建开关；关闭后，返回状态的操作会报告 `HX_OS_NOT_SUPPORTED`。
+`hx_os_ring` 完全借用调用方传入的外部字节数组，`hx_os_ring` 结构体本身和底层数组都可以直接放在栈上或静态存储区。它绝不调用堆分配器、不会自动扩容、不会覆盖尚未消费的旧字节，也不启动后台线程或阻塞等待。该模块复用 `HX_OS_ENABLE_CONTAINERS` 构建开关；若关闭该开关，返回状态码的操作会返回 `HX_OS_NOT_SUPPORTED`。
 
-希望按需增长、直接复制读写时，使用 `hx_os_byte_queue`；需要固定内存预算，或者直接访问缓冲的两个连续片段时，使用这里的固定环形缓冲。二者都不支持自行并发访问：跨线程共享时，锁必须覆盖完整操作或整段借用期间。没有内部互斥锁不代表这是无锁并发队列。
+| 对比维度 | `hx_os_ring`（固定环形缓冲） | `hx_os_byte_queue`（[可增长字节队列](BYTE_QUEUE.zh-CN.md)） |
+| --- | --- | --- |
+| 内存来源 | 借用调用方提供的固定数组，零堆内存分配 | 由容器分配器管理，在上限内按需动态扩容 |
+| 访问方式 | 支持普通复制读写 + **双连续片段（Spans）直接借用与提交** | 支持精确复制读写、预览与 `read_some`/`write_some`（因扩容可能搬移地址，不提供裸片段借用） |
+| 适用场景 | 固定内存预算、嵌入式零分配缓冲、直接在环形空间内原位组装或解析报文 | 未知峰值到达节奏、希望自动扩容暂存的字节流 |
+
+> [!IMPORTANT]
+> `hx_os_ring` 和 `hx_os_byte_queue` 都是单线程数据结构，不含内部互斥锁（没有内部锁并不意味着它是无锁并发队列）。若在多线程之间共享同一个 `hx_os_ring`，外部互斥锁必须完整覆盖每一次读写调用，或者覆盖从 `write_spans`/`read_spans` 开始直到 `commit`/`consume` 结束的**整段借用期间**。
 
 ## 2. 普通读写
+
+如果只需要常规的字节拷贝读写，包含 `<hx_ring.h>` 并调用 `hx_os_ring_init`、`hx_os_ring_write` 和 `hx_os_ring_read` 即可：
 
 ```c
 #include <hx_ring.h>
@@ -43,21 +55,23 @@ int main(void)
 }
 ```
 
-输出为 `hello`，不需要调用销毁函数。在环形对象或借用片段使用期间，`storage` 必须始终有效。已初始化的 C 环形对象不能复制，也不能直接修改成员。重新初始化会丢弃原有数据，只能在全部操作与借用结束后进行；初始化允许接收未初始化对象，因此不会读取旧状态。
+运行后输出 `hello`。由于不涉及任何堆内存分配，使用完毕后无需调用销毁函数。
+- **底层数组生命周期**：在 `ring` 对象或任何借用片段仍在使用期间，`storage` 数组必须始终保持有效。切勿按值拷贝已初始化的 `hx_os_ring` 结构体或直接手工修改其内部字段。若需重新初始化一个 `hx_os_ring`，必须先结束所有正在进行的借用；重新调用 `hx_os_ring_init` 会直接丢弃原有数据计数。
+- **容量查询与清空**：`hx_os_ring_size(&ring)` 返回当前已排队的可读字节数，`hx_os_ring_capacity(&ring)` 返回底层数组的准确字节长度，`hx_os_ring_space(&ring)` 返回剩余可写字节数（即 `capacity - size`）。`hx_os_ring_clear(&ring, error)` 会丢弃所有已排队字节但保留底层数组绑定。允许初始化容量为 `0` 的环形缓冲（仅能执行 `0` 字节复制）。
 
-`size()` 是已保存字节数，`capacity()` 是数组的准确长度，`space()` 是二者之差。`clear()` 丢弃数据但保留数组。对象的管理信息占用数组之外的额外内存。零容量对象有效，允许零字节复制，但不能保存数据。
-
-| 操作 | 数据或空间不足 | 失败影响 |
+| 操作接口 | 空间或数据不足时的返回值 | 失败时的状态保持 |
 | --- | --- | --- |
-| `hx_os_ring_write` | `HX_OS_OUTPUT_FULL` | 原有数据不变 |
-| `hx_os_ring_read` | `HX_OS_NEED_INPUT` | 环形内容和目标缓冲都不变 |
-| `hx_os_ring_read(..., NULL, bytes, ...)` | `HX_OS_NEED_INPUT` | 仅成功时准确丢弃 `bytes` 字节 |
+| `hx_os_ring_write(&ring, data, bytes, error)` | `HX_OS_OUTPUT_FULL`（剩余空间小于 `bytes`） | 环形缓冲内原有数据不变，不写入部分字节 |
+| `hx_os_ring_read(&ring, out, bytes, error)` | `HX_OS_NEED_INPUT`（可读数据小于 `bytes`） | 环形缓冲与目标 `out` 缓冲区均保持不变 |
+| `hx_os_ring_read(&ring, NULL, bytes, error)` | `HX_OS_NEED_INPUT`（可读数据小于 `bytes`） | 仅在数据充足时准确丢弃头部 `bytes` 个字节 |
 
-普通复制接口的输入、输出不能与环形对象或底层数组重叠。这里没有 EOF 或生产者关闭状态。所有长度单位都是字节，与字符编码无关。
+普通复制读写传入的输入／输出缓冲区不能与 `hx_os_ring` 结构体自身或底层 `storage` 数组发生内存重叠。
 
 ## 3. 借用两个片段，省去中间复制
 
-数据绕到数组开头时，逻辑内容分为两个连续片段。流顺序始终是先第一段、再第二段。借用会一次返回两段；未使用的第二段为 `{NULL, 0}`。
+当环形缓冲的读写游标绕过底层数组末尾（Wrap Around）时，逻辑上连续的可写空闲空间或可读数据在物理内存上会分成前后两段（先是数组尾部的第一段 `parts[0]`，紧接着是绕回数组开头的第二段 `parts[1]`；若未发生回绕，则未使用的第二段固定为 `{NULL, 0}`）。
+
+通过 `hx_os_ring_write_spans` 和 `hx_os_ring_read_spans`，调用方可以一次性借出这两段连续内存的指针与长度，直接在环形缓冲内部填充数据或运行解析器，从而省去先拷入临时线性缓冲区的中间复制开销：
 
 ```c
 hx_os_ring_write_span parts[2];
@@ -70,22 +84,24 @@ if (status == HX_OS_OK) {
 }
 ```
 
-对应的读取方式是 `hx_os_ring_read_spans()` 配合 `hx_os_ring_consume()`。解析器可以直接查看两段数据，只消费已经识别的前缀。`commit()` 只发布调用者已经填好的前缀，其余部分仍为空闲空间。这里省去的是中间缓冲复制，不代表操作系统或业务流程中的所有复制都消失了。
+读取侧遵循对称的模式：先调用 `hx_os_ring_read_spans(&ring, parts, error)` 检视 `parts[0]` 和 `parts[1]` 中的可读字节，解析完已识别的前缀后，调用 `hx_os_ring_consume(&ring, bytes, error)` 正式消费对应字节数并腾出空间。同理，写入侧调用 `hx_os_ring_commit(&ring, bytes, error)` 只会将实际已填好的前缀长度发布为可读数据，其余未提交部分仍作为空闲空间保留。
 
-借用期间需要遵守：
-
-- 同一时刻只允许一个读借用或写借用。结束前再次借用、复制读写或 `clear()` 都返回 `HX_OS_BUSY`。
-- `commit(0)` 或 `consume(0)` 显式放弃相应借用，不改变有效字节数。
-- commit/consume 成功后，两段指针都失效，即使只提交或消费了部分。继续处理时必须重新借用。
-- 完成数量超过借用范围时返回 `HX_OS_RANGE`，原借用仍然有效，可以重试。使用错误方向结束借用时返回 `HX_OS_INVALID`，同样保留原借用。
-- 空缓冲的读借用返回 `HX_OS_NEED_INPUT`，满缓冲的写借用返回 `HX_OS_OUTPUT_FULL`；这两种失败不会建立借用。
-- 清空、重新初始化、结束对象或数组的生命周期前，先结束借用。函数和析构函数都不会自动提交数据。
+> [!WARNING]
+> **片段借用（Span Borrow）生命周期与状态机规则：**
+> 1. **单借用互斥**：同一时刻最多只允许存在一个活动借用（无论是读借用还是写借用）。在当前借用通过 `commit` 或 `consume` 结束之前，再次发起借用、调用普通复制读写或调用 `clear` 都会被拒绝并返回 `HX_OS_BUSY`。
+> 2. **放弃借用**：传入 0 字节（`hx_os_ring_commit(&ring, 0, NULL)` 或 `hx_os_ring_consume(&ring, 0, NULL)`）可显式取消当前借用而不改变缓冲内的有效字节数。
+> 3. **提交／消费后指针立即失效**：一旦 `commit` 或 `consume` 成功返回（即便只提交或消费了借用长度的一部分），此前拿到的 `parts[0]` 和 `parts[1]` 指针即告失效；若需继续读写，必须重新调用 `write_spans` 或 `read_spans`。
+> 4. **越界与方向错误恢复**：若传入 `commit` / `consume` 的字节数超过了本次借用提供的总长度，函数返回 `HX_OS_RANGE`；若在读借用上调用了 `commit`（或在写借用上调用了 `consume`），函数返回 `HX_OS_INVALID`。这两种错误都不会销毁当前借用，调用方修正参数后仍可继续完成提交或消费。
+> 5. **空／满时不建立借用**：对空缓冲调用 `read_spans` 返回 `HX_OS_NEED_INPUT`，对满缓冲调用 `write_spans` 返回 `HX_OS_OUTPUT_FULL`；这两种情况均不会进入借用状态。
+> 6. **无自动提交**：在清空、重新初始化或让 `ring` 及底层数组离开作用域之前，必须先完成或取消活动借用；任何函数或 C++ 析构函数都不会自动替你 `commit` 未提交的数据。
 
 ## 4. C++11 与完整示例
 
-`<hx/Ring.hpp>` 提供 `hx::Ring::create(storage, bytes)`、`write()`、`read()`、`discard()`、`clear()` 和容量查询。操作返回 `hx::Result`。`readSpans()`、`writeSpans()` 的结果通过 `parts[0]`、`parts[1]` 提供两段数据，需要显式调用 `consume()`、`commit()`。包装类借用数组，支持移动构造，不支持复制或赋值。移动会把尚未结束的借用交给新对象；被移动的原对象变为空对象。析构不会提交数据，也不会释放调用者的数组。
+C++11 头文件 `<hx/Ring.hpp>` 提供了 `hx::Ring::create(storage, bytes)` 以及 `write()`、`read()`、`discard()`、`clear()`、`size()`、`capacity()` 和 `space()`，所有可能失败的操作均返回 `hx::Result<T>`。
+- 调用 `readSpans()` 和 `writeSpans()` 会返回包含 `parts[0]` 与 `parts[1]` 的片段结构，处理完毕后显式调用 `consume(bytes)` 或 `commit(bytes)`。
+- `hx::Ring` 仅借用外部数组，支持移动构造（若原对象正处于借用状态，移动构造会将该未完成借用一并转移给新对象，原对象变为空壳），禁止复制构造或赋值。`hx::Ring` 析构时既不会自动提交数据，也不会释放外部传入的数组。
 
-开启 examples 后，构建 `hx_os_byte_queue_ring` 即可运行完整的 [C 示例](../examples/byte_queue_ring.c)。示例同时演示可增长 ByteQueue 的读取，以及绕过数组末尾的固定环形缓冲。预期输出：
+在启用 `-DHX_OS_BUILD_EXAMPLES=ON` 后构建并运行 `hx_os_byte_queue_ring` 即可查看完整的 [C 示例](../examples/byte_queue_ring.c)，输出如下：
 
 ```text
 ByteQueue: 5 bytes: hello

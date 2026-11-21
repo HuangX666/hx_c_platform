@@ -2,19 +2,21 @@
 
 [简体中文](LINUX_DESKTOP.zh-CN.md) · [README](../README.md)
 
-**Start with a complete program.** Request temporary sleep inhibition while completing work such as a file export on a desktop system.
+When a desktop application is running a long file export, firmware flash, or batch job and wants to prevent the desktop environment from automatically suspending the machine due to user inactivity, use the scoped sleep-inhibition API (`hx_os_sleep_inhibit` / `hx::SleepInhibit`).
 
-Open [sleep_inhibit.c](../examples/sleep_inhibit.c). sleep_inhibit_create → perform application work → sleep_inhibit_destroy releases the request.
+To see it in action on your desktop, build and run [sleep_inhibit.c](../examples/sleep_inhibit.c). The program calls `hx_os_sleep_inhibit_create` to acquire a scoped sleep-inhibition lease, performs simulated work, and calls `hx_os_sleep_inhibit_destroy` to release the lease. Follow the [example run instructions](../examples/README.md#run) to enable `HX_OS_BUILD_EXAMPLES=ON` and build `hx_os_sleep_inhibit` (no command-line arguments or input files are needed):
 
-Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_sleep_inhibit`. This program needs no arguments or input files.
+```sh
+cmake -S . -B build -DHX_OS_BUILD_EXAMPLES=ON
+cmake --build build --config Release --target hx_os_sleep_inhibit
+./build/bin/hx_os_sleep_inhibit
+```
 
-**Expected result:** Available services produce request/release messages. Missing desktop/login services report unsupported or native errors; WSL and headless embedded systems need not provide them.
-
-Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+On a Linux desktop running a supported session power manager (such as GNOME or KDE), the program prints confirmation messages as it acquires and releases the inhibitor. On headless servers, embedded boards, or WSL environments without a desktop session bus, it explicitly reports `not supported` or the native bus error. You can also drop its source into the [minimal project](USAGE.md#c-project) template.
 
 ## 1. The same ordinary C entry
 
-A long file export may ask the desktop to keep the computer awake while that work runs. Create a request at the beginning and destroy it afterward:
+Linux desktop builds use the exact same C99 entry points as Windows and macOS. Create a request when your operation begins and destroy it when the work finishes:
 
 ```c
 hx_os_sleep_inhibit *request = NULL;
@@ -27,9 +29,10 @@ if (status != HX_OS_OK)
 return hx_os_sleep_inhibit_destroy(&request, NULL);
 ```
 
-This fragment belongs inside a function returning hx_os_status. The complete [sleep_inhibit.c](../examples/sleep_inhibit.c) builds as `hx_os_sleep_inhibit`; its 20 ms interval demonstrates where application work belongs. Run `build/bin/hx_os_sleep_inhibit` on a Linux desktop. A supported service grants the request and the program reports its release. Without an available backend/service it explicitly prints `not supported`. The example does not change a power plan or desktop setting.
+In [sleep_inhibit.c](../examples/sleep_inhibit.c), a 20 ms sleep stands in for the application work:
 
-Each object owns its own request, so one library consumer can release its request while another remains active. The reason is copied as UTF-8 and can be 1–4,096 bytes. Caller serialization permits transfer to another thread; concurrent operations on the same object are excluded. No worker or reconnect thread is started.
+- **Per-handle isolation**: Each `hx_os_sleep_inhibit` instance owns its own private D-Bus session-bus connection. Multiple subsystems or plugins in the same process can hold independent requests concurrently—destroying one request never cancels another consumer's active inhibitor.
+- **Reason string and threading**: The UTF-8 `reason` string (`1–4,096` bytes) is copied and shown by the desktop environment if the user checks what is preventing sleep. You may transfer an instance across threads with external synchronization, provided only one thread operates on a given instance at a time. No background worker or auto-reconnect thread is spawned.
 
 ```mermaid
 flowchart LR
@@ -42,31 +45,31 @@ flowchart LR
 
 ## 2. Actual platform behavior
 
-The Linux adapter tries existing services in this order: org.freedesktop.PowerManagement, its org.freedesktop.PowerManagement.Inhibit alias, then org.gnome.SessionManager. The first two use the PowerManagement Inhibit interface. The GNOME request uses flag **4 for suspend**, not flag 8 for idle; it does not request inhibition of automatic screen locking. User actions and desktop policy can override requests. GNOME may expose the request when a user asks to suspend. [GNOME method contract](https://gnome.pages.gitlab.gnome.org/gnome-session/re04.html), [KDE interface](https://github.com/KDE/powerdevil/blob/master/daemon/dbus/org.freedesktop.PowerManagement.Inhibit.xml).
-
-Requests do not autostart a missing service or ask for interactive authorization. An explicit DBUS_SESSION_BUS_ADDRESS must contain only local `unix:` addresses, at most 16 KiB. When it is absent the native user-bus default is used. Do not change process environment concurrently with creation/reactivation. No remote bus, unixexec helper or automatic daemon launch is requested by this adapter.
-
-Method calls share a one-second monotonic budget. Native connection setup and scheduling have no hard deadline. Timeout/error releases messages and the private connection; an accepted object is returned only after a valid uint32 cookie reply. Native errno-style failures are retained. Missing runtime/service returns NOT_SUPPORTED; permission, timeout and malformed replies are not turned into success.
-
-Deactivation or destruction closes the private connection without waiting for an Uninhibit reply. The desktop removes inhibitors associated with the disconnected owner. The library reports local resource release; the desktop observes disconnection asynchronously. Other consumers' connections are unaffected. [Native connection ownership](https://github.com/systemd/systemd/blob/main/man/sd_bus_default.xml).
+- **Service discovery order and GNOME suspend flag**:
+  - The Linux adapter tries active session-bus services in order: `org.freedesktop.PowerManagement`, its `org.freedesktop.PowerManagement.Inhibit` alias, and finally `org.gnome.SessionManager`.
+  - The first two use the freedesktop PowerManagement `Inhibit` method; the GNOME request passes **`flags = 4` (inhibit suspend only)** rather than `flags = 8` (idle), so it does not block automatic screen locking (see the [GNOME method contract](https://gnome.pages.gitlab.gnome.org/gnome-session/re04.html) and [KDE interface](https://github.com/KDE/powerdevil/blob/master/daemon/dbus/org.freedesktop.PowerManagement.Inhibit.xml)). Explicit user actions and system power policies can still override an inhibitor.
+- **Connection policy and timeout budget**:
+  - Requests never autostart a missing desktop daemon or trigger interactive PolicyKit authorization prompts.
+  - If `DBUS_SESSION_BUS_ADDRESS` is set, it must contain only local `unix:` socket addresses (up to `16 KiB`); remote TCP buses and `unixexec:` helpers are rejected. When unset, the native user-bus default is used (do not mutate the process environment concurrently while creating or reactivating a request).
+  - Method calls share a `1-second` monotonic time budget. On timeout, permission failure, or a malformed reply, messages and the private connection are closed and the error is returned (`HX_OS_NOT_SUPPORTED` when the runtime or desktop service is absent).
+- **Release via private connection close**: Deactivating (`set_active(false)`) or destroying (`destroy`) a request closes its private bus connection immediately without blocking on an `Uninhibit` reply. Because desktop session managers scope inhibitors to the bus connection owner, disconnecting automatically releases that inhibitor while leaving other consumers' connections untouched (see [Native connection ownership](https://github.com/systemd/systemd/blob/main/man/sd_bus_default.xml)).
 
 ## 3. Requested state and restart
 
-set_active(true) is idempotent. set_active(false) releases the connection; a later true creates a new connection and request. active() reports the last requested state, not live desktop health. A desktop/session-bus restart can discard the native lease while this flag remains true. Deactivate/reactivate, or recreate the object, after such a restart. There is no background polling or automatic recovery.
-
-Do not use an inherited active object after fork. Keep hx_c_platform, its context and borrowed host resources loaded/alive until all corresponding requests are destroyed. Destroy consumes the object as in the existing Windows/Apple contract.
+- **Idempotent activation**: Calling `hx_os_sleep_inhibit_set_active(request, 1, &error)` on an already active request is a no-op; calling `set_active(request, 0, &error)` closes the private connection, and a subsequent `set_active(request, 1, &error)` opens a fresh connection and acquires a new lease.
+- **Session-bus restarts**: `hx_os_sleep_inhibit_active()` returns the last locally requested state rather than polling the desktop daemon. If the desktop session or D-Bus daemon restarts while your application is running, the remote lease may be lost while `active()` remains true; deactivate and reactivate (or recreate) the request if you detect a session restart.
+- **`fork` and unload rules**: Never use an inherited active request in a child process after `fork()`. Keep `hx_c_platform`, its `hx_context`, and host resources alive until all sleep-inhibition requests have been destroyed.
 
 ## 4. Optional operating-system runtime
 
-`HX_OS_ENABLE_LINUX_DESKTOP` defaults to ON and also requires SLEEP_INHIBIT. It applies to Linux desktop builds, excluding Android. It dynamically uses the operating system's installed libsystemd.so.0 or libelogind.so.0 through the published sd-bus C ABI. No implementation/SDK header is copied into the project, no native runtime is built or statically included, and no Qt/GLib dependency is added. The loader checks every required symbol; absent/older incompatible runtimes report NOT_SUPPORTED. This is an optional system-runtime dependency; bundled third-party source continues to live in deps/.
+`HX_OS_ENABLE_LINUX_DESKTOP` defaults to `ON` and requires `HX_OS_ENABLE_SLEEP_INHIBIT` (applying to desktop Linux builds, excluding Android):
 
-The native provider mapping is held with RTLD_NODELETE so its own TLS cannot reference unloaded code. Per-object dlopen references, messages, connections and first-party allocations are released; the provider mapping and its internal process state may remain until process exit. First-party allocation injection does not replace the native provider's allocator. No per-process allocator or shared bus configuration is changed.
-
-Turn LINUX_DESKTOP or SLEEP_INHIBIT OFF for an embedded/headless build that does not need this adapter. It requires neither NETWORK, LOOP, LIBRARY nor PATHS. Static CMake/pkg-config consumption carries the required system dl linkage. The capability bit means an adapter was compiled, not that the current desktop has a service. Linux performance requests remain NOT_SUPPORTED.
+- **Dynamic `sd-bus` loading**: At runtime, the adapter dynamically loads the OS-installed `libsystemd.so.0` or `libelogind.so.0` via the public `sd-bus` C ABI (using `RTLD_NODELETE` so internal library TLS never points to unmapped code). No `systemd` / `elogind` headers or sources are bundled or statically linked, and no Qt or GLib dependency is added. Missing or incompatible runtimes cleanly return `HX_OS_NOT_SUPPORTED`.
+- **Headless / embedded builds**: Set `-DHX_OS_ENABLE_LINUX_DESKTOP=OFF` or `-DHX_OS_ENABLE_SLEEP_INHIBIT=OFF` when targeting headless or embedded Linux systems. The adapter does not depend on `NETWORK`, `LOOP`, `LIBRARY`, or `PATHS` (static CMake and `pkg-config` consumers automatically receive the required `-ldl` linkage). Note that `hx_os_performance_request` remains `HX_OS_NOT_SUPPORTED` on Linux.
 
 ## 5. C++11 and validation
 
-Include `<hx/Power.hpp>`. In a function returning hx_os_status:
+Include `<hx/Power.hpp>` in C++11 to use the move-only `hx::SleepInhibit` wrapper returning `hx::Result` without exceptions:
 
 ```cpp
 auto request = hx::SleepInhibit::create("Finishing a file export");
@@ -77,8 +80,4 @@ if (!request)
 return request.value().close().status();
 ```
 
-The existing move-only facade releases synchronously and uses Result, without exceptions. Closing after deactivation is valid; it does not release another object's inhibitor.
-
-Run the public [sleep_inhibit.c](../examples/sleep_inhibit.c) to request temporary sleep inhibition from the current desktop service. Check service availability and the returned status.
-
-Whether a request prevents physical sleep depends on GNOME/KDE, logind/elogind, session permissions and machine policy. Verify the effect in the actual desktop environment; WSL protocol traffic cannot establish physical sleep prevention. See [platform support](PLATFORMS.md) for other boundaries.
+Calling `close()` after deactivation is valid and never affects another instance's inhibitor. Because physical sleep prevention depends on the active desktop environment (GNOME/KDE), `logind`/`elogind`, session permissions, and hardware policy, always verify physical sleep behavior on your target desktop system. See [platform support](PLATFORMS.md) for general OS boundaries.

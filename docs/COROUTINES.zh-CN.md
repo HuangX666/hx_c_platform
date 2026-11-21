@@ -2,56 +2,64 @@
 
 [English](COROUTINES.md) · [README](../README.zh-CN.md)
 
-**先让一个后台任务算出 42，再在主线程拿到它。** 本页先用 C++11 的完整程序 [go.cpp](../examples/go.cpp) 跑通这件事，再说明 C99 和 C++20 的写法。协程适合大量等待 channel、定时或协程 I/O 的任务；普通阻塞 SDK 调用仍会占住工作线程。
+当应用需要同时管理大量等待 Channel、定时器或异步网络 I/O 的并发任务，又不希望为每个连接或任务创建独立的操作系统线程时，可以使用本库的协作式协程模块。协程在等待 Channel、睡眠或协程 I/O 时会自动挂起并让出底层工作线程，去执行其他就绪任务。
 
-从库源码根目录执行。先完成一次[示例配置](../examples/README.zh-CN.md#run)，把下方 `build` 换成现有构建目录；Debug 构建需同时把命令和运行路径中的 Release 换成 Debug。
+### 快速上手：运行第一个协程程序
+
+我们先用完整的 C++11 示例 [go.cpp](../examples/go.cpp) 跑通最常见的流程：在后台协程中计算出 `42`，再通过 Channel 发回主线程打印。
+
+在库源码根目录下完成一次[示例配置](../examples/README.zh-CN.md#run)后，构建并运行 `hx_os_go`（请将下方 `build` 替换为你的构建目录；Debug 构建请将命令和路径中的 `Release` 替换为 `Debug`）：
 
 ```sh
 cmake --build build --config Release --target hx_os_go
 ```
 
-Windows Visual Studio：
+Windows（Visual Studio）：
 
 ```powershell
 .\build\bin\Release\hx_os_go.exe
 ```
 
-Linux／WSL：
+Linux / WSL：
 
 ```sh
 ./build/bin/hx_os_go
 ```
 
-无需文件、参数或另开线程，成功输出 `Answer: 42` 并退出。程序内部依次做这些事：
+程序无需任何命令行参数或外部文件，运行后会打印 `Answer: 42` 并退出。`go.cpp` 内部依次完成了以下核心步骤：
 
-| 步骤 | 为什么需要 |
+| 步骤 | 作用 |
 | --- | --- |
-| `Runtime::create(owner)` | 创建运行时及它管理的工作线程；业务不用自己启动调度线程 |
-| `Scope::enter(runtime)` | 告诉当前主线程，接下来的 `go` 提交到哪个运行时 |
-| `co_chan<int> answers(1)` | 留一个整数缓冲槽，让任务可以先写入 42 |
-| `go ...` | 提交普通 lambda；运行时持有并回收任务 |
-| `waitUntil(...)` | 主线程等任务结束，并检查提交／执行错误 |
-| `receive(NOW)` | 取出已经放好的整数，然后打印 |
-| `shutdownUntil(...)` | 关闭并等待运行时自己的线程退出 |
+| `Runtime::create(owner)` | 创建协程运行时及其托管的工作线程，业务无需手动管理调度线程 |
+| `Scope::enter(runtime)` | 将当前宿主线程绑定到该运行时，使随后的 `go` 语句知道往哪里提交任务 |
+| `co_chan<int> answers(1)` | 创建容量为 1 的整型缓冲 Channel，让后台协程可以先写入 `42` 再退出 |
+| `go ...` | 提交普通 lambda 作为有栈协程运行，运行时自动持有并在结束后回收该任务 |
+| `waitUntil(...)` | 主线程等待运行时内所有任务完成，并检查是否有提交或执行错误 |
+| `receive(HX_OS_DEADLINE_NOW)` | 从 Channel 立即取出已算好的整数并打印 |
+| `shutdownUntil(...)` | 关闭运行时并等待所有底层工作线程安全退出 |
 
-短片段解释单个步骤；第一次复制时使用完整 go.cpp 作为自己的 `main.cpp`，按[最小 C++ 工程](USAGE.zh-CN.md#cpp-project)链接库。第 8 节列出另外三种完整示例的构建目标。
+下文的小代码片段用于拆解各个接口的细节；初次接入工程时，可直接将完整的 [go.cpp](../examples/go.cpp) 复制为你的 `main.cpp`，并按[最小 C++ 工程](USAGE.zh-CN.md#cpp-project)链接目标。第 8 节汇总了其余 C99、C++11 和 C++20 完整示例的构建目标。
 
 ## 1. 先选择一种写法
 
-协程是能够在等待时暂停、让工作线程去运行其他任务的任务。本库自研调度器、队列、定时等待、channel/select 和生命周期管理；Windows 使用操作系统原生 fiber，POSIX 使用本库的 CPU 上下文切换代码。没有使用 minicoro、Boost.Context 或其他协程库。
+本库自研了完整的协程调度器、就绪队列、定时等待、Channel / `select` 以及生命周期管理：Windows 下使用操作系统原生 Fiber 保存有栈上下文，POSIX 下使用自研的架构级 CPU 上下文切换实现，不依赖 `minicoro`、`Boost.Context` 等第三方协程库。
 
-| 写法 | 启动任务 | 等待方式 | 等待前的变量放在哪里 |
+你可以根据项目语言标准和内存预算，在四种调用风格中选择：
+
+| 写法 | 启动方式 | 等待方式 | 跨挂起点的变量保存在哪里 |
 | --- | --- | --- | --- |
-| C99 有栈 | `hx_os_coro_spawn(..., HX_OS_CORO_STACKFUL, ...)` | 普通函数调用，也支持嵌套函数 | 协程自己的固定大小栈 |
-| C++11 有栈 | `runtime.spawn(函数, 参数...)` 或可选的 `go lambda;` | `hx::coro::sleepFor`、`channel.receive`、stream 方法 | 普通局部变量，可以使用 RAII |
-| C99/C++11 无栈 | `HX_OS_CORO_STACKLESS` 回调 | 返回 `WOULD_BLOCK` 后，下一次回调继续同一个操作；可使用状态机宏 | 自己定义的持久状态结构体 |
-| 可选 C++20 无栈 | `runtime.go(协程函数(参数))` | `co_await hx::coro::async::...` | 编译器生成的协程帧 |
+| **C99 有栈协程** | `hx_os_coro_spawn(..., HX_OS_CORO_STACKFUL, ...)` | 直接在普通函数（含深层嵌套调用）中调用协程等待接口 | 协程独立的固定大小私有栈 |
+| **C++11 有栈协程** | `runtime.spawn(函数, 参数...)` 或可选的 `go lambda;` | `hx::coro::sleepFor`、`channel.receive`、`Stream` 方法 | 普通局部变量，支持完整 C++ RAII |
+| **C99 / C++11 无栈状态机** | `HX_OS_CORO_STACKLESS` 回调 | 返回 `HX_OS_WOULD_BLOCK` 后由下一次调度继续同一操作（可配合状态机宏） | 调用方自定义的持久化状态结构体 |
+| **可选 C++20 无栈协程** | `runtime.go(协程函数(参数))` | `co_await hx::coro::async::...` | 编译器自动生成的协程帧（Coroutine Frame） |
 
-调度方式是已经确认的协作式：协程版睡眠、channel、任务等待和 I/O 会让出工作线程，长时间计算需要主动调用 `yield`。普通阻塞文件操作、原生互斥锁等待和第三方阻塞函数仍会占住工作线程。这里没有接管系统调用、强制抢占普通代码、垃圾回收、自动增长栈，也不能给 C/C++ 增加 Go 的语言关键字。C++11 函数和回调继续使用无异常的 `Result<T>` 错误返回。
+> [!NOTE]
+> **协作式调度边界**
+> 只有调用本库提供的协程版睡眠、Channel、协程同步原语和协程 I/O 时，协程才会挂起并让出工作线程；长时间纯 CPU 计算需要定期主动调用 `yield`。如果在协程内部调用普通阻塞式文件读写、原生操作系统互斥锁或第三方阻塞 SDK，仍会占住当前底层工作线程。C++11 接口全程使用无异常的 `hx::Result<T>` 返回错误。
 
 ## 2. C++11：普通任务不必保存句柄
 
-先按 [go.cpp 完整程序](../examples/go.cpp) 创建一次运行时。在其他头文件**之后**包含 `hx/GoKeywords.hpp`，即可选择接近 libgo 的写法。宿主线程先进入一个作用域：
+先按 [go.cpp 完整程序](../examples/go.cpp) 创建运行时。若希望使用类似 Go / `libgo` 的简洁语法，可在所有其他头文件**之后**包含 `hx/GoKeywords.hpp`，并在宿主线程上进入 `Scope`：
 
 ```cpp
 auto scope = hx::coro::Scope::enter(runtime);
@@ -71,19 +79,13 @@ if (!done)
 auto answer = answers.receive(HX_OS_DEADLINE_NOW);
 ```
 
-这段放在返回 `Result<void>` 的函数里。`go` 提交任务，运行时持有它直到清理完成；任务向有一个缓冲槽的 channel 发送 42。无需为每个任务保存句柄，也不用先建任务组。`done` 检查完成情况及运行时保留的任务错误；检查 `answer` 后再读取 `answer.value()`。完整程序输出 `Answer: 42`，并展示创建与显式关闭。
+- **自动托管任务句柄**：`go` 提交任务后，由运行时自动持有该任务直至执行和清理完毕，无需为每个任务单独保存 `Task` 句柄或预先创建任务组。
+- **为什么上面代码中 Channel 容量设为 `1`？** 因为主线程先调用了 `runtime.waitUntil()` 等待协程结束，之后才调用 `receive()`。如果把容量改成 `0`（无缓冲会合模式），协程发送时必须等待接收者就绪，而主线程又在等待协程结束，两边就会互相死等。使用无缓冲 Channel 时，应当让另一个协程并发接收，或者让主线程先 `receive()` 再 `waitUntil()`。
+- **如果不希望引入全局 `go` 宏**：只需包含 `hx/Go.hpp`，使用 `hx_go(runtime) lambda;`、`hx_go_here lambda;` 或常规成员函数 `runtime.spawn(函数, 参数...)`，它们具有完全相同的自动托管语义。可选头文件 `hx/GoKeywords.hpp` 定义的 `go`、`co_chan<T>`、`co_sleep(ms)` 和 `co_yield` 都是 C++ 宏/类型辅助（启用 `go` 宏后，若需获取带返回值的 `Task<T>`，请调用 `runtime.submit(...)` 而不是 `.go()`）。
+- **`Scope` 绑定规则**：`Scope` 仅将当前宿主线程绑定到已有运行时，不会隐式创建线程或全局单例。多个 `Scope` 可以嵌套，但必须在创建它的同一宿主线程上按后进先出（LIFO）顺序析构；在协程内部使用 `go` 时会自动沿用所属运行时。若既未进入 `Scope` 也不在协程内，提交会直接报错。
+- **错误收集与空闲等待**：普通托管任务可返回 `void` 或 `Result<void>`（若希望内部错误被运行时记录，请从任务返回该 `Result`）。运行时将提交失败与任务执行失败记录为“首个完整 `hx_os_error` + 饱和错误计数”：可通过 `runtime.errors()` 读取快照，或用 `runtime.errors(true)` 读取并清空。`runtime.waitUntil()` 会先等待运行时空闲，再报告首个已记录的错误（不会自动清空错误记录，也不会禁止新任务提交；若需等待独立命名的任务批次，请使用第 10 节的 `Group`）。
 
-这里的缓冲容量 `1` 有实际作用：主线程先 wait、后 receive，任务仍能先放入一个值再结束。若改成容量 `0`，发送必须等接收者，主线程却在等发送任务结束，这种顺序就会互相等待。无缓冲 channel 应让另一任务同时接收，或让主线程先 receive 再 wait；不能只改数字。
-
-`Scope` 选中一个已有运行时，不会创建线程或全局单例。作用域可以嵌套，必须在创建它的宿主线程上按后进先出顺序关闭；它持有运行时引用，但不负责停止运行时。不能把 scope 移到其他线程，或先销毁外层 scope。在协程内部调用 `go` 时，自动沿用该协程的运行时。既没有 scope 也不在协程内时，提交会返回错误，此时也没有运行时可以保存它，不能忽略返回值。
-
-不需要全局关键字宏时，包含 `hx/Go.hpp`，使用 `hx_go(runtime) lambda;` 或 `hx_go_here lambda;`。普通方法 `runtime.spawn(函数, 参数...)` 具有相同的自动持有行为。可选关键字头还提供 `co_chan<T>`、`co_sleep(毫秒)`，以及 C++20 之外的 `co_yield`；它们是 C++ 辅助语法，不是新增的语言关键字。`go` 宏可能与其他标识符冲突，也会影响旧 `.go()` 方法，因此启用它后用 `.submit()` 获取有返回值的任务。
-
-普通任务可以返回 void 或 `Result<void>`。如果希望内部操作的失败出现在统一报告中，必须从任务返回这个错误；void 回调内部忽略的错误无法自动变得可见。普通 spawn 的非 void 值会在清理后丢弃，需要结果时使用返回 `Task<T>` 的 `runtime.submit(...)`。没有启用关键字头的旧代码仍然可以使用 `runtime.go(...)`，其既有契约保持不变。
-
-提交失败与执行失败保存为“首个完整 `hx_os_error` + 饱和累计数量”，不是无限增长的错误队列。`runtime.errors()` 读取快照，`runtime.errors(true)` 读取并清空。`waitUntil` 先等运行时空闲，再报告首个已记录错误，不自动清空；未清空时后续等待仍会返回这个错误。它不会拒绝新任务，也不是对固定批次做快照；需要把空闲视作本批结束时，先停止外部生产者，已运行任务仍可提交子任务。等待超时保留工作。需要独立命名批次时可使用下文的可选 `Group`。
-
-运行时仍然显式创建：
+运行时的创建与关闭始终显式管理宿主持有的 `owner` 指针：
 
 ```cpp
 hx_os_coro_runtime *owner = NULL;
@@ -98,13 +100,11 @@ if (!created) {
 auto &runtime = created.value();
 ```
 
-这段代码中，返回 1 表示创建失败且清理已完成，返回 2 表示清理仍未完成。长期运行的宿主应保留 owner 并安排重试，不能丢弃它。
-
-C 指针 `owner` 是需要保留的所有者；`Runtime` 是借用它的操作入口，析构不等待。最后调用 `runtime.shutdownUntil(截止时间)`；返回 `TIMEOUT`、`BUSY` 或 `NOT_SUPPORTED` 时保留 owner，由宿主决定何时重试。关闭运行时不能替代检查任务错误。借用的捕获对象必须活到执行及清理结束，仍有工作依赖插件或 context 时不能卸载、销毁它们。
+`hx::coro::Runtime` 只是借用 `owner` 指针的视图，其析构函数不会阻塞等待。退出前请显式调用 `runtime.shutdownUntil(deadline)`；若返回 `HX_OS_TIMEOUT`、`HX_OS_BUSY` 或 `HX_OS_NOT_SUPPORTED`，宿主必须保留非空的 `owner` 指针及任务借用的数据、分配器 `context` 和动态库插件，按业务策略稍后重试关闭。
 
 ## 3. C++20：不用单独的栈
 
-包含 `hx/Coroutines20.hpp`，链接可选目标 `hx_c_platform::cpp20`。C 库仍按 C99 编译，其他消费者仍可使用 C++11。
+如果编译器支持 C++20 协程，可以包含 `hx/Coroutines20.hpp` 并链接可选目标 `hx_c_platform::cpp20`（底层 C 库仍按 C99 编译，工程中其他模块仍可保持 C++11）：
 
 ```cpp
 hx::coro::Routine<int> answer()
@@ -121,13 +121,13 @@ hx::coro::Routine<int> answer()
 auto task = runtime.go(answer());
 ```
 
-[完整 C++20 程序](../examples/coroutine20.cpp) 同样输出 `Answer: 42`。`Routine<>` 表示没有返回值，用 `co_return hx::Result<void>();` 正常结束。协程帧分配失败时，`go` 返回 `NO_MEMORY`。协程帧使用不可变的默认 C 分配器；调度器对象、任务结果存储使用运行时的 context。调用协程函数时会先创建帧，再提交任务。通常提交被拒绝时仍保留 routine；如果 prepare 已成功、随后遇到并发关闭，则所有权已转移，并由库完成清理。
-
-优先使用具名协程函数，通过值参数传入数据；C++20 使用 `runtime.go(函数(参数))`，把返回 routine 的工厂当作普通有栈函数提交会在编译时被拒绝。临时的、带捕获的协程 lambda 可能让编译器帧持有已经失效的闭包指针。库提供的 awaiter 会持有 channel/stream 句柄；传入的缓冲区仍是借用，必须活到等待完成。协程帧只接受本库 awaiter，不能交给外部执行器在别的线程恢复。编译器要求的 `unhandled_exception` 钩子不意味着这里支持用异常报告业务错误；用户回调依然不得抛异常。
+[完整 C++20 程序](../examples/coroutine20.cpp) 同样输出 `Answer: 42`。无返回值的协程使用 `Routine<>`，并通过 `co_return hx::Result<void>();` 正常结束。
+- **内存分配**：调用协程函数时，编译器生成的协程帧通过默认 C 分配器分配（若分配失败，`runtime.go()` 返回 `HX_OS_NO_MEMORY`）；调度器对象与任务结果槽位则使用运行时绑定的 `context`。
+- **避免悬空捕获**：编写 C++20 协程时，**优先使用具名协程函数并按值传参**（`runtime.go(answer())`）。不要使用带捕获的临时协程 lambda，因为临时闭包对象在 `co_await` 挂起后可能已经析构，导致协程帧内部访问悬空指针。
 
 ## 4. 用 channel 传递值
 
-`Channel<int>::create(runtime)` 创建容量为零的 channel：发送者要等接收者到达。传入正容量则建立有界缓冲。普通宿主线程也可以发送、接收，等待时阻塞线程；协程调用则挂起协程。协程的发送、接收及 select 必须使用所属运行时，普通线程的 select 尚不支持。`NOW` 不阻塞。
+`Channel<int>::create(runtime)` 默认创建容量为 `0` 的同步会合（Rendezvous）Channel，发送方会挂起等待接收方到达；传入正整数容量则会创建有界缓冲 Channel。普通宿主线程和协程都可以对同一个 Channel 执行发送与接收（宿主线程等待时会阻塞线程，协程等待时则挂起协程并让出工作线程；`HX_OS_DEADLINE_NOW` 始终非阻塞）。
 
 ```cpp
 auto created = hx::coro::Channel<int>::create(runtime, 8);
@@ -148,11 +148,11 @@ auto consumer = runtime.go([channel]() noexcept {
 });
 ```
 
-检查两个提交结果，等待任务完成，再按完整示例关闭运行时。channel 关闭后，新发送返回 `CLOSED`；已经进入缓冲的值仍可读出，读完后返回 `EOF`。关闭不会丢弃缓冲值。最后一个 channel 引用释放时，才清理剩余值；挂起的操作会持有自己的 channel 引用。
-
-C++ `Channel<T>` 同时支持普通值与拥有资源的 C++ 对象，后者的移动构造和析构必须不抛异常。普通值按字节传递，接收存储需要无异常默认构造；`hx::String` 等拥有资源的对象放入地址稳定、带引用计数的盒子，正常调用构造与析构，不按字节搬移对象本身。盒子计入运行时 channel 字节预算，内部字符串等载荷另计。左值发送还要求无异常复制；只能移动的对象使用 `send(std::move(value))`。盒子分配成功后，即使发送随后失败，也可能已经消耗原值。需要拥有字符串、variant 或自定义 C 对象时，可以给 C channel 设置已有容器的 copy/drop 策略。复制发生在调度之前，可以明确失败；保留下来的值最终只清理一次。接收输出应当是尚未持有资源的存储，接收成功后由接收者承担值的释放责任。回调不得挂起或重入 channel 操作。C 策略的存储表示仍必须能够按字节搬移，C++ 拥有值的路径则通过正确移动保持自指针语义。`channel << value` 发送，`channel >> output` 接收并无异常移动赋值，两者都返回明确的结果。
-
-C++20 使用同一个 channel，只把等待写成：
+- **关闭与排空**：调用 `channel.close()` 后，后续发送会立即返回 `HX_OS_CLOSED`；但已在缓冲区中的元素仍可继续被 `receive()` 正常取出，全部取空后才返回 `HX_OS_EOF`。当最后一个 `Channel` 句柄及挂起操作引用全部释放时，剩余未取出的元素会被自动清理。
+- **值类型与资源对象**：
+  - C++ `Channel<T>` 既支持平凡可复制类型，也支持拥有资源的 C++ 对象（如 `hx::String`，要求移动构造和析构 `noexcept`）。拥有资源的 C++ 对象会被封装在地址稳定、带引用计数的盒子里传递，确保构造、析构和内部自指针语义正确，盒子内存计入运行时的 Channel 字节预算。也可使用流式操作符 `channel << value` 发送、`channel >> output` 接收。
+  - C 接口支持为 Channel 配置容器级 `copy` / `drop` 回调策略，用于安全传递拥有堆内存的 `hx_string`、`hx_variant` 或自定义 C 结构体。
+- **C++20 协程等待**：C++20 协程可直接复用同一个 `Channel<T>`：
 
 ```cpp
 auto sent = co_await hx::coro::async::send(channel, 42);
@@ -160,11 +160,11 @@ auto sent = co_await hx::coro::async::send(channel, 42);
 auto received = co_await hx::coro::async::receive(channel);
 ```
 
-C++ 可使用 `hx::coro::select` 或 `co_await hx::coro::async::select`。`hx_os_coro_select` 最多同时等待 64 个发送/接收分支，最终只有一个分支提交。每次轮换就绪分支的检查起点，但不承诺严格公平。`NOW` 下没有就绪分支返回 `WOULD_BLOCK`；其他截止时间到期返回 `TIMEOUT`。选中的分支返回 `OK`、`EOF` 或 `CLOSED` 时，selected 才是对应索引。取消和超时会移除所有未获选分支；同一 select 中的发送和接收不会互相配对。
+- **多路复用 `select`**：通过 `hx_os_coro_select`、C++11 `hx::coro::select` 或 C++20 `co_await hx::coro::async::select`，可以在协程内同时等待最多 `64` 个发送或接收分支，每次调用至多提交其中一个分支（会轮换就绪分支的检查起点以避免固定偏置）。在 `HX_OS_DEADLINE_NOW` 下若无就绪分支则返回 `HX_OS_WOULD_BLOCK`，超出有限截止时间则返回 `HX_OS_TIMEOUT`。当选中分支返回 `HX_OS_OK`、`HX_OS_EOF` 或 `HX_OS_CLOSED` 时，`selected` 输出参数才表示获选分支下标。
 
 ## 5. C99 无栈状态机
 
-[完整 C 程序](../examples/coroutine.c) 输出 `Count: 1`、`Count: 2`、`Count: 3`。关键写法如下：
+在嵌入式裁剪或纯 C99 场景下，如果不需要私有栈，可以使用基于状态机宏的无栈协程。[完整 C 程序](../examples/coroutine.c) 依次输出 `Count: 1`、`Count: 2`、`Count: 3`，核心写法如下：
 
 ```c
 typedef struct counter_state {
@@ -194,15 +194,16 @@ static hx_os_status count(hx_os_coro *self, void *user, hx_os_error *error)
 }
 ```
 
-初始 `step=0`，每个 `AWAIT` 单独占一行。跨等待使用的值和缓冲区放在 state 中，不能放在回调的普通局部变量里。宏使用 switch/case，不能跨越变长数组声明或混入另一个嵌套 switch。宏负责挂起，不会代替调用者检查错误。`hx_os_coro_complete` 用于区分“任务以 WOULD_BLOCK 错误结束”和“回调还要继续调度”。不使用宏也可以直接实现同一状态机协议。
-
-没有注册等待就返回 `WOULD_BLOCK`，任务会重新进入工作线程的就绪队列。反复这样返回可能占满一个 CPU 核心，并不会等待外部事件。需要挂起时，使用协程版 sleep、channel、同步或 I/O 接口，配合 `AWAIT` 等到结果就绪；计算循环中的 `yield` 用于主动让出工作线程。已有显式重新排队的行为继续保留。
+- **状态结构体保存跨挂起变量**：将 `step` 初始化为 `0`，所有需要跨越 `HX_OS_CORO_AWAIT` 挂起点保留的变量和缓冲区都必须放在 `user` 指向的持久化结构体中，不能使用普通栈上局部变量。
+- **宏使用注意事项**：每个 `HX_OS_CORO_AWAIT` 必须单独占一行；由于宏展开基于 `switch`/`case`，不能跨越变长数组（VLA）声明或混入外层手写的 `switch` 块中。当任务因错误需要结束时，调用 `hx_os_coro_complete(status, error)`，以便调度器区分“任务真的以 `HX_OS_WOULD_BLOCK` 错误终止”与“任务挂起等待下一次唤醒”。
+- **避免空转占满 CPU**：如果在未注册任何协程等待（如睡眠、Channel、同步原语或 I/O）的情况下直接返回 `HX_OS_WOULD_BLOCK`，任务会被立即放回当前工作线程的就绪队列，循环如此会占满一个 CPU 核心。
 
 ## 6. 网络与管道
 
-C 接口提供 `hx_os_coro_listen`、`dial`、`accept`、`read`、`write`、`resolve`、`pipe_pair`。地址沿用 `hx_os_address`，DNS 返回调用者拥有的 `hx_os_address_list`。listen 可以返回系统分配的临时端口；地址复用必须显式开启。dial 连接一个数字地址，调用者可以在同一个绝对截止时间内依次尝试 DNS 返回的地址。
-
-C++11 提供 `Stream::dial`、`Stream::listen`、`stream.accept/read/write`、`Stream::pipePair`。`Addresses::resolve` 和 `async::resolve` 提供自动释放的 DNS 结果。C++20 提供对应的 `async::listen/dial/accept/read/write/pipePair` awaiter。读取缓冲区由调用者持有，写入缓冲区借用到操作完成。读操作返回部分字节或 EOF；写操作尝试写完整段数据，失败时保留已完成字节数。即使 `ok()` 为 false，仍可先检查 `Result<size_t>::hasValue()`，再读取实际进度。
+协程 I/O 提供了与操作系统原生事件循环集成的流式网络与命名管道接口：
+- **C 接口**：`hx_os_coro_listen`、`hx_os_coro_dial`、`hx_os_coro_accept`、`hx_os_coro_read`、`hx_os_coro_write`、`hx_os_coro_resolve`、`hx_os_coro_pipe_pair`。
+- **C++11 接口**：`Stream::dial`、`Stream::listen`、`stream.accept()` / `read()` / `write()`、`Stream::pipePair`，以及自动管理结果生命周期的 `Addresses::resolve`。
+- **C++20 接口**：`hx::coro::async::listen` / `dial` / `accept` / `read` / `write` / `pipePair` / `resolve` Awaiter。
 
 ```mermaid
 flowchart LR
@@ -212,78 +213,69 @@ flowchart LR
     W -->|带着状态和进度恢复| A
 ```
 
-所有原生 socket/pipe 操作由 I/O 调度线程负责。stream 可以在同一运行时的工作线程间使用；一个 socket 可以同时存在一个读和一个写，冲突操作返回 `BUSY`；管道端点只接受一个操作。取消只是请求原生操作退出，不会提前释放仍被使用的缓冲区。原生完成回调返回之后，才通知协程恢复。释放 stream 不等待 I/O 退役，由调度线程完成原生关闭。运行时关闭成功后所有原生 stream 已退役，调用者保留的包装句柄仍可安全释放；不向外暴露需要调用者自行协调的原生句柄。
+所有底层 Socket 和管道操作均由运行时内部独立的 I/O 调度线程驱动：
+- 同一个 Socket `Stream` 允许同时存在一个读操作和一个写操作（重复发起同方向操作返回 `HX_OS_BUSY`）；管道端点同一时刻只允许一个在途操作。
+- 读操作在收到任意可用字节或遇到 `HX_OS_EOF` 时返回；写操作会尝试写完整段缓冲区，若中途失败仍会通过 `Result<size_t>`（检查 `hasValue()`）保留已写入的字节数。
+- 传入的读写缓冲区在整个 I/O 操作完成前由底层借用；即使协程等待超时或被取消，也只有在底层原生 I/O 回调真正退场后，协程才会恢复执行，从而保证借用缓冲区绝不会被提前释放。
 
 ### 6.1 用协程等待 UDP，不占住工作线程
 
-先调用 `hx_os_coro_udp_bind` 绑定 UDP 地址，拿到同一种需要释放的 `hx_os_coro_stream` 句柄。端口填零表示让系统选一个可用端口，通过 `bound` 获取实际地址。之后用 `hx_os_coro_send_to` 发送一条数据报，用 `hx_os_coro_receive_from` 接收一条。它们复用运行时现有的 I/O 调度线程和原生 loop，等待时挂起任务，不循环轮询，也不为每次收发新建线程。C++11 有栈任务对应 `Stream::bindUdp`、`sendTo`、`receiveFrom`。这些方法要在协程内部调用，不能直接放在应用主线程里调用。
+调用 `hx_os_coro_udp_bind`（C++11 为 `Stream::bindUdp`）可绑定本地 UDP 地址并获得 `hx_os_coro_stream` 句柄（端口传 `0` 可由系统分配临时端口并通过 `bound` 返回）。随后在协程内调用 `hx_os_coro_send_to` / `hx_os_coro_receive_from`（C++11 为 `sendTo` / `receiveFrom`）收发数据报。等待期间协程会自动挂起，既不会阻塞工作线程，也无需业务自己写轮询循环。
 
-可以先```mermaid
-flowchart LR
-    C[协程发起请求] -->|复制输入| Q[有界 I/O 队列]
-    Q --> W[固定数量 I/O 线程]
-    W --> H[libcurl HTTP 或 HTTPS]
-    H -->|操作完成| S[恢复协程]
-    T[到期或取消] --> S
-    C -. 等待时挂起 .-> O[协程线程执行其他任务]
-```
-
-运行完整的 C99 状态机示例 [coroutine_udp.c](../examples/coroutine_udp.c)：它绑定一个本机回环临时端口，把 JSON 状态消息发给这个端口，再接收并释放句柄。跨越挂起点的数据都保存在任务状态里，cleanup 回调也负责取消后的清理。
+构建并运行完整的 C99 状态机示例 [coroutine_udp.c](../examples/coroutine_udp.c)（需要开启 `HX_OS_ENABLE_NETWORK`、`HX_OS_ENABLE_LOOP`、`HX_OS_ENABLE_COROUTINES` 和 `HX_OS_ENABLE_COROUTINE_IO`）：
 
 ```sh
 cmake --build build --config Release --target hx_os_coroutine_udp
 ```
 
-Linux／WSL 运行 `./build/bin/hx_os_coroutine_udp`；Visual Studio 运行 `.\build\bin\Release\hx_os_coroutine_udp.exe`。把 `build` 换成已有构建目录；需要开启 examples、NETWORK、LOOP、COROUTINES 和 COROUTINE_IO。不用另开服务端，也不用传参数，预期输出：
+Linux / WSL 运行 `./build/bin/hx_os_coroutine_udp`，Windows Visual Studio 运行 `.\build\bin\Release\hx_os_coroutine_udp.exe`，预期输出：
 
 ```text
 UDP JSON: {"type":"status","device_id":7}
 ```
 
-每次接收只消费一条数据报。空数据报返回成功和零字节，不是 EOF。缓冲区太小时返回 `LIMIT`、实际复制字节数和发送者地址，剩余部分已丢弃；不要把这段前缀当成完整 JSON 解析。超时或取消仍会等原生 I/O 退场后再归还借用缓冲区；无栈返回 `WOULD_BLOCK` 时，缓冲区必须继续保留并通过 `AWAIT` 再次调用。发送成功只表示本机接受了数据，不是对端确认收到。这些协程入口暂不提供 packet-info／组播控制，也不增加可靠性；UDP 仍可能丢失、重复或乱序。它们与已有协程 I/O 共用句柄、请求数和字节预算。
+每次 `receive_from` 消费一条 UDP 数据报：收到零字节空数据报时返回 `HX_OS_OK` 和 `0` 字节（而非 `HX_OS_EOF`）；若接收缓冲区小于数据报长度，则返回 `HX_OS_LIMIT`、实际复制的字节数及发送方地址，超出的尾部字节会被截断丢弃（切勿将截断后的前缀当作完整 JSON 解析）。
 
 ## 7. 容量、取消与生命周期
 
-| 配置或操作 | 契约 |
+| 配置项或操作 | 默认值与行为契约 |
 | --- | --- |
-| 默认工作线程 | 2 个，创建后固定；没有全局运行时 |
-| `max_coroutines` | 1,024 个活跃句柄；已经完成但仍持有的任务也占名额 |
-| 有栈协程栈 | 默认有效区 128 KiB；总预留预算 64 MiB，包括保护页和原生取整 |
-| channel 与协程同步对象 | 共用 128 个对象上限；对象、缓冲区、等待者和拥有值盒子合计最多 16 MiB |
-| I/O | 1,024 个 stream 包装对象；原生 loop 请求/字节预算 16 MiB；一个调度线程 |
-| `max_io_handles=0` | 仅使用计算/channel，不创建 I/O 线程，也不初始化网络 |
-| DNS | 复用有界解析池；`resolve` 保留系统 DNS，`resolve_cancellable` 可以取消 c-ares 查询 |
-| `cancel` | 设置协作式取消标志，唤醒或取消当前等待；不强杀线程，不强行展开 C++ 栈 |
-| `wait_until` | 普通线程阻塞，协程挂起；等待自身返回 `DEADLOCK`，协程跨运行时等待返回 `NOT_SUPPORTED` |
-| `drain_until` | 拒绝新任务，允许已接收任务结束；随后 close 可以升级为取消 |
-| `close_until` | 拒绝新任务，取消已接收任务，在调用者给定的单调截止时间内等待和 join |
-| `destroy` | 必须先关闭成功；否则返回 `BUSY` 并保留 owner |
+| 默认工作线程数 | `2` 个（创建后固定，不设隐藏全局运行时） |
+| `max_coroutines` | 最多 `1,024` 个活跃协程句柄（含已执行完但尚未释放句柄的任务） |
+| 有栈协程栈预算 | 默认单栈有效区 `128 KiB`；总预留上限 `64 MiB`（含保护页与系统页对齐） |
+| Channel 与协程同步原语 | 共享 `128` 个对象上限；对象、缓冲区、等待节点与资源盒子共享 `16 MiB` 预算 |
+| 协程 I/O 预算 | 最多 `1,024` 个 `Stream` 包装对象；原生事件循环请求与字节预算 `16 MiB`；`1` 个 I/O 调度线程 |
+| `max_io_handles = 0` | 纯计算与 Channel 模式，不启动 I/O 调度线程，也不初始化网络子系统 |
+| DNS 解析 | 复用有界解析池：`resolve` 使用系统 DNS，`resolve_cancellable` 支持取消 `c-ares` 查询 |
+| `cancel` | 设置协作式取消标志并唤醒当前等待；不强杀线程，也不通过异常强行展开 C++ 栈 |
+| `wait_until` | 宿主线程调用时阻塞，协程调用时挂起；等待自身返回 `HX_OS_DEADLOCK`，跨运行时协程等待返回 `HX_OS_NOT_SUPPORTED` |
+| `drain_until` | 拒绝新任务提交，等待已接收任务自然结束（后续可调用 `close_until` 升级为取消） |
+| `close_until` | 拒绝新任务并取消所有已接收任务，在单调时钟截止时间内等待工作线程退出并 `join` |
+| `destroy` | 必须在 `close_until` 成功后调用；否则返回 `HX_OS_BUSY` 并保留 `owner` |
 
-有栈的原生栈在首次调度时创建；接收任务后仍可能出现原生栈分配或平台能力失败，这类错误通过任务结果返回。回调的 self/current 指针是借用，需要拥有独立引用时先 retain。任务一旦被接收，其 cleanup 最终执行一次，包括还没开始执行就被取消的情况。任务完成状态包含 cleanup 已结束。清理回调和 I/O 调度线程等待未完成任务时返回 DEADLOCK；在调度线程内关闭运行时同样返回 DEADLOCK。超时保留对象和后台存储，允许重试；不承诺硬实时。一个始终不让出的协程，可能让 close 一直无法完成。运行时的配置和分配器不会变成影响其他消费者的可变全局设置。
+> [!WARNING]
+> **线程局部存储（TLS）与原生锁的注意事项**
+> - **协程绑定固定工作线程**：每个协程固定在创建时分配的工作线程上运行（协程内派生的子任务默认继承同一工作线程，宿主线程提交的任务按轮询分配），不做跨线程工作窃取。
+> - **不要混用操作系统 TLS**：在 POSIX 平台上，同一个工作线程上的多个协程共享同一份线程局部存储（TLS）；在 Windows 上，FLS 则跟随原生 Fiber。如需跨平台一致的协程局部存储，请使用第 9 节的 `hx::coro::Local<T>`（或 C `hx_os_coro_local_*` 接口）。
+> - **切勿持有原生互斥锁跨越协程挂起点**：如果在持有操作系统 `hx_os_mutex` 时挂起协程，同一工作线程切换到其他协程后一旦再次请求该锁，就会导致工作线程自身死锁。协程间同步请使用第 9 节的协程同步原语。
 
-创建 runtime 时，如果工作线程或 I/O 的回滚清理也失败，会返回失败状态并保留非空 owner。这个 runtime 已关闭任务入口，只能重试 `close_until`，成功后再 destroy；期间保留 context。C++ 工厂返回失败 Result 时，传入的 owner 变量仍可用于清理：临时构造 `hx::coro::Runtime(owner)`，仅调用 `shutdownUntil(deadline)`。协程 HTTP 服务内部线程池回滚失败时也遵守这个规则，先关闭 service，再关闭 runtime。详见[通用生命周期约定](CONTRACTS.zh-CN.md)。
-
-协程固定在一个工作线程上；协程内提交的子任务默认继承当前工作线程，普通线程提交的任务轮流分配。没有工作窃取或自动迁移。线程局部存储不等于协程局部存储：POSIX TLS 在同一工作线程的任务间共享，Windows FLS 跟随原生 fiber。可移植协程局部值可使用 `Local<T>`／C local-key 接口，或使用 user 数据、编译器帧，不要拿着原生互斥锁跨越协程挂起。本库会切换 signal/profiler/hash 的重入状态，profiler 的计时栈另按协程隔离，避免交替执行被误记为相互嵌套。每个协程最多 64 个局部槽，由 profiler 与应用局部键共用；结束时释放缓存并标记未结束区间为 aborted，max_threads 继续约束计时上下文总数。从宿主线程在任务结束后关闭 profiler；其关闭接口仍是同步接口。这不会自动让任意依赖 TLS 的第三方 API 适合协程。
-
-容量预算计算的是相应模块的直接存储，用户回调的分配、值内部的分配、C++ 帧/结果及原生工作线程栈各有自己的生命周期和占用。固定栈溢出是操作系统故障，不能转换成普通错误返回；栈预留量也不等于物理内存驻留量。关闭包括工作线程 TLS 清理和原生 join。Android API 21 已支持有限时间 join：Bionic 适配通过 `pthread_gettid_np` 观察内核清零的线程标识，再完成原生资源回收，等待范围包含 TLS 清理。超时保留线程对象，可以重试；这提供单调截止时间，不代表强制取消或硬实时保证。宿主还需要协调自行创建的提交线程，并在销毁 owner 前排除正在进行的 API 调用；库不会替宿主 join 这些线程。关闭之后仍保留的任务/channel/stream 句柄可能继续占有 context 分配，应先释放这些句柄，再销毁 context。插件卸载前，还必须释放依赖插件代码的句柄、帧、结果和回调表；即使运行时已经关闭，也不能忽略这些对象。用户值中构成的引用环也需要用户自行解除。
+创建运行时（或协程 HTTP 服务）时，如果部分工作线程启动失败且回滚清理未能在截止时间内完成，工厂函数会返回错误并保留非空的 `owner` 指针。此时该实例已处于关闭状态，请勿提交任务，只需通过 `hx::coro::Runtime(owner).shutdownUntil(deadline)` 重试清理直至成功（详见[通用生命周期约定](CONTRACTS.zh-CN.md)）。
 
 ## 8. 构建、裁剪和验证
 
-先选择一个目标，不必全部构建。以下程序都不需要参数或输入文件：
+你可以按需单独构建以下任一完整示例，所有示例均无需命令行参数或输入文件：
 
-| 目标 | 完整源码 | 运行结果 |
+| 构建目标 | 完整源码 | 预期运行结果 |
 | --- | --- | --- |
-| `hx_os_go` | [go.cpp](../examples/go.cpp) | C++11，channel 传回 `Answer: 42` |
-| `hx_os_cpp_coroutine` | [coroutine.cpp](../examples/coroutine.cpp) | C++11，Task 返回 `Answer: 42` |
-| `hx_os_coroutine` | [coroutine.c](../examples/coroutine.c) | C99，依次输出 `Count: 1`、`Count: 2`、`Count: 3` |
-| `hx_os_coroutine_udp` | [coroutine_udp.c](../examples/coroutine_udp.c) | C99，发送并接收一条 JSON UDP 数据报 |
-| `hx_os_cpp_coroutine20` | [coroutine20.cpp](../examples/coroutine20.cpp) | C++20，co_await 后返回 `Answer: 42` |
+| `hx_os_go` | [go.cpp](../examples/go.cpp) | C++11，通过 Channel 传回并打印 `Answer: 42` |
+| `hx_os_cpp_coroutine` | [coroutine.cpp](../examples/coroutine.cpp) | C++11，通过 `Task<int>` 返回并打印 `Answer: 42` |
+| `hx_os_coroutine` | [coroutine.c](../examples/coroutine.c) | C99 无栈状态机，依次输出 `Count: 1`、`Count: 2`、`Count: 3` |
+| `hx_os_coroutine_udp` | [coroutine_udp.c](../examples/coroutine_udp.c) | C99，在协程内发送并接收一条 JSON UDP 数据报 |
+| `hx_os_cpp_coroutine20` | [coroutine20.cpp](../examples/coroutine20.cpp) | C++20，使用 `co_await` 睡眠后返回 `Answer: 42` |
 
-例如 `cmake --build build --config Release --target hx_os_coroutine`，再运行 Windows 的 `.\build\bin\Release\hx_os_coroutine.exe` 或 Linux 的 `./build/bin/hx_os_coroutine`。仍在库源码根目录操作。
+启用示例后，CMake 会自动检测 C++ 编译器是否支持 `<coroutine>`（`HX_OS_HAVE_CPP20_COROUTINES`），检测通过时才会生成 `hx_os_cpp_coroutine20` 目标；C99 与 C++11 示例不依赖 C++20。
 
-启用 examples 后，CMake 会查找 C++ 编译器并检测 `<coroutine>`。检测通过才生成 `hx_os_cpp_coroutine20`，没有需要手动打开的 C++20 示例开关。若提示目标不存在，查看配置阶段的 C++ 编译器和 `HX_OS_HAVE_CPP20_COROUTINES` 检测结果；不要把内部检测变量强设为成功。C99 与 C++11 示例不要求 C++20。
-
-在自己的安装包工程中，先创建相应 executable，再选择一个链接目标：
+在外部工程中使用 `find_package` 接入时，按需选择链接目标即可：
 
 ```cmake
 find_package(hx_c_platform CONFIG REQUIRED)
@@ -293,45 +285,50 @@ target_link_libraries(my_cpp11_app PRIVATE hx_c_platform::cpp)
 target_link_libraries(my_cpp20_app PRIVATE hx_c_platform::cpp20)
 ```
 
-`HX_OS_ENABLE_COROUTINES`、`HX_OS_ENABLE_STACKFUL_COROUTINES`、`HX_OS_ENABLE_COROUTINE_IO` 默认 ON。关闭核心后排除调度/channel/原生切换实现；仅关闭有栈仍可使用 C 状态机和 C++20。协程 I/O 依赖 NETWORK 和 LOOP，任何一个关闭后，相应接口明确返回 `NOT_SUPPORTED`。没有创建 I/O 资源时，内部生命周期清理自然可以成功。嵌入式最小配置明确关闭本模块；可以在 `-C cmake/minimal.cmake` 后按需重新开启。
-
-POSIX 栈切换已有 x86_64、i386/SSE、ARMv7/VFP、AArch64 适配。没有适配的 CPU 会明确编译失败，可以暂时使用仅无栈配置。Linux x86 若实际开启影子栈，有栈入口会检测并返回不支持，不会替宿主关闭保护；查询规则见 [Linux 内核说明](https://www.kernel.org/doc/html/latest/arch/x86/shstk.html)。Windows 由原生 fiber 保存上下文。Apple 适配路径已提供，目标构建和运行仍待验证。 其他目标限制见[平台支持](PLATFORMS.zh-CN.md)。
+CMake 开关 `HX_OS_ENABLE_COROUTINES`、`HX_OS_ENABLE_STACKFUL_COROUTINES` 和 `HX_OS_ENABLE_COROUTINE_IO` 默认均为 `ON`：
+- 仅关闭 `HX_OS_ENABLE_STACKFUL_COROUTINES` 时，C99 无栈状态机和 C++20 无栈协程依然可用。
+- POSIX 有栈切换已内置 `x86_64`、`i386/SSE`、`ARMv7/VFP` 和 `AArch64` 后端。若 Linux x86 进程在运行期启用了硬件影子栈（Shadow Stack，见 [Linux 内核说明](https://www.kernel.org/doc/html/latest/arch/x86/shstk.html)），有栈协程入口会自动检测并返回 `HX_OS_NOT_SUPPORTED`，绝不暗中关闭宿主安全防护。更多平台细节见[平台支持](PLATFORMS.zh-CN.md)。
 
 ## 9. 协程同步与局部值
 
-包含 `hx/CoroutineSync.hpp`。`Mutex::create(runtime)`、`Semaphore::create(runtime, initial, maximum)`、`Event::create(runtime, manualReset, initiallySet)`、`RwLock::create(runtime)`、`Condition::create(runtime)` 都返回明确结果。对应 C 接口位于 `hx_os_coroutine.h`，也支持 C99 无栈的重试／消费完成结果协议。
+包含 `hx/CoroutineSync.hpp`（C 接口位于 `hx_os_coroutine.h`），即可使用专为协程设计的同步原语。当发生锁竞争时，协程会挂起并让出工作线程，而宿主线程调用时则会阻塞等待：
 
-| 原语 | 契约 |
+| 同步原语 | 工厂与行为契约 |
 | --- | --- |
-| 互斥锁 | 不可递归，拥有者是协程身份或宿主线程；同一个拥有者重复上锁返回 `DEADLOCK`。`acquireUntil` 返回 RAII `Lock`。 |
-| 信号量 | 计数有界，post 超过最大值返回 `LIMIT`，计数不变。 |
-| 事件 | 手动复位唤醒全部等待者并保持已设置；自动复位唤醒一个，或保留一次通知。重复 set 不累计次数。 |
-| 读写锁 | 多个读者或一个写者；等待中的写者阻止新读者插队。不提供升级、降级或递归读锁保证。调用者必须拥有每一份释放的读锁。 |
-| 条件变量 | 等待时原子地释放传入且已持有的互斥锁；通知不保留，醒来后需要循环检查条件。 |
+| **互斥锁（`Mutex`）** | `Mutex::create(runtime)`。不可递归，拥有者按协程身份或宿主线程区分；同一拥有者重复加锁返回 `HX_OS_DEADLOCK`。`acquireUntil` 返回 RAII `Lock`。 |
+| **信号量（`Semaphore`）** | `Semaphore::create(runtime, initial, maximum)`。有界计数，`post` 超过最大值时返回 `HX_OS_LIMIT` 且保持原计数不变。 |
+| **事件（`Event`）** | `Event::create(runtime, manualReset, initiallySet)`。手动复位事件唤醒所有等待者并保持置位；自动复位事件每次只唤醒一个等待者。 |
+| **读写锁（`RwLock`）** | `RwLock::create(runtime)`。支持多读者并发或单写者独占；排队中的写者会阻止新读者插队。不支持递归读锁或直接将读锁升级为写锁。 |
+| **条件变量（`Condition`）** | `Condition::create(runtime)`。等待时原子地释放已持有的协程互斥锁，被唤醒后请在循环中重新检查业务条件。 |
 
-无竞争加锁使用运行时锁，不分配等待者；发生竞争时才分配有界等待对象。宿主线程等待会阻塞，协程等待会挂起；跨运行时的协程等待返回 `NOT_SUPPORTED`。`NOW` 下不能完成时返回 `WOULD_BLOCK`。调用期间必须持有对象引用，已经接受的等待会保留所需引用。close 拒绝或唤醒等待，原有锁仍可解锁；关闭互斥锁不会强行剥夺拥有者。
+> [!IMPORTANT]
+> **条件变量返回时必定重新持锁，且协程退出不会自动解锁**
+> - **条件变量重获锁保证**：无论是因为收到通知、等待超时、被取消还是条件变量关闭，`Condition` 等待在**返回给调用方之前都会重新取得关联的互斥锁**。重获锁的过程可能会超出原定的截止时间且不会被取消打断，因此调用方在等待返回后最终必须解锁。
+> - **严禁持锁退出协程**：协程退出时**不会**自动释放它持有的 `Mutex` 或 `RwLock`（自动解锁可能把修改了一半的共享状态暴露给其他任务）。在 C 回调中请确保每条错误/取消分支都完成解锁；在 C++ 中请将 RAII `Lock` 守卫留在获取它的同一协程上下文内，确保在协程结束前析构解锁。
 
-条件变量等待在**返回前重新取得互斥锁**，超时、取消、关闭条件变量时也如此。重新取得锁可能超过截止时间，重复取消不会打断这一步，因此拥有者最终必须解锁。这保证返回时的锁所有权，不是硬截止承诺。guard 留在取得它的协程／线程，任务结束前解锁，不要跨执行上下文转移。guard 析构只解锁，不阻塞等待。
+C++20 同样提供对应的 Awaiter：`async::acquire(mutex)`、`async::wait(event/semaphore)`、`async::readLock(lock)` / `async::writeLock(lock)` 以及 `async::wait(condition, guard)`。
 
-协程退出不会自动释放它持有的互斥锁或写锁。拥有者没有解锁就退出，可能让其他调用者永久阻塞；其他线程或协程不能代替拥有者解开会检查所有权的互斥锁。自动解锁可能让其他任务读到只修改了一半的共享数据。C 回调取得锁后，每条退出路径都必须清理；C++ guard 留在拥有者所在的执行上下文，覆盖错误和取消的返回路径。
-
-关闭运行时或同步对象不会打断条件变量重新加锁，也不会撤销当前拥有者。运行时关闭成功后，宿主创建的普通线程仍可能在重新加锁，因为运行时只 join 自己的工作线程。先让锁拥有者完成并解锁，再由宿主等待该线程退出，释放同步句柄，最后销毁运行时。当前“返回时持锁”的契约不保证这一整段流程存在硬截止时间。
-
-C++20 提供 `async::acquire(mutex)`、`async::wait(event/semaphore)`、`async::readLock/writeLock(lock)` 和 `async::wait(condition, guard)`；条件变量所引用的 guard 必须活到 await 结束。这些入口共用 C 调度器，不会为每个等待创建线程。
-
-`Local<T>::create(context)` 创建键，复制包装对象仍共享同一个键。`set(value)` 保存当前协程拥有的值，`get()` 借用当前协程的值指针，`clear()` 销毁它。同一工作线程上的其他协程有独立值；替换或协程退出时，每个拥有值只清理一次。释放外部最后一个键引用不会使仍存储的值失效。C 接口接受值指针及可选清理回调，set 成功才转移该值的清理责任。最多 64 个局部槽，与内部 profiler 使用的槽共用上限。清理在结束该协程的工作线程上执行，不得 yield 或修改局部槽；宿主线程没有协程局部槽。值或回调可能依赖插件，卸载之前先结束任务并释放键。
+**协程局部存储（`Local<T>`）**：调用 `Local<T>::create(context)` 创建键（复制 `Local<T>` 包装对象共享同一个键）。`set(value)` 为当前协程保存独立的值，`get()` 借用当前协程的值指针，`clear()` 主动销毁它。同一工作线程上的不同协程拥有各自独立的槽位；当值被替换或协程退出时，每个值保证只清理一次（最多支持 `64` 个局部槽位，与内部性能分析器共用上限；宿主线程没有协程局部槽位）。
 
 ## 10. 按需使用任务组和返回值
 
-`Group group(runtime, capacity)` 收集有界的一批 void／`Result<void>` 任务。`group.spawn(...)` 保存任务句柄，`group.waitUntil(deadline)` 等待并消费已经完成的条目；超时保留未完成条目，最终报告首个保存的提交／执行失败。某个任务失败不会跳过其余任务的等待。`group.cancel()` 请求协作取消。任务组由同一个调用方串行操作，不是支持并发 Add 的 Go WaitGroup；析构只释放句柄，不暗中等待或取消，被引用的应用数据仍需满足执行生命周期。组内错误持续保留，新错误范围请创建新任务组。
-
-需要返回值时用 `runtime.submit(函数, 参数...)`。`Task<T>::getUntil` 只在任务完成后消耗句柄，等待超时保留句柄，释放句柄也不会强杀任务。[C++11 完整返回值示例](../examples/coroutine.cpp) 与 [C++20 示例](../examples/coroutine20.cpp) 继续保留。普通自动持有任务、可选任务组和有返回值任务，共用同一份任务／栈预算及调度器。
+- **命名批次等待（`Group`）**：`Group group(runtime, capacity)` 用于收集固定上限的一批 `void` / `Result<void>` 任务。通过 `group.spawn(...)` 启动任务，再调用 `group.waitUntil(deadline)` 等待该组内的任务完成并汇总首个错误；`group.cancel()` 可向组内任务发起协作式取消。注意：`Group` 由单个调用方串行操作，析构时只释放句柄而不会暗中等待或取消任务。
+- **获取任务返回值（`Task<T>`）**：当需要从协程拿回类型化计算结果时，调用 `runtime.submit(函数, 参数...)` 获取 `Task<T>`，随后调用 `Task<T>::getUntil(deadline)` 等待并消费结果（详见 [C++11 完整返回值示例](../examples/coroutine.cpp) 与 [C++20 示例](../examples/coroutine20.cpp)）。
 
 ## 11. 等待 TLS 或 HTTP 时让出协程线程
 
-已有 TLS owner 时，把同步就绪等待、发送、接收、冲刷换成 `hx_os_coro_tls_wait_ready`、`hx_os_coro_tls_send_until`、`hx_os_coro_tls_receive_until` 或 `hx_os_coro_tls_flush_until`。这些操作向已有 TLS 工作线程登记等待，不新增轮询线程。C++11 有栈任务可以使用 `<hx/CoroutineNetwork.hpp>` 中借用 owner 的 `hx::coro::Tls`。原始 TLS 仍需要业务协议分帧，并显式关闭端点。
+- **协程版 TLS 读写**：对于已创建的 TLS 会话 `owner`，只需将同步的就绪等待、发送、接收和冲刷替换为 `hx_os_coro_tls_wait_ready`、`hx_os_coro_tls_send_until`、`hx_os_coro_tls_receive_until` 和 `hx_os_coro_tls_flush_until`（C++11 有栈协程可使用 `<hx/CoroutineNetwork.hpp>` 中的 `hx::coro::Tls` 视图）。它们直接向该 TLS 会话现有的工作线程登记唤醒，不会额外启动轮询线程（信任校验与配置详见 [TLS](TLS.zh-CN.md)）。
+- **协程版 HTTP 客户端**：通过 `hx_os_coro_http` 创建独立的协程 HTTP 服务，内部由有界 I/O 线程池驱动（默认 `2` 个线程、最多 `16` 个在途请求、`64 MiB` 请求/响应数据预算）：
 
-HTTP 使用显式创建的 `hx_os_coro_http` 服务，内部是独立、有容量上限的 I/O 线程池。默认两个线程、最多十六个已接收请求，按复制输入和最大响应数据预留 64 MiB。容器扩容峰值及 curl／TLS 原生分配另计；这是请求接收预算，不是进程内存硬上限。输入在挂起前复制，成功时才替换响应。
+```mermaid
+flowchart LR
+    C[协程发起请求] -->|复制输入| Q[有界 I/O 队列]
+    Q --> W[固定数量 I/O 线程]
+    W --> H[libcurl HTTP 或 HTTPS]
+    H -->|操作完成| S[恢复协程]
+    T[到期或取消] --> S
+    C -. 等待时挂起 .-> O[协程线程执行其他任务]
+```
 
 运行完整的 C99 状态机示例 [coroutine_http.c](../examples/coroutine_http.c)：
 
@@ -341,8 +338,6 @@ cmake --build build --config Release --target hx_os_coroutine_http
 build/bin/hx_os_coroutine_http http://127.0.0.1:8080/hello.txt
 ```
 
-Visual Studio 使用 `build/bin/Release/hx_os_coroutine_http.exe`。假设 `hello.txt` 内容为 `hello`，输出为 `HTTP 200`，下一行显示 `hello`。程序展示创建服务、`HX_OS_CORO_AWAIT`、释放响应，以及先关闭 I/O 服务再关闭运行时的流程。有栈任务只需调用 `hx_os_coro_http_get(service, url, NULL, &response, &error)`；C++ 使用 `hx::coro::Http(service).get(url, response)`。
+Visual Studio 请运行 `build/bin/Release/hx_os_coroutine_http.exe`。当 `hello.txt` 内容为 `hello` 时，程序会输出 `HTTP 200` 并在下一行打印 `hello`。在有栈协程内部，只需一行 `hx_os_coro_http_get(service, url, NULL, &response, &error)`（或 C++11 `hx::coro::Http(service).get(url, response)`）即可完成挂起等待。退出时请先在宿主线程上调用 `close_until` 关闭 HTTP 服务，再关闭协程运行时（普通流式文件传输详见 [HTTP 传输](HTTP_FILES.zh-CN.md)）。
 
-无栈任务把参数、缓冲区和截止时间放进持久状态，收到 `WOULD_BLOCK` 后继续同一个待完成操作。TLS 发送保留累计完成的字节数。取消协程会唤醒等待，未结束的 HTTP 后台操作继续持有自己的数据副本。原生 owner 线程用 `close_until` 关闭 HTTP 服务；超时后保留对象供重试，包括阻塞在系统 DNS 中的工作线程。不要先销毁运行时，也不要把 HTTP 取消当作服务端操作撤销。普通流式文件操作见 [HTTP 传输](HTTP_FILES.zh-CN.md)，信任校验及 profile 见 [TLS](TLS.zh-CN.md)。
-
-需要让 DNS 网络等待也能取消时，用 `hx_os_coro_resolve_cancellable`，C++11 对应 `Addresses::resolveCancellable`，C++20 对应 `async::resolveCancellable`。参数在首次挂起前复制，成功结果由调用者拥有，原生回调退出后才结束该次解析。旧的 resolve 保留系统 DNS。[DNS 示例](NETWORK_OPTIONS.zh-CN.md#123-事件循环和协程里怎么用)给出可直接运行的 `--coro` 模式。协程 HTTP 则需另选 c-ares 版 libcurl SDK，并在服务提交前启用 `hx_os_coro_http_use_cancellable_dns`，见 [HTTP 配置](HTTP_FILES.zh-CN.md#4-连-dns-无响应也需要取消时)。两种解析机制不能混为同一个构建开关。
+如果希望 DNS 解析阶段在无响应时也能立即响应协程取消，请使用 `hx_os_coro_resolve_cancellable`（C++11 为 `Addresses::resolveCancellable`，C++20 为 `async::resolveCancellable`，详见[DNS 示例](NETWORK_OPTIONS.zh-CN.md#123-事件循环和协程里怎么用)的 `--coro` 模式）；协程 HTTP 服务则需链接启用了 `c-ares` 的 `libcurl` 并在提交请求前调用 `hx_os_coro_http_use_cancellable_dns`（详见 [HTTP 配置](HTTP_FILES.zh-CN.md#4-连-dns-无响应也需要取消时)）。

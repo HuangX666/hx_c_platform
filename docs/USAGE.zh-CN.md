@@ -2,7 +2,7 @@
 
 [English](USAGE.md) · [首页](../README.zh-CN.md) · [详细参考](REFERENCE.zh-CN.md)
 
-更多专题先从[可运行示例目录](../examples/README.zh-CN.md)选择：每项列出使用场景、构建目标、所需输入和预期结果。
+如果你想直接按功能寻找更多完整程序，可以从[可运行示例目录](../examples/README.zh-CN.md)开始：其中列出了每个示例的适用场景、CMake 构建目标、所需输入和预期输出。
 
 - [1. 怎样使用这份教程](#using-guide)
 - [2. 准备一个最小项目](#project)
@@ -19,9 +19,14 @@
 
 ## 1. 怎样使用这份教程
 
-每一节解决一个具体问题，例如“读取端口配置”或“把一个计算交给后台”。先完成第 2 节接入，再挑一节运行。每个 C／C++ 代码块都是独立程序：一次只把其中一个保存为 `main.c` 或 `main.cpp`，不要把多个 main 拼在一起。
+这份教程按具体工程任务组织，每一节解决一个常见需求，例如“从 JSON 配置文件读取端口号”或“把一段计算放到后台线程池执行”。
 
-阅读顺序是：准备输入 → 编译运行 → 对照输出 → 替换成业务数据。暂时不需要自定义分配器或深入平台原理；这些细节在[接口参考](REFERENCE.zh-CN.md)按功能查询。
+建议先按第 2 节搭好最小演示工程，再挑任意一节动手运行：
+1. **准备输入**：按小节说明准备好示例文件（多数示例不需要外部文件）。
+2. **编译运行**：本教程中的每个 C / C++ 代码块都是独立可运行的完整程序。每次只把其中一个代码块保存为 `main.c` 或 `main.cpp`，不要把多个 `main` 函数拼进同一个文件。
+3. **对照输出**：确认控制台输出与教程一致后，再把示例中的文件路径、键名或参数替换成你的业务数据。
+
+上手阶段不需要配置自定义内存分配器，也不必深究底层平台差异；当你需要查询具体的接口限制、生命周期契约或平台边界时，可以随时查阅[详细参考](REFERENCE.zh-CN.md)。
 
 <a id="project"></a>
 
@@ -29,7 +34,7 @@
 
 ### 2.1 目录和源码
 
-从源码开始时，在 MSVC 开发者终端或 Linux 终端执行：
+如果从源码接入，打开 MSVC 开发者终端（Windows）或普通 Shell（Linux / macOS），执行以下命令拉取仓库与子模块：
 
 ```sh
 mkdir hx_demo
@@ -41,25 +46,25 @@ git -C hx_c_platform submodule update --init --recursive
 cd ..
 ```
 
-现在位于 `hx_demo`，在这里创建 `CMakeLists.txt` 和本节要运行的程序。仅文件／配置例子需要额外输入文件，其余例子可以直接运行。
+此时你位于 `hx_demo` 目录下。接下来在这里创建 `CMakeLists.txt` 和你要运行的源文件。本教程中只有“读取文本文件”和“读取 JSON 配置”两个例子需要额外输入文件，其余例子可以直接编译运行。
 
 ```text
 hx_demo/
 ├── CMakeLists.txt
 ├── main.c
-├── hello.txt       # 文本读取例子需要
-├── config.json     # 配置读取例子需要
+├── hello.txt       # 第 3 节文本读取示例使用
+├── config.json     # 第 5 节配置读取示例使用
 └── deps/
     └── hx_c_platform/
 ```
 
-文件读取例子使用 UTF-8 的 `hello.txt`：
+第 3 节文件读取示例使用 UTF-8 编码的 `hello.txt`：
 
 ```text
 Hello, hx_c_platform!
 ```
 
-配置读取例子使用 UTF-8 的 `config.json`：
+第 5 节配置读取示例使用 UTF-8 编码的 `config.json`：
 
 ```json
 {"port": 8080}
@@ -69,7 +74,7 @@ Hello, hx_c_platform!
 
 ### 2.2 编译 C 程序
 
-把选中的 C 程序保存为 `main.c`，`CMakeLists.txt` 使用下面的完整内容：
+把选中的 C 示例代码保存为 `main.c`，并在 `CMakeLists.txt` 中写入以下完整配置：
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
@@ -89,34 +94,37 @@ set_target_properties(hx_demo PROPERTIES
 	C_EXTENSIONS NO)
 ```
 
-`add_subdirectory` 构建本库；`target_link_libraries` 让自己的程序能调用本库。上面的七个开关关闭需要额外原生 SDK 的模块，文件、字符串、内置 JSON、设置、容器和线程池仍可用于本教程。需要那些可选模块时，再按[依赖指南](DEPENDENCIES.zh-CN.md)准备 SDK，并通过对应的 `-DHX_OS_ENABLE_模块名=ON` 配置参数开启。
+其中 `add_subdirectory` 负责构建本库，`target_link_libraries` 将 `hx_c_platform::hx_c_platform` 链接到你的可执行程序。
 
-在 `hx_demo` 中执行：
+> [!TIP]
+> 上面的 `foreach` 循环关闭了 7 个依赖外部原生 SDK（如 OpenSSL、libcurl、utf8proc、SQLite 等）的可选模块，使最小工程无需预装第三方 SDK 即可直接编译。本教程用到的文件、字符串、内置 JSON、可变设置、容器、线程池和 `variant` 均属于核心或内置模块，不受影响。后续需要使用那些扩展模块时，请先按[依赖指南](DEPENDENCIES.zh-CN.md)准备对应 SDK，再通过 `-DHX_OS_ENABLE_<MODULE>=ON` 开启。
+
+在 `hx_demo` 目录下执行构建：
 
 ```sh
 cmake -S . -B build
 cmake --build build --config Release
 ```
 
-Windows 的 Visual Studio Release 构建：
+在 Windows 上使用 Visual Studio 生成器构建完成后，运行：
 
 ```powershell
 .\build\Release\hx_demo.exe
 ```
 
-Linux 的 Ninja／Makefile 构建：
+在 Linux / macOS（或使用 Ninja / Makefile 生成器）构建完成后，运行：
 
 ```sh
 ./build/hx_demo
 ```
 
-运行时继续留在 `hx_demo`，程序就能按相对路径找到这里的输入文件。换例子时替换 `main.c` 并重新构建；同一工具链复用同一个构建目录。Windows 使用 Ninja 时，执行文件通常是 `build/hx_demo.exe`。
+请保持在 `hx_demo` 目录下运行程序，这样程序才能通过相对路径找到同目录下的 `hello.txt` 和 `config.json`。尝试其他章节的例子时，只需替换 `main.c` 的内容并重新执行 `cmake --build build --config Release`，同一工具链下无需删除并重建 `build` 目录（Windows 下若使用 Ninja 生成器，可执行文件通常位于 `build/hx_demo.exe`）。
 
 <a id="cpp-project"></a>
 
 ### 2.3 编译 C++ 程序
 
-把选中的 C++ 程序保存为 `main.cpp`，用下面的完整 CMake 配置。编译和运行命令仍与第 2.2 节相同。
+把选中的 C++ 示例代码保存为 `main.cpp`，并使用下面的 `CMakeLists.txt`。构建与运行命令与第 2.2 节完全相同：
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
@@ -143,34 +151,35 @@ else()
 endif()
 ```
 
-`hx_c_platform::cpp` 提供 C++ 头文件包装并连接同一个 C 核心。这里选择 C++11、关闭异常。C++ 调用先检查 Result 是否成功，再通过 `.value()` 使用里面的结果。
+链接 `hx_c_platform::cpp` 会引入 header-only 的 C++11 封装层并自动链接底层 C 核心库。本库的所有 C++ 接口都通过 `hx::Result<T>` 返回结果与错误状态，不抛出异常，因此在关闭异常（`/EHs-c-` 或 `-fno-exceptions`）的工程中也能直接使用。调用后先检查 `Result` 是否成功，再通过 `.value()` 取出结果。
 
 <a id="installed-project"></a>
 
-### 2.4 已经有 include／lib／bin 安装包
+### 2.4 已经有 include / lib / bin 安装包
 
-把完整 SDK 放到业务项目的 `deps/hx_c_platform`，无需克隆本库源码。按[安装包独立接入教程](INSTALL.zh-CN.md)操作：其中提供可直接复制的 C99 和 C++11 完整 CMakeLists.txt、main、输入文件、Windows／Linux 运行命令，以及 cmake-gui／Visual Studio 的启动方法。
+如果你拿到的是已经编译打包好的 SDK（包含 `include`、`lib`、`bin` 目录），只需将完整 SDK 放到业务工程的 `deps/hx_c_platform` 下，无需克隆本库源码。具体步骤请参考[安装包独立接入教程](INSTALL.zh-CN.md)，其中提供了可直接复制的 C99 与 C++11 `CMakeLists.txt`、示例源文件、Windows / Linux 运行命令，以及 `cmake-gui` 和 Visual Studio 的配置方法。
 
-保留 lib/cmake 中本库和依赖的包配置，以及 bin 或 lib 中匹配的运行库。教程用 find_package 导入已编译库；不要对安装包调用 add_subdirectory，也不需要打开源码示例构建开关。仅复制头文件和主库、删掉包配置或依赖，不能保证链接和运行成功。
+> [!IMPORTANT]
+> 使用预编译安装包时，请完整保留 `lib/cmake` 下的 CMake 导出配置以及 `bin` / `lib` 中匹配的依赖运行库，并在宿主工程中使用 `find_package(hx_c_platform CONFIG REQUIRED)` 导入目标（不要对安装目录调用 `add_subdirectory`，也不需要开启源码示例构建开关）。如果只拷贝头文件和主库文件而丢弃了 CMake 包元数据或底层依赖库，链接或运行时将会失败。
 
-### 2.5 看懂示例中的几种写法
+### 2.5 看懂示例中的几种常见写法
 
-| 写法 | 你需要知道的意思 |
+| 常见写法 | 在代码中的含义 |
 | --- | --- |
-| `hx_os_status status` | 保存这次操作的结果；与 `HX_OS_OK` 比较判断成功 |
-| `hx_string text = HX_STRING_INIT` | 准备一个空字符串，之后用它接收或保存文字 |
-| `&text` | 允许函数把结果写进这个字符串 |
-| 最后的 `NULL` 错误参数 | 暂时不需要详细系统诊断，仍要检查返回状态 |
-| C++ 的 `if (!result)` | 检查调用失败 |
-| C++ 的 `result.value()` | 成功后取得真正的字符串、数字或对象 |
+| `hx_os_status status` | 保存本次 C 接口调用的状态码；与 `HX_OS_OK` 比较以判断是否成功 |
+| `hx_string text = HX_STRING_INIT` | 初始化一个空的 UTF-8 字符串对象，用来接收或保存文本 |
+| `&text` | 将字符串对象的地址传给函数，允许函数把输出内容写进该字符串 |
+| 末尾的 `NULL` 错误参数 | 表示当前调用不需要获取详细的原生系统错误记录，但仍需检查返回的 `hx_os_status` |
+| C++ 的 `if (!result)` | 检查 `hx::Result<T>` 调用是否失败 |
+| C++ 的 `result.value()` | 在确认 `result` 成功后，取出里面保存的字符串、数值或对象 |
 
-`NULL` 的含义取决于参数位置，不是所有指针都能传 NULL。下面每节会解释实际用到的参数。
+需要注意，参数传 `NULL` 的含义取决于参数位置，并非所有指针参数都允许传 `NULL`。下面每一节都会结合具体代码说明关键参数的作用。
 
 <a id="files"></a>
 
 ## 3. 读取并显示文本文件
 
-**要完成的事：**读取 `hello.txt`，显示文件内容。输入文件已在第 2 节准备；不需要自己创建文件句柄或循环读取。
+**应用场景**：将磁盘上的 UTF-8 文本文件 `hello.txt` 一次性读入内存并打印出来，无需手动管理文件句柄或编写分块读取循环。
 
 ### 3.1 C 完整程序
 
@@ -194,13 +203,11 @@ int main(void)
 }
 ```
 
-调用顺序如下：
-
-1. `HX_STRING_INIT` 创建空字符串，用来接收文件内容。
-2. `hx_os_file_read_text` 读取文件，第二个参数 `&text` 表示将内容写入这个字符串；最后的 `NULL` 表示本例只检查状态，不接收额外错误记录。
-3. `status == HX_OS_OK` 时才能使用结果。`hx_string_c_str(&text)` 取得以 NUL 结束的字符指针，交给 `puts` 显示。
-4. 无论成功还是失败，最后都调用 `hx_string_destroy` 结束字符串的生命周期。文件已由读取函数关闭。
-5. `return` 返回 0 表示程序成功，1 表示程序失败。
+这段代码的执行流程如下：
+1. `HX_STRING_INIT` 将 `text` 初始化为空字符串，准备用来接收文件内容。
+2. `hx_os_file_read_text("hello.txt", &text, NULL)` 自动完成打开文件、读取内容、校验 UTF-8 并关闭文件。第二个参数 `&text` 用于接收文本，最后一个参数传 `NULL` 表示只通过返回值判断状态，不额外收集底层系统错误码。
+3. 当 `status == HX_OS_OK` 时，调用 `hx_string_c_str(&text)` 获取以 `\0` 结尾的 C 字符串指针并传给 `puts` 打印。
+4. 无论读取成功还是失败，退出前都调用 `hx_string_destroy(&text)` 释放字符串占用的内存。
 
 ### 3.2 C++ 完整程序
 
@@ -224,21 +231,23 @@ int main()
 }
 ```
 
-`readText` 返回 `Result<hx::String>`，里面包含字符串或错误。`if (!text)` 表示读取失败，此时打印错误类别并退出；成功后才访问 `text.value()`。`hx::String` 自动管理自己的内存，程序结束不需要手工释放字符串。
+在 C++ 中，`hx::Files::readText` 返回 `hx::Result<hx::String>`。先用 `if (!text)` 检查是否读取失败；确认成功后再通过 `text.value().c_str()` 访问字符串内容。`hx::String` 会在离开作用域时自动释放内存，无需手动调用销毁函数。
 
-**两种程序的正常输出：**
+**预期输出：**
 
 ```text
 Hello, hx_c_platform!
 ```
 
-找不到文件时，先确认当前工作目录和 `hello.txt` 是否匹配。该便利入口默认严格读取 UTF-8，移除开头的 UTF-8 BOM，最多读取 16 MiB；无效编码或超限会失败。读取其他编码、二进制或大文件时使用对应扩展入口，见[文件与编码参考](REFERENCE.zh-CN.md#section-7)。
+> [!NOTE]
+> - 如果运行后提示找不到文件（`HX_OS_NOT_FOUND`），请检查终端当前工作目录下是否已经放置了第 2 节准备的 `hello.txt`。
+> - `hx_os_file_read_text` / `hx::Files::readText` 默认按严格 UTF-8 读取，会自动剥离文件开头的 UTF-8 BOM，并将单文件读取上限设为 16 MiB；遇到非法 UTF-8 字节或超出大小上限时会返回错误。如果需要读取二进制数据、传统编码文本（如 GBK / UTF-16）或更大体积的文件，请参考[详细参考：字符串与编码转换](REFERENCE.zh-CN.md#section-7)。
 
 <a id="strings"></a>
 
 ## 4. 处理字符串
 
-**要完成的事：**将 `"  Hello  "` 的两端空格去掉，再把 ASCII 大写字母变为小写。这个任务没有输入文件。
+**应用场景**：将带有首尾空格的字符串 `"  Hello  "` 去掉两端空白，再把其中的 ASCII 大写字母转换为小写。本示例不需要外部输入文件。
 
 ### 4.1 C 完整程序
 
@@ -287,21 +296,22 @@ int main()
 }
 ```
 
-**正常输出：**
+**预期输出：**
 
 ```text
 hello
 ```
 
-先赋值或复制字符串，因为这一步可能分配失败；检查成功后再做原地修改。`trim` 表示去掉两端空白，`lower` 表示转换 ASCII 大写字母。原地操作不创建另一份字符串，也不需要额外结果检查。中文、emoji 等字节保持原样；这两个函数不承担完整 Unicode 大小写转换。
+创建或复制字符串（`hx_string_assign_cstr` / `hx::String::copy`）需要分配内存，因此第一步要先检查返回状态。一旦字符串构建成功，后续的 `hx_string_trim_ascii_in_place` 和 `hx_string_lower_ascii_in_place`（或 C++ 的 `.trimAscii().lowerAscii()` 链式调用）都在现有缓冲区上原地修改，不会触发内存分配，因此不会失败，也不需要每一步都检查错误码。
 
-C 程序最后调用 `hx_string_destroy`，C++ 程序由对象自动释放。需要分割、拼接、编码转换或独立字符串副本时，见[字符串工具](COMMON_UTILITIES.zh-CN.md)。
+> [!NOTE]
+> 这里的 `trim_ascii` 和 `lower_ascii` 仅针对 ASCII 空白字符和 `A`–`Z` 字母处理，字符串中的中文、emoji 等多字节 UTF-8 内容会原样保留，不会被破坏。如果你需要按分隔符拆分、拼接、格式化字符串，或进行完整的 Unicode 规范化与大小写折叠，请参阅[常用工具：字符串处理](COMMON_UTILITIES.zh-CN.md)。
 
 <a id="configuration"></a>
 
 ## 5. 读取 JSON 配置
 
-**要完成的事：**读取 `config.json`，取得根对象中的整数 `port`。输入为 `{"port":8080}`；`port` 是键名，`8080` 是它的值。
+**应用场景**：解析第 2 节准备的 `config.json`（内容为 `{"port": 8080}`），读取根对象下的整数配置项 `port`。
 
 ### 5.1 C 完整程序
 
@@ -335,7 +345,11 @@ int main(void)
 }
 ```
 
-C 版本分三步：`load` 读取并解析文件；`pointer(..., "/port", ...)` 找到键对应的节点；`get_i64` 将节点读为 64 位整数。每步失败就不执行后面的查询。`hx_os_config_release` 释放整个文档，节点由文档管理，不能再单独释放或继续使用。
+C 语言读取配置分为三步：
+1. `hx_os_config_load` 读取并解析 `config.json`，生成只读文档句柄 `document`。
+2. `hx_os_config_pointer(hx_os_config_root(document), "/port", &node)` 从根节点按 JSON Pointer 路径查找 `/port` 对应的节点。
+3. `hx_os_config_get_i64(node, &port)` 将该节点的值作为 64 位有符号整数读出。
+4. 最后调用 `hx_os_config_release(document)` 释放整棵配置文档。文档内的节点指针（`node`）由 `document` 托管，无需也不能单独释放，且在 `document` 释放后不能继续访问。
 
 ### 5.2 C++ 完整程序
 
@@ -366,21 +380,22 @@ int main()
 }
 ```
 
-**正常输出：**
+**预期输出：**
 
 ```text
 Port: 8080
 ```
 
-`/port` 表示从根对象读取 `port`；如果输入是 `{"server":{"port":8080}}`，查询位置变为 `/server/port`。它不是文件路径，点号也不是这里的层级分隔符。
-
-文件损坏、键缺失、值不能按整数读取都会报告失败，不会自动变成 0。默认配置输入上限为 1 MiB。文档创建后用于只读查询；想在内存中修改设置，使用下一节的 `hx_settings`。其他格式的范围和后端区别见[配置格式说明](CONFIGURATION.zh-CN.md)。
+> [!NOTE]
+> - **查询路径语法**：`/port` 是 JSON Pointer 路径，表示查找根对象下的 `port` 字段。如果配置是嵌套结构 `{"server": {"port": 8080}}`，查询路径应写为 `"/server/port"`（使用斜杠 `/` 分隔层级，而不是点号 `.`）。
+> - **严格类型检查**：文件语法错误、键不存在（返回 `HX_OS_NOT_FOUND`）或字段类型不是整数（返回 `HX_OS_TYPE_MISMATCH`）都会明确报错，绝不会静默返回 `0`。
+> - **只读文档 vs. 可变设置**：`hx_os_config_document`（默认输入上限 1 MiB）解析完成后是不可变的只读树。如果你需要在运行时动态修改配置项或保存回文件，请使用下一节的 `hx_settings`。关于 YAML、TOML、INI、XML 等其他格式的语法范围，请参阅[配置格式说明](CONFIGURATION.zh-CN.md)。
 
 <a id="settings"></a>
 
 ## 6. 修改内存中的设置
 
-**要完成的事：**创建一个内存中的设置对象，将 `port` 写为 `8080`，再读出来。这个例子不读取或保存文件，用来说明“设置”和“已解析文档”的不同用途。
+**应用场景**：创建一个可在运行时读写的内存设置对象（`hx_settings`），将 `port` 设为 `8080` 并读回。与上一节只读的 `hx_os_config_document` 不同，`hx_settings` 专为运行时动态修改、默认值分层和并发快照读取而设计。
 
 ### 6.1 C 完整程序
 
@@ -414,7 +429,7 @@ int main(void)
 }
 ```
 
-`create` 创建对象，`set_i64` 以整数类型写入值，`get_i64` 读取该值，`destroy` 关闭并释放。关闭也会返回状态；若前面已经失败，本例保留前面的错误，否则检查关闭结果。
+这里 `hx_settings_create` 创建可变设置对象，`hx_settings_set_i64` 写入整数值，`hx_settings_get_i64` 读出该值，最后由 `hx_settings_destroy` 关闭并释放对象。由于销毁操作本身也会返回状态码，代码在前面步骤全部成功时继续检查 `closed` 的结果，若前面已经出错则优先保留最初的错误码。
 
 ### 6.2 C++ 完整程序
 
@@ -466,17 +481,17 @@ int main()
 }
 ```
 
-**正常输出：**
+**预期输出：**
 
 ```text
 Port: 8080
 ```
 
-`owner` 保存库内部对象的指针；`hx::Settings settings(owner)` 提供 C++ 调用方式，`create()` 才真正创建资源。`setInt` 写入整数，`integer` 返回读取结果，`closeUntil` 显式关闭。这里使用 `HX_OS_DEADLINE_NOW`，表示立即尝试关闭；本例没有观察者或并行调用。
+在 C++ 封装中，调用方持有底层指针 `hx_settings *owner = NULL`，`hx::Settings settings(owner)` 绑定该指针并提供面向对象的方法，调用 `settings.create()` 时才真正分配底层资源。退出前通过 `settings.closeUntil(HX_OS_DEADLINE_NOW)` 显式关闭（本例没有注册观察者回调或多线程并发访问，传入 `HX_OS_DEADLINE_NOW` 即可立即完成关闭）。
 
-### 6.3 一次填写多个值
+### 6.3 一次连续写入多个值
 
-在第 6.2 节程序中，将 `auto changed = settings.setInt("port", 8080);` 这一句替换成下面的赋值，就能连续写入两个值。保留原程序后面的结果检查、读取和关闭步骤：
+如果要连续写入多项配置，不想每写一项都写一段 `if` 判断，可以把第 6.2 节中的 `auto changed = settings.setInt("port", 8080);` 替换为下面的链式调用（其余检查、读取和关闭代码保持不变）：
 
 ```cpp
 auto changed = settings.update()
@@ -485,9 +500,10 @@ auto changed = settings.update()
 		       .finish();
 ```
 
-成功后可分别用 `settings.integer("port")` 和 `settings.boolean("enabled")` 读取。每次读取也要检查结果。`finish()` 不执行延迟提交，它只返回此前写入的最终状态；每个 setter 调用时就已生效。
+写入成功后，可分别用 `settings.integer("port")` 和 `settings.boolean("enabled")` 读取对应的值。
 
-例如第一项成功、第二项失败，第一项保留，后面的项不执行。`changed.value()` 在该接口失败时也包含成功操作次数，可用于诊断。需要保存文件时显式调用 `settings.save("settings.json")` 并检查结果。[完整设置契约](PLATFORM_UTILITIES.zh-CN.md)说明默认值、观察者、快照及关闭重试。
+> [!IMPORTANT]
+> `settings.update()` 的每个 setter 在调用当下就会**立即生效**，而不是攒到 `finish()` 才一次性提交事务。如果第一项写入成功、第二项失败，第一项的修改会保留，后续 setter 将被跳过；此时 `changed` 为失败状态，但你可以通过 `changed.value()` 查看在出错前已成功执行的写入次数。需要将设置持久化到磁盘时，请显式调用 `settings.save("settings.json")` 并检查返回值。更多关于默认值层、变更观察者（Observer）、不可变快照与关闭重试的规则，请参阅[平台工具：可变设置契约](PLATFORM_UTILITIES.zh-CN.md)。
 
 <a id="containers"></a>
 
@@ -495,7 +511,9 @@ auto changed = settings.update()
 
 ### 7.1 vector：按顺序保存整数
 
-**要完成的事：**保存 `10`、`20`，读取数量和第一个值。`vector` 是可增长的连续数组；本例指定最多 16 项。宏要放在函数外，它为指定元素类型生成有名字的 C 函数，不需要 C++ 模板。
+**应用场景**：创建一个可动态增长的连续整数数组（`vector`），依次追加 `10` 和 `20`，然后打印当前元素个数与第一个元素的值。
+
+`HX_OS_DECLARE_VECTOR(int_vector, int)` 宏需要放在函数外部，它会为 `int` 类型生成一套类型安全的 C 函数（如 `int_vector_create`、`int_vector_push` 等），无需依赖 C++ 模板。本例将容量上限设为 16 项：
 
 ```c
 #include <hx_os.h>
@@ -529,17 +547,17 @@ int main(void)
 }
 ```
 
-**正常输出：**
+**预期输出：**
 
 ```text
 Count: 2, first: 10
 ```
 
-`int_vector_create` 创建整数容器，`push` 追加元素，`size` 返回数量，`at(..., 0)` 返回第一个整数的位置；前面两次追加成功，所以本例直接读取它。下标从 0 开始，越界时 `at` 返回 NULL。`destroy` 释放容器。
+`int_vector_create` 创建容器，`int_vector_push` 在末尾追加元素，`int_vector_size` 返回当前元素数量，`int_vector_at(numbers, 0)` 返回下标 `0` 处元素的指针（若下标越界则返回 `NULL`；本例前两次 `push` 均已成功，因此可以直接解引用），最后调用 `int_vector_destroy` 释放容器内存。
 
-### 7.2 queue：先放进去的先取出来
+### 7.2 queue：先进先出队列
 
-**要完成的事：**依次放入 `10`、`20`，取出一项后得到 `10`，队列里剩一项。
+**应用场景**：创建一个先进先出（FIFO）队列，依次入队 `10`、`20`，弹出队首元素后得到 `10`，队列中剩余 1 项。
 
 ```c
 #include <hx_os.h>
@@ -577,27 +595,30 @@ int main(void)
 }
 ```
 
-**正常输出：**
+**预期输出：**
 
 ```text
 Removed: 10, remaining: 1
 ```
 
-`push` 放入队尾，`pop` 从队首取出并写入 `value`。这组类型化宏适用于整数等可以直接复制字节的元素；拥有内存的字符串、非平凡 C++ 对象需使用带复制/释放规则的接口，不能把上面的 `int` 随意换成 `hx_string`。C 容器也能被 C++ 调用。其他容器和元素规则见[C 容器说明](CONTAINERS.zh-CN.md)。
+`int_queue_push` 将元素放入队尾，`int_queue_pop` 从队首取出元素并写入 `value`。这些 C 容器同样可以在 C++ 代码中直接调用。
+
+> [!WARNING]
+> `HX_OS_DECLARE_VECTOR` 和 `HX_OS_DECLARE_QUEUE` 生成的类型化宏仅适用于 `int`、普通结构体等**可直接按字节复制（POD）**的元素类型。不要把 `int` 直接替换成持有堆内存的 `hx_string` 或包含析构逻辑的 C++ 对象；存放需要深拷贝和自定义释放的资源时，请使用带 `copy` / `drop` 回调的通用容器接口，详见[C 容器说明](CONTAINERS.zh-CN.md)。
 
 <a id="thread-pool"></a>
 
 ## 8. 提交 C++ 线程池任务
 
-**要完成的事：**创建两个工作线程，提交计算 `21 × 2` 的任务，等待结果，然后关闭线程池。它不需要输入文件。`21` 按值交给任务，不借用调用线程的局部指针。
+**应用场景**：创建一个包含 2 个工作线程的线程池，将计算 `21 * 2` 的任务提交到后台执行，等待计算结果并安全关闭线程池。这里参数 `21` 按值传递给任务，避免跨线程借用调用方的局部栈指针。
 
-下面的图展示必须分开的几个步骤。提交成功只表示任务被接受，读取结果时才确认计算是否完成。
+在使用线程池时，需要把“任务已成功排入队列”和“任务已执行完毕并拿到结果”区分开：
 
 ```mermaid
 flowchart LR
-    A["创建线程池"] --> B["提交计算任务"]
-    B --> C["等待并检查结果"]
-    C --> D["显式关闭线程池"]
+    A["1. 创建线程池"] --> B["2. 提交任务（入队准入）"]
+    B --> C["3. 等待并检查执行结果"]
+    C --> D["4. 显式关闭线程池"]
 ```
 
 ```cpp
@@ -656,29 +677,31 @@ int main()
 }
 ```
 
-**正常输出：**
+**预期输出：**
 
 ```text
 Answer: 42
 ```
 
-关键步骤：
+关键步骤解析：
+1. `hx::ThreadPool::withThreads(owner, 2)` 启动 2 个工作线程，并将底层线程池句柄保存在 `owner` 中，供后续关闭和超时重试使用。
+2. `pool.submit(...)` 接收可调用对象（带 `noexcept` 的 lambda）和参数 `21`。
+3. `if (submitted)` 表示任务已被线程池队列接受；接着调用 `submitted.value().getUntil(...)` 等待工作线程算完并返回 `answer`，确认 `if (answer)` 成功后读取 `answer.value()`。
+4. `hx_os_deadline_after_ms(2000)` 根据当前单调时钟计算 2 秒后的截止时间（2 秒只是本示例选择的等待预算，你可以根据业务需要自由设定）。
+5. `pool.shutdownUntil(..., HX_OS_POOL_CANCEL_PENDING)` 显式关闭并销毁线程池。`HX_OS_POOL_CANCEL_PENDING` 会取消队列中尚未开始执行的任务，并等待正在运行中的任务自然退出，绝不会强行杀死工作线程。
 
-1. `withThreads(owner, 2)` 创建两个工作线程。`owner` 保留内部线程池，用于关闭和重试。
-2. `submit` 接收任务函数和参数；lambda 中 `value * 2` 是真正的工作。`noexcept` 表示该函数不使用异常机制。
-3. `submitted` 成功后，`submitted.value()` 取得任务对象；`getUntil` 等待执行结果。它返回的 `answer` 还要检查，任务被接受不等于已执行成功。
-4. `hx_os_deadline_after_ms(2000)` 从当前时间计算 2 秒后的等待截止点。等待结果和关闭分别使用本例选定的预算，这不是库规定所有应用必须等 2 秒。
-5. `shutdownUntil` 关闭并释放线程池；`HX_OS_POOL_CANCEL_PENDING` 跳过尚未开始的任务，并等待在途工作退出，不强杀正在执行的任务。
-
-完整程序是独立命令行演示；关闭失败时报告问题并以失败结束。放到长期运行的程序中时，需要把 `owner` 放在覆盖关闭重试的持久状态中：超时后保留线程池、任务数据及相关代码，再继续关闭。`hx::ThreadPool` 包装对象析构不会暗中等到结束，也不会替你丢弃这个指针。涉及长任务、取消、并行关闭或插件卸载时，先看[线程池契约](CPP_POOL.zh-CN.md)。
-
-C 程序可使用底层 C 线程池；创建、提交、等待和关闭的示例见[详细参考中的 C 线程池](REFERENCE.zh-CN.md#section-15)。
+> [!IMPORTANT]
+> **长生命周期服务中的关闭重试契约**：上面的命令行小程序在关闭超时（`HX_OS_TIMEOUT`）时直接报错退出；但在长期运行的后台服务或宿主程序中，`hx::ThreadPool` 包装对象的析构函数**不会**暗中无限阻塞等待，也**不会**替你丢弃未完成的 `owner` 指针。如果 `shutdownUntil` 因在途长任务尚未退出而返回 `HX_OS_TIMEOUT`，你必须把 `owner`、任务访问的数据以及相关代码（如插件动态库）继续保留在关闭状态机中，稍后再次调用 `shutdownUntil` 重试，直到返回 `HX_OS_OK`。关于长任务协作取消、并行关闭与插件卸载的完整规则，请参阅[C++ 线程池契约](CPP_POOL.zh-CN.md)。C 语言工程也可直接使用底层 C 线程池接口，详见[详细参考：C 线程池与延迟任务](REFERENCE.zh-CN.md#section-15)。
 
 <a id="variant"></a>
 
 ## 9. 同一个变量保存不同类型
 
-variant 每次保存一个值，但可以改变值的类型；修改时自动释放旧内容。C 示例先存整数 42，再存 hello，最后存坐标 Point(2, 5)。不需要输入文件，采用第 2 节的 C 构建配置：
+**应用场景**：使用 `hx_variant`（或 C++ 的 `hx::TypedVariant`）在同一个变量中先后存放整数 `42`、字符串 `"hello"` 和自定义坐标结构体 `Point{2, 5}`。每次赋新值时，容器会自动释放旧值占用的资源。
+
+### 9.1 C 完整程序
+
+无需外部输入文件，使用第 2.2 节的 C 构建配置即可编译：
 
 ```c
 #include <hx_variant.h>
@@ -748,7 +771,9 @@ failed:
 }
 ```
 
-C++11 可在类型列表中指定整数、浮点、字符串和自定义 Point。采用第 2 节的 C++ 构建配置，关闭异常：
+### 9.2 C++ 完整程序
+
+C++11 可以用 `hx::TypedVariant<...>` 直接在模板参数列表中声明允许存放的类型集合（使用第 2.3 节的无异常 C++ 构建配置）：
 
 ```cpp
 #include <hx/Variant.hpp>
@@ -803,7 +828,7 @@ int main()
 }
 ```
 
-两份程序输出相同：
+**两份程序的预期输出：**
 
 ```text
 Integer: 42
@@ -811,42 +836,48 @@ String: hello
 Point: 2.0, 5.0
 ```
 
-C 用 point_type 告诉库怎样复制这个普通结构体，C++ 由类型自动生成描述。set 拥有副本；读取时先检查结果，再使用数字、字符串视图或结构体引用。改为其他类型时旧值自动释放，C 在末尾 destroy，C++ 离开作用域自动清理。
+在 C 代码中，`HX_VARIANT_DEFINE_TRIVIAL_TYPE(point_type, point)` 宏为普通 POD 结构体生成类型描述符；在 C++ 中则由模板自动推导。调用 `set` 会保存数据的独立副本，赋新值时自动释放前一个值，退出前 C 程序调用 `hx_variant_destroy(&value)`，C++ 对象则在离开作用域时自动析构。
 
-读取错误类型明确失败，例如保存 Point 后不能 get<int32_t>。结构体里含 hx_string/堆资源时需要深复制和清理；完整回调、emplace/visit、混合 vector 和分配器说明见[variant 专题](VARIANT.zh-CN.md)。
+> [!NOTE]
+> `variant` 读取时会严格核对当前保存的类型（例如当前存放的是 `Point` 时，调用 `get<int32_t>()` 会返回 `HX_OS_TYPE_MISMATCH` 错误）。如果自定义结构体内部持有 `hx_string` 或堆内存指针，不能使用 `TRIVIAL_TYPE` 宏，而应提供自定义的深拷贝与清理回调；关于自定义生命周期回调、`emplace` / `visit`、异构 `vector` 以及分配器绑定的完整用法，请参阅[variant 专题教程](VARIANT.zh-CN.md)。
 
 <a id="questions"></a>
 
 ## 10. 初次使用常见问题
 
-### 10.1 为什么有 HX_OS_OK、Result 和 value？
+### 10.1 为什么要把状态码（`HX_OS_OK`）、`Result` 和 `.value()` 分开？
 
-文件不存在、配置错误或分配失败都可能发生。C 函数用状态码报告；`HX_OS_OK` 表示成功。C++ 把值和错误放到 Result 里，`if (!result)` 检查失败，成功后 `result.value()` 读取值。不要把失败直接当成空字符串或 0；需要原生错误详情时可传入错误记录，见[错误参考](REFERENCE.zh-CN.md#section-6)。
+文件不存在、配置格式损坏、内存分配失败在真实环境中随时可能发生。C 接口统一通过返回 `hx_os_status` 报告结果（`HX_OS_OK` 表示成功）；C++ 接口则将返回值与错误打包进 `hx::Result<T>`，先用 `if (!result)` 判断是否出错，确认成功后再用 `result.value()` 取出结果。这样设计是为了避免把读取失败静默当成空字符串 `""` 或数字 `0` 继续往下跑。如果你需要获取底层操作系统的具体错误码和可读诊断文本，可以传入 `hx_os_error` 参数，详见[详细参考：错误状态与分配器](REFERENCE.zh-CN.md#section-6)。
 
-### 10.2 NULL 是不是同一种含义？
+### 10.2 函数参数里的 `NULL` 都是同一个意思吗？
 
-看它所在的参数：分配器/选项位置的 NULL 使用默认行为，输出错误记录位置的 NULL 表示不额外接收详情。必填的对象或输出位置不能随意用 NULL。本教程不要求创建自定义分配器；需要它时再看 context 的详细说明。
+不是，`NULL` 的含义取决于它所在的参数位置：
+- **分配器上下文（`context`）或选项（`options`）参数传 `NULL`**：表示使用默认的全局内存分配器或默认配置参数。
+- **末尾的错误记录（`error`）参数传 `NULL`**：表示调用方只需要 `hx_os_status` 状态码，不需要额外填充详细的 `hx_os_error` 结构。
+- **必填的对象句柄或输出指针**：不能传 `NULL`（传 `NULL` 会返回 `HX_OS_INVALID`）。
 
-### 10.3 为什么 C 要释放，C++ 有时也要关闭？
+### 10.3 为什么 C 对象要手动调用 `destroy`，而 C++ 有时也要显式调用 `closeUntil` / `shutdownUntil`？
 
-C 没有自动析构，所以字符串、文档、容器用完需调用对应释放函数。C++ 的字符串和只读文档可以在离开作用域时释放；线程池等对象可能还有后台工作，使用显式关闭保留超时重试的机会。对象还活着时，不要先释放它借用的数据或卸载它要调用的代码。
+C 语言没有析构函数，因此 `hx_string`、`hx_os_config_document`、容器等对象用完后必须调用对应的 `destroy` 或 `release` 函数归还内存。
 
-### 10.4 中文内容为什么在 Windows 终端显示不对？
+在 C++ 中，像 `hx::String`、`hx::ConfigDocument`、`hx::TypedVariant` 这类纯内存对象会在离开作用域时自动析构释放；但像 `hx::ThreadPool`、`hx::Settings` 这类可能涉及后台工作线程或并发观察者的资源所有者，关闭过程可能会因为等待后台任务而超时（`HX_OS_TIMEOUT`）。显式调用 `shutdownUntil` / `closeUntil` 能让你检查关闭是否真正完成，并在超时后安全地保留对象以便重试。只要资源对象尚未成功关闭，就绝不能提前释放它借用的用户数据或卸载对应的插件代码。
 
-库的路径和字符串采用 UTF-8，文件读取和终端显示是两件事。终端也要按 UTF-8 解码输出字节。这里用 ASCII 输出验证调用流程；中文路径/内容的文件处理仍由库按 UTF-8 适配。库不会为了打印示例擅自修改整个进程的字符编码或 locale。
+### 10.4 为什么在 Windows 终端里打印中文有时会乱码？
 
-### 10.5 关闭了可选模块，为什么示例失败？
+本库内部的所有文件路径与字符串统一采用 UTF-8 编码（在 Windows 下调用系统文件 API 时会自动在内部转换为 UTF-16）。然而，“文件按 UTF-8 正确读入内存”和“终端窗口按什么编码显示标准输出字节”是两件独立的事。如果 Windows 控制台当前代码页仍是本地 ANSI（如活动代码页 936 GBK），直接把 UTF-8 字节写到 `stdout` 就会显示乱码。本库不会在后台擅自修改宿主进程的全局控制台代码页或 `locale`；在 Windows 终端中查看 UTF-8 输出时，可以先执行 `chcp 65001` 或使用默认 UTF-8 的终端环境。
 
-第 2 节的入门配置保留了这些示例所需的模块。JSON 需要 CONFIG，容器需要 CONTAINERS，variant 需要 VARIANT，设置需要 SETTINGS，线程池需要 THREAD_POOL。关闭模块或遇到目标不支持的能力时，接口明确返回不支持，不会用成功伪装。开关、可选解析器、编码依赖和最小嵌入式配置见[构建参考](REFERENCE.zh-CN.md#section-27)。
+### 10.5 为什么关闭某些 CMake 模块开关后，运行示例会报错？
 
-### 10.6 我想使用其他功能
+第 2 节的入门 `CMakeLists.txt` 保留了本教程所有示例所需的模块。如果你额外关闭了核心功能开关（例如解析 JSON 需要 `HX_OS_ENABLE_CONFIG`，容器需要 `HX_OS_ENABLE_CONTAINERS`，`variant` 需要 `HX_OS_ENABLE_VARIANT`，可变设置需要 `HX_OS_ENABLE_SETTINGS`，线程池需要 `HX_OS_ENABLE_THREAD_POOL`），对应接口在调用时会明确返回 `HX_OS_NOT_SUPPORTED`，而不会用空实现伪装成功。完整的模块开关列表、可选第三方解析器与最小嵌入式裁剪配置见[详细参考：构建开关与可选依赖](REFERENCE.zh-CN.md#section-27)。
 
-| 想做什么 | 文档 |
+### 10.6 我想进一步使用其他功能，该看哪篇文档？
+
+| 你想实现的功能 | 推荐阅读的文档 |
 | --- | --- |
-| 日期/文件名、翻译、分词、目录遍历 | [常用工具](COMMON_UTILITIES.zh-CN.md) |
-| 递归查找文件、在线程池里查询 | [文件查询](FILE_SEARCH.zh-CN.md) |
-| 网络、进程、管道、映射、系统指标 | [平台工具](PLATFORM_UTILITIES.zh-CN.md) |
-| 配置 Keepalive、选择组播网卡与查询 IP 地址 | [网络选项与设备发现](NETWORK_OPTIONS.zh-CN.md) |
-| 锁、事件、线程局部存储和资源生命周期 | [基础契约](CONTRACTS.zh-CN.md) |
-| 静态/共享安装后 find_package 接入 | [安装参考](REFERENCE.zh-CN.md#section-5) |
-| 目标平台的要求与限制 | [平台支持](PLATFORMS.zh-CN.md) |
+| 日期与安全文件名生成、多语言翻译表、词法分词、目录遍历 | [常用工具](COMMON_UTILITIES.zh-CN.md) |
+| 按通配符递归查找文件、将查找任务放到线程池执行 | [文件查询](FILE_SEARCH.zh-CN.md) |
+| 套接字网络、子进程输出捕获、管道、内存映射、系统指标查询 | [平台工具](PLATFORM_UTILITIES.zh-CN.md) |
+| 配置 TCP Keepalive、选择组播网卡、枚举本机 IP 地址 | [网络选项与设备发现](NETWORK_OPTIONS.zh-CN.md) |
+| 互斥锁、事件、线程局部存储（TLS）与资源生命周期规则 | [基础契约](CONTRACTS.zh-CN.md) |
+| 静态库 / 动态库打包安装与 `find_package` 工程接入 | [工程接入、安装与链接](REFERENCE.zh-CN.md#section-5) |
+| 各操作系统与编译工具链的版本基线及平台限制 | [平台支持](PLATFORMS.zh-CN.md) |

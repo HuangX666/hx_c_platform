@@ -2,9 +2,15 @@
 
 [简体中文](VARIANT.zh-CN.md) · [Home](../README.md) · [Task tutorial](USAGE.md#variant)
 
-**Start here when one variable must hold different types at different times.** Run the [complete C/C++ tutorial](USAGE.md#variant): store integer 42, then hello, then Point(2, 5). Output is `Integer: 42`, `String: hello` and `Point: 2.0, 5.0`.
+When a C99 or C++11 program needs a single variable that can hold different types at different points in its lifetime—such as an integer now, a UTF-8 string later, and a custom struct after that—or when a `vector`, `queue`, or `map` needs to store heterogeneous elements side by side, use `<hx_variant.h>` (or `<hx/Variant.hpp>` in C++11). Assigning a new value automatically releases the resources owned by the previous value, and reading a value checks the active type tag before touching memory, preventing the type confusion and leaks common with raw `union` or `void *` casts.
 
-The sequence is initialize → set type/value → get the matching type → set another type → destroy. Replacement cleans the old value. Use a trivial descriptor for plain numeric structures; structures owning memory need the copy/cleanup callbacks in section 4 rather than a shallow copy.
+You can build and run the [complete C/C++ tutorial](USAGE.md#variant) or enable `-DHX_OS_BUILD_EXAMPLES=ON` and build the `hx_os_variant` (C99) and `hx_os_cpp_variant` (C++11) targets. Both programs store integer `42`, replace it with `"hello"`, and then replace it with `Point(2, 5)`, producing:
+
+```text
+Integer: 42
+String: hello
+Point: 2.0, 5.0
+```
 
 - [1. What it does](#purpose)
 - [2. Store numbers, strings and a structure in C](#c-start)
@@ -21,38 +27,39 @@ The sequence is initialize → set type/value → get the matching type → set 
 
 ## 1. What it does
 
-`hx_variant` is a value with a type tag. Store `42`, later replace it with `"hello"`, or store your own `point` structure. One object holds one active value; replacement releases the old value. A vector/queue holds multiple elements; a variant lets each element have a different type.
+`hx_variant` is a runtime-tagged value container. A single `hx_variant` instance holds at most one active value at a time: store `42`, replace it with `"hello"`, or store your own `point` struct, and the previous value is cleaned up automatically. While a sequence or map container manages multiple element slots, placing an `hx_variant` in each slot allows every element in the container to carry its own type.
 
-Include `<hx_variant.h>` or the C umbrella `<hx_os.h>`. The C++11 facade is `<hx/Variant.hpp>`. No global initialization, configuration/settings tree, new third-party dependency or C++ runtime is required by the C implementation.
+Include `<hx_variant.h>` (or the C umbrella header `<hx_os.h>`) in C99, or `<hx/Variant.hpp>` in C++11. The module requires no global initialization, no configuration or settings tree, no third-party dependencies, and no C++ runtime when used from C.
 
-| Type | C setter / getter | Behavior |
+| Value kind | C setter / getter (prefix `hx_variant_`) | Storage and ownership semantics |
 | --- | --- | --- |
-| Empty | `hx_variant_clear` / `hx_variant_kind` | Initially empty; clear releases the active value |
-| Boolean | `set_bool` / `get_bool` | C uses int; nonzero input becomes 1 |
-| Signed integers | `set_i32/i64` / `get_i32/i64` | int32_t / int64_t, no implicit conversion |
-| Unsigned integers | `set_u32/u64` / `get_u32/u64` | uint32_t / uint64_t, no implicit conversion |
-| Floating point | `set_float/double` / `get_float/double` | Native values, including NaN/infinity |
-| String | `set_cstr/string` / `get_string_view/string` | Owned UTF-8 bytes; explicit lengths allow NUL |
-| Raw pointer | `set_pointer` / `get_pointer` | Borrowed pointee, never released |
-| Custom structure | `set_custom/emplace_custom` / `get_custom` | Checked identity, aligned storage, custom copy/drop |
+| Empty | `hx_variant_clear` / `hx_variant_kind` | Starts empty after `HX_VARIANT_INIT`; `clear` releases any active value and resets to empty |
+| Boolean | `set_bool` / `get_bool` | Uses `int` in C; any non-zero input is normalized to `1` on write |
+| Signed integers | `set_i32`, `set_i64` / `get_i32`, `get_i64` | Stores exact `int32_t` or `int64_t` values without implicit width conversion |
+| Unsigned integers | `set_u32`, `set_u64` / `get_u32`, `get_u64` | Stores exact `uint32_t` or `uint64_t` values without signed/unsigned coercion |
+| Floating point | `set_float`, `set_double` / `get_float`, `get_double` | Preserves native IEEE floating-point values, including `NaN` and infinities |
+| UTF-8 string | `set_cstr`, `set_string` / `get_string_view`, `get_string` | Deep-copies and owns valid UTF-8 bytes (explicit lengths allow embedded `NUL`) |
+| Raw pointer | `set_pointer` / `get_pointer` | Stores a borrowed `void *` without ever freeing the pointee |
+| Custom structure | `set_custom`, `emplace_custom` / `get_custom`, `get_custom_mut` | Checks descriptor identity, allocates aligned storage, and runs custom `copy`/`drop` callbacks |
 
-Abbreviated entries use the complete `hx_variant_` prefix: `set_i32` is `hx_variant_set_i32`.
+> [!NOTE]
+> All abbreviated names in the table above carry the `hx_variant_` prefix—for example, `set_i32` is `hx_variant_set_i32`.
 
 ```mermaid
 flowchart LR
     A["hx_variant"] --> B{"kind"}
-    B --> C["Inline number / bool / pointer"]
-    B --> D["Owned UTF-8 string"]
-    B --> E["Aligned custom object + type descriptor"]
+    B --> C["Inline scalar: number / bool / borrowed pointer"]
+    B --> D["Owned UTF-8 string buffer"]
+    B --> E["Owned aligned custom object + type descriptor"]
 ```
 
-These are alternative representations. Only the representation selected by kind is active; storing a structure does not keep the former number/string active.
+Only the representation selected by `hx_variant_kind(&value)` is active at any given moment; storing a structure replaces and releases any previously stored string or scalar.
 
 <a id="c-start"></a>
 
 ## 2. Store numbers, strings and a structure in C
 
-Store/display an integer, then replace it with a string, then with a coordinate structure. Save as `main.c` and use the [tutorial's C99 CMake configuration](USAGE.md#c-project). No input files are needed. The built project also supplies the `hx_os_variant` example.
+The complete C99 program below stores and prints an `int32_t`, replaces it with a UTF-8 string, and then replaces it with a `point` coordinate struct. Save it as `main.c` using the [tutorial's C99 CMake configuration](USAGE.md#c-project), or run the built `hx_os_variant` example target directly:
 
 ```c
 #include <hx_variant.h>
@@ -130,46 +137,44 @@ String: hello
 Point: 2.0, 5.0
 ```
 
-1. HX_VARIANT_INIT creates an empty value with the default allocator. Initialize each object exactly once.
-2. set_i32 stores a 32-bit integer; get_i32 checks the active type and copies it into count.
-3. set_cstr copies text and replaces the integer. get_string_view borrows that text; do not release text or keep it beyond its owner.
-4. HX_VARIANT_DEFINE_TRIVIAL_TYPE declares the size/alignment of point. These coordinates have no separately owned members and support a byte copy.
-5. set_custom copies position, so later edits to the source do not change the stored value. get_custom checks the same point_type before lending its object; read it as const point*.
-6. destroy releases the active value. The example also cleans up through its failed branch.
+How the lifecycle works:
+1. **Initialization**: `HX_VARIANT_INIT` initializes an empty variant bound to the default allocator (or call `hx_variant_init(&value, context)` to bind a custom allocator). Initialize each object only once.
+2. **String copy and borrowed view**: `hx_variant_set_cstr` allocates and copies `"hello"`, replacing the integer `42`. `hx_variant_get_string_view` lends a non-owning view (`text`) into that internal buffer—never free `text.data` or use `text` after `value` is overwritten, cleared, or destroyed.
+3. **Trivial struct descriptor**: Because `point` contains only plain `double` fields and owns no external handles or heap pointers, `HX_VARIANT_DEFINE_TRIVIAL_TYPE(point_type, point)` is all that is needed to declare its size and alignment for bytewise copying.
+4. **Custom value storage and lookup**: `hx_variant_set_custom` copies `position` into aligned storage owned by `value`, so later changes to the local `position` variable do not affect the stored copy. `hx_variant_get_custom` verifies that the active descriptor matches `&point_type` before setting `object` to a borrowed `const void *` pointer.
+5. **Cleanup**: `hx_variant_destroy(&value)` releases the active payload on both the normal exit path and the `failed` branch.
 
-Do not independently copy an owning variant by structure assignment. Use copy as described below.
+> [!WARNING]
+> **Never duplicate an owning `hx_variant` with plain struct assignment (`b = a;`)**: A raw C struct copy aliases the internal string or custom-object pointer, causing a double-free when both variables are destroyed. Always use `hx_variant_copy` or `hx_variant_move` (Section 3).
 
 <a id="ownership"></a>
 
 ## 3. Copy, move and read values
 
-| Operation | Success | Failure |
+| Operation | Behavior on success | Behavior on failure |
 | --- | --- | --- |
-| `hx_variant_copy(out, source, error)` | Deep copy using out's context; source unchanged | Previous out preserved |
-| `hx_variant_move(out, source)` | Release out, transfer value/context; source becomes default empty | Valid initialized owners: no failure/allocation |
-| `hx_variant_swap(a, b)` | Exchange value and context | No failure/allocation |
-| `hx_variant_clear(value)` | Release value, retain context | Cannot fail |
-| `hx_variant_destroy(value)` | Release value/context lease, reset to default empty | Cannot fail; repeated destroy allowed |
-| Scalar getters | Copy the numeric value | Output unchanged |
-| get_string_view | Borrow text | Output unchanged |
-| get_string | Copy into the output hx_string's context | Output unchanged |
-| get_custom/get_custom_mut | Borrow the corresponding structure | Output unchanged |
+| `hx_variant_copy(out, source, error)` | Deep-copies `source` using `out`'s allocator context; `source` is unchanged | Previous value of `out` is preserved |
+| `hx_variant_move(out, source)` | Releases `out`'s old value, transfers value and context from `source`, and resets `source` to default empty | Cannot fail between valid initialized objects; zero allocation |
+| `hx_variant_swap(a, b)` | Exchanges both the active values and allocator contexts | Cannot fail; zero allocation |
+| `hx_variant_clear(value)` | Releases the active value while retaining `value`'s allocator context lease | Cannot fail |
+| `hx_variant_destroy(value)` | Releases the active value and context lease, resetting `value` to default empty | Cannot fail; safe to call repeatedly on the same object |
+| Scalar getters (`get_i32`, etc.) | Copies the numeric value into the caller's output variable | Output variable is unchanged |
+| `hx_variant_get_string_view` | Outputs a borrowed `hx_string_view` pointing to the internal buffer | Output variable is unchanged |
+| `hx_variant_get_string` | Deep-copies the string into the caller's initialized `hx_string` | Target `hx_string` is unchanged |
+| `get_custom` / `get_custom_mut` | Outputs a borrowed `const void *` or `void *` to the stored custom object | Output pointer is unchanged |
 
-Copy does not duplicate a string pointer. set_string/set_cstr retain text bytes, so inputs need only survive the call. hx_variant_take_string transfers an existing hx_string on success, empties the source and adds no allocation; its buffer continues to use its original allocator.
-
-Types are exact: get_i64 on an i32 reports TYPE_MISMATCH. There is no silent integer widening or text-to-number parsing. C++ get<T>() follows the same rule. After failure, do not use an output as though written or call result.value().
-
-Strings require strict UTF-8. Invalid input reports INVALID_ENCODING. hx_string_view lengths preserve embedded NUL; set_cstr ends at the first NUL. UTF-8 storage is separate from terminal decoding; this module does not implicitly convert other encodings.
-
-Text views expire on replacement/clear/destroy. Structure pointers expire when that object is released. A variant move or container growth does not relocate separately allocated structure contents, but a pointer to a container's variant element may expire and must be acquired again. Owners cannot form ownership cycles; do not move an outer owner into its own child. Copy/construct/drop callbacks cannot mutate participating values.
+Important ownership and type-checking rules:
+- **Zero-copy string transfer**: While `hx_variant_set_string` and `hx_variant_set_cstr` copy input bytes, `hx_variant_take_string(&value, &str, error)` transfers ownership of an existing `hx_string` directly into `value` without allocating, leaving `str` empty. When `value` is later cleared or destroyed, that buffer is returned to the allocator that originally created `str`.
+- **Exact type matching**: Reading an `int32_t` variant through `hx_variant_get_i64` returns `HX_OS_TYPE_MISMATCH` (C++ `get<T>()` enforces the same rule). There is no silent integer widening or string-to-number coercion. Never read an output variable or call `result.value()` after a failed getter.
+- **Strict UTF-8 and borrow lifetimes**: String setters validate UTF-8 and reject malformed byte sequences with `HX_OS_INVALID_ENCODING` (`hx_string_view` setters preserve embedded `NUL` bytes within the explicit length, whereas `set_cstr` stops at the first `NUL`). Borrowed string views expire when the variant is overwritten, cleared, or destroyed. Because custom structures are stored in their own heap allocation, moving an `hx_variant` or growing a container of `hx_variant` elements does not relocate the custom structure itself—though any pointer to the `hx_variant` element inside a resized `vector` or `deque` must be re-fetched.
 
 <a id="custom"></a>
 
 ## 4. Structures that own resources
 
-A structure containing hx_string, allocated memory or an owned file handle cannot usually be byte-copied: both copies could release the same resource. Supply copy/drop callbacks. Saving/cloning uses copy; replacement/clear/destruction uses drop. Borrowed pointers can be byte-copied if their lifetime remains valid, but the library does not thereby acquire the pointee.
+When a custom struct owns an `hx_string`, heap memory, or an OS handle, a shallow byte copy would cause two instances to free the same resource. For these types, populate an `hx_variant_type` descriptor with `copy` and `drop` callbacks: `hx_variant_set_custom` and `hx_variant_copy` invoke `copy`, while replacement, `clear`, and `destroy` invoke `drop`.
 
-This complete C program stores Alice/18, changes the input to Bob, and still reads Alice from the saved record:
+The complete C99 program below defines `record_copy` and `record_drop` for a `user_record` containing an `hx_string`. It stores `"Alice", 18`, mutates the original `input.name` variable to `"Bob"`, and verifies that the stored variant still holds `"Alice"`:
 
 ```c
 #include <hx_variant.h>
@@ -249,21 +254,21 @@ int main(void)
 
 Expected output: `Record: Alice, 18`.
 
-record_copy receives aligned, uninitialized storage. It initializes/copies name using the destination context, then copies age. If allocation fails, the callback cleans up its partially initialized resources before returning. The library frees only the raw candidate storage and never calls drop on failed construction; the former variant remains unchanged.
-
-record_drop releases the nested name; the library releases the outer allocation, so the callback must not free it again. Drop returns normally. Each successfully constructed object is dropped once. No global registration is needed.
-
-A descriptor's address is its type identity: two identical descriptor contents are still different types. Across C files, declare `extern const hx_variant_type point_type;` in a shared header and define it with the macro in one .c file. Keep the immutable descriptor, callback code and borrowed user state alive until all associated values retire.
-
-For fallible direct construction use hx_variant_emplace_custom(value, type, construct, user, error). Publication follows successful construction. NULL copy with non-NULL drop, or NO_COPY, permits construction/move but rejects set_custom/copy with NOT_SUPPORTED. NULL copy/drop together default to byte copying, so nontrivial types must declare their operations. NO_COPY cannot be combined with copy. Size must be nonzero; alignment is zero or a power of two. Invalid descriptors report INVALID; allocation-size overflow reports RANGE.
+Contract details for custom type descriptors:
+1. **`copy` callback and failure cleanup**: `record_copy` receives aligned, uninitialized storage in `destination`. It initializes and copies nested fields using the supplied destination `context`. If a nested allocation fails, `record_copy` must clean up any fields it already initialized before returning the error status. The library frees the raw outer `destination` block without calling `drop` on failed constructions, leaving the destination `hx_variant`'s previous value intact.
+2. **`drop` callback scope**: `record_drop` releases only the nested resources inside the struct (here, `hx_string_destroy(&record->name)`). The library frees the outer struct allocation itself, so `record_drop` must never call `free(object)`. Every successfully constructed object is dropped exactly once.
+3. **Descriptor address as type identity**: Type identity is determined by the pointer address of `const hx_variant_type *`—two distinct descriptor variables with identical field values are treated as different types (`HX_OS_TYPE_MISMATCH`). To share a type across translation units, declare `extern const hx_variant_type point_type;` in a common header and define it in a single `.c` file. The descriptor, callback code, and borrowed `user` pointer must remain valid until all variants using that descriptor are destroyed.
+4. **In-place construction and move-only types**: Use `hx_variant_emplace_custom(value, type, construct, user, error)` to construct an object directly in aligned variant storage; the previous value of `value` is replaced only after `construct` returns `HX_OS_OK`. Setting `copy = NULL` with `drop != NULL`, or setting the `HX_VARIANT_TYPE_NO_COPY` flag, marks the type as move/construct-only: `emplace_custom` and `hx_variant_move` succeed, whereas `set_custom` and `hx_variant_copy` return `HX_OS_NOT_SUPPORTED` (`HX_VARIANT_TYPE_NO_COPY` cannot be combined with a non-`NULL` `copy` callback). Descriptor `size` must be non-zero and `alignment` must be `0` or a power of two (otherwise `HX_OS_INVALID` is returned; size-calculation overflow returns `HX_OS_RANGE`).
 
 <a id="cpp"></a>
 
 ## 5. Direct C++11 calls and visitors
 
-hx::Variant accepts runtime choices; hx::TypedVariant<Ts...> declares its allowed types and rejects other writes during compilation. This is C++11 without <variant>/C++17. The facade reuses the C implementation, uses no exceptions and never implicitly copies resource owners.
+In C++11, `<hx/Variant.hpp>` provides two exception-free wrapper classes over `hx_variant`:
+- `hx::Variant`: An open variant that can hold any supported scalar, string, or custom C++ type chosen at runtime.
+- `hx::TypedVariant<Ts...>`: A compile-time constrained variant that restricts writes and visits to the listed types `Ts...`, rejecting unlisted types at compile time. Neither class requires C++17 or `<variant>`.
 
-Save this complete program as main.cpp and use the [C++ CMake configuration with exceptions disabled](USAGE.md#cpp-project), or run hx_os_cpp_variant:
+Save the complete program below as `main.cpp` and build it with the [C++ CMake configuration with exceptions disabled](USAGE.md#cpp-project), or run the `hx_os_cpp_variant` target:
 
 ```cpp
 #include <hx/Variant.hpp>
@@ -318,27 +323,30 @@ int main()
 }
 ```
 
-The output matches the C program in section 2. set(Point{2,5}) supplies a descriptor automatically; get<Point>() returns a checked structure reference. StringView is the canonical string alternative: writes own copied bytes, reads borrow a view. Its name does not mean that the variant merely retains the source pointer.
+The output matches Section 2. Calling `value.set(Point{2, 5})` automatically synthesizes the type descriptor for `Point`, and `value.get<Point>()` returns a checked reference wrapper.
 
-| C++ operation | Example |
+> [!TIP]
+> **Why is `hx::StringView` used in the `TypedVariant` parameter list?**
+> In `hx::TypedVariant<..., hx::StringView, ...>`, `hx::StringView` serves as the canonical type tag for the string alternative: `value.set("hello")` still **deep-copies and owns** the UTF-8 string bytes inside the variant, while `value.get<hx::StringView>()` returns a borrowed view without allocating a second copy.
+
+| C++11 operation | Usage |
 | --- | --- |
 | Store integer | `value.set(int32_t(42))` |
 | Store floating point | `value.set(3.5)` |
-| Store string | `value.set("hello")` |
-| Transfer an existing String | Open Variant: `value.takeString(std::move(text))` |
-| Store structure | `value.set(Point{2, 5})` |
-| Construct custom type directly | `value.emplace<MyType>(arguments...)` |
-| Check type | `value.holds<Point>()` |
-| Read | `auto result = value.get<Point>();`, then value() on success |
-| Explicit copy | `auto copied = value.clone(context);` |
+| Store UTF-8 string | `value.set("hello")` |
+| Transfer an existing `hx::String` | `value.takeString(std::move(text))` (on open `hx::Variant`) |
+| Store copyable struct | `value.set(Point{2, 5})` |
+| Construct custom type in place | `value.emplace<MyType>(arguments...)` |
+| Check active type | `value.holds<Point>()` |
+| Read value | `auto result = value.get<Point>();` (check `if (result)` before `result.value()`) |
+| Explicit deep copy | `auto copied = value.clone(context);` (`context` defaults to `NULL`) |
 | Move | `hx::Variant moved(std::move(value));` |
-| Clear | `value.clear()`; destructor releases automatically |
+| Clear / destroy | `value.clear()` (destructor also releases automatically) |
 
-Scalar get returns a copy, StringView a borrowed view, custom get a reference; const owners give const structure references. Borrowing from a temporary variant is prohibited. Native scalar types are bool, int32_t/uint32_t, int64_t/uint64_t, float, double and void*; other C++ types use custom storage. Clone's default NULL context selects the default allocator; pass a custom context explicitly when needed.
-
-Copy construction/destruction must be noexcept, as must direct construction through emplace. Use emplace for resource types without copying; clone reports NOT_SUPPORTED when copying is prohibited. For complex types with recoverable allocation failures, use a C descriptor and native() with explicit errors. Do not pretend std::string or other potentially throwing copies cannot fail. Automatic C++ copy construction does not inject context into arbitrary user classes; their nested resources follow their own policy. Use the C copy callback for destination-context-aware copying.
-
-A visitor chooses the overload matching the active value. Complete C++11 program:
+Key rules for C++ custom types and visitors:
+- **Return types of `get<T>()`**: Scalar types (`bool`, `int32_t`/`uint32_t`, `int64_t`/`uint64_t`, `float`, `double`, `void *`) return a value copy; `hx::StringView` returns a borrowed view; custom structs return a reference (`const` reference on a `const` variant). Borrowing a view or reference from a temporary rvalue variant is rejected at compile time.
+- **`noexcept` and fallible copies**: Custom C++ types passed to `set<T>` or `emplace<T>` must have `noexcept` copy/in-place constructors and destructors. For move-only or non-copyable resource types, construct them in place with `emplace<T>`; calling `clone()` on a variant holding a non-copyable object returns `HX_OS_NOT_SUPPORTED`. If a type performs fallible heap allocations during copying or needs to allocate from the destination `hx_os_context`, register a C `hx_variant_type` descriptor (Section 4) and use `value.native()` rather than wrapping exception-throwing types like `std::string`.
+- **Synchronous `visit`**: A visitor dispatches to the overload matching the active alternative:
 
 ```cpp
 #include <hx/Variant.hpp>
@@ -370,15 +378,15 @@ int main()
 }
 ```
 
-Output: `String: hello`. Visiting is synchronous, stores no callback and allocates no callback state. Return void, hx_os_status or Result<void>. Function-object overloads must be noexcept; C++11 function pointers promise normal return by contract.
-
-TypedVariant visits declared alternatives. Open Variant selects a range with value.visit<int32_t, hx::StringView>(PrintValue{}). No match reports TYPE_MISMATCH. TypedVariant starts empty and becomes empty on clear, even if empty is not listed; add hx::EmptyValue and an overload to visit that state. Lists contain 1..64 unique object types without cv/ref qualifiers. Dispatch checks the list, with O(N) worst-case complexity.
+This prints `String: hello`. Visitor overloads execute synchronously without heap allocation, must be marked `noexcept`, and may return `void`, `hx_os_status`, or `hx::Result<void>`.
+- On `hx::TypedVariant`, `value.visit(visitor)` automatically checks all declared alternatives. On an open `hx::Variant`, specify the candidate list explicitly with `value.visit<int32_t, hx::StringView>(visitor)` (1 to 64 unique, unqualified object types, checked in `O(N)` worst-case time).
+- If the active value does not match any listed type—or if the variant is currently empty and `hx::EmptyValue` is not in the list—`visit` returns `HX_OS_TYPE_MISMATCH`. Include `hx::EmptyValue` in the type list and add an `operator()(hx::EmptyValue) const noexcept` overload when you want the visitor to handle empty variants explicitly.
 
 <a id="containers"></a>
 
 ## 6. Use vector, queue and map
 
-hx_variant_container_options_init provides copy/drop operations for container elements. This complete C program stores an integer and a string and prints `Values: 42, hello`:
+Call `hx_variant_container_options_init(&options, context)` to configure `copy` and `drop` callbacks for [C containers](CONTAINERS.md) (`vector`, `deque`/`queue`, and `map` values). The complete C99 program below pushes an integer `42` and a string `"hello"` into the same `hx_os_vector`, then reads both back and prints `Values: 42, hello`:
 
 ```c
 #include <hx_variant.h>
@@ -439,32 +447,28 @@ int main(void)
 }
 ```
 
-push_back owns independent copies; subsequent edits/destruction of the temporary do not change stored elements. Queue/deque and map values can use the same preset. Sorting, heap and ordered map operations still require application-defined compare/key_compare: there is no unique ordering of unrelated types.
-
-Do not use the POD HX_OS_DECLARE_VECTOR macros for owning variants, or byte-copy hx::Variant objects. C++ users of the C container store hx_variant and pass value.native(), not &value.
-
-A non-NULL pop/erase output transfers ownership; use uninitialized external storage, with no existing context lease/value, and destroy it after successful extraction. NULL output drops the value. Successful _take insertion leaves source bytes untouched; reset to HX_VARIANT_INIT without destroying transferred resources. On failure the source still owns them. Ordinary copy insertion is the easier default.
+Container integration notes:
+- `hx_os_vector_push_back` deep-copies `value`, so reusing or destroying the local `value` variable afterward does not affect stored elements. Sorting, heap operations, and ordered maps still require an application-supplied `compare` or `key_compare` callback because heterogeneous types have no single universal ordering.
+- **Avoid POD container macros and raw C++ wrapper copies**: Never store owning `hx_variant` instances in `HX_OS_DECLARE_VECTOR` POD macros, and never pass a C++ `hx::Variant` object to a raw byte-copy C container API. When calling C container APIs from C++, store `hx_variant` elements and pass `value.native()` rather than `&value`.
+- **Popping and `_take` transfers**: Passing a non-`NULL` destination to `pop` or `erase` transfers ownership into that uninitialized `hx_variant` struct (call `hx_variant_destroy` on it when done); passing `NULL` drops the element immediately. After a successful `_take` insertion (such as `hx_os_sequence_push_back_take`), reset the source struct to `HX_VARIANT_INIT` without calling `hx_variant_destroy` on the transferred payload.
 
 <a id="allocation"></a>
 
 ## 7. Memory, allocators and module selection
 
-| Path | Module costs |
+| Operation path | Allocation and runtime cost |
 | --- | --- |
-| Default empty / scalar get / visit | No allocation, new lock, thread or system call |
-| Scalar set/copy | No allocation; retiring an old owner can invoke allocator/drop |
-| UTF-8 string set | O(bytes) validation/copy; nonempty strings allocate |
-| Custom structure set | One size/alignment allocation plus callback costs |
-| move/swap | No allocation; move releases the former destination |
-| Custom clone | New storage/copy callback, no implicit shared object |
+| Default empty initialization / scalar getter / `visit` | Zero heap allocation; no locks, worker threads, or system calls |
+| Scalar set or copy (`bool`, integers, floats, raw pointers) | Zero heap allocation (retiring a previous string/custom value may free storage) |
+| UTF-8 string set | `O(bytes)` validation and copy; non-empty strings allocate one buffer |
+| Custom struct set | One aligned allocation of `type->size` bytes plus the `copy` callback cost |
+| `hx_variant_move` / `hx_variant_swap` | Zero heap allocation; `move` releases the destination's previous value |
+| Custom struct clone | Allocates independent storage and runs the `copy` callback |
 
-Non-default context retention/release uses existing atomic counters. Allocators/callbacks may have their own locks, allocations or system calls. No global type registry or mutable process configuration is introduced. C++ descriptors use compiler-provided C++11 function-local static initialization.
-
-hx_variant_init(value, context) retains a lease even while empty, so context destruction reports BUSY. Clear keeps that lease; destroy releases it. Copy uses the destination context; move/swap transfer contexts with values. A taken string can retain another allocator, which must remain alive until its resources retire. Allocators must support the threads used and cross-thread release.
-
-Measured MSVC layout: 64-bit hx_variant is 48 bytes, alignment 8, descriptor 48 bytes; 32-bit value is 24 bytes, alignment 8, descriptor 24 bytes. hx::Variant adds no storage. Measure other ABIs with the layout report; these are not universal sizes. Field size sorting alone is not a layout guarantee; packing is not used to weaken alignment.
-
-HX_OS_ENABLE_VARIANT defaults ON. OFF keeps declarations/exports, reports NOT_SUPPORTED for active operations and clears HX_OS_CAP_VARIANT; initialization, kind queries and cleanup remain usable. The embedded minimal profile disables it; re-enable it independently:
+Allocator leases, struct layout, and CMake feature switches:
+- **Context lease lifecycle**: Calling `hx_variant_init(&value, context)` with a non-default `context` acquires a lease on that context immediately—even while `value` is empty—so `hx_os_context_destroy` will return `HX_OS_BUSY`. Calling `hx_variant_clear` releases only the value while keeping the context lease; `hx_variant_destroy` releases both the value and the context lease. `hx_variant_copy` allocates from the destination variant's context, whereas `hx_variant_move` and `hx_variant_swap` transfer the context alongside the value.
+- **Measured ABI sizes**: On Windows MSVC, 64-bit `hx_variant` and `hx_variant_type` are 48 bytes each (8-byte aligned), and 32-bit `hx_variant` and `hx_variant_type` are 24 bytes each (8-byte aligned). `hx::Variant` adds zero bytes of overhead. Consult the generated layout report when targeting other ABIs.
+- **Module trimming (`HX_OS_ENABLE_VARIANT`)**: `HX_OS_ENABLE_VARIANT` defaults to `ON`. When set to `OFF`, public declarations and exports remain present, `HX_OS_CAP_VARIANT` is cleared, active operations return `HX_OS_NOT_SUPPORTED`, and initialization, `hx_variant_kind`, and `hx_variant_destroy` remain safe to call. Because `cmake/minimal.cmake` disables optional modules for small embedded builds, you can re-enable `HX_OS_ENABLE_VARIANT` on its own without enabling `HX_OS_ENABLE_CONFIG`, `HX_OS_ENABLE_SETTINGS`, or `HX_OS_ENABLE_CONTAINERS`:
 
 ```sh
 cmake -S . -B build-variant -C cmake/minimal.cmake \
@@ -474,57 +478,55 @@ cmake --build build-variant --config Release
 build-variant/bin/hx_os_variant
 ```
 
-Windows multi-configuration builds place these programs in the corresponding `bin/Release/` directory with an `.exe` suffix.
+(On multi-configuration generators such as Visual Studio, the binary is placed in `build-variant/bin/Release/hx_os_variant.exe`.)
 
-CONFIG, SETTINGS and CONTAINERS remain disabled here while the value module works. Container integration needs CONTAINERS. Container max_items/max_bytes bound container storage; nested structure/string allocations in copy callbacks are outside max_bytes. Bound value sizes, text lengths and callback resource consumption for untrusted input.
+> [!NOTE]
+> Container integration (`hx_variant_container_options_init`) additionally requires `HX_OS_ENABLE_CONTAINERS=ON`. While a container's `max_items` and `max_bytes` bound the container's own node/array storage, the string buffers and custom struct allocations owned inside each `hx_variant` are outside the container's `max_bytes` counter. Always bound string lengths and custom payload sizes when accepting untrusted input.
 
 <a id="contracts"></a>
 
 ## 8. Errors, threads and plugin lifetimes
 
-Errors use hx_os_status and caller-owned hx_os_error. There is no global last-error or logger dependency. Error outputs are optional. Custom callbacks receive a cleared non-NULL error record; the returned status normalizes error.status and retains native domain/code/cause details.
+All errors are reported through the returned `hx_os_status` and an optional caller-supplied `hx_os_error *error`, with no thread-local last-error state or logger dependency. Custom `copy` and `construct` callbacks receive a cleared, non-`NULL` `hx_os_error` pointer; any non-`HX_OS_OK` status returned by a callback is normalized into `error->status` while preserving native domain, code, and cause fields.
 
-| Status | Meaning |
+| Status code | Meaning and state guarantee |
 | --- | --- |
-| OK | Set, copy or read completed |
-| TYPE_MISMATCH | Wrong active type/custom descriptor |
-| INVALID_ENCODING | Invalid UTF-8 input |
-| INVALID | Invalid mandatory input/descriptor |
-| RANGE | Allocation-size overflow |
-| NO_MEMORY | Object or string allocation failed |
-| NOT_SUPPORTED | Module disabled or type cannot copy |
-| Callback status | Propagated with native detail; replacement failure keeps old value |
+| `HX_OS_OK` | Set, copy, in-place construction, or read completed |
+| `HX_OS_TYPE_MISMATCH` | Active kind or custom descriptor address does not match the requested type |
+| `HX_OS_INVALID_ENCODING` | Input string is not valid UTF-8 |
+| `HX_OS_INVALID` | Required pointer argument is `NULL`, or custom descriptor fields (`size`/`alignment`/`flags`) are invalid |
+| `HX_OS_RANGE` | Integer overflow when computing custom object allocation size or alignment |
+| `HX_OS_NO_MEMORY` | Heap allocation for a string or custom object failed (previous variant value is preserved) |
+| `HX_OS_NOT_SUPPORTED` | `HX_OS_ENABLE_VARIANT` is disabled, or copy was requested on a `HX_VARIANT_TYPE_NO_COPY` type |
+| User callback status | Propagated verbatim with native error details; failed writes/replacements preserve the old value |
 
-There are no waits, deadlines, background workers or automatic I/O. User callbacks can themselves block. Visiting does not change the value, but callback external effects are not rolled back on error. Callbacks return normally without longjmp or mutation of participating values/containers.
-
-No per-value lock is supplied. Serialize mutation/destruction/moves and exclude readers. Concurrent readers can inspect stable values when nested resources, callback state and user data are also safe. Transfer ownership across threads with an existing lock, queue or atomic publication relation; this value is not a synchronization primitive.
-
-Descriptors have fixed layout, are immutable, and borrow user data. Before plugin unloading, retire associated values and exclude in-flight copy/drop/visit. Automatic C++ descriptors work across translation units in the same linked module; do not assume identically named DLL/plugin types match. Use an explicit shared C descriptor, one library instance and an agreed release boundary. Views/references do not extend owners, modules or pointee lifetimes.
+**Concurrency and plugin/DLL lifetime rules:**
+- **Thread safety**: Individual `hx_variant` objects have no internal locks. Concurrent reads are safe while the variant and its nested resources remain immutable; synchronize any mutation, move, or destruction externally against all other readers and writers.
+- **Plugin unloading**: Descriptors have a fixed layout, are immutable once published, and borrow their `user` pointer. Before unloading a plugin or shared library that defines a custom `hx_variant_type` or its callbacks, destroy or clear every `hx_variant` holding that type and ensure no `copy`, `drop`, or `visit` calls remain in flight.
+- **Type identity across DLL boundaries**: Automatic C++ descriptors (`hx::Variant` / `hx::TypedVariant`) share a single function-local static descriptor across translation units linked into the same module. Across separately linked DLLs or plugins, do not rely on identically named C++ structs to merge static addresses—define and export a shared C `hx_variant_type` descriptor from a common library instead.
 
 <a id="comparison"></a>
 
 ## 9. Differences from C++ variant
 
-| Aspect | This library |
-| --- | --- |
-| Language | C99 core, C++11 facade |
-| Alternatives | Runtime descriptors in C/open Variant, compile-time restriction in TypedVariant |
-| Initial state | Empty, no automatic first-alternative construction |
-| Storage | Inline native scalars, owned string bytes, separately allocated custom object |
-| Failure | Explicit status/Result; replacement preserves previous value; no exceptions |
-| Copy | C copy, explicit fallible C++ clone; construction-only types supported |
-| Visit | Synchronous single value, void/status/Result<void>; O(N) type dispatch |
-| Identity | Custom descriptor address, not a name/size match |
-| Persistence | No automatic JSON/config conversion or arbitrary object/pointer serialization |
-
-Standard std::variant is available from C++17, declares alternatives in its template and nests the active object within itself; std::visit has different result/complexity contracts. This library brings the one-active-type, checked-get and type-visitor experience to C99/C++11 under its documented memory/API rules. It is not a drop-in standard implementation. See the primary [variant definition](https://eel.is/c++draft/variant.general) and [visit contract](https://eel.is/c++draft/variant.visit).
+| Aspect | `hx_variant` / `hx::Variant` / `hx::TypedVariant` | C++17 `std::variant` |
+| --- | --- | --- |
+| Language baseline | C99 core implementation + C++11 exception-free facade | Requires C++17 |
+| Set of alternatives | Runtime descriptors in `hx_variant` / `hx::Variant`; compile-time list in `hx::TypedVariant<Ts...>` | Compile-time template parameter list only |
+| Initial state | Always starts empty (`HX_VARIANT_EMPTY`) without constructing a default alternative | Default-constructs the first template alternative (unless `std::monostate` is used) |
+| Storage model | Inline scalars, owned heap UTF-8 strings, separately allocated aligned custom structs | Inline union storage sized to the largest alternative |
+| Failure handling | Explicit `hx_os_status` / `hx::Result<T>`; failed replacement preserves the old value; never `valueless_by_exception` | Reports construction/assignment failures via C++ exceptions |
+| Copying and move-only types | `hx_variant_copy` in C and fallible `clone()` in C++; supports construct/move-only custom types | Copy constructor is deleted if any alternative is non-copyable |
+| Visitor dispatch | Synchronous single-variant visit returning `void`, `hx_os_status`, or `hx::Result<void>`; `O(N)` type check | Multi-variant `std::visit` (see the [variant definition](https://eel.is/c++draft/variant.general) and [visit contract](https://eel.is/c++draft/variant.visit)) |
+| Serialization | In-memory value container only; no automatic JSON/config conversion or pointer serialization | No built-in serialization in the standard library either |
 
 <a id="verification"></a>
 
 ## 10. Usage examples and platform limits
 
-variant/cpp_variant exercise type transitions, exact types, UTF-8/NUL, aliasing inputs, cross-translation-unit identities, deep copies, move/swap, over-alignment, construction-only types, native error propagation, allocation-failure preservation, destructor counts and context cleanup. Container cases cover stable object addresses on growth, ownership extraction and failed-copy cleanup. Disabled-module tests check NOT_SUPPORTED and unchanged outputs. C++ tests reject exception-enabled compilation.
+Configure with `-DHX_OS_BUILD_EXAMPLES=ON` to build and run the public example and benchmark targets:
+- `hx_os_variant`: Complete C99 walkthrough covering scalars, strings, trivial structs, resource-owning structs, and container integration.
+- `hx_os_cpp_variant`: Complete C++11 walkthrough covering `hx::Variant`, `hx::TypedVariant`, and `visit`.
+- `hx_os_portable_baseline`: Includes timing observations for integer and struct `set`/`get` operations; see the [Android baseline](ANDROID.md) and [build reference](REFERENCE.md#section-30) for benchmark commands.
 
-See [platform support](PLATFORMS.md) for target build/deployment requirements and limits. Public examples are independent of private maintainer regressions.
-
-portable_baseline adds integer set/get and ordinary structure set/get timing observations without pass thresholds or claims of a speed ratio against std::variant. Commands are in the [Android baseline](ANDROID.md) and [build reference](REFERENCE.md#section-30). macOS, Win7, Android 5.0, physical ARM boards and other libc targets still need their corresponding environments.
+See [platform support](PLATFORMS.md) for compiler baselines, target OS requirements, and deployment details.

@@ -2,23 +2,35 @@
 
 [简体中文](RING.zh-CN.md) · [ByteQueue](BYTE_QUEUE.md) · [README](../README.md)
 
-**Start with a complete program.** Use a fixed ring when you already have storage and want to fill its free regions directly.
+When you already have a fixed-size byte array (on the stack, in static storage, or in a pre-allocated memory pool) and want to reuse that buffer circularly with **zero heap allocation**—or borrow its two contiguous free/readable segments (spans) directly so producers and parsers can work in place without an intermediate buffer copy—use `hx_os_ring` (or `hx::Ring` in `<hx/Ring.hpp>` for C++11).
 
-Open [byte_queue_ring.c](../examples/byte_queue_ring.c). `example_ring` initializes eight bytes → writes abcdef → consumes abcd → fills two free spans with x → `commit` → borrows read spans → `consume`.
+To see how it works, open [byte_queue_ring.c](../examples/byte_queue_ring.c): `example_ring` initializes a ring over an 8-byte array, writes `"abcdef"`, consumes `"abcd"` (leaving `"ef"` near the end of the array), borrows the two remaining free spans across the wrap-around boundary to fill them with `'x'`, commits those writes with `hx_os_ring_commit`, and then borrows and consumes the readable spans.
 
-Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_byte_queue_ring`. This program needs no arguments or input files.
+Follow the [example run instructions](../examples/README.md#run) to configure with `-DHX_OS_BUILD_EXAMPLES=ON` and build `hx_os_byte_queue_ring` (no arguments or input files are required). The second output line comes from the fixed ring:
 
-**Expected result:** The ring section prints `Ring: efxxxxxx`. Concatenating the spans gives the logical sequence. New bytes become readable after commit; consume makes their space reusable.
+```text
+ByteQueue: 5 bytes: hello
+Ring: efxxxxxx
+```
 
-Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+You can also use the example source as `main.c` in the [minimal project](USAGE.md#c-project).
 
 ## 1. Choose the storage model
 
-`hx_os_ring` uses an array supplied by the caller. Both the ring object and its bytes can live on the stack or in static storage. It never allocates, grows, overwrites unread bytes, starts a thread, or waits for data. It uses the `HX_OS_ENABLE_CONTAINERS` build switch; disabled status-returning operations report `HX_OS_NOT_SUPPORTED`.
+`hx_os_ring` operates entirely on a byte array supplied by the caller. Both the `hx_os_ring` struct and its backing array can live on the stack or in static storage: the ring never allocates heap memory, grows, overwrites unread bytes, spawns worker threads, or blocks waiting for data. It shares the `HX_OS_ENABLE_CONTAINERS` CMake switch; when disabled, status-returning calls report `HX_OS_NOT_SUPPORTED`.
 
-Use `hx_os_byte_queue` when growable storage and copied input/output are convenient. Use this fixed ring for a known memory budget or direct access to its two segments. Neither provides concurrent access: a lock must protect the complete operation or borrow when sharing across threads. A ring without an internal mutex is not a lock-free concurrent queue.
+| Aspect | `hx_os_ring` (Fixed byte ring) | `hx_os_byte_queue` ([Growable byte queue](BYTE_QUEUE.md)) |
+| --- | --- | --- |
+| Memory backing | Borrows a caller-supplied fixed array; zero heap allocation | Managed by the container allocator; grows on demand up to a limit |
+| Access style | Copied reads/writes + **direct two-span borrow and commit/consume** | Exact copied reads/writes, peeks, and `read_some`/`write_some` (no raw span borrows because growth can relocate storage) |
+| Best fit | Fixed memory budgets, zero-allocation embedded paths, in-place packet assembly or parsing | Variable burst sizes where automatic buffer growth is preferred |
+
+> [!IMPORTANT]
+> Neither `hx_os_ring` nor `hx_os_byte_queue` is thread-safe on its own (having no internal mutex does not make it a lock-free concurrent queue). When sharing a ring across threads, protect each complete operation—or the entire borrow window from `write_spans`/`read_spans` through `commit`/`consume`—with an external mutex.
 
 ## 2. Ordinary reads and writes
+
+For copied reads and writes, include `<hx_ring.h>` and call `hx_os_ring_init`, `hx_os_ring_write`, and `hx_os_ring_read`:
 
 ```c
 #include <hx_ring.h>
@@ -43,21 +55,23 @@ int main(void)
 }
 ```
 
-This prints `hello`. No destruction call is needed. Keep `storage` alive while the ring or any borrowed segment uses it. An initialized live C ring must not be copied or have its fields edited. Reinitialization discards data and is allowed only after all operations and borrows finish; initialization accepts an uninitialized object and cannot inspect its old state.
+This prints `hello`, and no destruction call is required.
+- **Backing array lifetime**: Keep `storage` alive for as long as `ring` or any borrowed span uses it. Never copy an initialized `hx_os_ring` struct by value or edit its fields directly. Reinitializing an existing `hx_os_ring` with `hx_os_ring_init` discards queued data and is valid only when no operation or span borrow is active.
+- **Capacity queries and reset**: `hx_os_ring_size(&ring)` returns the number of queued readable bytes, `hx_os_ring_capacity(&ring)` returns the exact backing array length, and `hx_os_ring_space(&ring)` returns `capacity - size`. `hx_os_ring_clear(&ring, error)` discards queued bytes while keeping the backing array attached. A zero-capacity ring is valid and accepts zero-byte copies.
 
-`size()` counts queued bytes, `capacity()` is the exact array length, and `space()` is their difference. `clear()` discards queued bytes while keeping the array. The object adds metadata outside this array. A zero-length ring is valid; it accepts zero-byte copies but cannot hold data.
-
-| Operation | Insufficient data/space | Effect on failure |
+| Operation | Insufficient space or data | Effect on failure |
 | --- | --- | --- |
-| `hx_os_ring_write` | `HX_OS_OUTPUT_FULL` | No queued bytes change |
-| `hx_os_ring_read` | `HX_OS_NEED_INPUT` | Queue and destination remain unchanged |
-| `hx_os_ring_read(..., NULL, bytes, ...)` | `HX_OS_NEED_INPUT` | Discards exactly `bytes` only on success |
+| `hx_os_ring_write(&ring, data, bytes, error)` | `HX_OS_OUTPUT_FULL` (free space `< bytes`) | Queued bytes remain unchanged; no partial write |
+| `hx_os_ring_read(&ring, out, bytes, error)` | `HX_OS_NEED_INPUT` (queued bytes `< bytes`) | Both the ring and `out` buffer remain unchanged |
+| `hx_os_ring_read(&ring, NULL, bytes, error)` | `HX_OS_NEED_INPUT` (queued bytes `< bytes`) | Discards exactly `bytes` only when enough data is present |
 
-Ordinary copy buffers must not overlap the ring object or its backing array. There is no EOF or producer-close state. All sizes are byte counts, independent of text encoding.
+Source and destination buffers passed to `hx_os_ring_write` and `hx_os_ring_read` must not overlap the `hx_os_ring` struct or its backing `storage` array.
 
 ## 3. Borrow two segments without an intermediate copy
 
-When data wraps around the array end, logical bytes occupy two segments. The first segment comes before the second in stream order. Borrowing exposes both at once; unused second segments are `{NULL, 0}`.
+When queued data or free space wraps around the end of the backing array, the logical sequence occupies at most two contiguous physical segments: `parts[0]` at the tail of the array followed in stream order by `parts[1]` at the front of the array (if no wrap-around occurs, `parts[1]` is `{NULL, 0}`).
+
+Borrowing exposes both segments at once so you can format bytes directly into free space or run a parser directly over readable bytes without copying through an intermediate scratch buffer:
 
 ```c
 hx_os_ring_write_span parts[2];
@@ -70,22 +84,24 @@ if (status == HX_OS_OK) {
 }
 ```
 
-The matching read side is `hx_os_ring_read_spans()` followed by `hx_os_ring_consume()`. A parser can inspect the borrowed segments and consume only the recognized prefix. `commit()` publishes only the prefix that the caller actually initialized; the remaining space stays free. This removes an intermediate buffer copy, not every copy performed by the operating system or application.
+The read side works symmetrically: call `hx_os_ring_read_spans(&ring, parts, error)` to inspect `parts[0]` and `parts[1]`, and then call `hx_os_ring_consume(&ring, bytes, error)` to advance the read cursor by the number of bytes your parser actually consumed. Similarly, `hx_os_ring_commit(&ring, bytes, error)` publishes only the prefix that the caller initialized, leaving the remaining space free.
 
-Important lifetime rules:
-
-- At most one borrow exists, of either direction. Other borrows, copied reads/writes and `clear()` return `HX_OS_BUSY` until it ends.
-- `commit(0)` or `consume(0)` explicitly abandons the matching borrow without changing the byte count.
-- Successful commit/consume invalidates both segments, even when only part was committed/consumed. Acquire fresh segments for further work.
-- A count above the offered size returns `HX_OS_RANGE` and retains the borrow for retry. Using the wrong completion direction returns `HX_OS_INVALID` and also retains it.
-- An empty read borrow returns `HX_OS_NEED_INPUT`; a full write borrow returns `HX_OS_OUTPUT_FULL`. These failures do not create a borrow.
-- Release every borrow before clearing, reinitializing or ending the ring/storage lifetime. No function or destructor commits data automatically.
+> [!WARNING]
+> **Span borrow lifetime and state-machine rules:**
+> 1. **One active borrow at a time**: At most one read borrow or write borrow may be active on a ring. Attempting another borrow, a copied read/write, or `clear()` while a borrow is open returns `HX_OS_BUSY`.
+> 2. **Abandoning a borrow**: Calling `commit(0)` or `consume(0)` ends the matching borrow cleanly without changing the queued byte count.
+> 3. **Spans expire on commit/consume**: A successful `commit` or `consume` invalidates both `parts[0]` and `parts[1]` immediately, even if only part of the offered span was committed or consumed. Call `write_spans` or `read_spans` again for subsequent work.
+> 4. **Recoverable range/direction errors**: Passing a byte count larger than the offered span total returns `HX_OS_RANGE`, and calling `commit` on a read borrow (or `consume` on a write borrow) returns `HX_OS_INVALID`. Both errors keep the active borrow open so the caller can retry with valid arguments.
+> 5. **Empty or full borrow attempts**: Calling `read_spans` on an empty ring returns `HX_OS_NEED_INPUT`, and calling `write_spans` on a full ring returns `HX_OS_OUTPUT_FULL`; neither failure opens a borrow.
+> 6. **No implicit commit**: Always complete or abandon any active borrow before clearing, reinitializing, or ending the lifetime of the ring or its backing array; destructors never commit unacknowledged bytes automatically.
 
 ## 4. C++11 and complete example
 
-`<hx/Ring.hpp>` provides `hx::Ring::create(storage, bytes)`, `write()`, `read()`, `discard()`, `clear()` and capacity queries. Operations return `hx::Result`. `readSpans()` and `writeSpans()` return an object whose `parts[0]` and `parts[1]` hold the two segments; call `consume()` or `commit()` explicitly. The wrapper borrows storage and is move-constructible, not copyable or assignable. Moving transfers a pending borrow to the new object; the moved-from object is empty. Destruction does not commit or release caller storage.
+`<hx/Ring.hpp>` provides `hx::Ring::create(storage, bytes)` along with `write()`, `read()`, `discard()`, `clear()`, `size()`, `capacity()`, and `space()`, returning `hx::Result<T>`.
+- `readSpans()` and `writeSpans()` return a two-segment struct (`parts[0]` and `parts[1]`); call `consume(bytes)` or `commit(bytes)` explicitly when done.
+- `hx::Ring` borrows the caller's array and is move-constructible (moving transfers any open borrow to the destination object and leaves the moved-from wrapper empty) but non-copyable. Its destructor neither commits pending writes nor frees the caller's backing storage.
 
-Build `hx_os_byte_queue_ring` with examples enabled to run the complete [C example](../examples/byte_queue_ring.c). It shows growable ByteQueue reads and a fixed ring spanning the array boundary. Expected output:
+Build and run `hx_os_byte_queue_ring` with `-DHX_OS_BUILD_EXAMPLES=ON` to execute the complete [C example](../examples/byte_queue_ring.c):
 
 ```text
 ByteQueue: 5 bytes: hello

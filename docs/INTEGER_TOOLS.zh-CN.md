@@ -2,19 +2,25 @@
 
 [English](INTEGER_TOOLS.md) · [首页](../README.zh-CN.md)
 
-**先运行一个完整例子。** 协议希望小整数占用较少字节，或记录需要带时间信息的 UUID 时，分别使用 Varint／ZigZag 和 UUID v7。
+当二进制协议或持久化格式需要将小整数压缩为更少的字节（Varint 与有符号 ZigZag 编码），或者业务记录需要生成带有毫秒时间戳前缀的有序唯一标识符（UUID v7）与规范化解析时，可以使用 `<hx_os_varint.h>` 与 `<hx_os_random.h>`（均已包含在总头文件 `<hx_os.h>` 中）。
 
-打开 [integer_tools.c](../examples/integer_tools.c)。varint_encode 300 → decode → zigzag_encode -1 → uuid_v7_generate_string → destroy 字符串。
+完整可运行的示例位于 [integer_tools.c](../examples/integer_tools.c)：程序先调用 `hx_os_varint_encode` 将整数 `300` 编码为 2 个字节并用 `hx_os_varint_decode` 解回，再用 `hx_os_zigzag_encode` 将有符号负数 `-1` 映射为无符号小整数 `1`，最后调用 `hx_os_uuid_v7_generate_string` 生成并打印一个带当前时间戳的 UUID v7 字符串。
 
-按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_integer_tools`。此例无命令行参数、无需输入文件。
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 `-DHX_OS_BUILD_EXAMPLES=ON` 并只构建 `hx_os_integer_tools` 目标即可直接运行（无需命令行参数或输入文件）。运行后前两行固定输出如下（第三行的 UUID 每次运行都会变化）：
 
-**会得到什么：**前两行是 `300 uses 2 bytes; decoded: 300`、`ZigZag -1: 1`；UUID 每次变化。Varint 解码返回消费字节数，不能把整段缓冲都当成一个整数。
+```text
+300 uses 2 bytes; decoded: 300
+ZigZag -1: 1
+018f... (UUID v7)
+```
 
-下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+你也可以参照[最小工程配置](USAGE.zh-CN.md#c-project)将该示例源码作为自己工程的 `main.c`。
 
 ## 1. 紧凑整数编码
 
-包含 `hx_os.h` 或 `hx_os_varint.h` 即可使用。缓冲区接口无需初始化或可选依赖。Varint 使用最短的 base-128 表示，把无符号 64 位整数编码为 1—10 字节。例如 `300` 编码为 `ac 02`。ZigZag 将有符号值映射为无符号值：`0 → 0`、`-1 → 1`、`1 → 2`、`-2 → 3`。这是整数编码工具，不是完整的 Protocol Buffers 实现。
+包含 `<hx_os_varint.h>`（或 `<hx_os.h>`）即可使用内存缓冲区上的 Varint 与 ZigZag 工具，无需全局初始化或可选第三方依赖：
+- **Varint（无符号变长编码）**：采用最短的 Base-128 表示，将 `uint64_t` 编码为 `1..10` 个字节（例如 `300` 编码为 2 字节 `0xac 0x02`）。
+- **ZigZag（有符号映射）**：由于普通补码负数的高位全为 `1`，直接按无符号 Varint 编码会固定占满 10 字节；`hx_os_zigzag_encode` / `hx_os_zigzag_decode` 将小绝对值的有符号整数交错映射为无符号小整数（`0 → 0`、`-1 → 1`、`1 → 2`、`-2 → 3`），从而让正负小整数都能紧凑编码。
 
 ```c
 unsigned char data[10];
@@ -27,9 +33,12 @@ if (status == HX_OS_OK)
 	status = hx_os_varint_decode(data, written, &value, &consumed, NULL);
 ```
 
-检查 `status` 成功后再使用 `value`。编码容量不足时返回 `OUTPUT_FULL`，通过 written 返回所需大小，缓冲区不变。解码失败保留原 value，consumed 为零。输入不完整返回 `TRUNCATED_INPUT`，溢出返回 `RANGE`，不是最短表示返回 `SYNTAX`。一个完整整数之后的字节不会被消费。输出字段不能与字节区域或彼此重叠。
+> [!IMPORTANT]
+> **编解码状态码与流式边界：**
+> - **缓冲区编码（`hx_os_varint_encode`）**：若目标缓冲区容量不足，函数返回 `HX_OS_OUTPUT_FULL`，通过 `*written` 告知实际需要的字节数，且保持目标缓冲区内容不变。
+> - **缓冲区解码（`hx_os_varint_decode`）**：解码成功后通过 `*consumed` 返回本次整数实际占用的字节数（紧随其后的后续字段字节不会被消费）。若输入在整数结束前截断则返回 `HX_OS_TRUNCATED_INPUT`；若数值超出 `uint64_t` 范围返回 `HX_OS_RANGE`；若存在冗余的前导高零字节（非最短规范表示）则返回 `HX_OS_SYNTAX`。解码失败时 `*value` 保持原值且 `*consumed` 置为 `0`。输出指针与输入数据区不得重叠。
 
-已有读写流新增 `hx_os_stream_read_varuint/write_varuint`，以及使用 ZigZag 的有符号 `read_varint/write_varint`，需要开启 STREAM。读取失败保留原数值，但可能已经消费部分字段；字段内 EOF 返回截断错误。写入报告实际完成字节数。部分 I/O 后不能直接重试整个字段，需要先处理流的当前位置。
+此外，当开启 `HX_OS_ENABLE_STREAM=ON` 时，读写流（`hx_os_stream` / C++ `hx::Stream`）还直接提供流式变长整数接口 `hx_os_stream_read_varuint` / `write_varuint` 以及内置 ZigZag 转换的有符号版本 `hx_os_stream_read_varint` / `write_varint`：
 
 ```cpp
 auto stream = hx::Stream::memory();
@@ -44,11 +53,17 @@ if (!number)
 	return 1;
 ```
 
+注意在流上调用 `read_varuint` / `read_varint` 若中途遇到 `EOF` 或非法字节，函数会保留调用方输出变量不变并返回 `HX_OS_TRUNCATED_INPUT` 等错误，但此时底层流可能已经消费了该字段的前面几个字节——重试前需先定位或恢复流偏移，不能直接在原位置盲目重读。
+
 ## 2. 解析或创建 UUID
 
-`hx_os_uuid_parse` 接受恰好 36 字节的 `8-4-4-4-12` 文本，十六进制大小写均可。接受所有版本／variant 和全零 UUID；拒绝花括号、前缀和空白。失败保留原有 16 字节输出。`hx_os_uuid_format` 写入小写规范文本，需要 37 字节，包含 NUL。
-
-`hx_os_uuid_v7_generate_string(&id, &error)` 直接写入已初始化的 `hx_string`。二进制 ID 使用 `hx_os_uuid_v7_generate`；`generate_at` 接受显式 Unix 毫秒时间，方便受控时钟。`hx_os_uuid_v7_time` 提取时间，遇到其他版本或 variant 会明确失败。
+- **规范化解析与格式化（`hx_os_uuid_parse` / `hx_os_uuid_format`）**：
+  - `hx_os_uuid_parse` 严格接受长度为 36 字节的 `8-4-4-4-12` 十六进制文本（大小写字母均可，支持任意 UUID 版本、变体及全零 Nil UUID），拒绝带花括号 `{...}`、`urn:uuid:` 前缀或首尾空白字符的输入；解析失败时保持调用方的 16 字节输出数组不变。
+  - `hx_os_uuid_format` 将 16 字节二进制 UUID 格式化为规范的小写 36 字符文本加结尾 `NUL`（目标缓冲区至少需 37 字节）。
+- **生成带时间戳的 UUID v7**：
+  - `hx_os_uuid_v7_generate_string(&id, &error)` 直接将新生成的 UUID v7 文本写入已初始化的 `hx_string`。
+  - 如需 16 字节二进制表示，可调用 `hx_os_uuid_v7_generate`（使用当前系统墙上时钟）或 `hx_os_uuid_v7_generate_at`（显式传入 48 位 Unix 毫秒时间戳，便于测试或受控时钟环境）。
+  - `hx_os_uuid_v7_time` 可从二进制 UUID v7 中提取出 48 位 Unix 毫秒时间戳；若传入的 UUID 不是版本 7 或不符合 RFC 变体标记，会明确返回错误。
 
 ```c
 hx_string id = HX_STRING_INIT;
@@ -60,8 +75,19 @@ if (status == HX_OS_OK)
 hx_string_destroy(&id);
 ```
 
-UUID v7 需要 RANDOM，复用已有的操作系统安全随机源。时间字段限制为 48 位。生成器没有全局状态：同一毫秒内不保证生成顺序，墙上时钟可能回拨，唯一性属于概率保证，不能用它确定跨设备的严格业务顺序。已有 UUID v4 行为保持原契约。C++11 提供 `hx::Random::uuidV7`、`parseUuid`、`uuidV7Time`，使用 Result 返回结果。
+> [!NOTE]
+> 生成 UUID v7 需要开启 `HX_OS_ENABLE_RANDOM=ON`，底层复用操作系统的密码学安全随机源填充随机位。生成器本身是无状态的：同一毫秒内多次生成的 UUID v7 随机位相互独立（不维护全局单调递增计数器），且系统墙上时钟可能因 NTP 校时发生回拨，因此不要将其作为跨机器严格全序的事务序列号。原有的随机 UUID v4 接口行为保持不变。在 C++11 中可使用 `<hx/Random.hpp>` 提供的 `hx::Random::uuidV7()`、`parseUuid()` 和 `uuidV7Time()`。
 
 ## 3. 运行示例
 
-复用已开启 `HX_OS_BUILD_EXAMPLES=ON` 的构建目录，构建 `--target hx_os_integer_tools`，运行 `bin/hx_os_integer_tools`；Visual Studio Debug 对应 `bin/Debug/hx_os_integer_tools.exe`。前两行输出 `300 uses 2 bytes; decoded: 300` 和 `ZigZag -1: 1`，最后的 UUID 每次不同。源码：[integer_tools.c](../examples/integer_tools.c)。
+在已开启 `HX_OS_BUILD_EXAMPLES=ON` 的构建目录中构建并运行 `hx_os_integer_tools`（源码见 [integer_tools.c](../examples/integer_tools.c)）：
+
+```sh
+cmake --build build --config Release --target hx_os_integer_tools
+# Linux / macOS：
+./build/bin/hx_os_integer_tools
+# Windows / Visual Studio：
+./build/bin/Release/hx_os_integer_tools.exe
+```
+
+前两行固定输出 `300 uses 2 bytes; decoded: 300` 和 `ZigZag -1: 1`，第三行输出每次新生成的 UUID v7 字符串。

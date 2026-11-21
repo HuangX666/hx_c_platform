@@ -2,43 +2,47 @@
 
 [English](COMMON_UTILITIES.md) · [返回首页](../README.zh-CN.md)
 
-**先运行一个完整例子。** 需要拆分文字、按名字调用一段处理逻辑，或精确换算时间单位时，先用这个小程序观察每个结果。
+在日常开发中，像去空白与字符串切分、128 位精确乘除换算（`a * b / c`）、按名称注册并调用模块内过程（Procedure）、加载多语言翻译词条、生成安全的时间戳文件名以及单层目录遍历等高频任务，都可以通过本库提供的单函数直接入口完成，而把高级内存预算与扩展控制留在 `_ex` 重载中。C99 核心接口与可选的 C++11 封装共用同一份底层实现，不引入任何额外第三方依赖。
 
-打开 [common_tasks.c](../examples/common_tasks.c)。trim／split → muldiv_u64 换算帧间隔 → 注册并调用 twice → 读取参数包 output → repeat 执行两次 tick → 释放。
+完整可运行的综合示例位于 [common_tasks.c](../examples/common_tasks.c)：程序先对字符串执行原地 ASCII 去空白与逗号切分（`hx_string_trim_ascii_in_place` + `hx_string_split`），接着用 `hx_os_muldiv_u64` 将 `1001 / 30000` 秒帧率精确换算为纳秒帧间隔，随后注册并按名字调用 `twice` 过程读取返回参数，最后用 `hx_os_repeat` 在当前线程执行两次周期回调并释放全部资源。
 
-按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_common_tasks`。此例无命令行参数、无需输入文件。
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 `-DHX_OS_BUILD_EXAMPLES=ON` 并构建 `hx_os_common_tasks` 目标即可直接运行（无需命令行参数或输入文件）。在默认全模块配置下，预期输出包含：
 
-**会得到什么：**完整模块配置下会看到 `pieces: 3`、`frame interval: 33366667 ns`、`procedure result: 42` 和两次 tick。命名过程在当前线程调用，不是远程 RPC。
+```text
+pieces: 3
+frame interval: 33366667 ns
+procedure result: 42
+```
 
-下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
-
-这批接口沿用 OBS 的思路：常见动作由一个入口完成，复杂控制留在扩展入口。实现独立于 OBS，没有复制 OBS 源码或增加第三方依赖。C99 与 C++11 使用同一份平台实现；旧公共结构体布局和既有函数保持不变。
+（以及两次周期 `tick` 输出。）你也可以参照[最小工程配置](USAGE.zh-CN.md#c-project)将该示例源码作为自己工程的 `main.c`。
 
 ## 从要完成的动作选择入口
 
-| 动作 | C99 | C++11 |
+| 常见开发任务 | C99 接口 | C++11 接口 |
 | --- | --- | --- |
-| 原地 ASCII 处理、替换、分割、拼接 | hx_string_trim_ascii_in_place / lower_ascii_in_place / replace_all / split / join | hx::String 原地处理；hx::Strings 副本 |
-| 读取指定编码并转为 UTF-8 | hx_os_file_read_text_encoded | hx::Files::readText(path, encoding) |
-| 得到应用配置文件路径 | hx_os_path_config_file | hx::Paths::configFile |
-| 加载翻译并覆盖部分词条 | hx_os_text_lookup_load / add_file / add_text | hx::TextLookup::load / addFile / addText |
-| 精确计算 a×b÷c | hx_os_muldiv_u64 | hx::Wide::multiplyDivide |
-| 按名称调用一个过程 | hx_os_proc_register / call | hx::ProcedureHandler::add / call |
-| 生成合法的时间文件名 | hx_os_filename_generate / format_string | hx::Calendar::filename |
-| 显式选择睡眠加短暂自旋 | hx_os_sleep_until_precise / _ex | hx::Wait::precise |
-| 在当前线程执行有限次周期动作 | hx_os_repeat / repeat_until | hx::Wait::repeat |
-| 分词并取得位置或解码后的字符串 | hx_os_lexer_next / hx_os_token_string | hx::Lexer / hx::Token::value |
-| 类型化 POD 容器 | HX_OS_DECLARE_VECTOR / HX_OS_DECLARE_QUEUE | 原有 C 容器接口，或标准 C++ 容器 |
-| 关闭并释放线程池 | hx_os_thread_pool_shutdown / _ex | hx::ThreadPool::shutdownUntil |
-| 指定线程数和队列容量 | 既有 pool options | hx::ThreadPool::withThreads |
+| 原地 ASCII 去空白／大小写转换、替换、分割、拼接 | `hx_string_trim_ascii_in_place` / `lower_ascii_in_place` / `replace_all` / `split` / `join` | `hx::String` 原地方法；`hx::Strings` 返回新副本 |
+| 按指定编码读取文本文件并转为 UTF-8 | `hx_os_file_read_text_encoded` | `hx::Files::readText(path, encoding)` |
+| 拼接应用配置文件路径 | `hx_os_path_config_file` | `hx::Paths::configFile` |
+| 加载多语言翻译表并叠加覆盖词条 | `hx_os_text_lookup_load` / `add_file` / `add_text` | `hx::TextLookup::load` / `addFile` / `addText` |
+| 128 位中间精度计算 `a × b ÷ c` | `hx_os_muldiv_u64` | `hx::Wide::multiplyDivide` |
+| 按名称注册并同步调用过程 | `hx_os_proc_register` / `hx_os_proc_call` | `hx::ProcedureHandler::add` / `call` |
+| 生成跨平台合法的 UTC／本地时间文件名 | `hx_os_filename_generate` / `format_string` | `hx::Calendar::filename` / `localFilename` |
+| 睡眠至截止时间前再短暂自旋等待 | `hx_os_sleep_until_precise` / `_ex` | `hx::Wait::precise` |
+| 在当前线程同步执行有限次周期动作 | `hx_os_repeat` / `hx_os_repeat_until` | `hx::Wait::repeat` |
+| 词法分词并获取位置或转义解码后的文本 | `hx_os_lexer_next` / `hx_os_token_string` | `hx::Lexer` / `hx::Token::value` |
+| 声明类型化 POD 容器包装 | `HX_OS_DECLARE_VECTOR` / `HX_OS_DECLARE_QUEUE` | 原有 C 容器接口，或标准 C++ 容器 |
+| 一步关闭并释放线程池 | `hx_os_thread_pool_shutdown` / `_ex` | `hx::ThreadPool::shutdownUntil` |
+| 按指定线程数和队列容量创建线程池 | 既有 `hx_os_thread_pool_options` | `hx::ThreadPool::withThreads` |
 
-可编译示例：[direct_calls.cpp](../examples/direct_calls.cpp)、[settings.c](../examples/settings.c)、[common_tasks.c](../examples/common_tasks.c)、[thread_pool.cpp](../examples/thread_pool.cpp)。
+配套可编译示例：[direct_calls.cpp](../examples/direct_calls.cpp)、[settings.c](../examples/settings.c)、[common_tasks.c](../examples/common_tasks.c)、[thread_pool.cpp](../examples/thread_pool.cpp)。
 
 ## 字符串与编码
 
-反复拼接文字时，可以复用同一个 `hx_string`：`hx_string_clear()` 清空内容但保留容量，`hx_string_destroy()` 才释放缓冲；知道大致长度时，可先 reserve 一次。已有字节长度就用 `hx_string_view` 配合 `hx_string_append()`；只有以 NUL 结尾的字符串时，直接用 `hx_string_append_cstr()`，它会先计算长度。尾部追加会省去已有尾部的搬移。两种写法仍会校验 UTF-8、在失败时保留原字符串，并支持借用字符串自身的内容，即使需要扩容也可以。view 可以包含内嵌 NUL；处理这种数据时应查看字节长度或使用 `fwrite()`，不能用 `puts()` 判断全部内容。
+在循环中反复组装文本时，建议复用同一个 `hx_string` 实例：调用 `hx_string_clear()` 只清空内容而保留已分配容量，直到最后调用 `hx_string_destroy()` 才真正释放堆缓冲区；如果提前知道大致长度，可以先调用一次 `hx_string_reserve()`。
+- 当已知字节长度时，优先使用 `hx_string_view` 配合 `hx_string_append()`；若只有以 `NUL` 结尾的 C 字符串，则直接调用 `hx_string_append_cstr()`。
+- 两种追加方式都会校验严格 UTF-8 编码、在失败时保持原字符串不变，并且允许传入借用自目标 `hx_string` 自身的切片（即便触发扩容也能安全追加）。注意 `hx_string_view` 允许包含内嵌 `NUL` 字节，打印此类数据时请按 `view.size` 使用 `fwrite()` 或 `%.*s`，不要直接用 `puts()`。
 
-~~~c
+```c
 hx_string text = HX_STRING_INIT;
 hx_string_parts *parts = NULL;
 
@@ -53,54 +57,52 @@ if (status == HX_OS_OK)
 // Check status before inspecting borrowed parts_at views.
 hx_string_parts_destroy(&parts);
 hx_string_destroy(&text);
-~~~
+```
 
-字符串以 UTF-8 为默认编码，长度按字节计算，允许内嵌 NUL。 trim/lower/upper 只处理 ASCII，不做 Unicode 归一化或完整大小写折叠。 replace_all 从左到右非重叠替换，允许输入视图借用目标字符串；空查找串无效。替换、拼接失败保持原值，使用目标字符串自己的 context。
-
-ASCII 的 `_in_place` 入口要求非 NULL、已初始化的字符串，返回 void，不分配内存。既有返回状态码的去空白／大小写接口共用实现并保留参数检查。C++ `String::trimAscii/lowerAscii/upperAscii/clear` 返回同一对象的引用，assign/append/reserve 继续报告 Result。
-
-split 的结果拥有输入副本；原字符串销毁后，结果视图仍有效，直到 parts_destroy。默认保留空片段、最多 4096 项；_ex 可设 1..65536，超限返回 LIMIT，不截断。join 支持借用目标的片段。对象并发修改需外部同步。
-
-指定编码的文件读取默认最多 16 MiB，完整读取后严格转为 UTF-8。 BOM 模块开启时去掉匹配的 BOM，编码与 BOM 冲突报 INVALID_ENCODING； BOM 模块关闭时不做 BOM 识别，转换器保留解码后的 U+FEFF。 UTF-16LE BOM 后紧跟 NUL 与 UTF-32LE 标记存在歧义时，以显式编码为准。不进行编码猜测。旧 UTF-8 读取接口及可选 libiconv 适配保持原行为。
-
-POD 宏仅包裹已有有界容器，不引入另一套实现。宏参数 name 应为小写下划线名称。元素按字节复制，不能用于拥有资源的 hx_string 或非平凡 C++ 对象；这类元素继续使用已有 copy/drop 回调。元素对齐来自 C99 offsetof 探测，不使用 pack 或未对齐访问。视图在容器修改后失效。
+核心字符串与文件编码规则：
+- **ASCII 原地处理与替换**：`trim`、`lower` 和 `upper` 仅处理 ASCII 字符，不触碰多字节 UTF-8 码点（不做 Unicode 归一化或完整大小写折叠）。带 `_in_place` 后缀的 C 函数要求传入非 `NULL` 的已初始化字符串，返回 `void` 且零内存分配（C++ `String::trimAscii` / `lowerAscii` / `upperAscii` / `clear` 返回当前对象引用以支持链式调用）。`hx_string_replace_all` 从左到右执行非重叠替换（拒绝空查找串，失败时保持原值不变）。
+- **字符串分割（`hx_string_split`）**：`hx_string_parts` 内部独立持有一份输入文本副本，因此即使原 `hx_string` 已经销毁，`hx_string_parts_at` 返回的视图在调用 `hx_string_parts_destroy` 之前依然有效。默认保留空片段、最多切分 `4096` 项；`_ex` 版本允许在 `1..65536` 之间配置上限，超出上限时返回 `HX_OS_LIMIT` 而不会静默截断。
+- **指定编码读取文件（`hx_os_file_read_text_encoded`）**：默认读取上限为 `16 MiB`，完整读入后严格转换为 UTF-8。当 `HX_OS_ENABLE_BOM=ON` 时会自动剥离匹配的字节序标记（BOM），若实际 BOM 与显式指定的编码冲突则返回 `HX_OS_INVALID_ENCODING`；当 `HX_OS_ENABLE_BOM=OFF` 时不做 BOM 剥离，保留解码后的 `U+FEFF`（当 UTF-16LE 的 BOM 后紧跟 `0x0000` 与 UTF-32LE 产生歧义时，以调用方显式指定的编码为准）。
+- **类型化 POD 容器宏**：`HX_OS_DECLARE_VECTOR(name, type)` 和 `HX_OS_DECLARE_QUEUE(name, type)` 为已有有界容器生成类型安全的薄包装（`name` 使用小写下划线标识符）。仅适用于可按字节平凡复制（POD）的元素类型；像拥有堆内存的 `hx_string`、`hx_variant` 或非平凡 C++ 对象，请继续使用带 `copy`/`drop` 回调的标准容器接口。
 
 ## 借用文本与持有设置字符串
 
-| getter | 生命周期与开销 |
-| --- | --- |
-| `ConfigDocument::stringView()` | 借用不可变文档字节，保持文档有效 |
-| `CallDataView::stringView()` | 借用参数包，修改或销毁后失效 |
-| `hx_os_text_lookup_get_view`／`TextLookup::getView()` | 命中时借用表，修改或销毁后失效；缺失时借用输入 fallback 本身 |
-| `hx_settings_get_string_ref`／`Settings::stringView()` | 持有不可变值引用，设置更新或关闭后仍有效；释放 C 引用或让 `SettingStringView` 析构 |
+为了在高频读取配置、参数包或翻译词条时省去字符串深拷贝与堆分配，可以使用以下借用或引用计数视图接口：
 
-这四种读取均不复制字符串字节。普通借用 getter 不分配内存。设置字符串引用的取得与复制不分配，但会保留／释放原子引用；从可变设置读取时仍使用既有根锁。从 `SettingStringView` 取出的普通 `StringView` 借用该持有对象，不能晚于它销毁。需要独立可变字符串时继续使用原有复制 getter。文档与翻译表的 C++ 借用 getter 拒绝持有者临时对象。
+| 读取接口 | 生命周期与内存开销 |
+| --- | --- |
+| `ConfigDocument::stringView()` | 零分配，直接借用不可变配置文档的内部字节（在文档对象销毁前有效） |
+| `CallDataView::stringView()` | 零分配，借用参数包内部字节（在参数包被修改或销毁前有效） |
+| `hx_os_text_lookup_get_view` / `TextLookup::getView()` | 零分配；命中时借用翻译表（在表被修改或销毁前有效），未命中时直接返回传入的 `fallback` 视图本身 |
+| `hx_settings_get_string_ref` / `Settings::stringView()` | 零堆分配，通过原子引用计数持有一份不可变字符串快照；即使所属 `Settings` 随后更新了该键或已关闭，只要尚未释放 C 引用（或 C++ `SettingStringView` 尚未析构），文本就始终有效 |
+
+> [!WARNING]
+> 从 C++ `SettingStringView` 中提取出的普通 `hx::StringView` 只是借用了该引用持有者（Lease），不能比所属的 `SettingStringView` 活得更久。此外，`ConfigDocument` 和 `TextLookup` 的 C++ 借用方法在编译期拒绝从右值临时对象上借用视图，以防止悬空指针。
 
 ## 连续设置与直接目录遍历
 
-需要进入子目录时，使用 Directory::findFirstFile 取得一个拥有的路径，或 Directory::findFiles / hx_os_directory_find_files 流式返回匹配文件。这些入口同步执行；界面程序使用现有线程池，再把复制后的结果投递到界面线程。限制、原生类型复用、错误/所有权契约和完整后台示例见[递归查找](FILE_SEARCH.zh-CN.md)。下方原有 forEach/visit 仍只遍历一层。
-
-使用 `hx_settings_update_begin`、类型化 setter 和一次 `hx_settings_update_finish`，或 `settings.update().setInt(...).setString(...).finish()`。每次成功都通过既有实现发布和通知。首次失败固定保留，后续项跳过，此前修改保留。finish 只检查游标，失败时也返回成功操作次数。它不提供事务回滚，也不合并通知。设置、分配器和用户状态须覆盖 setter 生命周期；`unset` 只修改显式层，游标不额外串行化既有设置操作。
-
-参数包提供对应的 `hx_os_calldata_edit_*` 与 `CallData::edit()`。后续失败时，之前成功的 setter 仍生效。游标借用参数包，调用方排除并发修改，并在调用消费者前检查 finish。单独使用既有 setter 时，仍分别返回自己的 Result／状态码。
-
-`hx_os_directory_visit(path, callback, user, error)` 在当前线程完成单目录打开、遍历和关闭。默认上限为启动 65536 次回调；`_ex` 接收 context、正数上限和完成次数输出。每个名称含 NUL 最多 4096 字节，内部复用一个按需增长的缓冲区。容量足够后包装层不增加逐项缓冲分配，原生适配自身可能分配。名称是未排序的借用 UTF-8 视图，仅回调期间有效；不递归、不查询类型、不创建目录快照。
-
-回调收到已清空的非 NULL 错误记录。OK 继续，EOF 正常停止，其他状态保留回调／原生错误详情。自然结束返回成功，超过数量上限返回 LIMIT；完成次数包括主动停止或失败的回调。恰好达到上限且原生已结束时成功。回调和原生目录调用不能被抢占，文件系统并发修改沿用原生行为，重入使用独立状态。所有返回路径均关闭目录、释放缓冲。关闭 FILE_UTILS 和 FILE_INFO 后仍可使用。
-
-C++ `Directory::forEach(path, callback, maxEntries, context)` 返回 `Result<size_t>`，失败时也带已执行数量。同步回调借用捕获，不分配回调状态。`void` 继续，`bool` 为 true 继续／false 正常停止，状态码／`Result<void>` 明确报告结果。lambda 和函数对象声明 `noexcept`，C++11 函数指针／引用遵守同一契约。需要每项独立持有文本或类型查询时，使用 `Directory::next()`。
+- **批量连续更新设置与参数包**：
+  - 对运行时设置（Settings），可使用 `hx_settings_update_begin`、一系列类型化 setter 和 `hx_settings_update_finish`（C++ 对应 `settings.update().setInt(...).setString(...).finish()`）。每个成功的 setter 都会立即通过底层实现发布并触发监听通知；一旦某一步失败，游标会锁定该错误并跳过后续 setter，此前已成功的修改保留（`finish` 汇报最终状态与已完成步数，不提供回滚事务或通知合并）。
+  - 对固定参数包（CallData），同样提供 `hx_os_calldata_edit_*` 与 `CallData::edit()` 链式编辑游标。
+- **单层目录同步遍历（`hx_os_directory_visit` / `Directory::forEach`）**：
+  - `hx_os_directory_visit(path, callback, user, error)` 在当前调用线程内一次性完成目录打开、逐项回调与关闭（内部复用单个按需增长的缓冲区，每个文件名含结尾 `NUL` 最多 `4096` 字节，默认最多触发 `65,536` 次回调；`_ex` 版本可指定自定义 `context`、正整数上限与已完成次数输出）。
+  - 回调收到的文件名是未排序的借用 UTF-8 视图，**仅在当前这次回调执行期间有效**。回调返回 `HX_OS_OK` 表示继续遍历，返回 `HX_OS_EOF` 表示主动正常停止（外层函数返回 `HX_OS_OK`），返回其他状态码则中止遍历并原样向上传播错误；若目录项数量超过上限则返回 `HX_OS_LIMIT`。所有退出路径都会自动关闭目录句柄并释放内部缓冲区。该接口不依赖 `HX_OS_ENABLE_FILE_UTILS` 或 `HX_OS_ENABLE_FILE_INFO`。
+  - C++ `Directory::forEach(path, callback, maxEntries, context)` 返回 `hx::Result<size_t>`（值为已执行的回调次数）。传入的 `noexcept` lambda 或函数对象可返回 `void`（继续）、`bool`（`true` 继续 / `false` 正常停止）、`hx_os_status` 或 `hx::Result<void>`。
+  - 如果需要递归搜索子目录并按通配符筛选文件，请使用 `Directory::findFirstFile` 或 `Directory::findFiles` / `hx_os_directory_find_files`，详见[递归查找](FILE_SEARCH.zh-CN.md)。
 
 ## 翻译文件
 
-~~~ini
+`hx_os_text_lookup`（C++11 对应 `<hx/TextLookup.hpp>` 中的 `hx::TextLookup`）用于加载扁平的 `key=value` 多语言词条文件，并支持用自定义翻译文件叠加覆盖部分词条：
+
+```ini
 # zh-CN.ini
 hello="你好"
 window.title="主窗口"
 shortcut="第一行\n第二行"
 url=https://example.invalid/
-~~~
+```
 
-~~~cpp
+```cpp
 #include <hx/TextLookup.hpp>
 
 hx::Result<hx::String> window_title() noexcept
@@ -115,31 +117,32 @@ hx::Result<hx::String> window_title() noexcept
 
 	return language.value().get("window.title");
 }
-~~~
+```
 
-采用扁平 key=value 目录，接受 UTF-8 BOM、CRLF/LF、# 注释、带引号的键值、 JSON 转义及代理对。未加引号的值按原文读取并裁掉两端空格/Tab，其中 # 开始注释；引号内的 # 保留。数字形状的文本和单词中的撇号都是文本。不支持节、包含文件或变量展开；不是修改已有 INI 配置解析器的语义。
-
-同名键以后出现的值覆盖先前值；缺失键返回键本身。默认 4096 项、键值文本合计 1 MiB；输入文件也受表的文本预算限制。加载使用候选表，语法、读取、分配或容量失败均保持原表。暂时持有旧表、新表和输入，元数据另计。字符串转义复用词法模块。并发只读可以共享，修改/加载/销毁由宿主排除并发；没有全局语言或 locale。
+语法与叠加规则：
+- 支持 UTF-8 BOM、`CRLF`/`LF` 换行、`#` 行注释、带双引号的键或值（支持标准 JSON 转义序列与 UTF-16 代理对解码）。未加引号的值按原文读取并裁去首尾空格与 Tab（未加引号时遇到 `#` 即视为注释开始；双引号内部的 `#` 则作为普通字符保留）。不包含 `[section]` 节、文件 include 或变量展开。
+- 后加载的同名键会覆盖先前的值；查询不存在的键时，默认回退返回键名本身。
+- 默认上限为 `4096` 个词条、键值文本总计 `1 MiB`。执行叠加加载（`add_file` / `add_text`）时采用候选表事务替换：若遇到语法错误、文件读取失败、内存不足或超出容量上限，原有的翻译表内容保持完整不变。无修改时允许多个线程并发只读查询。
 
 ## 宽位换算与时序
 
-~~~c
+```c
 uint64_t interval_ns;
 
 hx_os_status status = hx_os_muldiv_u64(1001, 1000000000, 30000,
 	HX_OS_ROUND_NEAREST, &interval_ns, NULL);
-// On success: 33366667 ns.
-~~~
+// On HX_OS_OK: 33366667 ns.
+```
 
-内部保留完整 128 位乘积，支持向下、向上、最近值舍入，恰好一半向上。除零报 INVALID，结果超出 uint64_t 报 RANGE，失败保持输出。可直接操作 hx_os_uint128 的 low/high。支持编译器原生 128 位整数时使用内建类型，其他目标使用共同的 32 位分块算法。没有堆分配、锁、浮点精度损失或新增汇编。
-
-精细等待接收本库绝对单调截止时间，默认最后 200 微秒自旋；_ex 允许 0..10 毫秒自旋预算，0 使用普通睡眠。NOW 立即成功，INFINITE 无效。不会修改全局计时器精度或调度优先级。系统调度可能延后唤醒，甚至跳过整个自旋窗口；该接口不提供硬实时、可取消或必然更准的保证。 Windows 兼容时钟按 tick 更新；自旋用独立 QPC 计时限制预算，预算耗尽后恢复普通睡眠，不改变原有截止时间的时钟起点和休眠语义。参阅 [Windows 时钟说明](https://learn.microsoft.com/en-us/windows/win32/api/realtimeapiset/nf-realtimeapiset-queryunbiasedinterrupttime)。
-
-repeat 在调用线程上同步执行：正毫秒间隔、正次数上限，首次在一个间隔后，错过多个周期合并；回调 OK 继续、EOF 正常停止、其他错误原样传播。回调获得非空且已清零的错误记录。_until 同时返回实际启动的次数。截止时间约束等待，不能中断回调。需要后台定时器时使用原有 timer/loop。
+- **128 位精确乘除（`hx_os_muldiv_u64` / `hx::Wide::multiplyDivide`）**：在内部保留完整的 128 位中间乘积 `a * b`，再除以 `c`，避免先乘后除的 64 位溢出或先除后乘的精度丢失。支持向下取整（`HX_OS_ROUND_DOWN`）、向上取整（`HX_OS_ROUND_UP`）和四舍五入（`HX_OS_ROUND_NEAREST`，恰好处于半值时向上取整）。除数为 `0` 返回 `HX_OS_INVALID`，商超出 `uint64_t` 范围返回 `HX_OS_RANGE`（失败时保持输出变量不变）。同时提供直接操作 `hx_os_uint128`（`low`/`high`）的底层算术函数，全程零堆分配、无锁且不依赖浮点数。
+- **睡眠加尾端自旋等待（`hx_os_sleep_until_precise` / `hx::Wait::precise`）**：接收本库单调时钟的绝对截止时间，先执行常规系统睡眠，在距离截止时间最后 `200 us`（默认窗口；`_ex` 版本允许在 `0..10 ms` 之间调整，`0` 表示纯睡眠）时切换为 CPU 自旋，以减小操作系统调度器唤醒抖动。传入 `HX_OS_DEADLINE_NOW` 立即返回 `HX_OS_OK`，传入 `HX_OS_DEADLINE_INFINITE` 返回 `HX_OS_INVALID`。该接口不会修改进程全局定时器分辨率或线程优先级；在 Windows 上使用独立的高精度性能计数器（QPC）约束自旋时长，防止系统时钟粒度导致超时自旋（参见 [Windows 时钟说明](https://learn.microsoft.com/en-us/windows/win32/api/realtimeapiset/nf-realtimeapiset-queryunbiasedinterrupttime)）。
+- **当前线程有限周期执行（`hx_os_repeat` / `hx::Wait::repeat`）**：按给定的正整数毫秒间隔与最大次数上限，在当前调用线程上同步执行回调（首次回调在第一个间隔到达后触发；若某次回调耗时跨过了多个周期，错过的周期会自动合并而不会连续补发）。回调返回 `HX_OS_OK` 继续下一次，返回 `HX_OS_EOF` 正常提前结束，返回其他错误码则立即停止并向上传播。`_until` 版本可额外指定总截止时间并返回实际已启动的回调次数。如需后台异步定时器，请使用事件循环（Timer / Loop）模块。
 
 ## 命名过程与关闭
 
-~~~cpp
+`hx_os_proc_handler`（C++11 对应 `<hx/Procedure.hpp>` 中的 `hx::ProcedureHandler`）允许模块按字符串名称注册过程回调，并由调用方按名称同步调用，实现模块间的解耦交互（注意这是进程内当前线程的同步调用，不是跨进程 RPC）：
+
+```cpp
 #include <hx/Procedure.hpp>
 
 hx::Result<hx_os_proc_registration>
@@ -156,38 +159,36 @@ register_double(hx::ProcedureHandler &procedures) noexcept
 			return data.setInt("answer", value.value() * 2);
 		});
 }
-~~~
+```
 
-过程名为复制的严格 UTF-8，1..127 字节，唯一、区分大小写；重复注册报 EXISTS，缺失报 NOT_FOUND。没有签名 DSL 或隐式类型转换。参数包按值复制，回调成功才提交输出；借用指针指向对象的副作用不能回滚。 C++ 回调声明 noexcept，可返回 Result<void>、状态码或 void；Result 失败保留原生错误详情。
-
-调用同步执行，多个线程的调用可重叠，回调在锁外运行；默认最多 256 个注册、64 个并发调用、16 层嵌套，可通过 options 调整。共享信号模块的在途计数、回调退役和等待实现；过程可以在 SIGNALS 关闭时使用。成功注册后 cleanup 被接管，最后一个在途回调退出后在锁外执行一次；被拒绝的注册不接管用户资源。
-
-unregister_until 先阻止新启动，再等待在途执行；超时保留 ID，重试同一 ID。 close_until/池 shutdown 超时或失败保留所有者；成功才置空并释放。自我/祖先等待返回 DEADLOCK。最终销毁前完成注册、注销和控制调用，已经接受的回调可以继续退出；多个最终销毁必须互斥，并排除新 API 进入。 add/close 的分配器回入同一过程表会被拒绝，其间 stop 忽略。截止时间不能抢占同步回调或 cleanup。
-
-宿主在卸载插件前必须完成调用并退役回调、分配器用户数据与借用指针。 C++ ProcedureHandler/ThreadPool 是宿主持有句柄的便利层，析构不偷偷等待或遗失句柄。
+- **名称与参数语义**：过程名称必须是长度为 `1..127` 字节的严格 UTF-8 字符串，区分大小写且唯一（重复注册同名过程返回 `HX_OS_EXISTS`，调用未注册的名称返回 `HX_OS_NOT_FOUND`）。调用时参数包按值隔离，只有当回调成功返回 `HX_OS_OK` 时，对参数包的修改才会提交给调用方。
+- **并发与容量上限**：回调在内部锁之外同步执行，支持多线程并发调用同一过程表（默认最多注册 `256` 个过程、同时进行 `64` 个并发调用、最大嵌套调用深度 `16` 层，均可通过 `options` 配置）。注册成功后，附带的 `cleanup` 回调归过程表接管，并在该过程的最后一个在途调用退出后、在锁外准确执行一次。
+- **安全注销与关闭**：`unregister_until` 会先阻止新的调用进入该过程，然后等待正在执行的在途回调结束；若等待超时，注册 ID 仍然保留以便调用方重试（在回调内部尝试等待自身或外层祖先调用注销会立即检测到死锁并返回 `HX_OS_DEADLOCK`）。在卸载动态插件（DLL / `.so`）之前，宿主必须先完成所有相关过程的注销或关闭过程表，确保插件代码与借用数据不再被任何在途调用访问。
 
 ## 文件名与词法分析
 
-原有文件名入口继续使用 UTC，默认格式为 `%CCYY-%MM-%DD_%hh-%mm-%ss`。`hx_os_filename_format_local_string()` / `hx::Calendar::localFilename()` 显式选择本地时间；`hx_os_filename_generate_local()` / `Calendar::localFilenameNow()` 使用当前墙上时钟；`Calendar::filenameNow()` 继续使用 UTC。Windows 非法字符、控制字符、末尾空格／点号及保留设备名会按原规则修复，Unicode 保留。扩展名可带一个前导点，最多 32 个 ASCII 字母、数字、连字符或下划线；结果最多 240 个 UTF-8 字节。不创建目录，不保证唯一，也不自动覆盖重名文件。夏令时回拨时，本地时间可能重复，生成的文件名也可能重复。
+- **安全的时间戳文件名生成**：
+  - `hx_os_filename_generate` / `hx_os_filename_format_string`（C++ `hx::Calendar::filename` / `filenameNow`）使用 UTC 时间格式化文件名（默认格式 `%CCYY-%MM-%DD_%hh-%mm-%ss`）。
+  - `hx_os_filename_generate_local` / `hx_os_filename_format_local_string`（C++ `hx::Calendar::localFilename` / `localFilenameNow`）使用系统本地时区时间。
+  - 所有文件名生成函数都会自动修复 Windows 非法文件名字符、控制字符、末尾空格／点号以及保留设备名（如 `CON`、`NUL`），同时保留合法的 Unicode 字符。文件扩展名允许带一个可选的前导点，最多 32 个 ASCII 字母、数字、连字符或下划线，最终文件名长度上限为 240 个 UTF-8 字节（函数只负责生成文件名字符串，不会在磁盘上创建目录或检查重名文件）。
+- **本地时间展示与时区偏移**：
+  - 若用于界面展示而非作为文件名，请调用不做文件名字符替换的 `hx_os_wall_time_format_local_string`（C++ `hx::Calendar::local`），默认输出带明确时区偏移的 ISO 风格文本（如 `2024-03-10T03:00:00-04:00`）。
+  - `hx_os_wall_time_local_offset_at` / `Calendar::localOffsetAt` 查询指定 Unix 毫秒时间点的本地时区偏移（返回单位为**秒**，并同时输出夏令时标志 `0`/`1`/`-1`；注意原有的“当前偏移”接口仍以**分钟**为单位）。
 
-展示本地时间时，使用 `hx_os_wall_time_format_local_string()` / `hx::Calendar::local()`，不执行文件名字符替换。默认结果明确带时区偏移，例如 `2024-03-10T03:00:00-04:00`。`hx_os_wall_time_local_offset_at()` / `Calendar::localOffsetAt()` 查询指定 Unix 毫秒时间点的偏移，单位为**秒**，同时返回 DST 0/1/-1；原有“当前偏移”接口继续以**分钟**为单位。库不修改全局时区或 locale。
-
-| 标记 | 含义 |
+| 格式占位符 | 输出含义 |
 | --- | --- |
-| `%CCYY`、`%Y`；`%YY`、`%y` | 四位年份；年份后两位 |
-| `%MM`、`%m`；`%DD`、`%d` | 月份；月内日期 |
-| `%hh`、`%H`；`%I`、`%p` | 24 小时；12 小时与 AM/PM |
-| `%mm`、`%M`；`%ss`、`%S` | 分钟；秒 |
-| `%a`、`%A`；`%b`、`%B` | 英文星期、月份的缩写／全名 |
-| `%j`；`%u`、`%w` | 年内第 001～366 天；星期一为 1／星期日为 7，或星期日为 0 |
-| `%L`；`%s` | 000～999 毫秒；向下取整的 Unix 秒，不受时区影响 |
-| `%z`、`%:z` | 有符号偏移 +HHMM 或 +HH:MM；需要时附加秒 |
-| `%Z` | 数值标签 `UTC` 或 `UTC+HH:MM[:SS]` |
-| `%%` | 百分号本身 |
+| `%CCYY`、`%Y`；`%YY`、`%y` | 四位完整年份；年份后两位 |
+| `%MM`、`%m`；`%DD`、`%d` | 两位月份（`01..12`）；两位月内日期（`01..31`） |
+| `%hh`、`%H`；`%I`、`%p` | 24 小时制小时（`00..23`）；12 小时制小时（`01..12`）与固定英文 `AM`/`PM` |
+| `%mm`、`%M`；`%ss`、`%S` | 两位分钟（`00..59`）；两位秒（`00..59`） |
+| `%a`、`%A`；`%b`、`%B` | 固定英文星期缩写／全名；固定英文月份缩写／全名 |
+| `%j`；`%u`、`%w` | 年内第几天（`001..366`）；星期几（`%u` 周一为 `1`..周日为 `7`；`%w` 周日为 `0`） |
+| `%L`；`%s` | 三位毫秒（`000..999`）；向下取整的 Unix 秒数（与所选时区无关） |
+| `%z`、`%:z` | 带符号时区偏移 `+HHMM` 或 `+HH:MM`（存在非整分偏移时自动附加秒） |
+| `%Z` | 明确的数值时区标签 `UTC` 或 `UTC+HH:MM[:SS]`（不使用有歧义的英文时区缩写） |
+| `%%` | 字面百分号 `%` |
 
-原有多字符标记优先于较短标记。星期、月份名称和 AM/PM 固定为英文。未知标记返回 SYNTAX，失败保留输出。`%Z` 不返回有歧义的缩写或 IANA 时区标识。UTC 时间 `ms=-1` 使用 `%s.%L` 时结果为 `-1.999`，这表示向下取整的秒与对应毫秒部分，并不是把时间当成一个实数秒值来表示。
-
-UTC 仍支持公历延伸范围 0001～9999 年。本地转换遵循宿主 C 运行库可用范围与时区规则：Windows 适配层通过 `_localtime64_s`，保守接受 1970～3000 年的 UTC 时间点；POSIX 还受 `time_t` 位宽和已安装时区数据影响。不内置独立历史／命名时区数据库，也不承诺闰秒格式化。宿主显式修改 TZ／时区时需要自行串行协调，参见 [Microsoft 本地时间契约](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/localtime-s-localtime32-s-localtime64-s)。
+未知格式占位符会返回 `HX_OS_SYNTAX` 并保持输出字符串不变。UTC 格式化支持公历 `0001..9999` 年；本地时区转换则遵循宿主 C 运行库支持的年份范围（例如 Windows `_localtime64_s` 保守支持 `1970..3000` 年，参见 [Microsoft 本地时间契约](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/localtime-s-localtime32-s-localtime64-s)）。
 
 ```cpp
 // Include <hx/Calendar.hpp>; check both Result<String> values.
@@ -196,20 +197,18 @@ auto name = hx::Calendar::localFilename(
 	milliseconds, "dat", "%Y-%m-%d_%H-%M-%S_%L");
 ```
 
-这里的 `milliseconds` 是 Unix 墙上时钟毫秒，不是单调截止时间。C 版本直接写入已初始化的 `hx_string`。格式化和字符串构造同步执行，不创建定时器或线程。
-
-词法器复制严格 UTF-8 输入，接受开头 BOM，拒绝内嵌 NUL； token 的 C 视图存活到 lexer_destroy，C++ Token 自己持有字符串。默认返回标识符、数字、引号串、单字符标点、换行，跳过空白和注释。标识符允许非 ASCII 码点，但不声称完成 Unicode 标识符标准验证；数字包含十进制/小数/指数/十六进制整数，符号单独返回。
-
-next/peek/reset 要求外部同步；EOF 返回 END token，失败保留输出。词法错误保持到 reset；position 可取得失败起点。行列从 1 开始，列按 Unicode 码点计，Tab 占一列，CRLF 为一个换行。默认输入 16 MiB、单 token 1 MiB、token 数 1 Mi；跳过的空白、注释也受限。它不是 C 编译器、预处理器或脚本运行时。
+- **轻量词法分析器（`hx_os_lexer` / `hx::Lexer`）**：
+  - 复制并持有严格 UTF-8 输入文本（接受开头 BOM，拒绝内嵌 `NUL`），识别标识符、数字（十进制、小数、科学计数法、十六进制）、双引号／单引号转义字符串、单字符标点与换行符，自动跳过空白与注释（块注释不嵌套）。
+  - C 接口返回的 Token 视图借用自词法器内部，在 `hx_os_lexer_destroy` 前有效；C++ `hx::Token` 则独立持有解码后的字符串。到达末尾时返回结束标记（`HX_OS_LEXER_TOKEN_END`）。
+  - 遇到词法错误后错误状态会保持，可通过 `position` 获取出错的起始行号与列号（均从 `1` 开始，列号按 Unicode 码点计数），调用 `reset` 可重新开始扫描。默认输入上限 `16 MiB`、单 Token 上限 `1 MiB`、最多 `1,048,576` 个 Token。
 
 ## 裁剪与成本
 
-新增 WIDE_MATH、PRECISE_WAIT、LEXER、PROCEDURES 默认开启，可分别关闭。文件名依赖 CALENDAR；翻译文本加载依赖 TEXT_LOOKUP+LEXER，文件加载再依赖 FILE_UTILS。SIGNALS 或 PROCEDURES 任意一个开启即可使用参数包。关闭模块保留公共符号、清除相应能力位、返回 NOT_SUPPORTED。
-
-ASCII 修改和宽位运算无分配；replace/join 使用临时字符串保证失败不变； split 分配拥有副本的结果。子串搜索采用朴素匹配，不承诺最坏线性复杂度。翻译表加载可能逐项复制和插入，不面向热循环。过程调用成功注册后不再分配上下文内存，但仍扫描有界槽表、获取锁并间接调用回调；有实际成本，不把它用来替代本来就知道目标的直接函数调用。基准入口为 hx_os_portable_baseline；结果与目标、优化选项和系统负载有关。
+- **独立构建开关**：`HX_OS_ENABLE_WIDE_MATH`、`HX_OS_ENABLE_PRECISE_WAIT`、`HX_OS_ENABLE_LEXER` 和 `HX_OS_ENABLE_PROCEDURES` 默认均为 `ON`，可按需独立关闭。时间戳文件名依赖 `HX_OS_ENABLE_CALENDAR`；翻译表文本加载依赖 `HX_OS_ENABLE_TEXT_LOOKUP` 与 `HX_OS_ENABLE_LEXER`（从文件加载还需 `HX_OS_ENABLE_FILE_UTILS`）；开启 `HX_OS_ENABLE_SIGNALS` 或 `HX_OS_ENABLE_PROCEDURES` 任一开关即可使用固定参数包 `hx_os_calldata`。模块关闭后保留导出符号、清除对应能力位并返回 `HX_OS_NOT_SUPPORTED`。
+- **内存与性能特征**：原地 ASCII 修改与 128 位宽整数乘除均为零堆内存分配；`replace_all` 和 `join` 使用临时字符串以保证失败时原值不变；`split` 为结果分配一份共享的输入文本副本。命名过程在完成注册后，调用路径不再分配上下文内存，但仍包含槽表查找、加锁与间接回调开销，仅用于需要按名动态解耦的边界，不应替代已知目标的普通 C 函数直接调用。
 
 ## 显式调试断点
 
-`<hx_os_util.h>` 中的 `hx_os_debug_break()` 在当前调用线程请求原生断点，Release 构建也生效。Windows 调用 `DebugBreak`，POSIX 触发 `SIGTRAP`。调试器或应用自己的处理器可以恢复执行；没有处理者时，操作系统可能终止进程。库不会安装信号处理器，也不会用这个入口报告普通调用错误。
-
-只有业务明确决定停到断点时才调用。POSIX 契约测试在它自己的测试进程中临时安装处理器，验证收到断点并恢复执行。Windows 已验证编译和链接，自动测试不实际触发 Windows 断点。
+`<hx_os_util.h>` 中的 `hx_os_debug_break()` 用于在当前调用线程上显式触发原生调试器断点（在 Release 构建下同样有效：Windows 调用 `DebugBreak()`，POSIX 发送 `SIGTRAP`）。
+- 如果当前进程已附加调试器或安装了信号／异常处理器，断住后可以继续单步或恢复执行；若未附加调试器且无处理器，操作系统会终止当前进程。
+- 库内部绝不会在普通错误路径上自动调用 `hx_os_debug_break()`，仅在业务代码明确希望中断到调试器时由开发者主动调用。

@@ -2,31 +2,40 @@
 
 [English](COORDINATION.md)
 
-**先运行一个完整例子。** 主线程需要通知多个工作线程停止，并等它们完成清理时，组合取消令牌、WaitGroup 和读写锁。
+当控制线程需要向多个后台工作线程广播停止请求、等待一轮并发任务全部完成，或者使用多读单写的读写锁保护共享状态时，可以组合使用本模块的取消令牌（`hx_os_cancel_token`）、等待组（`hx_os_wait_group`）和读写锁（`hx_os_rwlock`）。
 
-打开 [coordination.c](../examples/coordination.c)。先登记任务 → 启动两个 worker → 在写锁内累计完成数 → 主线程请求取消 → WaitGroup 等完成 → join → 销毁协调对象。
+### 快速运行示例
 
-按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_coordination`。此例无命令行参数、无需输入文件。
+完整示例位于 [coordination.c](../examples/coordination.c)：在启动两个工作线程之前先向 `WaitGroup` 登记任务计数，工作线程在写锁保护下累加处理记录数，主线程随后发起取消请求、等待 `WaitGroup` 计数归零、`join` 两个工作线程，最后在读锁下读取统计结果并销毁所有协调对象。
 
-**会得到什么：**输出 `Processed ... records, then stopped cooperatively.`，数量随调度变化。取消只是请求；等待和 join 成功后才可以释放 worker 使用的数据。
+按[示例运行方法](../examples/README.zh-CN.md#run)启用示例后，构建并运行 `hx_os_coordination`（无需命令行参数或输入文件）：
 
-下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+```sh
+cmake --build build --config Release --target hx_os_coordination
+```
+
+预期输出格式为 `Processed ... records, then stopped cooperatively.`（具体记录数随操作系统线程调度而变化）。在自己的工程中接入时，可参考[最小工程配置](USAGE.zh-CN.md#c-project)直接使用该结构。
 
 ## 1. 三种独立工具
 
-开启 `HX_OS_ENABLE_THREAD_EX` 即可使用。这些工具面向原生线程，不要求线程池、协程运行时或后台工作线程。
+启用 `HX_OS_ENABLE_THREAD_EX` 即可使用以下三项原语。它们直接面向原生操作系统线程，不依赖线程池或协程运行时，也不会在后台隐式创建线程：
 
-| 工具 | 用途 |
-|---|---|
-| 取消令牌 | 发布协作停止请求，唤醒支持取消的等待，或请求取消已经注册的任务。 |
-| WaitGroup 等待组 | 统计尚未完成的任务，支持父任务尚未完成时加入子任务。 |
-| 读写锁 | 允许多个读者并发读取，写入时独占保护。 |
+| 协调原语 | 核心用途 |
+| --- | --- |
+| **取消令牌（`hx_os_cancel_token`）** | 发布协作式停止请求，立即唤醒所有支持取消的等待操作，或触发已注册的取消回调 |
+| **等待组（`hx_os_wait_group`）** | 统计尚未完成的并发任务数量，支持父任务在运行期间继续追加子任务计数 |
+| **读写锁（`hx_os_rwlock`）** | 允许多个读线程并发读取共享数据，写线程更新时独占加锁 |
 
-取消只是请求，并不表示工作已经结束。不可取消的第三方阻塞函数不会被强制打断。等待组完成也不等于原生线程退出或 TLS 清理完成；释放线程状态之前仍要分别 join。
+> [!IMPORTANT]
+> **取消请求不等于任务已结束，WaitGroup 归零也不等于线程已退出**
+> - 发出取消请求只是设置标志并唤醒可取消等待，无法强行打断阻塞在第三方不可取消系统调用中的线程。
+> - `WaitGroup` 计数归零仅代表工作函数内调用了 `hx_os_wait_group_done()`，此时原生线程的栈帧收尾和 TLS 析构可能尚未跑完。在释放线程所使用的共享状态或销毁协调对象之前，必须先对所有工作线程完成 `hx_os_thread_join()`。
 
-[完整协作示例](../examples/coordination.c) 启动两个工作线程，在写锁内更新共享记录数，然后请求取消、等待组归零、等待两个线程退出，最后在读锁内读取结果。复用现有已开启 examples 的构建目录，编译 `hx_os_coordination`。记录数随调度变化，以正常完成为预期，不固定某个数字。
+[完整协作示例](../examples/coordination.c) 演示了从登记计数、并发读写、请求取消到等待组归零与线程 `join` 的完整闭环。
 
 ## 2. 先登记数量，再发布任务
+
+使用 `hx_os_wait_group` 时，务必遵循**“先在提交线程 `add`，再启动工作线程；若启动失败则立即 `done` 回滚”**的顺序：
 
 ```c
 hx_os_status status = hx_os_wait_group_add(group, 1, &error);
@@ -40,36 +49,33 @@ if (status == HX_OS_OK) {
 (void)hx_os_wait_group_done(group, 1, NULL);
 ```
 
-前半段在提交任务的线程执行；最后的 `done` 应放在工作函数内部，包括失败和取消退出路径。启动失败需要减回已经登记的数量。当前数量仍为正时，任务可以先加入子任务，再报告自己完成。
-
-`hx_os_wait_group_wait_until(group, deadline, NULL, ...)` 等待当前这一轮归零。它不是提交时的任务快照，这一轮后续加入的子任务也要完成。超时保留计数和对象；下一轮必须等上一轮所有等待者都返回后再开始。计数下溢／上溢返回 `RANGE`，销毁仍有任务或等待者的组返回 `BUSY`。
-
-向 wait 传入取消令牌，取消的是当前等待调用，不会自动取消计数中的任务。关闭时，应先向工作线程请求取消，再不带已取消令牌地等待组归零，确认工作实际结束。
+- **动态派生子任务**：只要当前未完成计数仍然大于 `0`，正在运行的任务就可以继续调用 `hx_os_wait_group_add()` 增加子任务，然后再调用自己的 `hx_os_wait_group_done()`。
+- **轮次等待与边界**：`hx_os_wait_group_wait_until(group, deadline, NULL, ...)` 等待当前轮次的计数彻底归零（包含本轮期间新加入的子任务）。若等待超时返回 `HX_OS_TIMEOUT`，计数与对象状态均保持不变，可供继续等待。如需复用同一个 `WaitGroup` 开启新一轮任务，必须等上一轮的所有等待者全部返回后再执行新的 `add`。计数上溢或下溢返回 `HX_OS_RANGE`；当仍有未完成计数或活跃等待者时调用销毁会返回 `HX_OS_BUSY`。
+- **等待调用本身的取消令牌**：向 `hx_os_wait_group_wait_until()` 传入取消令牌时，该令牌**只用于取消当前这次 `wait` 等待调用本身**，不会自动取消组内正在运行的任务。因此在停机流程中，应当先触发业务工作线程的取消令牌，然后**不带已取消令牌**地调用 `hx_os_wait_group_wait_until()`，从而真正等到所有工作线程完成清理。
 
 ## 3. 取消与订阅
 
-令牌一旦取消就保持取消状态，不会复位；新一轮取消范围使用新令牌。默认预分配 64 个注册槽，可用 `max_callbacks` 指定其他有限容量。可取消等待也会临时占用注册槽。
+`hx_os_cancel_token` 采用单向置位设计：一旦调用 `hx_os_cancel_request()` 触发取消，该令牌就永久保持已取消状态（不可复位；若下一阶段需要新的取消范围，请创建新的令牌）。创建时默认预分配 `64` 个回调槽位（可通过 `max_callbacks` 自定义上限；各类 `*_cancellable_until` 等待在阻塞期间也会临时借用一个槽位）：
 
-- `hx_os_cancel_requested` 查询取消标志。
-- `hx_os_cancel_wait_until` 在观察到取消请求时返回 `OK`，等待截止时返回 `TIMEOUT`。
-- `hx_os_sleep_cancellable_until` 在取消时返回 `CANCELLED`，睡眠截止时返回 `OK`；无限期可取消睡眠必须传令牌。
-- `subscribe` 返回注册 ID。首次请求取消的线程在令牌锁外同步执行回调，回调应只做简短的唤醒／请求操作，不应 join 或执行阻塞业务。
-- 对已取消令牌注册会返回 `CANCELLED`，不调用回调，也不接管用户数据。
-- `unsubscribe_until` 阻止新回调启动，并等待正在执行的回调结束。超时后 ID 和用户数据仍需保留，可以使用同一 ID 重试；回调等待自己结束会返回 `DEADLOCK`。
-
-线程池任务、I/O 请求和协程的绑定继续遵循各自已有的取消契约。绑定成功后保留目标，直到成功退订；目标完成并不会自动删除注册。绑定不会创建分离线程来执行阻塞回调。另一个并发 `request` 可能先于首次请求的回调派发完成而返回。
+- **状态查询与可取消等待**：
+  - `hx_os_cancel_requested(token)`：非阻塞查询是否已收到取消请求。
+  - `hx_os_cancel_wait_until(token, deadline, error)`：等待取消信号发生；观察到取消时返回 `HX_OS_OK`，到达截止时间仍未取消则返回 `HX_OS_TIMEOUT`。
+  - `hx_os_sleep_cancellable_until(deadline, token, error)`：可被取消唤醒的睡眠；被取消时返回 `HX_OS_CANCELLED`，正常睡满截止时间返回 `HX_OS_OK`（若传入 `HX_OS_DEADLINE_INFINITE`，则必须提供非空令牌）。
+- **订阅取消回调（`subscribe` / `unsubscribe_until`）**：
+  - `hx_os_cancel_subscribe()` 返回注册 ID。首次发起取消请求的线程会在令牌内部锁之外**同步调用**所有已注册回调，因此回调函数必须简短（仅做唤醒或设置标志，切勿在回调中执行 `join` 或耗时阻塞操作）。
+  - 如果向一个**已经处于已取消状态**的令牌调用 `subscribe`，函数会立即返回 `HX_OS_CANCELLED`，既不会调用回调，也不会接管用户数据。
+  - 在释放回调所引用的用户数据之前，必须调用 `hx_os_cancel_unsubscribe_until(token, id, deadline, error)`。它会阻止该回调被新启动，并等待正在执行中的回调返回；若返回 `HX_OS_TIMEOUT`，必须保留该 ID 和用户数据并稍后重试（在回调内部等待自身退订会返回 `HX_OS_DEADLOCK`）。
 
 ## 4. 读写锁
 
-使用 `hx_os_rwlock_read_until` 或 `hx_os_rwlock_write_until` 获取锁，也可以传取消令牌。获取后必须由同一个原生线程按同一模式解锁。已经排队的写者会阻止新读者进入，但不承诺严格 FIFO，也不保证绝无饥饿。
-
-锁不可递归，不支持持有读锁时直接升级成写锁。需要升级时先释放，再获取写锁，并重新检查共享条件。读锁的线程所有权属于调用者契约，不为每个线程分配一张所有权表。这些是原生线程等待，不能单独挂起协程而释放工作线程；协程代码应使用对应的协程同步原语。
-
-等待使用单调截止时间，但重新获取内部互斥锁、结束取消注册等操作可能超过指定时间。`NOW` 表示不等待条件满足，并不承诺硬实时完成。
+调用 `hx_os_rwlock_read_until()` 或 `hx_os_rwlock_write_until()` 获取读锁或写锁（均支持传入单调时钟截止时间和可选取消令牌）：
+- **同线程同模式解锁**：获取锁后，必须由**同一个原生线程**调用对应的读解锁或写解锁。排队中的写者会阻止后续新读者插队。
+- **不可递归、不支持直接升级**：读写锁不可递归加锁，也不支持在持有读锁的状态下直接升级为写锁（如需修改，请先释放读锁、再获取写锁，并在拿到写锁后重新检查业务条件）。
+- **面向原生线程**：`hx_os_rwlock` 会阻塞底层操作系统线程，不能在协程中单独挂起协程而让出工作线程；协程内请使用 `<hx/CoroutineSync.hpp>` 中的协程版 `RwLock`。
 
 ## 5. C++11 便利类保留明确的宿主所有权
 
-包含 `<hx/Coordination.hpp>`。`CancelToken`、`WaitGroup`、`ReadWriteLock` 与 `hx::Thread` 一样，使用宿主持有、初始为 NULL 的 owner 指针引用创建。
+包含 `<hx/Coordination.hpp>` 即可使用无异常的 `hx::CancelToken`、`hx::WaitGroup` 和 `hx::ReadWriteLock`。它们与 `hx::Thread` 一致，均通过引用宿主持有的原生 `owner` 指针（初始为 `NULL`）创建：
 
 ```cpp
 hx_os_wait_group *groupOwner = NULL;
@@ -85,8 +91,6 @@ if (!added)
 // Publish work here; every accepted task must eventually call group.done().
 ```
 
-把 owner 指针、便利类和工作数据保留在宿主生命周期状态中。便利类析构不等待，也不释放底层对象，需要显式 `close()`；`WaitGroup::closeUntil(deadline)` 会先等待，再在安全时销毁。`BUSY`、`TIMEOUT` 或 `CANCELLED` 后仍保留 owner，便于重试。关闭前必须排除新的调用者和任务提交。
-
-`ReadWriteLock::readUntil`、`writeUntil` 返回 `Result<ReadWriteGuard>`。guard 离开作用域时解锁，只允许移动，并且必须始终处于获取锁的那个线程。所有 guard 释放前，锁的 owner 必须保持有效。显式 `guard.unlock()` 可以检查错误；guard 仍持锁时，`lock.close()` 返回 `BUSY`。
-
-`CancelToken::subscribe(function, user)` 返回 `Result<uint64_t>`。保存该 ID，在释放回调数据前调用 `unsubscribeUntil(id, deadline)` 并确认成功。便利类不会隐藏分配的 lambda 所有者，也不会默默丢弃退订超时的注册。所有方法使用 `Result`，不使用异常。
+- **显式关闭与重试**：C++ 便利类的析构函数不会暗中阻塞等待，也不会销毁底层对象。请在停止新任务后显式调用 `close()`（`WaitGroup::closeUntil(deadline)` 会先等待计数归零，成功后再销毁底层对象）。若返回 `HX_OS_BUSY`、`HX_OS_TIMEOUT` 或 `HX_OS_CANCELLED`，`owner` 指针保持有效，可供稍后重试。
+- **RAII 读写锁守卫（`ReadWriteGuard`）**：`ReadWriteLock::readUntil()` 和 `writeUntil()` 返回 `Result<ReadWriteGuard>`。守卫仅支持移动，必须留在获取锁的同一线程并在离开作用域时自动解锁（也可显式调用 `guard.unlock()` 检查错误；当仍有守卫持锁时调用 `lock.close()` 会返回 `HX_OS_BUSY`）。
+- **取消订阅 ID 管理**：`CancelToken::subscribe(function, user)` 返回 `Result<uint64_t>`。请保存该注册 ID，并在销毁回调所捕获的用户状态之前调用 `unsubscribeUntil(id, deadline)` 并确认返回 `HX_OS_OK`。

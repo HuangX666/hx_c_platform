@@ -2,19 +2,18 @@
 
 [English](FAST_TOOLS.md) | [通用算法](ALGORITHMS.zh-CN.md)
 
-**先运行一个完整例子。** 需要随机抽取记录、按整数键排序或在消息中同时查找多个告警词时，先看这个组合示例。
+当工程中需要持有可动态增长的原始二进制字节块（`hx_bytes`）、对数组执行随机打乱（Shuffle）或无放回抽样（Sample）、按 32/64 位整数键做线性时间稳定基数排序（Radix Sort），或者需要在二进制流与日志文本中执行 KMP 子串查找、Aho–Corasick 多模式同时扫描与布隆过滤器（Bloom Filter）成员初筛时，可以使用本页介绍的工具集。
 
-打开 [fast_algorithms.c](../examples/fast_algorithms.c)。固定种子初始化 RNG → shuffle/sample → radix_sort → bytes_find → matcher_scan 回调 → bloom 插入与查询 → 释放对象。
+完整可运行的组合示例位于 [fast_algorithms.c](../examples/fast_algorithms.c)：程序使用固定种子初始化伪随机数生成器 `hx_os_rng`，对整数数组依次执行 `hx_os_array_shuffle` 打乱、`hx_os_array_sample` 抽样和 `hx_os_radix_sort_i32` 基数排序，随后用 `hx_os_bytes_find` 查找单模式偏移，用编译好的 `hx_os_matcher` 一次扫描多条告警关键字，最后演示 `hx_os_bloom` 的插入与成员查询。
 
-按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_fast_algorithms`。此例无命令行参数、无需输入文件。
-
-**会得到什么：**排序边界为 `-3 .. 9`，error 位于字节 16，warning 和 error 分别触发回调。Bloom 的 `possibly present` 需要再查真实数据；固定种子 RNG 不用于生成密钥。
-
-下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+按[示例运行方法](../examples/README.zh-CN.md#run)启用 `-DHX_OS_BUILD_EXAMPLES=ON` 并只构建 `hx_os_fast_algorithms` 目标即可直接运行（无需命令行参数或输入文件）。运行后将看到排序后的首尾边界为 `-3 .. 9`，单模式 `"error"` 位于字节偏移 `16`，多模式匹配器依次触发 `"warning"` 和 `"error"` 回调，以及布隆过滤器的查询输出。你也可以参照[最小工程配置](USAGE.zh-CN.md#c-project)将该示例源码作为自己工程的 `main.c`。
 
 ## 1. 持有二进制字节
 
-`hx_bytes` 是与 `hx_string` 对应的二进制值。通过 `HX_BYTES_INIT` 初始化后，可以赋值、追加、预留和调整大小，接受 NUL 及任意编码，不补字符串终止符。扩展大小会填零。赋值／追加可引用当前值，失败保持不变。容量最多 64 MiB，扩容期间可能同时持有新旧缓冲。持有资源的结构应通过移动／复制接口处理，不能直接按结构复制；修改需要外部串行化。
+`hx_bytes` 是与 `hx_string` 对应的原始二进制缓冲区容器。通过 `HX_BYTES_INIT` 初始化后，即可调用赋值（`assign`）、追加（`append`）、预留容量（`reserve`）和调整大小（`resize`）：
+- 接受包含 `0x00`（`NUL`）和任意字节分布的二进制数据，不校验 UTF-8，也不会在末尾自动补字符串终止符。
+- 调用 `hx_bytes_resize` 扩大长度时，新增尾部字节会自动清零。
+- `assign` 和 `append` 允许传入借用自当前 `hx_bytes` 自身缓冲区的视图切片（即使触发扩容也能安全处理）；若分配失败或超出 `64 MiB` 容量上限，原有内容保持不变。
 
 ```c
 hx_bytes packet = HX_BYTES_INIT;
@@ -28,11 +27,11 @@ if (status == HX_OS_OK)
 hx_bytes_destroy(&packet);
 ```
 
-C++ `hx::Bytes` 只能移动，`view()` 借用数据直到修改或销毁。字节缓冲始终属于核心，不是队列；顺序消费请用 ByteQueue／Ring。
+C++11 对应提供只可移动的 `hx::Bytes`（调用 `view()` 可获取借用视图，在后续修改或析构前有效）。`hx_bytes` 始终编译在核心库中；它表示一块连续的二进制值，若需按流顺序边写边消费，请使用 [ByteQueue](BYTE_QUEUE.zh-CN.md) 或 [Ring](RING.zh-CN.md)。
 
 ## 2. 打乱、抽样和整数基数排序
 
-C 算法直接处理普通数组和结构体数组，不要求先放入本库容器。
+与[通用算法](ALGORITHMS.zh-CN.md)一样，这里的 C 函数直接操作普通数组或结构体数组，无需先将数据搬入本库容器：
 
 ```c
 int32_t values[] = {5, -9, 0, 12, 2};
@@ -50,13 +49,14 @@ if (status == HX_OS_OK)
 	status = hx_os_radix_sort_i32(NULL, values, 5, 0, NULL);
 ```
 
-打乱使用 Fisher–Yates，抽样最多选择输出容量项，不重复选择，保持被选项在原数据中的顺序，输入与输出不能重叠。元素必须允许按字节搬移。传入自有 RNG 可以避免逐元素系统调用；传 `NULL` 则为本次操作从系统随机数播种一次。示例用固定种子 1234，便于复现。
-
-`hx_os_rng` 使用 xoshiro256** 和 SplitMix64 播种，有界整数通过拒绝采样消除取模偏差。它是快速、确定性的伪随机生成器，不能用于密码学。安全随机字节使用 `hx_os_random_bytes`，由系统提供；不承诺每次都直接读取物理硬件真随机源。
-
-`hx_os_radix_sort_i32/u32/i64/u64` 使用稳定 LSD 基数排序，分别进行四／八个字节轮次，按真实数字升序排列，包含负数。实现通过 `memcpy` 读取数值，不依赖主机字节序。需要一份数组大小的暂存空间，默认预算 16 MiB，包含分配开销。分配失败或超限保持数组不变。小数组可能普通排序更快，复杂度不能代替实际性能测量。
-
-C++ `hx::algo::shuffle` 遵守标准随机访问迭代器要求。C++11 也有 `sample`：前向输入支持普通输出迭代器，单遍输入需要随机访问输出完成蓄水池抽样。输出容量及不会抛异常的元素／迭代器操作由调用者保证。
+- **随机打乱与抽样（`hx_os_array_shuffle` / `hx_os_array_sample`）**：
+  - `shuffle` 采用 Fisher–Yates 原地洗牌算法；`sample` 执行无放回抽样，最多选出目标输出容量个元素，并**保持被抽中元素在原数组中的相对先后顺序**（输入与输出数组不得重叠，元素须支持按字节搬移）。
+  - 传入调用方持有的 `hx_os_rng` 可避免每次调用都向操作系统请求随机种子；若将 `rng` 传为 `NULL`，函数会在内部用系统随机源自动播种一次（需开启 `HX_OS_ENABLE_RANDOM`）。
+  - `hx_os_rng` 采用 `xoshiro256**` 算法（配合 `SplitMix64` 种子初始化与拒绝采样消除取模偏差），适合高性能确定性模拟与抽样，**不可用于生成密码学密钥**（安全随机字节请使用 `hx_os_random_bytes`）。
+- **稳定整数基数排序（`hx_os_radix_sort_i32` / `u32` / `i64` / `u64`）**：
+  - 采用低位优先（LSD）稳定基数排序，32 位和 64 位整数分别固定执行 4 轮和 8 轮按字节分桶，按真实数值升序排列（正确处理有符号负数的符号位翻转，且不依赖主机大小端字节序）。
+  - 需要分配一份与输入数组等大的临时暂存空间（默认预算上限 `16 MiB`，含分配头开销）。若超出预算返回 `HX_OS_LIMIT`、分配失败返回 `HX_OS_NO_MEMORY`，失败时原数组保持不变。
+- **C++11 迭代器洗牌与抽样**：`<hx/Algorithms.hpp>` 中的 `hx::algo::shuffle` 接受随机访问迭代器与标准随机数生成器；`hx::algo::sample` 在输入为前向迭代器（`ForwardIterator`）时支持任意输出迭代器，在单遍输入迭代器（`InputIterator`）时则要求输出为随机访问迭代器以执行蓄水池抽样（Reservoir Sampling）：
 
 ```cpp
 #include <hx/Algorithms.hpp>
@@ -69,11 +69,11 @@ hx::algo::shuffle(values, values + 5, generator);
 auto end = hx::algo::sample(values, values + 5, selected, 2, generator);
 ```
 
-`end - selected` 是实际选中的数量。C++ 迭代器入口与 C 的按字节搬移入口独立。
+返回值 `end` 减去 `selected` 即为实际抽中的元素个数。
 
 ## 3. 查找字节模式
 
-`hx_os_bytes_find` 使用 KMP，接受带长度的任意字节和 NUL。传入起始偏移及可选暂存预算，返回第一处匹配。空模式匹配起始位置，找不到返回 `NOT_FOUND` 且保留原偏移。同步调用期间借用输入。
+`hx_os_bytes_find` 使用 KMP（Knuth–Morris–Pratt）算法在二进制字节流中查找单个模式串，支持包含 `0x00`（`NUL`）的任意字节序列：
 
 ```c
 size_t offset = 0;
@@ -84,20 +84,30 @@ hx_os_status status = hx_os_bytes_find(NULL,
 	(hx_os_bytes_view){"\0b", 2}, 0, 0, &offset, NULL);
 ```
 
-结果偏移为 1。预处理需要 O(模式长度) 暂存，默认上限 16 MiB；整体为 O(输入＋模式)，不会逐字节分配。
+- 上例从偏移 `0` 开始搜索长度为 2 的模式 `"\0b"`，成功命中并将 `offset` 设为 `1`。
+- 空模式串（长度为 `0`）直接匹配起始偏移 `start_offset`；未找到匹配时返回 `HX_OS_NOT_FOUND` 且保持 `offset` 原值不变。
+- KMP 前缀表预处理需要 `O(模式长度)` 的临时空间（默认预算上限 `16 MiB`），整体搜索时间复杂度为线性 `O(输入长度 + 模式长度)`，扫描过程中不再逐字节分配内存。
 
 ## 4. 一次查找多个模式
 
-先从字节视图编译不可变 `hx_os_matcher`，然后对多条消息重复查询。稀疏 Aho–Corasick 自动机支持重叠和重复模式，回调报告模式序号、起点及长度。不同查询可以并发共用编译结果，销毁前需排除查询；回调不能销毁对象或抛异常／longjmp。
-
-最多 4096 个模式、模式总字节 1 MiB、默认编译预算 16 MiB、每次最多交付 65536 处匹配。达到结果上限返回 `LIMIT`，同时给出已经交付的数量。失败链和输出链只维护一份，不为每个状态复制完整后缀列表。不启动后台任务，不逐匹配分配。C++ 使用 `hx::Matcher`。
+当需要在一批日志或网络报文中同时查找多个固定特征码或关键字时，可以先将模式列表编译为一个不可变的 `hx_os_matcher`（基于稀疏 Aho–Corasick 自动机，C++11 对应 `hx::Matcher`），然后对任意多条消息重复调用扫描接口：
+- **支持重叠与重复模式**：扫描时每命中一处模式，就会同步调用一次用户回调，传入命中的模式序号（对应编译时的输入顺序）、在待查数据中的起始偏移与字节长度。
+- **并发共享与生命周期**：编译完成后的 `hx_os_matcher` 是只读不可变的，**允许多个线程并发调用扫描接口共享同一个匹配器实例**（只需确保在所有扫描完成之后再调用销毁函数；回调内部不得销毁当前匹配器，也不得抛异常或 `longjmp`）。
+- **容量与结果上限**：单次编译最多支持 `4096` 个模式串、模式总长度不超过 `1 MiB`、默认编译内存预算为 `16 MiB`。单次扫描最多交付 `65,536` 处匹配；若命中次数超出该上限，扫描函数返回 `HX_OS_LIMIT` 并通过输出参数报告已交付的匹配次数。自动机的失败跳转链（Failure Links）与输出链仅维护单份紧凑索引，扫描过程零堆内存分配。
 
 ## 5. 布隆过滤器
 
-`hx_os_bloom_create(context, expected_items, false_positive_rate, budget, ...)` 创建有界成员过滤器。加入任意字节键后，用 `hx_os_bloom_contains` 查询。假说明从未加入，真可能是误报，仍需访问真实数据源确认。预期数量只用于计算容量，超过它会增加误报；不提供删除或自动扩容，`clear` 可以清空。
-
-误报率参数范围为 1e-9..0.5，默认内存预算 16 MiB，最大 64 MiB。双重哈希在插入时不分配，属于非密码学哈希，不能作为认证或安全隔离。修改需串行化，不变数据的查询可以并发。C++ 使用 `hx::Bloom`。
+`hx_os_bloom_create(context, expected_items, false_positive_rate, budget, &bloom, error)`（C++11 对应 `hx::Bloom`）用于创建有界空间复杂度的高速集合成员初筛器：
+- **查询语义（无漏报、有受控误报）**：写入任意字节键后，调用 `hx_os_bloom_contains` 查询。若结果为假（`0`），说明该键**绝对未曾加入过**，可直接省去昂贵的磁盘或数据库查询；若结果为真（`1`），表示“可能存在”（存在一定的假阳性误报概率），仍需回查真实数据源确认。
+- **容量参数与操作边界**：`expected_items` 仅用于在创建时计算最优位宽与哈希次数，并非硬性插入上限（但实际插入量远超预期值会导致误报率上升）。布隆过滤器不支持删除单个元素，也不自动扩容；调用 `hx_os_bloom_clear` 可将全部位重置为空。
+- **预算与并发规则**：目标误报率 `false_positive_rate` 取值范围为 `1e-9 .. 0.5`，默认内存预算为 `16 MiB`（最大允许 `64 MiB`）。内部采用非密码学双重哈希（Double Hashing），插入与查询均为零内存分配。修改操作需在外部串行化；数据不再修改时允许多个线程并发查询。
 
 ## 6. 示例和裁剪
 
-构建／运行 `hx_os_fast_algorithms`，查看打乱、抽样、基数排序、多个告警模式查找和布隆过滤。[fast_algorithms.c](../examples/fast_algorithms.c) 是完整程序。C 算法、匹配器和布隆过滤需要 `HX_OS_ENABLE_CONTAINERS`，关闭后返回 `NOT_SUPPORTED`；系统播种另需 RANDOM。核心字节缓冲和确定性 RNG 不需要全局初始化。
+在开启 `-DHX_OS_BUILD_EXAMPLES=ON` 后构建并运行 `hx_os_fast_algorithms`（源码见 [fast_algorithms.c](../examples/fast_algorithms.c)），即可一次性验证数组洗牌、无放回抽样、基数排序、KMP／Aho–Corasick 模式查找与布隆过滤器的完整行为。
+
+> [!NOTE]
+> **模块编译开关说明**：
+> - `hx_bytes` 与确定性伪随机生成器 `hx_os_rng` 始终包含在核心库中，无需额外开关或全局初始化。
+> - C 数组洗牌／抽样、基数排序、`hx_os_bytes_find`、`hx_os_matcher` 和 `hx_os_bloom` 依赖 `HX_OS_ENABLE_CONTAINERS=ON`；若关闭该开关，相关调用会返回 `HX_OS_NOT_SUPPORTED`。
+> - 当 `shuffle` / `sample` 的 `rng` 参数传 `NULL` 以请求系统随机种子时，还需开启 `HX_OS_ENABLE_RANDOM=ON`。

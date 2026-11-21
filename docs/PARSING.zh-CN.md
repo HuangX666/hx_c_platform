@@ -2,34 +2,32 @@
 
 [English](PARSING.md) · [README](../README.zh-CN.md)
 
-**先运行一个完整例子。** 自定义配置里既有需要读取的字段，又有可以忽略的扩展块时，可以用 Lexer 辅助检查符号、读值和跳过括号组。
+当应用需要解析自定义的轻量配置脚本、DSL 规则或命令文本——其中既有必须提取的键值对，又有可以安全跳过的嵌套扩展块（如 `{ ... }`）——如果每次都手写字符循环、引号转义与括号配对计数，代码很容易变得冗长且脆弱。本模块在 UTF-8 词法分析器（Lexer）之上提供了一组轻量级的语法消费与括号组跳过辅助函数。
 
-打开 [parse_script.c](../examples/parse_script.c)。create lexer → read_title 依次检查 title、等号、字符串和分号 → skip_group 跳过 extensions → 检查 END → destroy。
+你可以先运行 [parse_script.c](../examples/parse_script.c) 查看完整效果：程序创建词法分析器后，调用 `read_title()` 依次核对 `title`、等号 `=`、带引号字符串与分号 `;`，接着调用 `hx_os_lexer_skip_group()` 一次性跳过整个 `extensions { ... }` 嵌套块，最后确认到达 `HX_OS_TOKEN_END` 并销毁分析器。按[示例运行方法](../examples/README.zh-CN.md#run)启用示例后，单独构建并运行 `hx_os_parse_script`（无需命令行参数或输入文件）：
 
-按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_parse_script`。此例无命令行参数、无需输入文件。
+```text
+Title: Camera
+```
 
-**会得到什么：**内置输入输出 `Title: Camera`。把输入字符串换成自己的规则，并为每个必需字段编写类似 read_title 的函数；这不会改变 C/C++ 源码语法。
-
-下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
-
-需要在解析前处理常量、条件分支和有界文件包含时，见[运行时预处理](PREPROCESSING.zh-CN.md)。
+将示例中的输入字符串替换为你自己的规则文本，即可按相同模式编写各字段的读取函数；你也可以按[最小工程配置](USAGE.zh-CN.md#c-project)将该示例源码作为 `main.c` 编译。如果文本在正式解析前还需要展开 `#define` 常量、处理 `#if` 条件分支或 `#include` 包含文件，请配合[运行时预处理](PREPROCESSING.zh-CN.md)使用。
 
 ## 1. 从词法单元到简单语法
 
-Lexer 把 UTF-8 输入拆成标识符、数字、带引号字符串、标点，以及按选项保留的空白／注释。解析辅助负责检查和跳过这些单元，让应用不用反复手写比较和括号计数。它们处理运行时的配置字符串或文件内容，不给 C/C++ 源码添加新语法，也不要求编译前生成步骤。
+底层 Lexer 负责将运行时的 UTF-8 文本切分为标识符（Identifier）、数字（Number）、带引号字符串（String）、标点符号（Punctuation）以及按选项保留的空白与注释。解析辅助函数则在此基础上封装了“试探消费（Accept）”、“强制匹配（Expect）”、“解码字符串（Read String）”和“跳过平衡括号组（Skip Group）”等常见递归下降解析动作（注意：它们仅在运行期解析数据文本，不会改变 C/C++ 源码语法，也不需要预编译代码生成器）。
 
-例如下面的输入，title 必须读取，extensions 可以由应用选择忽略：
+例如面对下面这段自定义配置，应用需要提取 `title` 字段，并安全忽略整个 `extensions` 块：
 
 ```text
 title = "Camera";
 extensions { nested [call("}")]; /* ignored */ }
 ```
 
-字符串 `"}"` 不会结束 extensions。跳过整组时，会正确区分字符串、注释和不同的括号类型。
+调用 `hx_os_lexer_skip_group()` 跳过 `{ ... }` 时，词法分析器会自动识别字符串字面量与注释——因此字符串内部的 `"}"` 或注释里的符号绝不会提前闭合外层的 `extensions` 花括号，同时内嵌的 `[...]` 与 `(...)` 也会被严格检查配对。
 
 ## 2. 运行完整 C 程序
 
-[parse_script.c](../examples/parse_script.c) 读取标题、跳过扩展块，最后确认没有多余内容：
+[parse_script.c](../examples/parse_script.c) 完整演示了读取 `title`、跳过 `extensions` 块并验证末尾无多余 Token 的过程：
 
 ```sh
 cmake --build build --config Release --target hx_os_parse_script
@@ -39,23 +37,27 @@ cmake --build build --config Release --target hx_os_parse_script
 ./build/bin/Release/hx_os_parse_script.exe
 ```
 
-预期输出为 `Title: Camera`。示例开启 `HX_OS_LEXER_SKIP_NEWLINES`，把换行当作可跳过空白。其它情况下，所有辅助函数都沿用创建 Lexer 时的空白／注释选项。
+运行输出为 `Title: Camera`。该示例在创建 Lexer 时开启了 `HX_OS_LEXER_SKIP_NEWLINES`，使换行符像普通空格一样被自动跳过；所有解析辅助函数均直接沿用创建 Lexer 时指定的空白与注释过滤选项。
 
-| 任务 | C 入口 | C++11 入口 |
+| 常见解析动作 | C 接口 | C++11 接口（`hx::Lexer`） |
 | --- | --- | --- |
-| 比较单个 token，不移动位置 | `hx_os_token_is` | 比较已有 token 的 text |
-| 尝试消费一个可选文本 | `hx_os_lexer_accept` | `lexer.accept(";")` |
-| 要求并消费指定文本 | `hx_os_lexer_expect` | `lexer.expect("title")` |
-| 要求一种 token 类型 | `hx_os_lexer_expect_kind` | `lexer.expectKind(HX_OS_TOKEN_NUMBER)` |
-| 读取并解码一个带引号字符串 | `hx_os_lexer_read_string` | `lexer.readString()` |
-| 跳过完整括号组 | `hx_os_lexer_skip_group` | `lexer.skipGroup()` |
-| 跳到指定 token 并消费它 | `hx_os_lexer_skip_until` | `lexer.skipUntil(";")` |
+| 比较单个 Token 文本（不推进游标） | `hx_os_token_is` | 直接比较已获取 `Token` 的 `.text()` |
+| 试探并消费可选的指定 Token | `hx_os_lexer_accept` | `lexer.accept(";")` |
+| 要求并消费指定的 Token 文本 | `hx_os_lexer_expect` | `lexer.expect("title")` |
+| 要求并消费指定的 Token 类型 | `hx_os_lexer_expect_kind` | `lexer.expectKind(HX_OS_TOKEN_NUMBER)` |
+| 读取并解码一个带引号的字符串 | `hx_os_lexer_read_string` | `lexer.readString()` |
+| 跳过一整组配对的括号块 `()`／`[]`／`{}` | `hx_os_lexer_skip_group` | `lexer.skipGroup()` |
+| 顺序跳到指定 Token 并消费它 | `hx_os_lexer_skip_until` | `lexer.skipUntil(";")` |
 
-“指定文本”比较的是单个 token 的原始字节，标识符区分大小写。想获得去掉引号、已处理转义的字符串内容，应使用 `read_string`。当前 Lexer 每次返回一个标点字符，`==` 是两个 `=` token，不会自动合成运算符；这些辅助入口不会悄悄改变已有词法规则。
+> [!NOTE]
+> **词法匹配细节：**
+> - **原始字节精确匹配**：`accept`、`expect` 与 `skip_until` 比较的是单个 Token 的原始字面字节，且标识符严格区分大小写。
+> - **获取去引号字符串**：若要获取去掉外层引号并完成转义解码后的字符串内容，请调用 `hx_os_lexer_read_string()`，而不是直接读取原始 Token 切片。
+> - **单字符标点规则**：当前 Lexer 每次将单个标点字符切分为一个独立的标点 Token（例如 `==` 会被切分为两个连续的 `=` Token，不会自动合并成双字符运算符）。
 
 ## 3. C++11 调用
 
-包含 `<hx/Lexer.hpp>`。下列片段用于返回 `hx_os_status` 的函数；还需包含 `<cstdio>`，成功路径最后返回 `HX_OS_OK`：
+在 C++11 中，包含 `<hx/Lexer.hpp>` 即可使用面向对象封装。下面这段代码可放入返回 `hx_os_status` 的函数中（成功路径末尾返回 `HX_OS_OK`）：
 
 ```cpp
 auto created = hx::Lexer::create("title = 'Camera'; { [1, 2] }");
@@ -86,27 +88,30 @@ if (!status)
 std::puts(title.value().c_str());
 ```
 
-`readString()` 返回独立拥有数据的 `String`，关闭 Lexer 后仍有效；`native()` 则借用 C 句柄，供高级调用使用。C token 输出借用 Lexer 的不可变输入，直到销毁 Lexer。C++ `next()` 继续返回自己拥有文本的 `Token`。
-
-`accept()` 返回 `Result<bool>`：先检查 `ok()`，再通过 `value()` 判断有没有匹配。正常的“不匹配”是 `ok()==true、value()==false`；只判断 Result 的真假，判断的是有无错误，不是是否匹配。空的或已经移走的 C++ Lexer 在这些操作中返回 `HX_OS_CLOSED`。
+- **生命周期独立**：`lexer.readString()` 返回独立持有内存的 `hx::Result<hx::String>`，即使后续关闭或销毁了 `lexer`，该字符串依然有效。而在 C 接口中，普通 Token 输出切片借用自 Lexer 的不可变输入缓冲区，需在销毁 Lexer 前使用。
+- **如何正确检查 `lexer.accept()`**：`accept()` 返回 `hx::Result<bool>`。请先检查 `result.ok()` 确认词法扫描本身没有出错，再检查 `result.value()` 判断是否匹配到了目标符号——正常的“当前符号不匹配”会返回 `ok() == true` 且 `value() == false`（若只写 `if (result)`，判断的只是“没有发生词法错误”，而非“匹配成功”）。对已移走（Moved-from）或未初始化的 C++ `Lexer` 调用方法会返回 `HX_OS_CLOSED`。
 
 ## 4. 失败及位置推进
 
-| 操作／结果 | 位置和输出 |
+不同辅助函数在匹配成功或失败时的游标推进契约如下：
+
+| 操作与结果场景 | 游标位置与输出状态 |
 | --- | --- |
-| `accept` 匹配 | 消费该 token，`matched=1` |
-| `accept` 不匹配，包括 EOF | 返回 OK、`matched=0`，不移动 |
-| `expect` 不匹配 | `HX_OS_SYNTAX`，不移动，不改 token 输出 |
-| `expect`／`read_string` 意外到达 EOF | `HX_OS_TRUNCATED_INPUT` |
-| `expect_kind(END)` 在 EOF | 成功返回 END，不再推进 |
-| `read_string` 分配／解码失败 | 保留原输出字符串及位置 |
-| `skip_group` 遇到错误闭括号或过深嵌套 | 返回 SYNTAX／LIMIT，可能已消费前缀，问题括号仍是下一个 token |
-| `skip_group` 缺少闭括号 | 消费已有前缀后返回 TRUNCATED_INPUT |
-| `skip_until` 找到指定 token | 消费到该 token，包含该 token 本身 |
-| `skip_until` 找不到指定 token | 扫描到末尾后返回 EOF |
+| `accept` 匹配成功 | 消费该 Token，输出 `matched = 1`，返回 `HX_OS_OK` |
+| `accept` 不匹配（包括已处于 `EOF`） | **不移动游标**，输出 `matched = 0`，正常返回 `HX_OS_OK` |
+| `expect` 遇到不匹配的 Token | **不移动游标**，不修改输出 Token，返回 `HX_OS_SYNTAX` |
+| `expect` 或 `read_string` 意外遇到 `EOF` | 返回 `HX_OS_TRUNCATED_INPUT` |
+| `expect_kind(HX_OS_TOKEN_END)` 在 `EOF` 处调用 | 成功返回 `HX_OS_OK` 与 `END` Token（游标保持在末尾不再推进） |
+| `read_string` 内存分配或转义解码失败 | 保持输出字符串原内容与游标位置不变 |
+| `skip_group` 遇到错误的闭括号或超出嵌套深度 | 返回 `HX_OS_SYNTAX` 或 `HX_OS_LIMIT`（外层已消费的前缀不再回退，出错的括号保留为下一个待读 Token） |
+| `skip_group` 在闭合前到达 `EOF` | 消费完已有前缀后返回 `HX_OS_TRUNCATED_INPUT` |
+| `skip_until` 找到目标 Token | 一直消费到该目标 Token（**包含**该目标 Token 本身），返回 `HX_OS_OK` |
+| `skip_until` 扫描至末尾仍未找到目标 Token | 游标停在输入末尾，返回 `HX_OS_EOF` |
 
-分组跳过支持 `()`、`[]`、`{}`，嵌套类型必须对应。默认深度上限为 64；`hx_os_lexer_skip_group_with_limit` 或 C++ `skipGroup(limit)` 可以指定 1～256。内部使用固定 256 字节括号栈，不递归、不分配内存。原有输入大小、token 大小和 token 数量上限继续生效。平面扫描 `skip_until` 不能代替完整括号组跳过，它可能停在嵌套组内部的目标 token。
+> [!IMPORTANT]
+> **括号组跳过（`skip_group`）与平面跳过（`skip_until`）的区别：**
+> - `hx_os_lexer_skip_group()` 支持 `()`、`[]` 和 `{}` 三种括号并严格校验嵌套配对。默认最大嵌套深度为 **64 层**；可通过 `hx_os_lexer_skip_group_with_limit()` 或 C++ `skipGroup(limit)` 在 **1—256 层**之间调整。内部使用固定的 256 字节栈上括号缓冲，零堆内存分配且不使用 C 函数递归。
+> - `hx_os_lexer_skip_until()` 只是平面顺序扫描，**不会**识别括号层级——如果嵌套花括号内部恰好也出现了分号 `;`，`skip_until(";")` 就会停在内部的分号上。因此跳过括号块时请务必使用 `skip_group`。
+> - 当 `expect` 报 `HX_OS_SYNTAX` 时，由于游标未移动，你可以直接调用 `peek` 查看当前实际是什么 Token；而当 `skip_group` 中途失败后，若想从头重新解析，请调用 `reset` 或重建 Lexer（切勿写出假设“每次检查 `END` 都会向前推进游标”的死循环）。
 
-expect 不匹配后，可以 peek 查看下一个 token 的位置而不消费它。分组跳过失败后，要从头再试，应 reset 或重新创建 Lexer；只提高深度上限不能恢复之前已经跳过的外层括号。不要假设每次成功检查 END 都会推进位置，从而写出不退出的重试循环。
-
-除了向独立字符串解码，这些辅助操作都不分配内存，也不引入线程或锁。同一 Lexer 的操作要串行执行；分配器回调不得重入、修改或销毁参与操作的 Lexer／目标字符串。关闭 `HX_OS_ENABLE_LEXER` 后，依赖 Lexer 的操作明确不支持；原始 token 比较仍是无状态的字节比较。
+除 `read_string` 需要向输出 `hx_string` 写入解码文本外，其余解析辅助操作均不分配堆内存。若在构建时关闭了 `HX_OS_ENABLE_LEXER`，依赖 Lexer 的操作会返回 `HX_OS_NOT_SUPPORTED`，而纯内存切片比较 `hx_os_token_is()` 仍可正常使用。

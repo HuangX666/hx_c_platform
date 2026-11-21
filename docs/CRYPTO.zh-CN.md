@@ -2,21 +2,17 @@
 
 [English](CRYPTO.md) · [首页](../README.zh-CN.md) · [依赖构建](DEPENDENCIES.zh-CN.md)
 
-**先运行一个完整例子。** 需要保存只有持有密码的一方才能还原的文本时，可以使用文本加解密便利入口。
+当应用需要使用口令或密钥加密保存配置文本、对本地大文件进行带完整性认证的加解密、计算 SHA-256 / SHA-512 摘要与 HMAC，或者使用 Ed25519 / RSA-PSS 进行数字签名与验签时，`hx_os_crypto` 提供了开箱即用的高层密码学接口。它基于固定版本的 OpenSSL 3.5 构建，将盐值生成、PBKDF2 密钥派生、AES-256-GCM 认证加密和原子文件发布封装为直观的 C99 与零异常 C++11 调用，让你无需直接操作繁琐的底层 `EVP_*` 接口。
 
-打开 [encrypt_text.c](../examples/encrypt_text.c)。encrypt_text 输入密码和 UTF-8 → 保存带认证的加密文本 → decrypt_text → 使用还原结果 → 销毁字符串并清理本线程加密资源。
-
-按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_encrypt_text`。此例无命令行参数、无需输入文件。
-
-**会得到什么：**输出一行 `Encrypted: ...` 和 `Decrypted: Hello, UTF-8!`。随机盐和 nonce 让密文每次不同；示例密码只用于演示，业务应从自己的安全输入取得密码。
-
-下面的短片段用于解释接口；复制运行时以完整示例为准。使用[安装包接入](USAGE.zh-CN.md#installed-project)时，也必须保留对应 SDK 模块。
+你可以直接编译并运行公开示例 [encrypt_text.c](../examples/encrypt_text.c) 来体验完整的加解密与认证流程（按[示例构建说明](../examples/README.zh-CN.md#run)启用 `HX_OS_BUILD_EXAMPLES=ON` 并构建 `hx_os_encrypt_text`，无需命令行参数或外部文件）：
+- 程序会输出一行随机生成的 Base64 密文 `Encrypted: ...`，随后验证并还原出明文 `Decrypted: Hello, UTF-8!`（每次运行生成的密文都不同，因为内部会自动生成随机盐值与随机 GCM Nonce）。
+- 如果通过[已安装包接入工程](USAGE.zh-CN.md#installed-project)，请同时保留对应的依赖 SDK 模块。
 
 ## 1. 构建与发布
 
-`HX_OS_ENABLE_CRYPTO` 默认开启，将固定版本的 OpenSSL 3.5 SDK 接入编译库；业务仍只需要包含 hx 头文件。核心继续使用 C99，C++11 包装不使用异常。模块启用后不会启动后台线程。
+`HX_OS_ENABLE_CRYPTO` 默认开启（`ON`），它会将固定版本的 OpenSSL 3.5 SDK 接入本库，而业务代码依然只需 `#include <hx_os.h>`，且加载模块不会启动任何后台线程。
 
-先按[依赖说明](DEPENDENCIES.zh-CN.md#4-构建依赖)构建 SDK，再用绝对 prefix 路径配置本库：
+请先按[依赖构建指南](DEPENDENCIES.zh-CN.md#4-构建依赖)编译依赖 SDK，再将 SDK 的安装前缀绝对路径传给 `HX_OS_DEPENDENCY_PREFIX`：
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
@@ -26,21 +22,21 @@ cmake --build build --config Release --target hx_os_encrypt_text --parallel 4
 build/bin/hx_os_encrypt_text
 ```
 
-Windows 多配置构建的程序在对应 `bin/Release/` 目录，带 `.exe` 后缀。
+（Windows 多配置构建生成的可执行文件位于 `build/bin/Release/hx_os_encrypt_text.exe`。）
 
-OpenSSL 默认动态链接。Windows 构建会把选中的 Crypto DLL 复制到本库的 `bin/<config>` 目录；通过 `add_subdirectory` 接入且可执行文件在其他目录时，业务也需要把该 DLL 放到程序旁，或者把安装后的 `bin` 加入 PATH。安装默认包含选中的 Crypto 运行库；业务自己管理部署时，可通过 `HX_OS_INSTALL_OPENSSL_RUNTIME=OFF` 关闭复制。Linux 将其安装在核心共享库旁，并设置相对运行库搜索路径。即便核心使用静态库，OpenSSL 默认仍为动态链接；安装后的静态库消费者执行 `find_package(hx_c_platform CONFIG REQUIRED)` 时，需要把 SDK prefix 加入 `CMAKE_PREFIX_PATH`。
+### 动态链接、静态链接与无 OpenSSL 裁剪
 
-启用 TLS 时，同时包含选定的 SSL 运行库，详见 [TLS 教程](TLS.zh-CN.md)。
-
-需要静态集成 OpenSSL 时，用 `HX_DEPS_OPENSSL_SHARED=OFF` 构建 SDK，并给主项目传入 `HX_OS_OPENSSL_STATIC=ON`。外部线程和插件卸载还需遵守第 5 节。分发时保留实际组件的许可证材料。Android 和 Linux ARM SDK 操作见[交叉构建](DEPENDENCIES.zh-CN.md#6-linux-arm-与-android-交叉构建)。目标要求见[平台支持](PLATFORMS.zh-CN.md)。
-
-Android SDK 通过自有 OpenSSL 配置使用 `libcrypto-hx.so`、`libssl-hx.so` SONAME，避开系统 BoringSSL 名称。CMake 目标和运行库清单记录实际文件，不要手工改名桌面运行库，也不能混用不同 ABI 的库。详见 [Android 部署](ANDROID.zh-CN.md)。
-
-完全不需要 OpenSSL 时，同时设置 `HX_OS_ENABLE_CRYPTO=OFF` 和 `HX_OS_ENABLE_ARCHIVE=OFF`；ARCHIVE 的密码 ZIP 同样使用 OpenSSL。头文件和函数仍可用，`hx_os_crypto_available()` 返回 0，加密操作返回 `HX_OS_NOT_SUPPORTED`。基础字符串、容器和文件能力不依赖 OpenSSL。
+- **默认动态链接 OpenSSL**：
+  - 在 Windows 上，构建过程会自动将对应的 Crypto DLL 复制到 `bin/<config>` 目录（若你的主工程通过 `add_subdirectory` 接入且可执行文件输出在其他目录，请将该 DLL 放到可执行文件旁或将安装后的 `bin` 目录加入 `PATH`）。
+  - `cmake --install` 默认会一并安装选中的 Crypto 运行库（若宿主工程自行管理运行库部署，可设 `-DHX_OS_INSTALL_OPENSSL_RUNTIME=OFF`）。Linux 安装时会将运行库放在核心共享库旁并自动配置相对 `RPATH`。
+  - 注意：即使本库核心编译为静态库，OpenSSL 默认仍为动态链接；外部静态库消费者在调用 `find_package(hx_c_platform CONFIG REQUIRED)` 时，需将依赖 SDK 的 `prefix` 路径加入 `CMAKE_PREFIX_PATH`（若同时启用了 TLS，还会自动包含 SSL 运行库，详见 [TLS 指南](TLS.zh-CN.md)）。
+- **静态嵌入 OpenSSL**：若需将 OpenSSL 静态编译进库中，请先用 `-DHX_DEPS_OPENSSL_SHARED=OFF` 构建依赖 SDK，再向主项目传入 `-DHX_OS_OPENSSL_STATIC=ON`，并务必遵守第 5 节的外部线程清理与卸载规则。
+- **Android 专有 SONAME 隔离**：Android 平台的依赖 SDK 通过专有配置生成 `libcrypto-hx.so` 与 `libssl-hx.so` SONAME，避免与 Android 系统自带的 BoringSSL 发生符号冲突（请勿手动重命名桌面端动态库或混用不同 ABI，详见[交叉构建指南](DEPENDENCIES.zh-CN.md#6-linux-arm-与-android-交叉构建)与 [Android 部署说明](ANDROID.zh-CN.md)）。
+- **彻底裁剪 OpenSSL**：如果目标环境完全不需要密码学能力，请同时设置 `-DHX_OS_ENABLE_CRYPTO=OFF` 和 `-DHX_OS_ENABLE_ARCHIVE=OFF`（因为 `ARCHIVE` 模块的加密 ZIP 同样依赖 OpenSSL）。裁剪后头文件与函数符号依然存在，但 `hx_os_crypto_available()` 返回 `0`，相关调用统一返回 `HX_OS_NOT_SUPPORTED`。
 
 ## 2. 加密并解密 UTF-8 文本
 
-下面是完整的 C 程序：加密一段文字，再解密并打印验证通过的原文。加密结果是 Base64 文本，可以存进 JSON 字符串。示例密码只用于演示，实际密码应由程序的输入或秘密存储提供。
+下面的完整 C 程序使用口令加密一段 UTF-8 文本，随后解密并打印通过完整性认证的明文。加密产物是标准的 Base64 字符串，非常适合直接存入 JSON、INI 或数据库字段（注：示例中的明文口令仅用于演示，实际业务请从安全输入或密钥管理服务中获取口令）：
 
 ```c
 #include <hx_os.h>
@@ -69,9 +65,7 @@ int main(void)
 }
 ```
 
-预期输出是 `Hello`。每次加密结果不同，因为盐和 nonce 都随机生成。可直接构建运行的 [encrypt_text.c](../examples/encrypt_text.c) 还会打印密文；运行 `build/bin/hx_os_encrypt_text` 或 `build\bin\Release\hx_os_encrypt_text.exe`。
-
-C++11 使用 `Result<String>`，不需要异常：
+运行后输出 `Hello`。在 C++11 中，包含 `<hx/Crypto.hpp>` 即可使用零异常的 `hx::Result<hx::String>` 接口：
 
 ```cpp
 #include <hx/Crypto.hpp>
@@ -93,11 +87,12 @@ int main()
 }
 ```
 
-C 的输出使用已初始化字符串自己的分配器，失败时保留原内容。原文和密码严格使用 UTF-8，不做字符规范化；按长度传入的原文可以包含 NUL。Base64 必须为标准规范形式，不接受空白和折行。文本上限为 16 MiB，密码为 1～1024 字节。错误密码或认证内容被修改返回 `HX_OS_AUTH_FAILED`；帧结构、编码错误单独报告。只有成功结果才可以当作解密原文使用。
+- **编码与容量约束**：输入明文与口令均严格校验 UTF-8 合法性（不做 Unicode 字符规范化转换；按长度传入的明文允许包含内部 `\0` 字节）。解密输入的 Base64 必须是无空格、无折行的标准規範格式。单次文本输入上限为 `16 MiB`，口令长度范围为 `1`～`1024` 字节。
+- **认证失败处理**：如果口令错误或密文/头部被篡改，解密函数会明确返回 `HX_OS_AUTH_FAILED`（若外层 Base64 或帧结构损坏则报告对应的格式/编码错误），同时保持输出字符串原有内容不变——**只有当函数返回 `HX_OS_OK` 时，才允许使用解密输出**。
 
 ## 3. 加密文件或任意字节
 
-文件只需调用下面两个 C 入口，打开、读写、关闭、认证和发布由库处理：
+对于本地文件，只需调用 `hx_os_crypto_encrypt_file()` 和 `hx_os_crypto_decrypt_file()`（C++11 对应 `hx::Crypto::encryptFile()` 与 `decryptFile()`），内部会自动完成分块读写、GCM 认证与原子发布：
 
 ```c
 hx_os_status status =
@@ -107,19 +102,29 @@ if (status == HX_OS_OK)
 		"report.hxc", "restored.pdf", password, &error);
 ```
 
-这里 `password` 由业务提供，`error` 是 `hx_os_error`。检查 `status` 后再使用输出文件。C++ 对应 `hx::Crypto::encryptFile`、`decryptFile`，返回 `Result<void>`。默认目标已存在时返回 `EXISTS`，不会悄悄覆盖。需要覆盖时使用 `_with_options`，显式设置 `HX_OS_CRYPTO_REPLACE`；同一入口还支持原始 32 字节密钥、密码字节串、长度限制和 `hx_os_file_save_result`，分别报告“已经发布”和“父目录持久化请求的结果”。
+- **分块流式处理与原子发布**：
+  - 文件加解密按 `32 KiB` 分块流式处理（内部工作缓冲共 `64 KiB`），不会把整个大文件读入内存。默认单文件上限为 `4 GiB`，最高可配置至 `64 GiB - 32 字节`（即 AES-GCM 单消息理论上限）。
+  - 默认情况下，若目标输出文件已存在，函数返回 `HX_OS_EXISTS` 而不会静默覆盖；如需覆盖已有文件，或需使用原始 32 字节密钥、自定义大小上限及获取父目录落盘结果（`hx_os_file_save_result`），请调用 `_with_options` 变体并传入 `HX_OS_CRYPTO_REPLACE`。
+  - 解密输出会先写入目标同目录下的私有临时文件，**只有当整份文件的 GCM 认证标签完全校验通过并刷盘成功后，才会原子发布为目标文件**——一旦密码错误或文件尾部被篡改，目标路径绝不会被污染。
+- **解密临时文件的权限保护**：
+  - 为了防止解密过程中的明文临时文件被同机其他普通用户偷看，POSIX 端强制使用仅所有者可读写的 `0600` 权限并做回读核实，Windows 端则设置仅允许当前所有者的受保护 DACL。如果目标挂载点忽略权限位（如部分 WSL Windows 挂载盘）或不支持持久 ACL，函数会在写入任何明文前直接返回 `HX_OS_NOT_SUPPORTED`。
+- **任意二进制内存加解密（`hx_os_crypto_encrypt` / `decrypt`）**：
+  - 处理非文本二进制数据时，传入 `hx_os_bytes_view` 与 `hx_os_crypto_secret`（口令或由 `hx_os_crypto_random_key()` 生成的 32 字节原始密钥），输出为独立持有的 `hx_os_crypto_bytes *`（单次默认上限 `16 MiB`，最大可配 `64 MiB`）。
+  - 读取完 `hx_os_crypto_bytes_data()` / `bytes_size()` 后，调用 `hx_os_crypto_bytes_destroy(&result)` 即可在释放前自动安全清零内存（调用方自己持有的原始密钥缓冲区用完后也应调用 `hx_os_secure_zero()` 清零）。
 
-文件按 32 KiB 分块，工作缓冲共 64 KiB，不会把整份文件读入内存。默认文件上限 4 GiB，可配置到 64 GiB 减 32 字节，即 GCM 单条消息上限。调用期间输入文件必须保持稳定。同目录临时文件通过认证、冲刷后才发布，认证失败不会替换目标文件。POSIX 文件系统不支持“不覆盖重命名”时，可通过硬链接原子发布已经写好的临时文件，再移除临时名称。
-
-解密临时文件使用私有权限：POSIX 仅所有者可访问，Windows 使用只允许所有者的受保护 DACL。POSIX 会核实创建后的权限；忽略 0600 的挂载文件系统，以及不支持持久 ACL 的 Windows 文件系统，会在写入明文前返回 `NOT_SUPPORTED`。发布后的文件保留这些权限。此约定保护的是其他普通账户，不能隔离管理员或同一用户身份运行的其他程序。失败和发布后的清理尽力完成，操作系统清理失败时可能留下私有临时文件；目标目录应由应用控制。WSL 原生文件系统和 Windows 挂载盘分别验证。
-
-任意二进制内容使用 `hx_os_crypto_encrypt/decrypt`：输入是 `hx_os_bytes_view`，秘密材料是 `hx_os_crypto_secret`，输出为独立持有的 `hx_os_crypto_bytes *`。`hx_os_crypto_random_key` 生成 32 字节密钥。通过 `bytes_data/bytes_size` 借用结果，完成后调用 `hx_os_crypto_bytes_destroy(&result)`，释放前会清零。结果不承诺 NUL 终止。二进制内存输入默认限制 16 MiB，最多 64 MiB；封装头和有界临时副本另计。限制针对单次调用，不是整个进程的内存预算。业务自己的密钥缓冲使用完后也应通过 `hx_os_secure_zero` 清零。原始密钥模式需要业务跨所有进程／设备协调轮换，同一密钥加密次数应少于 2^32；无状态的字节串入口不保存全局密钥计数。此限制来自随机 nonce 的 [NIST SP 800-38D 第 8.3 节](https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-38d.pdf)。
+> [!WARNING]
+> **原始 32 字节密钥的 Nonce 碰撞边界（NIST SP 800-38D）**
+> 当跳过 PBKDF2 直接使用固定的 32 字节原始密钥（Raw Key Mode）进行 AES-256-GCM 加密时，由于每次采用 96 位随机 Nonce，根据 [NIST SP 800-38D 第 8.3 节](https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-38d.pdf) 规范，**同一个原始密钥在所有进程与设备上的累计加密次数不得超过 $2^{32}$ 次**，应用层需自行协调密钥轮换。
 
 ## 4. 摘要、HMAC 与签名
 
-`hx_os_crypto_sha256(NULL, input, &text, &error)` 返回小写十六进制 SHA-256。`hash` 还支持 SHA-512；`sha256_file/hash_file` 采用有界文件缓冲；`hmac` 接收密钥字节串和消息字节串。收到十六进制标签时，用 `hx_os_crypto_hmac_verify`／`hx::Crypto::verifyHmac` 验证，格式检查后执行常量时间比较，不匹配返回 `AUTH_FAILED`。这些函数失败时不改变输出字符串。普通摘要不能证明发送者身份，需要认证时使用秘密密钥 HMAC 或签名。
+- **单次 SHA 摘要与常时间 HMAC 校验**：
+  - `hx_os_crypto_sha256(NULL, input, &text, &error)` 输出小写十六进制 SHA-256 字符串；通用入口 `hx_os_crypto_hash()` 还支持 SHA-512；文件摘要入口 `sha256_file` / `hash_file` 则使用有界文件缓冲逐块读取（若需边收网络流边算摘要，请见[分块增量哈希指南](INCREMENTAL_HASH.zh-CN.md)）。
+  - `hx_os_crypto_hmac()` 接收密钥与消息字节串计算消息认证码；收到对端发来的十六进制 HMAC 标签时，请调用 `hx_os_crypto_hmac_verify()`（C++11 为 `hx::Crypto::verifyHmac()`），它会在校验格式后执行**常量时间比较（Constant-Time Comparison）**，不匹配时返回 `HX_OS_AUTH_FAILED`。
+- **非对称数字签名（Ed25519 与 RSA-PSS）**：
+  - 默认生成 **Ed25519** 密钥对直接对消息签名；也可显式指定 `HX_OS_CRYPTO_RSA_3072` 生成 RSA 密钥（采用 **RSA-PSS + SHA-256 + MGF1-SHA256 + 32 字节盐**，支持导入 2048～8192 位 RSA 密钥）。单次签名消息上限为 `16 MiB`。
 
-下面的 C++ 片段生成 Ed25519 私钥，签名后只用导出的公钥验证：
+下面的 C++11 示例生成一个 Ed25519 私钥，导出 SPKI 公钥 PEM 后，仅用公钥对象验证签名：
 
 ```cpp
 auto key = hx::CryptoKey::generate();
@@ -141,48 +146,42 @@ if (!verified)
 	return 1;
 ```
 
-C 对应 `hx_os_crypto_key_*`、`sign` 和 `verify`。显式选择 `HX_OS_CRYPTO_RSA_3072` 可生成 RSA 密钥，签名使用 RSA-PSS、SHA-256、MGF1-SHA256 和 32 字节盐。导入的 RSA 密钥限定为 2048～8192 位。Ed25519 直接对消息签名。消息最多 16 MiB，签名最多 1024 字节。RSA 生成和密码派生需要计算时间，接口同步执行。
-
-密钥导入接收一份不加密的 PKCS#8 私钥 PEM 或 SPKI 公钥 PEM，前后仅允许空白，最多 64 KiB；不支持的算法明确失败，不会弹出密码输入。私钥导出明确是**不加密**的 PKCS#8，通过释放时清零的 `CryptoBytes` 持有。需要密码保护时，先把这些字节加密为认证封装再保存，读取后解密再导入。此入口不解析加密 PKCS#8 或传统 PKCS#1 PEM。只有公钥的对象不能签名或导出私钥。密钥对象持有自己的 engine 引用；对象存活期间，多个独立调用可以共享同一不可变密钥。
+（C 语言对应 `hx_os_crypto_key_*`、`hx_os_crypto_sign()` 与 `hx_os_crypto_verify()`。）注意：PEM 导入接收单张未加密的 PKCS#8 私钥或 SPKI 公钥（上限 `64 KiB`）；私钥导出同样返回保存在自清零 `CryptoBytes` 中的未加密 PKCS#8 数据——如需用口令落盘保存私钥，请先用第 3 节的 `hx_os_crypto_encrypt()` 将其加密为 HXCRYPT 认证信封后再写入磁盘。
 
 ## 5. 线程、内存与插件卸载
 
-一次性 C 调用传入 NULL engine 即可。重复使用时创建 `hx_os_crypto` 并传给操作，结束后释放；C++ 的 `hx::Crypto::create()` 提供 RAII，通过 `native()` 借用底层句柄。engine 使用私有 `OSSL_LIB_CTX` 和内置 default provider，不更换宿主的分配器、属性或配置。调用前后的原生错误条目会保存和恢复，但 OpenSSL 公开恢复接口不保留 `ERR_set_mark` 的嵌套标记，分配失败时可能丢失附加错误文本；因此不要在原生错误标记作用域、OpenSSL 分配器或 provider 回调内部调用这些接口。自有分配器在同一线程重入正在执行的加密操作时返回 `DEADLOCK`，避免嵌套清理正在使用的线程状态。
-
-本库自己的对象和缓冲使用选定的 `hx_os_context`，OpenSSL 内部分配仍使用它自己的分配器，不能声称 context 预算限制了全部原生加密内存。不同调用可以共享 engine／密钥，输出对象和销毁必须由调用方排他访问。每次操作返回前，会清理本线程对该私有 engine 的原生线程状态，允许最后一次引用在其他线程安全释放。短操作因此有额外成本；复用 context 不代表零分配，也不自动构成性能提升证据。OpenSSL 的进程级、线程级基础设施仍由 OpenSSL 管理。
-
-Windows 动态 OpenSSL 会在普通原生线程退出时自动清理其线程状态。使用**静态 OpenSSL** 时，受控的外部 Windows 线程必须在最后一次使用这个 OpenSSL 运行库后调用 `hx_os_crypto_thread_cleanup()`。该操作清理本线程的全部 OpenSSL 状态，也会涉及其他原生消费者；不能在该线程仍有 OpenSSL 操作或回调时调用。本库不会隐式执行这种全线程清理。卸载运行库／插件前，所有操作和对象必须结束，参与线程必须退出，或者在代码仍已加载时协调完成清理。仍有 TLS 析构器或存活对象引用代码时不能卸载。
-
-二进制结果释放时清零；普通 `hx_string` 不因此变为安全内存，业务副本、分配器历史、分页和崩溃转储均不受此接口保护。同步文件、KDF 和密钥生成不承诺可取消或硬截止时间。界面需要及时响应时，把昂贵操作交给调用方持有的工作线程。
+- **Engine 复用与上下文隔离**：偶发调用直接将 `engine` 参数传 `NULL` 即可；高频重复调用建议显式创建一个 `hx_os_crypto *`（C++11 为 `hx::Crypto::create()`）并在多次调用间共享。每个 Engine 内部持有独立的私有 `OSSL_LIB_CTX` 与内置 Default Provider，绝不会污染宿主进程全局的 OpenSSL 配置。注意：不可在自定义分配器回调或 OpenSSL Provider 回调内部同线程重入正在执行的加密操作，否则会立即返回 `HX_OS_DEADLOCK`。
+- **静态链接 OpenSSL 时的 Windows 线程清理**：在 Windows 下使用默认动态链接 OpenSSL 时，`DllMain` 会在线程退出时自动清理线程状态；但如果你显式开启了**静态链接 OpenSSL（`HX_OS_OPENSSL_STATIC=ON`）**，任何调用过该 OpenSSL 运行库的外部自建 Windows 线程，在彻底结束使用 OpenSSL 后必须显式调用一次 `hx_os_crypto_thread_cleanup()`。在卸载动态插件或运行库前，请确保所有加密操作已结束、密钥与 Engine 对象已销毁，且参与线程已退出或完成了线程清理。
 
 ## 6. HXCRYPT v1 二进制格式
 
-这是基于 OpenSSL AES-256-GCM 的公开应用封装，不是 `openssl enc` 的文件格式。其他语言的对端需要遵守下面的结构，并拒绝认证失败的数据。
+本库的字节与文件加解密采用公开、自包含的 **HXCRYPT v1** 认证信封格式（基于 AES-256-GCM，注意它不是命令行 `openssl enc` 的格式）。如果其他语言的对端需要直接生成或解密本格式，只需遵循以下二进制布局：
 
-| 偏移 | 字节数 | 含义 |
+| 字节偏移 | 长度（字节） | 字段含义 |
 | --- | --- | --- |
-| 0 | 8 | ASCII `HXCRYPT`，后接数值为 1 的字节 |
-| 8 | 1 | 算法 1：AES-256-GCM |
-| 9 | 1 | 秘密类型 1：32 字节原始密钥；2：密码 |
-| 10 | 2 | 保留，必须为零 |
-| 12 | 4 | 大端 PBKDF2 迭代数；原始密钥模式为零 |
-| 16 | 16 | 随机密码盐；原始密钥模式全部为零 |
-| 32 | 12 | 随机 GCM nonce |
-| 44 | N | 密文，长度与明文一致 |
-| 44 + N | 16 | 认证标签 |
+| `0` | `8` | 7 字节 ASCII 魔数 `HXCRYPT`，紧跟 1 字节版本号 `0x01` |
+| `8` | `1` | 对称加密算法：`1` 代表 `AES-256-GCM` |
+| `9` | `1` | 密钥来源类型：`1` 代表 32 字节原始密钥；`2` 代表口令派生（Password） |
+| `10` | `2` | 保留字段：必须为 `0` |
+| `12` | `4` | 大端无符号整数：PBKDF2 迭代次数（原始密钥模式下固定为 `0`） |
+| `16` | `16` | 16 字节随机密码盐（Salt；原始密钥模式下全为 `0`） |
+| `32` | `12` | 12 字节随机 GCM Nonce |
+| `44` | `N` | 密文载荷（字节长度与明文完全一致） |
+| `44 + N` | `16` | 16 字节 AES-GCM 认证标签（Authentication Tag） |
 
-44 字节头整体作为 GCM 的附加认证数据。密码模式对精确的密码字节和盐执行 PBKDF2-HMAC-SHA256，派生 32 字节密钥。默认 600,000 次；加密可配置 100,000～2,000,000 次，解密另有有界的接受上限，默认 2,000,000。长度和迭代限制在 KDF 前检查。文本入口把整份二进制封装转换成带标准填充的 Base64。
+- **附加认证数据（AAD）**：前 **44 字节头部整体作为 AES-GCM 的附加认证数据（AAD）**参与认证，任何对版本号、迭代次数、盐值或 Nonce 的篡改都会导致 GCM 标签校验失败（返回 `HX_OS_AUTH_FAILED`）。
+- **PBKDF2 参数**：口令模式使用 **PBKDF2-HMAC-SHA256** 从精确的 UTF-8 口令字节与 16 字节随机盐派生出 32 字节密钥。默认迭代次数为 **600,000 次**（加密时可在 `100,000`～`2,000,000` 次之间配置；解密端同样检查迭代上限以防恶意超大迭代数造成 CPU 拒绝服务攻击）。文本加解密接口（`_text`）则是将上述完整二进制信封编码为带标准 `=` 填充的 Base64 字符串。
 
 ```mermaid
 flowchart LR
-    A["密码与随机盐"] --> B["PBKDF2 派生密钥"]
-    B --> C["AES-GCM 与认证头"]
-    D["字节或分块文件"] --> C
-    C --> E["HXCRYPT / Base64"]
-    E --> F["解密并校验标签"]
-    F --> G["成功后才发布结果"]
+    A["UTF-8 口令 + 16 字节随机盐"] --> B["PBKDF2-HMAC-SHA256 派生密钥"]
+    B --> C["AES-256-GCM (44 字节头部作为 AAD)"]
+    D["明文字节或 32 KiB 文件分块"] --> C
+    C --> E["HXCRYPT 二进制信封 / Base64"]
+    E --> F["解密并校验 16 字节 GCM 标签"]
+    F --> G["标签验证通过后才交付明文或发布文件"]
 ```
 
 ## 7. 运行示例入口
 
-编译并运行公开的 [encrypt_text.c](../examples/encrypt_text.c) 可以体验加密和解密。错误密码或内容被修改时，要处理认证失败，不能继续使用输出。目标要求见[平台支持](PLATFORMS.zh-CN.md)。
+编译并运行 [encrypt_text.c](../examples/encrypt_text.c) 即可快速验证文本加解密流程。在实际工程中，请始终检查函数返回值，遇到错误的口令或被篡改的密文时立即按 `HX_OS_AUTH_FAILED` 中止处理。各操作系统的详细部署要求见[平台支持说明](PLATFORMS.zh-CN.md)。

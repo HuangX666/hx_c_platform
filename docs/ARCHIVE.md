@@ -1,21 +1,23 @@
-# Files and directories in archives
+# Files and Directories in Archives
 
-[简体中文](ARCHIVE.zh-CN.md) · [README](../README.md) · [Dependency builds](DEPENDENCIES.md)
+[简体中文](ARCHIVE.zh-CN.md) · [README](../README.md) · [Dependency Builds](DEPENDENCIES.md)
 
-**Start by packing and extracting a small directory.** Create records with a device.json containing `{"device":42}`. Enable archive dependencies, build hx_os_archive_files, then follow section 2 to pack, list and unpack. Listing shows device.json and the extracted file contains the original JSON. First run ordinary ZIP without a password or 7-Zip backend; add those options when needed.
+When your application needs to bundle log folders, configuration snapshots, or exported reports into `.zip`, `.tar.gz`, `.tar.zst`, or `.7z` archives—or safely extract incoming packages without risking path traversal (`..` / Zip Slip), symlink escapes, or decompression bombs—`hx_os_archive` provides a unified C99 and exception-free C++11 interface.
+
+To try a complete round-trip first, create a directory named `records` containing a file `device.json` with `{"device":42}`, build `hx_os_archive_files` as shown in Section 2, and run `pack`, `list`, and `unpack`: `list` prints `device.json`, and the extracted file matches the original JSON. Start with ordinary unencrypted ZIP first, then explore password encryption and the optional native 7-Zip backend in Sections 3 and 4.
 
 ## 1. Choose the operation
 
-Include `<hx_os.h>` or the smaller `<hx_os_archive.h>`. Normal calls need no global initialization, archive handle, manual read loop or explicit codec setup.
+Include `<hx_os.h>` or the standalone `<hx_os_archive.h>` header. Operations require no global initialization, manual codec setup, or chunk loops:
 
-| Task | C entry point | C++11 entry point |
+| Task | C Entry Point | C++11 Entry Point |
 | --- | --- | --- |
-| Pack one file or a directory | `hx_os_archive_pack` | `hx::Archive::pack` |
-| Extract to a directory | `hx_os_archive_unpack` | `hx::Archive::unpack` |
-| Extract one named regular file | `hx_os_archive_extract_file` | `hx::Archive::extractFile` |
-| Visit entries without extracting | `hx_os_archive_visit` | `hx::Archive::forEach` |
+| Pack a single file or directory into an archive | `hx_os_archive_pack` | `hx::Archive::pack` |
+| Extract an archive into a destination directory | `hx_os_archive_unpack` | `hx::Archive::unpack` |
+| Extract a single named regular file from an archive | `hx_os_archive_extract_file` | `hx::Archive::extractFile` |
+| Inspect archive entries without extracting to disk | `hx_os_archive_visit` | `hx::Archive::forEach` |
 
-For example, packing `records/` containing `device.json` and `images/photo.png` produces those relative names in the archive. It does not add another `records/` directory. Packing one file stores its basename. Empty directories are preserved; links and special files are rejected when packing.
+**Relative Path Rules**: Packing a directory `records/` containing `device.json` and `images/photo.png` stores those relative paths directly at the archive root without adding an extra outer `records/` prefix; packing a single file stores its basename. Empty directories are preserved, whereas symlinks, hard links, and special device files in the source tree are rejected explicitly.
 
 ```c
 #include <hx_os.h>
@@ -33,13 +35,13 @@ int main(void)
 }
 ```
 
-Existing destinations are preserved by default. A failed operation reports a status; it never silently skips an unsupported codec, unsafe name or existing file.
+By default, existing destination files are preserved (returning `HX_OS_EXISTS` rather than overwriting).
 
 ## 2. Build and use the complete program
 
-ARCHIVE is enabled by default and requires FILE_UTILS, CONTAINERS and the prepared libarchive/OpenSSL/compression SDK. Disable it with `HX_OS_ENABLE_ARCHIVE=OFF`; functions remain linkable and return `HX_OS_NOT_SUPPORTED`, and `hx_os_archive_available()` returns 0. OpenSSL may also serve CRYPTO and HTTP/URL; check the enabled [dependency targets](NATIVE_DEPENDENCIES.md) when trimming.
+`HX_OS_ENABLE_ARCHIVE` is `ON` by default and requires `FILE_UTILS`, `CONTAINERS`, and the prebuilt `libarchive`, `OpenSSL`, `zlib`, `liblzma`, and `zstd` dependency stack. Setting `-DHX_OS_ENABLE_ARCHIVE=OFF` keeps all symbols linkable while `hx_os_archive_available()` returns `0` and archive calls return `HX_OS_NOT_SUPPORTED` (see [Native Dependency Targets](NATIVE_DEPENDENCIES.md) when trimming modules).
 
-Build the SDK as described in [DEPENDENCIES](DEPENDENCIES.md), then configure the library with its absolute prefix:
+Build the dependency stack per the [Dependency Guide](DEPENDENCIES.md), then configure the library with `HX_OS_DEPENDENCY_PREFIX` and build `hx_os_archive_files`:
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
@@ -48,7 +50,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
 cmake --build build --config Release --target hx_os_archive_files
 ```
 
-The runnable C program is [archive_files.c](../examples/archive_files.c). It uses these same public calls, prints copied diagnostics on failure and reports how many files were published. The example converts Windows command-line arguments to UTF-8 using the existing argument helper.
+The runnable C program is [archive_files.c](../examples/archive_files.c). After creating a `records/` folder containing `device.json`, run these four commands to pack, list, unpack, and extract a single entry:
 
 ```sh
 ./build/bin/hx_os_archive_files pack records records.zip
@@ -57,29 +59,34 @@ The runnable C program is [archive_files.c](../examples/archive_files.c). It use
 ./build/bin/hx_os_archive_files extract records.zip device.json selected.json
 ```
 
-On a Visual Studio Release build, use `build\bin\Release\hx_os_archive_files.exe`. The `records` input directory must already contain your files. `restored` is created when needed. All paths and passwords use UTF-8. The program is deliberately conservative: it does not overwrite existing files.
+(On Windows Visual Studio Release builds, use `build\bin\Release\hx_os_archive_files.exe`.) All paths and passwords use UTF-8. Because the example refuses to overwrite existing files by default, remove `records.zip`, `restored`, and `selected.json` (or pick new output paths) before re-running.
 
-The same core supports installed pure C consumers through `find_package(hx_c_platform CONFIG REQUIRED)` and `hx_c_platform::hx_c_platform`. C++ consumers link `hx_c_platform::cpp`. No archive headers from third parties appear in the public API.
+Installed C projects link `hx_c_platform::hx_c_platform` via `find_package(hx_c_platform CONFIG REQUIRED)` (C++ projects link `hx_c_platform::cpp`), and public headers never expose third-party archive headers.
 
 ## 3. Formats and passwords
 
-| Output name / explicit format | File | Directory | Password |
+| Filename Extension / Explicit Format | Single File | Directory | Password Support |
 | --- | --- | --- | --- |
 | `.zip` / `HX_OS_ARCHIVE_ZIP` | Yes | Yes | AES-256 ZIP |
 | `.tar` / `HX_OS_ARCHIVE_TAR` | Yes | Yes | No |
 | `.tar.gz`, `.tgz` / `HX_OS_ARCHIVE_TAR_GZIP` | Yes | Yes | No |
 | `.tar.xz`, `.txz` / `HX_OS_ARCHIVE_TAR_XZ` | Yes | Yes | No |
 | `.tar.zst`, `.tar.zstd` / `HX_OS_ARCHIVE_TAR_ZSTD` | Yes | Yes | No |
-| `.7z` / `HX_OS_ARCHIVE_7ZIP` | Yes | Yes | Optional native 7-Zip backend |
-| `.gz` / `HX_OS_ARCHIVE_GZIP` | Yes | No | No |
-| `.xz` / `HX_OS_ARCHIVE_XZ` | Yes | No | No |
-| `.zst`, `.zstd` / `HX_OS_ARCHIVE_ZSTD` | Yes | No | No |
+| `.7z` / `HX_OS_ARCHIVE_7ZIP` | Yes | Yes | Via optional native 7-Zip backend (Section 4) |
+| `.gz` / `HX_OS_ARCHIVE_GZIP` | Single file only | No | No |
+| `.xz` / `HX_OS_ARCHIVE_XZ` | Single file only | No | No |
+| `.zst`, `.zstd` / `HX_OS_ARCHIVE_ZSTD` | Single file only | No | No |
 
-`AUTO` infers the packing format from the extension. Reading identifies container content, including an encrypted 7z renamed to `.blob`. A raw compression extension selects a single decoded file; an explicit format removes ambiguity. For raw streams, the extracted name is the archive basename with its final extension removed, or `data` if no useful basename remains. Stored Gzip filenames are not used as destination paths. Empty files and concatenated Gzip members are supported.
+- **Format Detection & Single-File Streams**:
+  - When packing with `HX_OS_ARCHIVE_AUTO`, the output extension selects the format; when reading, the library inspects container headers (even if an encrypted `.7z` was renamed to `.blob`).
+  - For raw single-file compression streams (`.gz`, `.xz`, `.zst`), the extracted output filename is derived by stripping the final extension from the archive basename (or `data` if empty)—**embedded Gzip header filenames are never trusted as output paths**.
+- **In-Process Codec Stack & Presets**:
+  - The default backend links `libarchive`, `zlib`, `liblzma`, `Zstd`, and `OpenSSL` directly in-process (never spawning external `tar`, `gzip`, or `7z` CLI tools). Outer Gzip/XZ/Zstd streams run through native streaming decoders in our adapter so trailing checksums are verified even after an inner TAR stream reaches its logical end-of-archive marker.
+  - `options.preset` selects `FAST`, `BALANCED` (default), or `SMALL`.
 
-The default backend is libarchive with zlib, liblzma, Zstd and OpenSSL. Gzip/XZ/Zstd outer streams use native streaming decoders in our adapter so integrity checks finish even after a TAR reader reaches its logical end. There is no external `tar`, `gzip` or `7z` command fallback. ZIP uses Deflate; ordinary 7z uses libarchive's selected codec. `preset` selects FAST, BALANCED (default) or SMALL; it is not an identical numeric compression level across formats.
+### Password-Protected AES-256 ZIP Archives
 
-Password ZIP requires only options:
+Pass a password through `hx_os_archive_options` to `hx_os_archive_pack_ex()`:
 
 ```c
 hx_os_archive_options options = HX_OS_ARCHIVE_OPTIONS_INIT;
@@ -97,24 +104,28 @@ if (status != HX_OS_OK)
 hx_string_destroy(&diagnostic);
 ```
 
-For `HX_OS_ERROR_ARCHIVE`, `native_code` retains the native code. A negative `cause_code` interpreted as `int64_t` is libarchive’s return value (with its errno in `native_code`); GZIP/XZ/ZSTD format constants identify outer-decoder errors; zero identifies native 7-Zip HRESULT/operation codes. The optional diagnostic provides copied readable detail. Native text is limited to a valid UTF-8 prefix; if none remains, the fallback is `Archive operation failed: <status>`, using the final status. Copying a diagnostic is best-effort if its allocator fails; the returned status and native error remain authoritative.
+Pass the same `options` to `hx_os_archive_unpack_ex()` or `hx_os_archive_extract_file_ex()` to decrypt.
 
-Use the same options with `unpack_ex` or `extract_file_ex` to decrypt. Wrong passwords fail; the decoder's copied diagnostic distinguishes details when available. Do not assume every backend maps every password failure to `AUTH_FAILED`: some native failures are `IO_ERROR` with archive details. ZIP AES does not hide filenames. ZIP password bytes have incompatible conventions across tools: this API uses UTF-8, while Windows 7-Zip converts through CP_ACP. Use an ASCII password for that ZIP interoperability; a non-ASCII ZIP password is not guaranteed to work in that external program. This does not affect the native 7z UTF-16 password interface. CRCs detect corruption; they do not authenticate a sender. Encrypted 7z likewise does not supply the application-level authenticated-envelope contract of the separate [crypto module](CRYPTO.md).
-
-The example reads `HX_ARCHIVE_PASSWORD` from its environment instead of accepting it as a command-line argument. A real application can pass its own in-memory password. An environment variable is a demonstration input method, not a secret store.
+> [!NOTE]
+> **ZIP Password Interoperability and Metadata Visibility**
+> - **ASCII Passwords for Cross-Tool ZIP Exchange**: ZIP tools disagree on character encoding for non-ASCII passwords—this library uses UTF-8 bytes, whereas Windows 7-Zip converts through the legacy system code page (`CP_ACP`). **Use ASCII passwords when exchanging encrypted `.zip` files with external Windows 7-Zip tools** (the native `.7z` backend in Section 4 uses UTF-16LE passwords and is unaffected by code-page differences).
+> - **Unencrypted ZIP Filenames**: Standard AES-256 ZIP encrypts file contents but leaves entry filenames visible in the central directory. To encrypt filenames as well, either use `.7z` with `HX_OS_ARCHIVE_ENCRYPT_NAMES` (Section 4) or encrypt the finished archive file with [`hx_os_crypto_encrypt_file()`](CRYPTO.md#3-encrypt-files-or-arbitrary-bytes).
+> - **Diagnostics**: Not every backend maps wrong passwords specifically to `HX_OS_AUTH_FAILED`; some report `HX_OS_IO_ERROR` with detailed native codes and UTF-8 text in `options.diagnostic`.
 
 ## 4. Password and filename encryption in 7z
 
-This is a separate optional backend. It does not change the default backend or link the native 7-Zip implementation into the core. Enable `HX_OS_ENABLE_7ZIP=ON`; LIBRARY and PATHS must also be available. This builds a small first-party C++11 shared adapter with exceptions disabled. The core remains C99 and communicates with it through a private C ABI. Native 7-Zip can use exceptions internally as allowed for third-party code; the used native COM interfaces contain native errors before returning.
-
-The pinned 7-Zip source is the independent `deps/7zip` submodule (26.04). A host runtime can be built without editing or generating files in that source tree:
+While the default `libarchive` backend reads and writes unencrypted `.7z` archives out of the box, **password-protected `.7z` archives and encrypted `.7z` header filenames (`HX_OS_ARCHIVE_ENCRYPT_NAMES`)** use a separate, opt-in **native 7-Zip backend**:
+1. Configure the main library with `-DHX_OS_ENABLE_7ZIP=ON` (keeping `LIBRARY` and `PATHS` enabled). This builds a small exception-free C++11 adapter shared library that bridges the C99 core to native 7-Zip via a private C ABI.
+2. Build the pinned `deps/7zip` (26.04) runtime library using the helper CMake project (run from a Visual Studio Developer Prompt on Windows, and ensure the build directory path **contains no spaces** due to upstream makefile rules):
 
 ```sh
 cmake -S tools/sevenzip -B build-7zip
 cmake --build build-7zip --config Release
 ```
 
-Windows requires a Visual Studio developer shell. The result is `build-7zip/runtime/7z.dll` on Windows and `build-7zip/runtime/7z.so` on Linux. The helper's build path must not contain spaces because of upstream makefile rules. The helper now accepts Linux ARM and Android cross builds from a POSIX host/WSL with the target toolchain. For Android it selects the NDK target/API, keeps libc++ inside this optional runtime and uses Bionic's libc thread symbols. See [cross-build commands](DEPENDENCIES.md#6-cross-build-linux-arm-and-android). Apple build/runtime validation is deferred. FetchContent uses the same pin if explicitly selected.
+This produces `build-7zip/runtime/7z.dll` on Windows and `build-7zip/runtime/7z.so` on Linux (see [Cross-Building Linux ARM and Android](DEPENDENCIES.md#6-cross-build-linux-arm-and-android) for embedded/mobile targets).
+
+Pass the **absolute path** to that trusted native runtime in `options.seven_zip_library`:
 
 ```c
 hx_os_archive_options options = HX_OS_ARCHIVE_OPTIONS_INIT;
@@ -127,29 +138,26 @@ hx_os_status status = hx_os_archive_pack_ex(NULL,
 	"records", "private.7z", &options, NULL, NULL);
 ```
 
-Omit ENCRYPT_NAMES when only content encryption is wanted. `seven_zip_library` must be an absolute trusted DLL/so path. `seven_zip_adapter` can explicitly name the first-party adapter; otherwise it is loaded beside the core library, or beside the executable for a static core. There is no PATH lookup for either top-level module. Normal OS rules still govern their dependent runtime libraries. The adapter is installed in `bin` on Windows and `lib` on POSIX; a statically linked POSIX application should provide its path or deploy it beside the executable.
-
-`hx_os_archive_7zip_available()` reports whether the bridge was compiled, not whether a native DLL is installed. Each synchronous operation releases its streams and native COM objects before unloading its module references. Exclude concurrent removal or replacement of runtime files. The adapter checks the native module version and interface layout before creating COM objects; a mismatch with pinned 26.04 returns NOT_SUPPORTED. p7zip and pre-23 Unix interfaces are not interchangeable. Private unloads are ordered with a short mutex, without holding it across codec work, application callbacks, injected allocators or diagnostic allocation.
-
-The optional native backend has LGPL/BSD/unRAR terms separate from the default permissive stack. Its runtime is not automatically copied into the core installation. Retain the exact upstream notices and satisfy the obligations for the components you distribute; dynamic loading does not erase those terms. See [third-party notices](../THIRD_PARTY_NOTICES.md).
+- **Explicit Path Loading**: Neither `seven_zip_library` nor `seven_zip_adapter` is ever searched via `PATH`. The adapter verifies the pinned 26.04 version and COM interface layout before creating objects, returning `HX_OS_NOT_SUPPORTED` for incompatible `p7zip` or older binaries.
+- **Licensing**: Because the optional native 7-Zip runtime carries separate LGPL/BSD/unRAR terms, it is not copied into the default core installation automatically. Preserve its upstream license notices per [Third-Party Notices](../THIRD_PARTY_NOTICES.md) when distributing it.
 
 ## 5. Limits, cancellation and partial results
 
-| Default option | Value / meaning |
+Every archive operation enforces bounded resource caps by default to guard against decompression bombs and runaway directory trees:
+
+| Option Field | Default Cap & Meaning |
 | --- | --- |
-| `max_archive_bytes` | 4 GiB input file or output archive |
-| `max_content_bytes` | 4 GiB file contents processed by packing/extraction; also rejects a single larger declared entry |
-| `max_decoded_bytes` | 8 GiB outer Gzip/XZ/Zstd stream, including TAR headers, padding and skipped contents |
-| `max_entries` | 65,536 inspected records |
-| `max_depth` | 64 path components |
-| `max_path_bytes` | 65,536 UTF-8 bytes including terminator |
-| `max_memory_bytes` | 16 MiB first-party allocations, including accounting overhead |
-| `workers` | One codec worker by default; 1–32 codec parallelism request, with possible fixed native helper threads |
-| `deadline` | Infinite by default; finite values use the existing monotonic absolute deadline |
+| `max_archive_bytes` | `4 GiB`: maximum input archive size or generated output archive size |
+| `max_content_bytes` | `4 GiB`: maximum cumulative unpacked/packed payload bytes (also rejects individual entries declaring a larger size) |
+| `max_decoded_bytes` | `8 GiB`: maximum decoded bytes from outer Gzip/XZ/Zstd streams (including TAR headers, padding, and skipped entries) |
+| `max_entries` | `65,536`: maximum archive entries inspected per call |
+| `max_depth` | `64`: maximum path component nesting depth |
+| `max_path_bytes` | `65,536`: maximum UTF-8 path length in bytes (including null terminator) |
+| `max_memory_bytes` | `16 MiB`: maximum first-party working buffer and metadata allocation budget |
+| `workers` | `1` codec worker thread by default (configurable from `1` to `32`) |
+| `deadline` | `INFINITE` by default; pass `hx_os_deadline_after_ms(...)` for a finite monotonic deadline |
 
-Native codec memory, dictionaries, solid blocks, interface-owned strings, runtime objects and filesystem caches are outside the first-party allocator budget. Output caps are not a hard memory or CPU sandbox. Inputs for which strong isolation is necessary belong in an application-owned helper process. No hard deadline or forced interruption of native code/filesystem calls is promised. Native ordinary-7z encoding can use a temporary spool outside the first-party memory budget; the source-content cap bounds input processed, while the output cap is enforced when data reaches our output stream.
-
-Options and strings are borrowed until return. A progress callback may return `HX_OS_CANCELLED` to stop. Default libarchive callbacks use the calling thread; native 7-Zip progress can arrive on a codec thread. Progress callbacks do not overlap, do not run under library locks and may coalesce intermediate notifications. A callback borrows its snapshot only until it returns. Never throw or `longjmp` across this C boundary. Coordinate any UI handoff yourself.
+Pass an initialized `hx_os_archive_result` struct to `_ex` functions to inspect progress counters (even if a call fails or is cancelled via a progress callback returning `HX_OS_CANCELLED`, `progress.published` reports how many files were already published to disk):
 
 ```c
 hx_os_archive_options options = HX_OS_ARCHIVE_OPTIONS_INIT;
@@ -165,25 +173,21 @@ hx_os_status status = hx_os_archive_unpack_ex(NULL,
 printf("Files already published: %u\n", progress.published);
 ```
 
-`entries/files/directories` count inspected records. `content_bytes` counts processed source or extracted bytes; it is zero for metadata-only listing. `archive_bytes` is the greatest file offset reached, not a sum that double-counts seeks. `published` counts destination files already made visible: one for a completed pack, potentially several during unpack. A failure can carry nonzero progress. No worker or caller buffer is retained after the synchronous function returns.
-
 ## 6. Filesystem and failure behavior
 
-Packing creates a sibling temporary, writes the archive, syncs it and publishes it atomically. The parent must already exist. By default, an existing target returns EXISTS. `HX_OS_ARCHIVE_OVERWRITE` permits replacement. Parent-directory sync is best effort, following `file_save_atomic`; success does not promise survival of every power-loss scenario. Packing an archive inside its source directory is rejected.
-
-Extraction creates directories as needed and writes each regular file into a temporary under its selected parent. It publishes that file after the native entry checks. With `HX_OS_ARCHIVE_SYNC_FILES`, file data is synced and POSIX parent-directory sync is also requested; a later failure preserves the fact that publication already happened. Windows offers the file sync request without claiming equivalent directory durability.
-
-Extraction is not a directory transaction. Earlier completed files and newly created directories remain if a later entry, callback or outer compression trailer fails. The current unpublished temporary is removed where possible; cleanup errors can leave a recoverable temporary. Do not treat a failed overall result as proof that the destination is unchanged. A metadata visit or skipped entry does not validate its payload CRC or authentication.
-
-Absolute paths, parent traversal, drive/stream syntax, Windows device names and invalid UTF-8 fail. Leading `./` is normalized. Names are kept portable across the supported native filesystems; some otherwise valid POSIX names are deliberately unrepresentable. Symbolic/hard links, reparse points and special files are never restored. Existing regular files are replaced only with OVERWRITE. Duplicate target names fail by default; full extraction with OVERWRITE processes them in archive order. Native 7z single-entry selection rejects ambiguous duplicate names.
-
-The operation anchors directory traversal with native handles/descriptors and never changes process working directory. Existing links below the destination are rejected. The caller keeps input/output trees stable; this is not protection against arbitrary concurrent namespace changes, including edits to Windows reparse metadata. Input files are not snapshotted.
-
-Encrypted plaintext staging requires a filesystem capable of restricting access. POSIX verifies owner/mode and clears inherited Darwin ACLs; Windows uses a protected owner-only DACL. Unsupported filesystems report failure, including Windows-mounted WSL paths that cannot enforce the requested mode. Our transient data buffers are cleared on release; this does not promise erasure of all vendor buffers, caches or storage media. Existing OpenSSL error entries are preserved across default-backend work; marks are outside OpenSSL's public save/restore guarantee. Static OpenSSL users still follow its explicit thread cleanup and unload contract.
-
-POSIX libarchive metadata conversion uses a temporary per-thread UTF-8 locale (`C.UTF-8`, or `en_US.UTF-8`). Progress/visit callbacks and injected allocator calls restore the caller's locale while executing. Overlapping operations share an immutable locale whose lifetime uses two short mutex sections per call. No lock spans codec work or callbacks, and the locale is released after the last operation. Process-global locale is not changed. A target missing both locale names returns NOT_SUPPORTED. Native Windows wide strings and native 7-Zip UTF-16 interface strings are converted inside the adapters.
+- **Atomic Archive Packing vs. Per-File Extraction**:
+  - **Packing (`pack`)** stages the archive in a sibling temporary file, syncs it, and publishes it atomically to the target path (packing an archive inside its own source directory is rejected, and existing targets return `HX_OS_EXISTS` unless `HX_OS_ARCHIVE_OVERWRITE` is set).
+  - **Extraction (`unpack`)** stages each regular file in a temporary file under its target parent directory and publishes it once that entry passes integrity checks. **Directory extraction is not an all-or-nothing rollback transaction**: if a later entry fails, earlier published files and created subdirectories remain on disk (reflected in `progress.published`).
+- **Path Sanitization & Zip-Slip Protection**:
+  - Entries with absolute paths, parent traversal (`..`), drive letters or NTFS alternate data streams (`:`), reserved Windows device names, or invalid UTF-8 are rejected immediately (leading `./` prefixes are normalized).
+  - Symbolic links, hard links, reparse points, and special files are **never restored** during extraction, and existing symlinks encountered beneath the destination directory are rejected to prevent symlink-following writes outside the target tree.
+- **Private Staging Permissions & Thread-Local POSIX UTF-8 Locale**:
+  - Extracting encrypted archives stages plaintext in owner-only temporary files (`0600` verified on POSIX; protected owner-only DACL on Windows), failing before writing plaintext if the target mount cannot enforce access restrictions.
+  - On POSIX, `libarchive` header conversion temporarily applies a per-thread UTF-8 locale (`C.UTF-8` or `en_US.UTF-8` via `uselocale`), restoring the caller's thread locale during progress/visitor callbacks and custom allocator calls without ever mutating the process-global locale.
 
 ## 7. C++11 direct calls
+
+Include `<hx/Archive.hpp>` to call the exception-free C++11 wrapper, which returns `hx::Result<hx_os_archive_result>`:
 
 ```cpp
 #include <hx/Archive.hpp>
@@ -208,7 +212,7 @@ int main()
 }
 ```
 
-The C++ facade forwards to the C implementation and uses `Result<hx_os_archive_result>`. When a result carries a value, partial counters remain accessible even on failure. `forEach` accepts a `noexcept` callback returning void, a status or `Result<void>`. There is no exception propagation, hidden background queue or separate C++ codec implementation.
+`hx::Archive::forEach` accepts a `noexcept` callable returning `void`, `hx_os_status`, or `hx::Result<void>`, and partial progress counters remain accessible on `Result` values even when an operation stops early.
 
 ## 8. Run the archive example
 
@@ -218,4 +222,4 @@ build/bin/hx_os_archive_files list records.zip
 build/bin/hx_os_archive_files unpack records.zip restored-folder
 ```
 
-Prepare input-folder first; the output archive and restored-folder should not already exist. Windows executables are under build/bin/Release with .exe suffix. See the earlier sections for options. The example runs independently; see [platform support](PLATFORMS.md) for deployment requirements.
+Prepare `input-folder` beforehand and ensure `records.zip` and `restored-folder` do not already exist (on Windows, run `build/bin/Release/hx_os_archive_files.exe`). See [Platform Support](PLATFORMS.md) for target deployment requirements.

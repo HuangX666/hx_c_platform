@@ -2,37 +2,50 @@
 
 [English](PREPROCESSING.md) · [README](../README.zh-CN.md)
 
-**先运行一个完整例子。** 运行时配置希望复用常量，并按条件保留不同文本时，先做预处理，再把输出交给 JSON 或自己的解析器。
+当复杂的业务配置文件需要复用公共端口或路径常量（`#define`）、根据运行环境或开关裁剪配置片段（`#if`／`#ifdef`），或者将大型配置拆分为多个受控的相对路径子文件（`#include`）时，可以在把文本交给 JSON 或自定义解析器之前，先执行一次**有界的运行时文本预处理**。
 
-打开 [preprocess_config.c](../examples/preprocess_config.c)。准备含 define／if 的独立文本 → preprocess_text_ex 展开 → 检查状态和 diagnostic → 使用输出 → destroy。
+你可以先运行 [preprocess_config.c](../examples/preprocess_config.c) 查看完整效果：程序准备了一段带有 `#define` 与 `#if` 分支的配置模板，调用 `hx_os_preprocess_text_ex()` 在内存中完成宏展开与条件裁剪，检查返回状态与诊断对象后打印最终生成的合法 JSON 文本。按[示例运行方法](../examples/README.zh-CN.md#run)启用示例后，单独构建并运行 `hx_os_preprocess_config`（无需命令行参数或外部输入文件）：
 
-按[示例运行方法](../examples/README.zh-CN.md#run)启用 examples，并只构建 `hx_os_preprocess_config`。此例无命令行参数、无需输入文件。
+```json
+{
+  "title": "Camera",
+  "port": 8080,
+  "enabled": true
+}
+```
 
-**会得到什么：**输出包含 title=Camera、port=8080、enabled=true 的 JSON 文本。示例此时只打印文本；真实业务还要解析和校验字段，文件包含必须显式提供受限加载器。
-
-下面的短片段用于解释接口；复制运行时以完整示例为准。也可按[最小工程配置](USAGE.zh-CN.md#c-project)把完整源码作为自己的 main。
+在实际工程中，预处理只负责产出展开后的纯文本，随后你应将该文本继续传给 [配置解析器](CONFIGURATION.zh-CN.md) 或自己的语法解析器以读取强类型字段。你也可以按[最小工程配置](USAGE.zh-CN.md#c-project)将完整示例作为 `main.c` 编译。
 
 ## 1. 从一次调用开始
 
-预处理器在运行时转换 UTF-8 配置文本，不修改 C/C++ 源码语法、不调用编译器，也不增加代码生成步骤。把模板保存为 `.hxconf` 等数据文件即可，不把它作为编译单元。
+运行时预处理器处理的是应用运行期间加载的 UTF-8 数据文本（例如 `.hxconf` 配置文件），它不改变 C/C++ 编译期的源码语法，不调用系统编译器，也不增加构建期代码生成步骤。
 
 ```c
-hx_string text = HX_STRING_INIT;
-hx_os_error error;
+#include <hx_os.h>
+#include <stdio.h>
 
-hx_os_status status =
-	hx_os_preprocess_file("device.hxconf", &text, &error);
-if (status == HX_OS_OK)
-	puts(hx_string_c_str(&text));
+int main(void)
+{
+	hx_string text = HX_STRING_INIT;
+	hx_os_error error;
 
-hx_string_destroy(&text);
+	hx_os_status status =
+		hx_os_preprocess_file("device.hxconf", &text, &error);
+	if (status == HX_OS_OK)
+		puts(hx_string_c_str(&text));
+
+	hx_string_destroy(&text);
+	return status == HX_OS_OK ? 0 : 1;
+}
 ```
 
-需包含 `<hx_os.h>` 和 `<stdio.h>`。C 字符串直接使用 `hx_os_preprocess_text(input, &text, &error)`；高级文本入口另接受明确字节长度、源名称、选项和可选诊断。输出使用自己的 context，失败保留原内容，不需要全局初始化。
-
-[preprocess_config.c](../examples/preprocess_config.c) 是完整可执行程序。构建 `hx_os_preprocess_config` 后，Linux/macOS 运行 `build/bin/hx_os_preprocess_config`，Visual Studio 构建运行 `build/bin/Release/hx_os_preprocess_config.exe`。它输出合法 JSON，title 为 Camera、port 为 8080、enabled 为 true，多出的空白是正常的。配套 [device.hxconf](../examples/data/preprocess/device.hxconf) 与 [common.hxconf](../examples/data/preprocess/common.hxconf) 演示文件包含，两者一起复制后，把前者路径交给文件入口即可。需要按类型读取 JSON 值时，再把输出传给[配置解析器](CONFIGURATION.zh-CN.md)。
+- **文件入口 vs. 文本入口**：直接处理磁盘文件使用 `hx_os_preprocess_file()`；直接处理内存中的 C 字符串使用 `hx_os_preprocess_text(input, &text, &error)`；若需传入显式字节长度、自定义源名称、资源上限选项（Options）或获取详细行列号诊断信息（Diagnostic），则使用 `hx_os_preprocess_text_ex()`／`hx_os_preprocess_file_ex()`。
+- **失败安全**：输出统一写入调用方已初始化的 `hx_string`，使用该字符串绑定的内存上下文；任何预处理错误都保证目标字符串保持原有内容不变。
+- **体验包含文件（`#include`）**：仓库中的 [device.hxconf](../examples/data/preprocess/device.hxconf) 与 [common.hxconf](../examples/data/preprocess/common.hxconf) 演示了跨文件包含。将这两个文件复制到同一目录下，把 `device.hxconf` 的路径传给 `hx_os_preprocess_file()` 即可看到合并展开后的 JSON，随后可直接喂给[配置解析器](CONFIGURATION.zh-CN.md)。
 
 ## 2. 语言规则
+
+预处理模板使用类 C 风格的 `#` 行首指令：
 
 ```text
 #define PORT 8080
@@ -44,34 +57,37 @@ hx_string_destroy(&text);
 #endif
 ```
 
-| 指令 | 行为 |
+| 支持的指令 | 行为说明 |
 | --- | --- |
-| `#define NAME replacement` | 复制对象宏，最后一次成功定义生效 |
-| `#define NAME` | 定义空替换内容，ifdef 仍能查到 |
-| `#undef NAME` | 删除定义，原本不存在也可正常完成 |
-| `#if expression` | 开始条件分支 |
-| `#ifdef NAME`、`#ifndef NAME` | 检查定义是否存在 |
-| `#elif expression` | 前面没有选中分支时才选择 |
-| `#else`、`#endif` | 选择剩余分支一次，或结束本层条件 |
-| `#include "relative.hxconf"` | 解析并处理另一个来源 |
+| `#define NAME replacement` | 定义对象宏（无参数宏）；若同名宏重复定义，以最后一次成功定义为准 |
+| `#define NAME` | 定义替换内容为空的宏（在正文中展开为空，但 `#ifdef NAME` 与 `defined(NAME)` 为真） |
+| `#undef NAME` | 移除宏定义（若该名称原本未定义也正常成功） |
+| `#if expression` | 计算条件表达式，开启条件分支 |
+| `#ifdef NAME`、`#ifndef NAME` | 判断指定宏名称当前是否已定义 |
+| `#elif expression` | 当前面所有分支均未命中时，计算并尝试命中当前分支 |
+| `#else`、`#endif` | 命中兜底分支（每层最多一次），或闭合当前层的条件块 |
+| `#include "relative.hxconf"` | 通过文件解析器（Resolver）加载并递归预处理另一个配置来源 |
 
-`#` 必须是该行第一个非空白／注释 token。名称区分大小写，是最多 127 字节的 UTF-8 标识符，沿用已有 Lexer 规则。字符串和注释不展开宏。每个来源配对自己的条件，不能在包含文件中关闭父文件的条件。普通文本中的未定义标识符保持原样。
+**词法与条件求值规则：**
+- **指令位置与标识符**：`#` 必须是当前物理行上第一个非空白、非注释的 Token。宏名称严格区分大小写，必须是长度不超过 `127` 字节的合法 UTF-8 标识符。**字符串字面量内部与注释内部绝不会展开宏**；普通配置正文中未定义的标识符保持原样输出。每个源文件（含被 `#include` 的子文件）必须闭合自己的 `#if ... #endif`，不能在子文件中闭合父文件的条件块。
+- **条件表达式语法**：支持有符号 64 位整数（十进制／十六进制）、`true`／`false` 字面量、`defined(NAME)` 或 `defined NAME`、一元运算符 `+`／`-`／`!`、大小与相等比较（`<`、`<=`、`>`、`>=`、`==`、`!=`）、逻辑与 `&&`、逻辑或 `||` 以及括号 `(...)`。运算符优先级从高到低依次为：一元运算 → 关系比较 → 相等比较 → `&&` → `||`。
+- **宏展开与未定义标识符**：`#if` 表达式会先对除 `defined(...)` 目标外的标识符做文本宏展开，再按上述优先级求值（不会在背地里替宏替换内容隐式套括号）。展开后仍未定义的标识符在 `#if` 条件中按整数 `0` 处理；保留字 `defined`、`true`、`false` 禁止被 `#define` 或 `#undef`。表达式括号嵌套上限为 `64` 层，且即使逻辑短路已确定结果，剩余操作数的语法仍会被完整校验。
 
-条件支持有符号 int64 十进制／十六进制和 true/false 字面量、`defined(NAME)` 或 `defined NAME`、一元 `+ - !`、比较、`&&`、`||` 和括号。优先级依次为一元、关系比较、相等比较、`&&`、`||`。先做文本展开再求值，不会暗中给宏加括号改变优先级。条件中的未定义名称按零处理，defined 内的名称不展开；defined/true/false 本身不能重定义。双字符运算符必须相邻，所有操作数都会被校验，包括逻辑结果不再需要的操作数。表达式嵌套固定最多 64 层。
-
-不支持函数宏、字符串化／token 粘贴、续行、二元算术、位运算、整数后缀、字符算术、编译器／系统头包含，也不自动访问宿主变量。不支持的活动指令／运算符明确失败。未选中分支仍需词法有效的 UTF-8，但不会调用 include 或求值其中的嵌套条件。BOM 只在完整来源开头接受，不在内部片段中作为标记。
+> [!NOTE]
+> **明确不支持的 C 预处理器特性：**
+> 为保持配置预处理的确定性与安全性，**不支持**带参数的函数宏、字符串化 `#`、记号粘贴 `##`、反斜杠行尾续行、二元算术与位运算（`+ - * / & | ^ << >>`）、整数类型后缀（如 `ULL`）、字符常量算术、系统尖括号包含 `<...>`，也不会自动读取宿主进程的环境变量。遇到不支持的指令或运算符会明确报错；未命中的条件分支内部虽不执行 `#include` 或求值嵌套条件，但仍要求是词法合法的 UTF-8 文本。
 
 ## 3. 明确的文件访问
 
-**文本入口默认不读取文件**，活动 include 在未提供 resolver 时返回 `HX_OS_NOT_SUPPORTED`。**文件入口提供相对文件 resolver**，以被包含语句所在文件的目录为基础，Windows UTF-8 转换由库内部处理。
-
-内置 resolver 拒绝绝对包含名、冒号语法和 `..` 分量，接受两种斜杠分隔符，会跟随文件系统链接。它是有界的可信配置访问，不是安全沙箱。应用资源表、包内资源或指定文件集合可使用自定义 resolver；`HX_OS_PREPROCESS_NO_INCLUDES` 即使有 resolver 也会关闭包含。只有文件入口依赖 FILE_UTILS。
-
-resolver 接收父标识、请求名称和剩余字节额度，填充已初始化的 `hx_string`，必须遵守额度，不保留输出指针、不更换 context，也不销毁 owner。库校验返回长度、UTF-8 及非空、最多 4,096 字节的解析后标识。稳定标识用于循环检查，深度／字节额度还会限制不能直接比较出重复的别名。回调副作用不回滚。文件和 resolver 同步执行，没有硬截止时间，也不会自动启动工作线程。
+预处理器对文件系统访问采取严格的显式授权策略：
+- **内存文本入口默认禁止读文件**：调用 `hx_os_preprocess_text()` 时默认没有绑定文件加载器（Resolver），一旦命中活动分支中的 `#include`，会直接返回 `HX_OS_NOT_SUPPORTED`（除非你在 `options` 中显式提供了自定义 Resolver）。
+- **文件入口内置相对路径加载器**：调用 `hx_os_preprocess_file()` 时，内置加载器以**当前发出 `#include` 的文件所在目录**为基准解析相对路径（内部自动处理 Windows UTF-8 路径转换）。
+- **内置加载器的路径限制**：严格拒绝绝对路径、带冒号 `:` 的盘符／协议语法以及任何 `..` 父目录跳转分量，同时接受 `/` 与 `\` 分隔符并跟随文件系统符号链接。注意：这是一种面向可信配置文件的有界路径约束，并非操作系统级安全沙箱。若你想完全禁用包含，可在 `options.flags` 中设置 `HX_OS_PREPROCESS_NO_INCLUDES`。
+- **自定义 Resolver 回调**：如果你的配置存储在内存资源表、压缩包或虚拟文件系统中，可以通过 `options` 注册自定义 Resolver。回调接收父来源标识、请求包含的名称以及剩余字节配额，将内容写入已初始化的 `hx_string` 并返回唯一、非空且不超过 `4,096` 字节的来源标识（用于检测循环 `#include`）。
 
 ## 4. C++11 与诊断
 
-包含 `<hx/Preprocessor.hpp>` 和 `<cstdio>`，在返回 `hx_os_status` 的函数中可以这样写：
+在 C++11 中，包含 `<hx/Preprocessor.hpp>` 即可调用 `hx::Preprocessor::file()` 或 `hx::Preprocessor::text()`，并通过可选的 `hx::PreprocessDiagnostic` 获取精确到行列号的失败原因：
 
 ```cpp
 hx::PreprocessDiagnostic why;
@@ -87,29 +103,25 @@ if (!text) {
 std::puts(text.value().c_str());
 ```
 
-成功路径最后返回 `HX_OS_OK`。`Preprocessor::text()` 接收 StringView，两种方法都返回自己拥有数据的 String，不使用异常。选项、诊断和 context 可选，普通调用只需要输入。
-
-C 诊断用 `HX_OS_PREPROCESS_DIAGNOSTIC_INIT` 或初始化函数设置，最后释放。每次调用清除旧诊断，失败提供来源及能够确定的、从 1 开始的调用处行列。description 借用库静态文本；来源名尽力复制，OOM 时可能为空，诊断失败不会替换主要状态／原生错误。诊断不能与输入、源名称或输出重叠，字符串／诊断存活期间需要保持实现库已加载。
-
-输出可能增加空格和空行，以保持 token 边界、分隔包含内容，不是保留排版的编辑器或完整源码映射。Lexer 默认返回换行 token，下游把换行当空白时应开启 `HX_OS_LEXER_SKIP_NEWLINES`，配置解析器则按格式处理空白。
+- 在 C 语言中，使用 `HX_OS_PREPROCESS_DIAGNOSTIC_INIT` 初始化 `hx_os_preprocess_diagnostic`，调用结束后用 `hx_os_preprocess_diagnostic_destroy()` 释放。当预处理失败时，诊断对象会记录出错的来源文件名、从 `1` 开始的行列号以及静态英文原因描述 `description`。
+- **空白与换行说明**：预处理器在展开宏和拼接 `#include` 文件时，可能会插入必要的空格与空行以防止相邻 Token 意外粘连。如果下游使用自定义 Lexer 解析且将换行视作普通空白，请为下游 Lexer 开启 `HX_OS_LEXER_SKIP_NEWLINES`；标准 JSON／YAML／TOML 配置解析器则会自动忽略这些空白。
 
 ## 5. 上限和所有权
 
-| 选项 | 默认 | 最大允许配置 |
+为防止无限宏递归、炸弹式宏展开（Billion Laughs）或过深的文件包含，预处理器强制执行以下资源预算（可通过 `HX_OS_PREPROCESS_OPTIONS_INIT` 初始化后按需下调或上调，任何上限设为 `0` 均视为非法）：
+
+| 预算选项字段 | 默认上限 | 允许配置的最大上限 |
 | --- | --- | --- |
-| 每来源 `max_input_bytes` | 16 MiB | 64 MiB |
-| 来源累计 `max_total_input_bytes` | 64 MiB | 64 MiB |
-| `max_output_bytes` | 16 MiB | 64 MiB |
-| `max_defines` | 256 | 4,096 |
-| 名称／替换保留量 `max_macro_bytes` | 1 MiB | 64 MiB |
-| 累计处理替换量 `max_expanded_bytes` | 64 MiB | 64 MiB |
-| `max_expansions`、`max_directives` | 各 65,536 | 各 1,048,576 |
-| 包含根来源的 `max_include_depth` | 16 | 64 |
-| `max_expansion_depth` | 32 | 64 |
-| 每来源 `max_condition_depth` | 64 | 64 |
+| 单个来源输入字节数 `max_input_bytes` | `16 MiB` | `64 MiB` |
+| 所有包含来源累计输入字节数 `max_total_input_bytes` | `64 MiB` | `64 MiB` |
+| 最终输出字节数 `max_output_bytes` | `16 MiB` | `64 MiB` |
+| 同时生效的宏定义数量 `max_defines` | `256` | `4,096` |
+| 宏名称与替换体保留字节数 `max_macro_bytes` | `1 MiB` | `64 MiB` |
+| 累计处理的宏展开总字节数 `max_expanded_bytes` | `64 MiB` | `64 MiB` |
+| 宏展开次数 `max_expansions`、指令数 `max_directives` | 各 `65,536` | 各 `1,048,576` |
+| 包含文件嵌套深度 `max_include_depth`（含根文件） | `16` | `64` |
+| 宏递归展开深度 `max_expansion_depth` | `32` | `64` |
+| 单文件条件块嵌套深度 `max_condition_depth` | `64` | `64` |
 
-使用 `HX_OS_PREPROCESS_OPTIONS_INIT` 或带容量检查的初始化函数，零上限无效。初始定义数量要装得进 max_defines，名称／值只借用到调用结束，会复制到本次私有宏表。不同调用的定义互不影响，并发调用也如此。每次处理替换内容都消耗累计展开字节额度，原有 Lexer 的 token 大小／数量上限也继续生效。
-
-来源／展开栈按需增长且受限，宏复用 PARAMETERS。这些是数据／操作上限，不是精确进程 RSS；分配头、倍增容量、Lexer 副本、原有输出和临时缓冲有另外的有界库内开销，自定义 resolver 内部由回调负责。嵌入式应用可以按实际需要降低限制。
-
-成功替换输出，失败释放临时字符串、Lexer、帧和宏表并保留输出。调用方串行访问自己的输出／诊断，让回调、context 和输入覆盖本次调用。模块不改变进程 locale、环境、工作目录或全局配置。`HX_OS_ENABLE_PREPROCESSOR` 默认开启，还需 LEXER、PARAMETERS，`hx_os_preprocess_available()` 查询组合可用性；缺少模块时返回 NOT_SUPPORTED，不新增第三方依赖。
+- **每次调用完全隔离**：通过 `options` 传入的初始预定义宏名称与值仅在调用期间借用，并会被深拷贝到本次调用私有的宏表中。不同预处理调用之间（包括多线程并发调用）互不共享宏状态，也不会修改任何进程全局变量。
+- **模块裁剪开关**：CMake 选项 `HX_OS_ENABLE_PREPROCESSOR` 默认开启，并依赖 `HX_OS_ENABLE_LEXER` 与 `HX_OS_ENABLE_PARAMETERS`（文件入口另需 `HX_OS_ENABLE_FILE_UTILS`）。运行期可通过 `hx_os_preprocess_available()` 查询可用性；若任一依赖模块被关闭，预处理接口会明确返回 `HX_OS_NOT_SUPPORTED`。

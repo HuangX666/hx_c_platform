@@ -2,17 +2,16 @@
 
 [English](SERIALIZATION.md) · [README](../README.zh-CN.md) · [解析格式范围](CONFIGURATION.zh-CN.md)
 
-**先把一个设备结构体转成 JSON，再读回。** 构建 `hx_os_serialization`，按[示例方法](../examples/README.zh-CN.md#run)运行，不传参数默认使用 JSON。[serialization.c](../examples/serialization.c) 和同目录的 [serialization_schema.h](../examples/serialization_schema.h) 需要一起阅读。
+在服务配置、设备状态上报或本地持久化场景中，我们经常需要在 **C 结构体／C++ 值对象**与 **JSON、YAML、XML、TOML、INI、ENV、properties** 文本之间做双向转换，或者在内存中构造并修改包含混合类型的多层嵌套文档。本模块提供基于编译期宏或显式字段表的**类型安全结构体编解码（Codec）**，以及面向动态结构的**不可变文档构建与序列化接口**。
 
-示例先准备设备名、两条采样、上下限和启用状态；encode 生成文本，decode 创建拥有数据的结果对象，最后打印 JSON 并释放结果。输出会保留两条 samples 及内部字段，不会把它们展平为字符串。传 `yaml`、`xml` 或 `toml` 可以比较相同数据的另一种表示；这个含数组的结构不能直接改成 INI。
+你可以先通过内置示例体验完整的“结构体 → JSON → 结构体”往返流程：按[示例方法](../examples/README.zh-CN.md#run)编译并运行 `hx_os_serialization`（不传命令行参数时默认使用 JSON；源码见 [serialization.c](../examples/serialization.c) 与配套的 [serialization_schema.h](../examples/serialization_schema.h)）。程序会准备好设备名称、两条传感器采样记录、上下限子结构体和启用标志，调用 `hx_os_codec_encode()` 输出 JSON 文本，再调用 `hx_os_codec_decode()` 还原为持有数据的结果对象并打印。传入 `yaml`、`xml` 或 `toml` 参数还可以对比同一份结构体在其他格式下的文本表示（由于该结构体包含数组，若传入不支持数组的 `ini` 会明确返回 `HX_OS_UNREPRESENTABLE`）。
 
-开始接自己的类型时，先用宏或字段表声明一次映射，再替换结构体数据。字符串借用解码结果对象，必须在 release 之前使用。第 3 节给出完整调用代码和字段含义。
+接入你自己的业务类型时，只需用宏或字段表声明一次结构体映射即可。请注意：解码生成的结构体内部的字符串视图与动态数组均**借用自解码结果所有者（`hx_os_codec_result`）**，请在使用完毕后再释放该结果对象。
 
 ## 1. 先选择适合你的入口
 
-新数据类型可以用 `HX_CODEC_STRUCT` 一次声明结构体和字段映射，使用 `hx_os_codec_encode/decode`。已有结构体继续使用显式映射。字段可以是整数、浮点、布尔、字符串、子结构体或数组。C++11 使用 `hx::Codec<T>`，返回 `Result`，不使用异常。
-
-数据结构不固定时，使用 `hx_os_config_parse/create/replace/serialize`。例如同一个数组里既有数字，又有字符串、null、对象和子数组，每个节点会保留自己的类型。读取时先看 `hx_os_config_kind`，再选择对应的 getter。不要把这样的数组声明为“整数数组”。
+- **结构固定的业务数据（推荐使用 `Codec`）**：对于新定义的业务类型，使用 `HX_CODEC_STRUCT` 可以一次性声明 C 结构体及其字段映射表，随后直接调用 `hx_os_codec_encode()` 与 `hx_os_codec_decode()`（已有的公共结构体也可使用显式字段表映射）。字段类型支持整数、浮点数、布尔、字符串、嵌套子结构体和数组。C++11 提供 `hx::Codec<T>` 封装，返回 `hx::Result` 且不使用异常。
+- **结构不固定的动态数据（使用 `ConfigDocument`）**：当同一个数组中混合了数字、字符串、`null`、子对象和子数组，或者字段结构在运行期完全动态变化时，请使用 `hx_os_config_parse()`、`hx_os_config_create()`、`hx_os_config_replace()` 和 `hx_os_config_serialize()`。读取这类动态节点时，先检查 `hx_os_config_kind` 再调用对应的取值函数，不要把异构混合数组强行声明为“整数数组”。
 
 ```mermaid
 flowchart LR
@@ -23,29 +22,28 @@ flowchart LR
     B -->|replace| E["新的文档，原文档保持有效"]
 ```
 
-`CONFIG`、`CONFIG_SERIALIZE`、`CODEC` 默认开启。`CODEC` 依赖前两个模块；关闭任一依赖后，codec 查询返回不可用，编码/解码入口返回 `HX_OS_NOT_SUPPORTED`。`-DHX_OS_ENABLE_CODEC=OFF` 可以单独移除结构体转换，保留文档读写。没有新增第三方依赖，没有隐式初始化或后台线程。
+CMake 选项 `HX_OS_ENABLE_CONFIG`、`HX_OS_ENABLE_CONFIG_SERIALIZE` 和 `HX_OS_ENABLE_CODEC` 默认均处于开启状态。其中 `CODEC` 依赖前两个模块；若通过 `-DHX_OS_ENABLE_CODEC=OFF` 单独关闭结构体编解码，仍可正常使用文档解析与写出，此时调用 `codec` 编解码接口会返回 `HX_OS_NOT_SUPPORTED`。整个模块无新增第三方依赖，无需全局初始化，也不启动后台线程。
 
 ## 2. 七种格式分别能保存什么
 
-| 格式 | 文档写出 | 结构体映射 | 明确的限制 |
+| 格式 | 文档树直接写出（`serialize`） | 结构体映射（`Codec`） | 明确的格式边界与限制 |
 | --- | --- | --- | --- |
-| JSON | 对象、数组、字符串、布尔、null、整数、实数 | 支持嵌套结构体、数组及 NODE 动态子树 | 不表示 NaN/Infinity；保留整数原始精度 |
-| YAML | block 映射和序列，含混合类型、空对象和空数组 | 同样支持嵌套结构体、数组及 NODE | 输出使用明确引号；解析仍遵守内置/libyaml 的既有范围，不是完整 YAML 语法实现 |
-| XML | XML 元素、属性、有序文本/元素子节点 | 根元素、字段子元素、嵌套对象、数组的 `item` 子元素；可选标量属性 | 不猜测任意 JSON 对象的 XML 映射；不保留注释、处理指令、CDATA 分界或源文件排版 |
-| TOML | 顶层键值、嵌套 inline table、混合数组 | 支持可表示的嵌套对象和数组 | 顶层必须是对象；没有 null；整数限制在有符号 64 位范围；日期节点来自现有 TOMLC 解析 |
-| INI | 全局字符串键值及一层节 | 按字段类型转换标量；一层子结构体对应节 | 不支持数组、更多层对象及无法无损表示的空白/换行 |
-| ENV | 扁平字符串键值，带引号和转义 | 扁平标量结构体 | 键为 `[A-Za-z_][A-Za-z0-9_]*`；无变量展开，不修改环境变量 |
-| properties | 扁平字符串键值及转义 | 扁平标量结构体 | UTF-8 输入输出；不支持数组和嵌套对象 |
+| **JSON** | 对象、数组、字符串、布尔、`null`、整数、浮点数 | 支持嵌套结构体、数组及 `NODE` 动态子树 | 不支持 `NaN`／`Infinity`；完整保留 64 位整数原始精度 |
+| **YAML** | 块级映射与序列（含混合类型、空对象 `{}` 与空数组 `[]`） | 支持嵌套结构体、数组及 `NODE` 动态子树 | 写出时使用明确引号保护字符串；解析遵循内置／`libyaml` 既有配置子集 |
+| **XML** | XML 元素、属性、有序文本／元素子节点 | 根元素、字段子元素、嵌套对象、以 `<item>` 包裹的数组、可选标量属性 | 不对无 schema 的任意 JSON 对象盲猜 XML 映射；不保留原文件注释、PI、CDATA 分界与缩进排版 |
+| **TOML** | 顶层键值、嵌套内联表、混合数组 | 支持可由 TOML 表示的嵌套对象与数组 | 顶层必须是对象（表）；无 `null` 类型；整数限有符号 64 位范围 |
+| **INI** | 顶层全局字符串键值及单层 `[section]` | 按声明的字段类型转换标量；单层嵌套子结构体映射为 `[section]` | 不支持数组、超过一层的嵌套对象，以及包含换行或会被裁剪的首尾空白 |
+| **ENV** | 扁平字符串键值（带引号与转义） | 仅限扁平标量结构体 | 键名须匹配 `[A-Za-z_][A-Za-z0-9_]*`；不展开变量，不修改进程环境变量 |
+| **properties** | 扁平字符串键值及转义 | 仅限扁平标量结构体 | 统一使用 UTF-8 读写；不支持数组与嵌套对象 |
 
-格式行为以项目已实现的 [XML 1.0](https://www.w3.org/TR/xml/)、[YAML 1.2](https://yaml.org/spec/1.2.2/) 和 [TOML 1.0](https://toml.io/en/v1.0.0) 范围为准；表中说明的是支持子集，不宣称完整覆盖所有语法。
+各格式的具体语法范围以项目实现的 [XML 1.0](https://www.w3.org/TR/xml/)、[YAML 1.2](https://yaml.org/spec/1.2.2/) 和 [TOML 1.0](https://toml.io/en/v1.0.0) 配置子集为准（详见[解析格式范围](CONFIGURATION.zh-CN.md)）。
 
-文档转换保留节点类型，不把数字自动变成字符串。结构体映射对 XML、INI、ENV、properties 按你声明的字段类型转换，这是有明确类型依据的转换。不能表示的输入返回 `HX_OS_UNREPRESENTABLE`，不会悄悄展平、删字段或把 null 改成零。
-
-JSON 字符串中的 `"{...}"` 始终是字符串。只有你显式调用 `hx_os_config_parse_node` 时，才会把字符串当成另一份文档解析。
+- **文档直接写出 vs. 结构体映射**：直接序列化文档树（`hx_os_config_serialize`）会严格保留每个节点的真实类型，不会把数字静默转成字符串；而通过结构体 Schema 编解码 XML、INI、ENV 和 properties 时，则会依据你在 Schema 中声明的字段类型有据可依地转换标量文本。遇到目标格式无法表示的结构（如向 INI 写出数组）会明确返回 `HX_OS_UNREPRESENTABLE`，绝不会悄悄展平、丢弃字段或把 `null` 当成 `0`。
+- **不隐式解析字符串内容**：JSON 字符串中的 `"{\"a\":1}"` 始终只是普通字符串；只有当你显式调用 `hx_os_config_parse_node()` 时，才会把该字符串节点的内容当作另一份内嵌配置文档解析。
 
 ## 3. 完整 C 示例：结构体和 JSON 相互转换
 
-下面的程序只需要 `hx_c_platform`。`HX_CODEC_STRUCT` 同时声明结构体、字段表和 schema；`host`、`port` 各写一次。宏由正常的 C99/C++11 预处理器展开，不需要 Python、Clang 分析器或额外生成步骤。完整文件见 [codec_macros.c](../examples/codec_macros.c)。
+下面这段完整的 C99 程序仅依赖 `hx_c_platform`。`HX_CODEC_STRUCT` 宏在普通 C99／C++11 预处理器下直接展开，同时生成结构体定义、字段描述符数组与 `connection_schema`（无需 Python、Clang 分析器或任何外部代码生成步骤）。完整源码见 [codec_macros.c](../examples/codec_macros.c)：
 
 ```c
 #include <hx_codec_macros.h>
@@ -92,22 +90,25 @@ int main(void)
 }
 ```
 
-输出：
+运行输出：
 
 ```text
 {"host":"localhost","port":8080}
 port = 8080
 ```
 
-把两个调用的格式都改成 `HX_OS_CONFIG_XML`，会得到 `<connection><host>localhost</host><port>8080</port></connection>` 并还原相同的结构体。这个扁平示例也能使用 YAML、TOML、INI、ENV、properties。
+如果你把 `encode` 和 `decode` 中的 `HX_OS_CONFIG_JSON` 同时改为 `HX_OS_CONFIG_XML`，程序会输出 `<connection><host>localhost</host><port>8080</port></connection>` 并还原出完全一致的 `connection` 结构体；由于该结构体是扁平标量结构，改为 YAML、TOML、INI、ENV 或 properties 也同样可以直接往返。
 
-`json` 自己持有编码文本。`owner` 持有解码后的结构体、字符串、数组和文档节点；`hx_os_codec_data` 返回只读借用指针。先读完结果，再释放 `owner`。即使原始输入缓冲区已经释放或被改写，解码结果仍有效。不要单独释放它里面的字符串或数组。输出句柄使用新的空变量；新的解码成功后，再由调用者替换并释放旧结果。
+**所有权与生命周期规则：**
+- `json`（`hx_string`）独立持有编码生成的文本。
+- `owner`（`hx_os_codec_result *`）统一持有解码还原出的结构体、字符串内容、动态数组和子树节点；`hx_os_codec_data(owner)` 返回指向该结构体的只读借用指针。
+- 解码完成后，即使立即销毁或覆写原始输入文本缓冲区（如 `json`），`owner` 中的数据依然完全有效。请先读取完 `decoded` 的所有字段，最后调用一次 `hx_os_codec_release(owner)` 统一释放，**切勿**对结构体内部的字符串或数组指针单独调用 `free()`。
 
 ## 4. 子结构体、数组和不固定的 JSON
 
-可运行的 [serialization.c](../examples/serialization.c) 使用 [serialization_schema.h](../examples/serialization_schema.h) 中的设备类型：`name`、`enabled`、子结构体 `range`，以及含多个采样结构体的 `samples` 数组。每个采样还有单位、数值和通道号。
+可运行示例 [serialization.c](../examples/serialization.c) 使用了定义在 [serialization_schema.h](../examples/serialization_schema.h) 中的嵌套设备结构：顶层 `device` 包含字符串 `name`、布尔值 `enabled`、子结构体 `range`（类型为 `limits`），以及包含多条 `sample` 记录的动态数组 `samples`。
 
-字段映射有这些常用形式：
+其宏声明写法非常直观：
 
 ```c
 HX_CODEC_STRUCT(device,
@@ -118,37 +119,37 @@ HX_CODEC_STRUCT(device,
 );
 ```
 
-动态数组字段的 C 类型是 `hx_os_codec_array`，即 `{data, count}`。编码时指向你现有的连续数组；解码时指向结果对象持有的连续数组。宏中的 `sample` 说明每个元素的实际类型，先用 `HX_CODEC_STRUCT` 声明它。固定内嵌数组使用 `HX_CODEC_FIXED(points, double, 3)`，解码长度必须完全匹配。宏数组可以包含对象。直接的“数组套数组”使用现有显式元素描述组合；深度与内存都受配置上限约束。
-
-字段类型支持带符号/无符号 8、16、32、64 位整数、`float`、`double`、布尔、`hx_string_view`、固定字符数组、对象、动态/固定数组以及 `NODE`。布尔存储为 `int` 或一字节布尔；`BUFFER` 字段是有 NUL 终止的内嵌字符数组，溢出或无法保存内嵌 NUL 时失败；`STRING` 保留精确字节长度和允许的内嵌 NUL。
-
-如果 `payload` 可能收到这样的内容：
+- **动态数组与固定长度数组**：
+  - `HX_CODEC_ARRAY(samples, sample)` 生成类型为 `hx_os_codec_array`（即 `{data, count}` 切片）的成员。编码时它借用你提供的连续元素数组；解码时它指向由 `owner` 统一分配并持有的连续数组（注意：元素结构体 `sample` 需先在前面完成声明）。
+  - `HX_CODEC_FIXED(points, double, 3)` 生成内嵌的固定长度数组 `double points[3]`，解码时要求输入数组的元素个数必须严格等于 `3`，否则返回 `HX_OS_RANGE`。
+- **标量与缓冲区字段**：支持有符号／无符号 `8`、`16`、`32`、`64` 位整数、`float`、`double`、布尔值、`hx_string_view`（`STRING`，完整保留精确字节长度与合法的内嵌 `\0`）以及内嵌定长字符数组（`BUFFER`，始终以 `\0` 结尾，若文本超长或含内嵌 `\0` 则解码失败）。
+- **保留动态子树（`HX_CODEC_NODE`）**：如果结构体中的某个字段（例如 `payload`）在运行期可能收到结构任意变化的混合 JSON：
 
 ```json
 {"items":[1,"文字",null,{"children":[true,2.5,{},[]]}]}
 ```
 
-使用 `HX_CODEC_NODE(payload)`，或者将已有字段 `const hx_os_config_node *payload` 显式映射成 `HX_OS_CODEC_NODE`。它能保留整个子树，再用 `hx_os_config_pointer(payload, "/items/3/children/1", &node)` 查询里面的数值。这个指针仍借用解码结果。编码 NODE 时借用你提供的有效文档；库会复制子树。XML 的 NODE 字段要求 XML 元素子树；其他格式也必须能够表示该子树。
+你可以将该字段声明为 `HX_CODEC_NODE(payload)`（对应 C 类型 `const hx_os_config_node *`）。解码时它会保留整棵动态子树，随后你可以用 `hx_os_config_pointer(payload, "/items/3/children/1", &node)` 直接按路径查询深层节点（该节点指针同样借用自解码结果 `owner`）。编码 `NODE` 字段时，库会从你提供的有效文档节点深拷贝整棵子树。
 
-纯文档用法见 [nested_document.c](../examples/nested_document.c)：先用 `hx_os_config_value` 描述混合数组，再 `hx_os_config_create` 一次复制成文档，用 `hx_os_config_serialize` 写出 JSON，最后重新解析并读取深层的 2.5。描述中的名字、字符串和数字文本只借用到 create 返回。数字描述使用完整的 JSON 数字文本，避免经过 double 损失大整数精度。
+若整个文档都是动态混合结构而不需要映射到 C 结构体，请参考 [nested_document.c](../examples/nested_document.c)：使用 `hx_os_config_value` 描述混合层级，调用 `hx_os_config_create()` 一次性构建不可变文档，再调用 `hx_os_config_serialize()` 写出文本。
 
 ### 4.1 常用宏怎么选
 
-| 写法 | 生成的成员 / 用途 |
+| 字段宏写法 | 生成的结构体成员类型与用途 |
 | --- | --- |
-| `HX_CODEC_STRING(host)` | `hx_string_view host`，借用/持有规则见第 3 节 |
-| `HX_CODEC_I32(port)` | `int32_t port`；另有 I8/U8/I16/U16/U32/I64/U64 |
-| `HX_CODEC_FLOAT(value)` / `HX_CODEC_DOUBLE(value)` | `float` / `double` |
-| `HX_CODEC_BOOL(enabled)` | `hx_codec_bool`，即 `int`，语义为布尔 |
-| `HX_CODEC_BUFFER(name, 64)` | 内嵌 `char name[64]`，包括 NUL 的容量 |
-| `HX_CODEC_OBJECT(range, limits)` | 内嵌 `limits range`，子类型先声明 |
-| `HX_CODEC_ARRAY(samples, sample)` | 动态 `hx_os_codec_array`，元素是 `sample` |
-| `HX_CODEC_FIXED(points, double, 3)` | 内嵌 `double points[3]` |
-| `HX_CODEC_NODE(payload)` | `hx_codec_node`，即 `const hx_os_config_node *` |
+| `HX_CODEC_STRING(host)` | `hx_string_view host`（生命周期见第 3 节） |
+| `HX_CODEC_I32(port)` | `int32_t port`（另有 `I8`、`U8`、`I16`、`U16`、`U32`、`I64`、`U64`） |
+| `HX_CODEC_FLOAT(value)` / `HX_CODEC_DOUBLE(value)` | `float value` / `double value` |
+| `HX_CODEC_BOOL(enabled)` | `hx_codec_bool enabled`（底层为 `int`，按布尔语义编解码） |
+| `HX_CODEC_BUFFER(name, 64)` | 内嵌定长字符数组 `char name[64]`（容量含末尾 `\0`） |
+| `HX_CODEC_OBJECT(range, limits)` | 内嵌子结构体 `limits range`（需先声明子类型 `limits`） |
+| `HX_CODEC_ARRAY(samples, sample)` | 动态切片 `hx_os_codec_array samples`，元素类型为 `sample` |
+| `HX_CODEC_FIXED(points, double, 3)` | 内嵌定长数组 `double points[3]` |
+| `HX_CODEC_NODE(payload)` | 动态子树指针 `hx_codec_node payload`（即 `const hx_os_config_node *`） |
 
-数组元素可以是 `int8_t` 到 `uint64_t` 的整数宽度类型、`float`、`double`、`hx_string_view`、`hx_codec_bool`、`hx_codec_node`，或当前作用域内先用 `HX_CODEC_STRUCT` 定义的类型。字符串数组例如 `HX_CODEC_ARRAY(names, hx_string_view)`，布尔数组例如 `HX_CODEC_ARRAY(states, hx_codec_bool)`。动态数组要指出元素类型，因为 `hx_os_codec_array` 本身只记录指针和数量。
+`HX_CODEC_ARRAY` 的元素类型支持 `int8_t`…`uint64_t`、`float`、`double`、`hx_string_view`、`hx_codec_bool`、`hx_codec_node` 或当前作用域内已用 `HX_CODEC_STRUCT` 定义的结构体名。
 
-需要改名、可选字段或 XML 属性时，在单个字段外包一层：
+如果需要**自定义序列化字段名**、标记**可选字段**或将标量映射为 **XML 属性**，可以在字段宏外层嵌套修饰宏：
 
 ```c
 HX_CODEC_STRUCT_NAMED(connection_options, "connection",
@@ -158,21 +159,20 @@ HX_CODEC_STRUCT_NAMED(connection_options, "connection",
 );
 ```
 
-它仍生成普通成员 `host`、`port`、`id`；写出名称分别为 `server_host`、`port`、`id`。XML 根名为 `connection`，`id` 在 XML 中成为属性，在 JSON 等格式中仍为普通字段。这些包装可以组合，例如可选的 XML 属性。缺失可选值仍按原 codec 契约清零，不把类型错误当作缺失。
+上述声明生成的 C 结构体成员名依然是 `host`、`port` 和 `id`，但在序列化写出时，`host` 的键名为 `"server_host"`，XML 根元素名为 `<connection>`，且 `id` 在 XML 下作为属性 `<connection id="...">` 读写（在 JSON／YAML 等格式下则仍作为普通字段）。修饰宏支持自由组合（如 `HX_CODEC_OPTIONAL(HX_CODEC_XML_ATTRIBUTE(...))`）。当输入中缺少 `OPTIONAL` 字段时，解码器会将该成员保持为零值／空视图；但若该字段存在却类型不匹配，仍会严格报错。
 
-宏适合新类型，需放在文件作用域或 C++ 命名空间作用域，末尾写分号；每个结构体支持 **1～32 个字段**，最后一个字段后不要加逗号。固定数组长度和字符缓冲容量必须为正整数常量表达式。顺序就是结构体的成员声明顺序，宏不会排序、压缩对齐或猜测指针类型。生成的 `类型_fields`、`类型_schema` 是当前编译单元的静态只读描述，可以把同一份声明放进有保护的头文件。
-
-现有公共结构体不需要改写成宏，继续使用 `HX_OS_CODEC_FIELD`、`HX_OS_CODEC_OBJECT_FIELD`、`HX_OS_CODEC_ARRAY_FIELD`、`HX_OS_CODEC_FIXED_FIELD` 和 `HX_OS_CODEC_SCHEMA`。超过 32 个字段、其他 typedef 元素别名或跨命名空间的限定类型，也使用这些显式入口。简洁宏的 32 字段上限不改变底层文档深度和节点上限。
+> [!NOTE]
+> **宏的适用范围与显式 Schema 宏：**
+> `HX_CODEC_STRUCT` 需写在文件作用域或 C++ 命名空间作用域并以分号结尾，单个结构体支持 **1—32 个字段**（最后一个字段末尾不加逗号）。生成的 `<type>_fields` 与 `<type>_schema` 具有静态内部链接，因此可直接放在带 include guard 的公共头文件中。
+> 如果你需要映射项目中已有的结构体定义、字段数超过 32 个、或者需要映射多层“数组套数组”，请使用 `<hx_codec.h>` 中的显式描述符宏（`HX_OS_CODEC_FIELD`、`HX_OS_CODEC_OBJECT_FIELD`、`HX_OS_CODEC_ARRAY_FIELD`、`HX_OS_CODEC_FIXED_FIELD` 与 `HX_OS_CODEC_SCHEMA`）。
 
 ### 4.2 在嵌入式 Linux 中使用
 
-只需用实际 SDK 正常交叉编译。宏展开产生标准 C99/C++11 声明，`sizeof`、`offsetof` 由 ARM 等目标编译器计算，不包含宿主机生成的数值偏移。Windows/x86 上构建 ARM 程序时，板子不需要 Python、Clang 或其他生成工具。没有额外运行时注册和初始化；编解码仍调用同一份 codec 实现。
-
-使用正确的 sysroot、libc、浮点 ABI、头文件及对齐配置；它们是普通 C/C++ 工程的兼容要求。不能把某套 glibc 交叉编译结果推广到所有 musl、旧 SDK 或板卡。 平台边界见[平台支持](PLATFORMS.zh-CN.md)。
+`HX_CODEC_STRUCT` 仅展开为标准 C99／C++11 源码声明，所有的 `sizeof` 与 `offsetof` 均由最终的目标架构编译器（如 ARM GCC/Clang）在编译期直接计算，不依赖任何宿主机脚本预计算字节偏移。因此在交叉编译嵌入式 Linux 目标时，照常使用目标板 SDK 工具链构建即可，目标板运行期也没有任何反射注册表开销。各平台的工具链与系统边界见[平台支持](PLATFORMS.zh-CN.md)。
 
 ## 5. C++11：直接取结果，不使用异常
 
-C++ 可以复用同一份字段映射。下面是 [serialization.cpp](../examples/serialization.cpp) 中的核心调用，`device_schema` 仍是上一节那一份：
+C++11 代码可以直接复用同一份 `device_schema`。以下片段取自 [serialization.cpp](../examples/serialization.cpp)，展示了解码 JSON 并转存为 XML 的过程：
 
 ```cpp
 hx::Codec<device> codec(device_schema);
@@ -188,13 +188,13 @@ if (!xml)
 std::puts(xml.value().c_str());
 ```
 
-`decoded.value()` 是持有结果的 `Decoded<device>`，它的 `.value()` 才是业务结构体；也可写 `decoded.value()->enabled` 访问成员。返回对象支持移动，析构自动释放全部解码存储。`arrayItem<sample>(span, index)` 将匹配映射类型的一个元素复制为 C++ 值，其内部借用文本仍依赖 `Decoded` 的寿命。
-
-`Codec<T>` 要求标准布局、可平凡复制的值类型；解码还要求不抛异常的默认构造。普通 C++ 值类可以有自己的业务方法，但不要把 `std::string`、`std::vector`、虚函数类、拥有资源的成员、指针对象图、packed 或过度对齐类型交给偏移映射。此类业务对象应与可映射的数据结构显式转换。本接口不对这些对象执行原始内存复制，不承诺反射任意 C++ 对象。
+- `decoded.value()` 返回移动语义的 `hx::Decoded<device>`，它负责管理底层解码内存的生命周期（析构时自动释放）；通过 `decoded.value().value()` 或 `decoded.value()->enabled` 即可访问还原出的业务结构体。
+- 若需在 C++ 中按类型访问 `hx_os_codec_array` 中的元素，可使用辅助方法 `hx::arrayItem<sample>(span, index)`（注意其内部的 `hx_string_view` 依然借用自所属的 `hx::Decoded` 对象）。
+- **C++ 类型约束**：`hx::Codec<T>` 要求 `T` 必须是标准布局（Standard-Layout）、可平凡复制（Trivially Copyable）且具备 `noexcept` 默认构造函数的纯值类型。可以包含普通的成员方法，但**切勿**将含有 `std::string`、`std::vector`、虚函数、RAII 资源句柄或 packed 非对齐属性的 C++ 类交给偏移量映射。
 
 ## 6. 修改文档、转换格式与保存文件
 
-文档不可变；修改时创建新的版本，旧版本及其借用节点保持有效：
+对于动态不可变文档（`ConfigDocument`），修改某个节点会返回一份全新的文档对象，原文档及其借用节点继续保持有效：
 
 ```cpp
 auto source = hx::ConfigDocument::parse("{\"port\":8080}");
@@ -214,29 +214,25 @@ if (!yaml)
 	return 1;
 ```
 
-C 对应调用 `hx_os_config_replace(source, target, &value, options, &out, &error)`，目标必须来自 source；函数保留目标原来的字段名。`hx_os_config_convert` 一次完成解析和写出，C++ 是 `ConfigDocument::convert(text, from, to)`。例如 JSON → YAML 会保留数组和数字类型；JSON → INI 如果遇到数组，会明确失败。XML 与一般对象树之间的转换请通过业务 schema 指定关系。
-
-文件接口有 `hx_os_config_load/save` 和 `hx_os_codec_load/save`，C++ 对应 `ConfigDocument::load/save`、`Codec<T>::load/save`。保存需要 `FILE_UTILS`，使用既有原子发布机制；不额外承诺断电持久化或失败事务回滚。路径为 UTF-8，Windows 内部转换为原生路径。
-
-`hx_settings_serialize/save` 也可使用新增的 YAML、TOML、ENV 输出。settings 是对象树，没有 XML 元素/属性模型，直接保存 XML 会返回不可表示；用 XML 文档或 schema 转换表达你的 XML 结构。settings 原有默认深度 32、上限 64 保持不变；新的文档/codec 深度规则见下一节。
+- **C 语言节点替换与格式互转**：C 接口对应 `hx_os_config_replace(source, target, &value, options, &out, &error)`（其中 `target` 必须是属于 `source` 的节点指针，替换后保留原键名）。若只需在两种格式文本之间直接转换，可调用 `hx_os_config_convert()` 或 C++ `ConfigDocument::convert(text, from, to)`（例如 JSON 转 YAML 会完整保留数组与数值类型；而将含数组的 JSON 转为 INI 则会返回 `HX_OS_UNREPRESENTABLE`）。
+- **文件直接读写**：提供 `hx_os_config_load()`／`hx_os_config_save()` 与 `hx_os_codec_load()`／`hx_os_codec_save()`（以及 C++ 对应的 `load`／`save` 方法）。保存操作复用文件工具模块的原子发布机制。
+- **运行期设置（`hx_settings`）导出**：`hx_settings_serialize()` 与 `hx_settings_save()` 同样支持输出 JSON、YAML、TOML、INI、ENV 和 properties（由于 `hx_settings` 是键值对象树而不具备 XML 元素／属性区分模型，直接将其保存为 XML 会返回 `HX_OS_UNREPRESENTABLE`）。
 
 ## 7. 失败、类型与容量规则
 
-- 所有新操作同步执行。不会启动线程、自动执行文件内容或修改进程 locale；较大数据可以由业务线程调用。
-- JSON/YAML/TOML 根据真实节点类型解码。`"8080"` 不能直接当作整数字段，`true` 不能当作整数 1，null 不能当作零；XML/INI/ENV/properties 则按声明的标量类型转换。
-- 缺失必需字段返回 `NOT_FOUND`；类型不符返回 `TYPE_MISMATCH`；整数缩窄溢出、固定数组长度不符等返回 `RANGE`。`OPTIONAL` 字段缺失时保持零/空状态；这不记录“缺失”和“显式零”的区别。未知字段忽略，适合只读取声明的业务字段；需要保留未知数据时用文档树或 NODE。
-- 标量字段同名 XML 元素重复时返回 `EXISTS`，不自动取其中一个。XML 数组是一个字段元素，内部有多个 `item`；对象中的非空白混合文本要求使用 NODE。
-- 默认最大深度 64，显式选项最多 128，根节点计为第 1 层。XML 标量的文本子节点也占一层。超过上限返回 `LIMIT`，不静默截断。
-- 默认输入/输出各最多 1 MiB、单个文档分配预算 16 MiB、节点数 65,536、工作量 16,777,216。创建文档时名字和值的字节总量受输入上限约束。codec 的解析树和解码结果共用文档内存预算；编码树和最终输出分别使用预算。既有输入、调用方旧输出、同时持有的其他文档及原生 locale 对象不计入本次新文档预算。 数值 getter 的转换临时缓冲也在文档分配预算之外。
-- 描述/schema 必须指向调用期间有效的数据；偏移、尺寸、重叠字段、重复名字和数组乘法会被检查。循环描述/schema 在深度/工作限制内失败，不无限递归。没有通用内存指针有效性检测。
-- 编码或转换失败时，`hx_string` 保持原内容。解码失败时结果指针为 NULL，并释放本次分配。加载失败不会改变调用方已有的业务对象。
-- 编码借用输入，不增加输入对象的所有权。解码结果由一个 owner 管理，多个读线程可以在排除释放竞争的前提下读取；释放时不允许其他线程继续使用其借用指针。allocator/context 按现有跨线程释放契约存活。
-
-可通过 `hx_os_config_error` 得到统一状态、原生详情和受控诊断。解析语法错误带可取得的输入位置；字段转换错误的位置未知时用 `SIZE_MAX`，不会伪造行列。消息不拼入配置内容。
+- **严格类型匹配 vs. 标量文本转换**：在解码 JSON、YAML 和 TOML 时，解码器严格核对节点的真实类型——字符串 `"8080"` 不会被当成整数 `8080`，布尔 `true` 不会被当成整数 `1`，`null` 也不会被当成 `0`。而在解码本身只有文本标量的 XML、INI、ENV 和 properties 时，解码器则会严格按照 Schema 声明的字段类型解析文本。
+- **常见错误码**：
+  - `HX_OS_NOT_FOUND`：缺少必需字段（未标记为 `OPTIONAL`）。
+  - `HX_OS_TYPE_MISMATCH`：节点类型与 Schema 字段类型不兼容。
+  - `HX_OS_RANGE`：整数缩窄到 8/16/32 位时发生溢出，或定长数组 `FIXED` 长度不匹配。
+  - `HX_OS_EXISTS`：XML 中对应标量或子结构体字段的同名元素重复出现（XML 数组则规范地使用一个字段容器元素包裹多个 `<item>` 子元素）。
+  - **忽略未知字段**：解码结构体时，输入中多出的未声明字段会被安全忽略，方便协议向前兼容；若业务需要完整保留未知字段，请配合文档树或 `HX_CODEC_NODE` 使用。
+- **深度与内存预算**：默认最大深度为 `64` 层（最高可配 `128` 层，根节点算第 1 层，XML 标量元素的文本子节点也计入深度），默认单次输入与输出上限各为 `1 MiB`、文档内存预算 `16 MiB`、节点上限 `65,536` 个、工作量上限 `16,777,216` 单位。超出预算一律返回 `HX_OS_LIMIT`，绝不静默截断。
+- **失败无副作用**：编码或格式转换失败时，目标 `hx_string` 保持原内容不变；解码失败时输出句柄置为 `NULL` 并释放当次已分配的全部内存。`hx_os_config_error` 提供状态码、字节偏移／行列号（未知偏移记为 `SIZE_MAX`）以及脱敏的英文错误原因。
 
 ## 8. 直接构建和运行示例
 
-以下命令都从库源码根目录执行。先完成[示例配置](../examples/README.zh-CN.md#run)，`build` 换成已有构建目录；Debug 构建需把 Release 同时改成 Debug。只编译要看的目标，不另建序列化专用目录：
+完成[示例配置](../examples/README.zh-CN.md#run)后，可在仓库根目录直接按需编译以下四个示例目标（将 `build` 替换为你的构建目录）：
 
 ```sh
 cmake --build build --config Release --target hx_os_codec_macros
@@ -245,7 +241,7 @@ cmake --build build --config Release --target hx_os_nested_document
 cmake --build build --config Release --target hx_os_cpp_serialization
 ```
 
-Windows Visual Studio:
+在 Windows（Visual Studio 生成器）下运行：
 
 ```powershell
 .\build\bin\Release\hx_os_codec_macros.exe
@@ -255,7 +251,7 @@ Windows Visual Studio:
 .\build\bin\Release\hx_os_cpp_serialization.exe
 ```
 
-Linux / WSL:
+在 Linux / macOS / WSL 下运行：
 
 ```sh
 ./build/bin/hx_os_codec_macros
@@ -265,31 +261,27 @@ Linux / WSL:
 ./build/bin/hx_os_cpp_serialization
 ```
 
-所有输入都写在源码里，不需要先准备 JSON 文件。前两个 C 示例都执行“编码 → 解码”，最后一个 C++ 示例执行“读入 JSON → 写出 XML”。
+这四个示例的输入数据均内置在源码中，无需准备外部文件：
 
-| 程序 | 应看到什么 |
+| 示例程序 | 预期输出 |
 | --- | --- |
-| `hx_os_codec_macros` | 第 3 节的 JSON 和 `port = 8080` |
-| `hx_os_serialization json` | 含 name、两条 samples、range 和 enabled 的 JSON；stderr 显示 `Decoded: samples=2 enabled=true` |
-| `hx_os_serialization xml` | 相同设备的 `<device>...<samples><item>...` XML；相同解码提示 |
-| `hx_os_nested_document` | `{"items":[1,"文字",null,{"children":[true,2.5]}]}`；stderr 显示 `items[3].children[1] = 2.5` |
-| `hx_os_cpp_serialization` | 一个名为 sensor、含一条采样的 `<device>...</device>` XML |
+| `hx_os_codec_macros` | 打印第 3 节的 `{"host":"localhost","port":8080}` 与 `port = 8080` |
+| `hx_os_serialization json` | `stdout` 打印包含 `name`、两条 `samples`、`range` 和 `enabled` 的 JSON；`stderr` 打印 `Decoded: samples=2 enabled=true` |
+| `hx_os_serialization xml` | `stdout` 打印同一设备数据的 `<device>...<samples><item>...` XML；`stderr` 打印相同的解码提示 |
+| `hx_os_nested_document` | `stdout` 打印 `{"items":[1,"文字",null,{"children":[true,2.5]}]}`；`stderr` 打印 `items[3].children[1] = 2.5` |
+| `hx_os_cpp_serialization` | 读取内置 JSON 并向 `stdout` 打印转换后的 `<device>...</device>` XML |
 
-`hx_os_serialization` 还接受小写的 `yaml`、`toml`；stdout 始终只打印文档，解码提示写到 stderr，便于把文档重定向保存。此设备包含数组，传 `ini`、`env` 或 `properties` 会返回 `HX_OS_UNREPRESENTABLE`，表示目标格式无法保存这个结构。要试这些格式，请在 codec_macros.c 中把 encode 和 decode 两处格式常量一起替换，使用扁平 connection 结构。
+`hx_os_serialization` 还可以传入小写的 `yaml` 或 `toml`；若传入 `ini`、`env` 或 `properties`，则会因为结构体含有数组而演示 `HX_OS_UNREPRESENTABLE` 错误返回。
 
 ### 8.1 把示例放进自己的工程
 
-按所选语言使用 [C 工程](USAGE.zh-CN.md#c-project)、[C++ 工程](USAGE.zh-CN.md#cpp-project)，或[安装包配置](USAGE.zh-CN.md#installed-project)，每次只选择一个 main：
+你可以按[C 工程](USAGE.zh-CN.md#c-project)、[C++ 工程](USAGE.zh-CN.md#cpp-project)或[安装包配置](USAGE.zh-CN.md#installed-project)将任意一个示例复制到自己的项目中作为起点：
 
-| 想做什么 | 需要复制 |
+| 目标场景 | 需要复制的源文件 |
 | --- | --- |
-| 最简单的 C 字段映射 | codec_macros.c → main.c |
-| C 嵌套结构体 | serialization.c → main.c，serialization_schema.h 放同目录 |
-| C++ JSON 转 XML | serialization.cpp → main.cpp，serialization_schema.h 放同目录 |
-| 不固定结构的混合 JSON | nested_document.c → main.c |
+| 最简单的 C 结构体字段映射 | 将 `codec_macros.c` 复制为 `main.c` |
+| 含嵌套子结构体与数组的 C 编解码 | 将 `serialization.c` 复制为 `main.c`，并将 `serialization_schema.h` 放在同一目录 |
+| C++11 JSON 转 XML 结构体编解码 | 将 `serialization.cpp` 复制为 `main.cpp`，并将 `serialization_schema.h` 放在同一目录 |
+| 动态混合类型 JSON 的构建与查询 | 将 `nested_document.c` 复制为 `main.c` |
 
-宏和映射头文件属于源码，无需生成工具。先改 schema 中的字段和 source 中的数据，再改接收结果后的业务处理；不要只改 JSON 字段名却保留旧映射。短片段里的 device、device_schema、sample 来自配套头文件，不能只复制一段调用就期望它们自动存在。
-
-`nested_document` 先生成文本，再 parse 为独立文档，使用路径 `/items/3/children/1` 读取 2.5；数组下标从 0 开始。这既展示了混合类型的保存，也展示了如何查到深层值。实际 JSON 中可能含多种类型时，先检查节点类型再取值，字段映射不是任意 JSON 的自动猜测器。
-
-遇到 `not supported`，检查 CONFIG、CONFIG_SERIALIZE、CODEC 是否开启；中文显示不正常时先检查终端 UTF-8 设置，Windows PowerShell 可在运行前执行 `chcp 65001`，不要通过改文档编码解决终端显示问题。平台限制见[平台支持](PLATFORMS.zh-CN.md)。
+如果运行中遇到 `HX_OS_NOT_SUPPORTED`，请检查构建时是否开启了 `HX_OS_ENABLE_CONFIG`、`HX_OS_ENABLE_CONFIG_SERIALIZE` 与 `HX_OS_ENABLE_CODEC`；若在 Windows 终端下看到中文字符乱码，可在运行前执行 `chcp 65001` 将终端活动代码页切为 UTF-8。更多平台边界说明见[平台支持](PLATFORMS.zh-CN.md)。

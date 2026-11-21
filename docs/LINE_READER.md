@@ -2,15 +2,15 @@
 
 [简体中文](LINE_READER.zh-CN.md)
 
-**Start with a small text file.** For large files or line-oriented records, a reader avoids loading the entire file into a string.
+When processing large log files, line-delimited data exports, or streaming text records, reading the entire file into memory at once wastes RAM and leaves your application vulnerable to oversized lines. `hx_os_line_reader` reads and validates UTF-8 text one line at a time under an explicit per-line byte ceiling, without loading the whole file into a single string.
 
-Prepare demo.txt using [input setup](../examples/README.md#inputs) and build `hx_os_read_lines`. Inside build, run `./bin/hx_os_read_lines demo.txt` on Linux or `.\bin\Release\hx_os_read_lines.exe demo.txt` on Windows. It prints `0123456789`; a multiline input produces one output line per record.
+To try it on a real file, prepare `demo.txt` in your build directory using the [input setup](../examples/README.md#inputs) guide and build `hx_os_read_lines`. From the build directory, run `./bin/hx_os_read_lines demo.txt` on Linux/macOS or `.\bin\Release\hx_os_read_lines.exe demo.txt` on Windows. It prints `0123456789` (or one line per record for a multiline input file).
 
-[read_lines.c](../examples/read_lines.c) follows open → repeated next → process line → close after EOF → destroy string. Replace fwrite with record processing. EOF is normal completion; invalid encoding, oversized lines and I/O failures are separate results.
+Open [read_lines.c](../examples/read_lines.c) to see the lifecycle: open the reader with `hx_os_line_reader_open()`, call `hx_os_line_reader_next()` in a loop to process each line, close the reader once `HX_OS_EOF` is reached, and destroy the reusable line buffer. Note that `HX_OS_EOF` signals normal end-of-input, whereas malformed UTF-8, oversized lines, and I/O errors return distinct status codes.
 
 ## 1. Read one line at a time
 
-`hx_os_line_reader` reads UTF-8 text without loading the whole file. Enable `HX_OS_ENABLE_LINE_READER` and its `HX_OS_ENABLE_STREAM` dependency. `max_line_bytes=0` selects a 1 MiB line limit. There is no background thread or implicit network deadline.
+Enable `HX_OS_ENABLE_LINE_READER` and its `HX_OS_ENABLE_STREAM` dependency in CMake (both default to `ON`). Passing `max_line_bytes = 0` selects the default **1 MiB** per-line byte limit. The reader operates synchronously on the calling thread with no background worker threads or implicit network deadlines.
 
 ```c
 #include <hx_line_reader.h>
@@ -36,36 +36,47 @@ int main(void)
 }
 ```
 
-For `first\r\nsecond\nlast` the returned lines are `first`, `second`, and `last`, then `HX_OS_EOF`. LF and CRLF are removed; a lone CR is preserved. Only the very first UTF-8 BOM is removed. Empty files, including a BOM-only file, return EOF without a line. A trailing LF does not invent an additional empty line. Empty physical lines still return a successful empty string.
+**Line Endings, BOM, and Empty Line Rules:**
+- Given the input `first\r\nsecond\nlast`, successive calls to `hx_os_line_reader_next()` yield `"first"`, `"second"`, and `"last"`, followed by `HX_OS_EOF`.
+- Trailing `\n` (LF) and `\r\n` (CRLF) line endings are stripped, while standalone `\r` (CR) bytes inside a line are preserved.
+- A single leading UTF-8 BOM (`EF BB BF`) at the start of the stream is stripped automatically. Empty files and BOM-only files return `HX_OS_EOF` on the first call without emitting an empty line.
+- A trailing LF at the end of the file does not synthesize an extra empty line, whereas actual blank physical lines inside the file return `HX_OS_OK` with an empty string (`size == 0`).
 
-The [read_lines example](../examples/read_lines.c) accepts a path and writes exact line lengths, including embedded NUL. Build `hx_os_read_lines` in an existing examples-enabled build directory, then run it with your UTF-8 file path. The simpler `puts` example above is intended for ordinary text without embedded NUL.
+The snippet above uses `puts()` for ordinary text without embedded `NUL` bytes. When lines may contain embedded `NUL` bytes, inspect `hx_string_size(&line)` as shown in the [read_lines example](../examples/read_lines.c).
 
 ## 2. Bounds, ownership and stream position
 
-The reader uses a fixed 4 KiB read-ahead buffer and a growing staging buffer capped at `max_line_bytes + 4` bytes. The extra bytes allow an initial BOM and CRLF. Growth can briefly hold old and new staging buffers, plus the reader object and allocation overhead. The caller's old/new output strings are separate from this budget. A successful output uses the string's own context.
-
-`open` owns its internal file stream. `from_stream` borrows an existing file, memory or callback stream. Keep a borrowed stream alive and use it exclusively through the reader until close. Read-ahead advances the stream beyond the last returned line, and closing the reader does not rewind it. Do not mix raw reads/seeks or use output strings whose storage backs the borrowed stream.
-
-The reader requires external serialization. Callback streams may block, and callbacks cannot reenter the reader. Short reads and progress returned together with EOF/error are handled: buffered complete lines may be delivered before the pending native error is reported. Partial line data survives an I/O error for retry. An `OK` callback with zero progress becomes `IO_ERROR`, preventing a busy loop.
+- **Internal buffers & memory ceiling**: Each reader maintains a fixed **4 KiB** read-ahead buffer and a dynamically growing line staging buffer capped at `max_line_bytes + 4` bytes (the extra 4 bytes accommodate an initial UTF-8 BOM and trailing CRLF). Buffer growth may briefly hold both old and new staging buffers, while committed output lines allocate through the caller's `hx_string` context.
+- **Owned file streams vs. borrowed streams**:
+  - `hx_os_line_reader_open()` opens and owns the underlying file stream, closing it when the reader is closed.
+  - `hx_os_line_reader_from_stream()` borrows an existing file, memory, or callback stream. Keep the borrowed stream alive and access it exclusively through the reader until `hx_os_line_reader_close()`. Because the 4 KiB read-ahead buffer advances the underlying stream cursor past the most recently returned line—and closing the reader does **not** rewind the stream—do not interleave raw stream reads/seeks or back a borrowed memory stream with the same `hx_string` used as the output buffer.
+- **Concurrency & short reads**: Access to a single reader must be serialized externally, and stream callbacks must not re-enter the reader. Short reads and partial progress returned alongside `EOF` or an I/O error are handled cleanly: any complete buffered lines are delivered first before reporting the pending native error. Partial line bytes survive a transient I/O error so you can retry; a custom stream callback that returns `HX_OS_OK` with zero bytes read is converted into `HX_OS_IO_ERROR` to prevent infinite busy loops.
 
 ## 3. Handle bad lines explicitly
 
-Every failure, including EOF, leaves the caller's output string unchanged.
+Every non-`HX_OS_OK` return (including `HX_OS_EOF`) leaves the caller's output `hx_string` untouched:
 
-| Result | Next step |
+| Status code | Meaning and recommended recovery action |
 |---|---|
-| `OK` | Use the complete validated line. |
-| `EOF` | End of input. A final non-LF line was already returned once. |
-| `LIMIT` | Current physical line exceeds the limit. Call `skip_line` to discard it, or close. |
-| Invalid/truncated UTF-8 | Current line is rejected. Call `skip_line` or close. |
-| `NO_MEMORY` | Free other resources and retry; a staged complete line is retained. |
-| Native I/O error | Partial bytes and diagnostics are retained; retry only if the backend can recover. |
+| `HX_OS_OK` | A complete, valid UTF-8 line was written into `line`. |
+| `HX_OS_EOF` | End of input reached (any final non-LF-terminated line was already delivered on the preceding call). |
+| `HX_OS_LIMIT` | The current physical line exceeds `max_line_bytes`. Call `hx_os_line_reader_skip_line()` to discard it, or close the reader. |
+| `HX_OS_INVALID` | The current physical line contains malformed or truncated UTF-8. Call `hx_os_line_reader_skip_line()` to discard it, or close the reader. |
+| `HX_OS_NO_MEMORY` | Allocation failed; any staged complete line is preserved so you can free memory elsewhere and retry. |
+| `HX_OS_IO_ERROR` (or native I/O error) | Underlying stream error; partial bytes and error diagnostics are retained for retry if the stream backend is recoverable. |
 
-Repeated `next` after a line-limit or UTF-8 error returns the same error until recovery. `skip_line` discards only the offending physical line. If its LF was already consumed, it resets the error without reading the next line. Otherwise it reads until LF/EOF without growing the line buffer. This explicit discard can block on the source; it has no hard deadline. If discard encounters an I/O error, retry `skip_line`; `next` returns `BUSY` while that discard remains unfinished.
+> [!TIP]
+> **Recovering from Oversized or Malformed Lines with `hx_os_line_reader_skip_line()`:**
+> After a line-length (`HX_OS_LIMIT`) or UTF-8 validation (`HX_OS_INVALID`) failure, calling `hx_os_line_reader_next()` again will repeat the same error until you explicitly recover. Calling `hx_os_line_reader_skip_line()` discards **only** the offending physical line:
+> - If its terminating LF was already consumed into the read-ahead buffer, `skip_line` clears the error state immediately without consuming the next line.
+> - Otherwise, it drains and discards bytes from the stream without growing the staging buffer until it reaches LF or `EOF`.
+> - If `skip_line` itself hits a transient I/O error, retry `hx_os_line_reader_skip_line()`; calling `next()` while a discard is still in progress returns `HX_OS_BUSY`.
 
-Close releases reader storage. An owned stream's close error is reported, but still consumes the reader; a borrowed stream remains open. Reentrant close returns `BUSY` and keeps the reader alive.
+`hx_os_line_reader_close()` frees the reader's buffers and nulls out the handle pointer. If closing an internally owned stream fails, the error is reported to the caller while the reader object itself is still freed; borrowed streams remain open.
 
 ## 4. C++11 loop
+
+In C++11, include `<hx/LineReader.hpp>` to use the move-only `hx::LineReader` wrapper:
 
 ```cpp
 #include <hx/LineReader.hpp>
@@ -92,4 +103,5 @@ int main()
 }
 ```
 
-`next` returns `Result<bool>`: successful `true` means one line, successful `false` means EOF, and a failed result contains the error. The class is move-only, uses no exceptions and closes on destruction. Explicit `close()` lets you inspect any close error.
+- `reader.value().next(line)` returns `hx::Result<bool>`: `true` indicates a new line was read into `line`, `false` indicates normal `EOF`, and an error result carries the failure status.
+- `hx::LineReader` is move-only, uses no C++ exceptions, and closes automatically in its destructor; calling `close()` explicitly lets you check for stream close errors.

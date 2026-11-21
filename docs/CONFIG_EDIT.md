@@ -2,19 +2,27 @@
 
 [简体中文](CONFIG_EDIT.zh-CN.md) · [README](../README.md)
 
-**Use this for editing a few configuration keys and saving them.** The example sets network.port to string 8080. Follow section 2: save, edit the main file to 9000, save again, then explicitly restore. The second save leaves 8080 in the main file and 9000 in the backup; restore puts 9000 back. This is an explicit save/restore workflow, not automatic recovery. Reuse the directory described in the [example guide](../examples/README.md#run) and work on demo files.
+When your application needs to update a few `[section]` and `key` entries in an INI file, preserve a verified `.bak` backup before overwriting a configuration file on disk, or merge an incoming set of runtime preferences into an active settings container, use the editing and backup APIs described here.
+
+Section 2 walks through a complete runnable example that sets `network.port` to `"8080"` and saves `preferences.ini` in the working directory. If you run the program once, manually edit the port in `preferences.ini` to `9000`, and run it a second time, the primary file is updated back to `8080` while your valid `9000` file is preserved in `preferences.ini.bak`; running the binary with `--restore` then restores `9000` to the primary file. Note that this is an **explicit save-and-restore workflow**, not an automatic background rollback service. Reuse the build setup described in the [example guide](../examples/README.md#run).
 
 ## 1. Edit an INI section and key
 
-`hx_os_ini_create()` creates an empty document; `hx_os_ini_load()` loads an existing UTF-8 file. Set strings with `hx_os_ini_set(&document, "network", "port", "8080", &error)`. The library creates missing sections/keys. It replaces the owner only after a complete new document is ready. If you retained the previous document, its nodes remain valid and unchanged.
+- **Create or load**: Call `hx_os_ini_create()` to start with an empty INI document, or `hx_os_ini_load()` to load an existing UTF-8 INI file.
+- **Set a key**: Call `hx_os_ini_set(&document, "network", "port", "8080", &error)` to insert or update a string key/value pair (missing sections and keys are created automatically). Under the hood, editing constructs a replacement immutable tree and updates the caller's `document` pointer only after the new tree is completely built and validated. If you previously retained a reference to the old document, that old tree and its borrowed nodes remain valid and unchanged.
+- **Read or remove**:
+  - `hx_os_ini_get(document, section, key, &text, &error)` copies the string value into `text` (`hx_string`).
+  - `hx_os_ini_remove_key()` removes a single key, and `hx_os_ini_remove_section()` removes an entire section.
+  - Passing `NULL` or `""` for `section` targets root-level global keys, whereas `hx_os_ini_remove_section()` requires a non-empty section name.
+  - Section and key names are matched as exact, case-sensitive literals—slashes `/`, dots `.`, and tildes `~` are ordinary characters, not path separators. A section cannot overwrite a global scalar key of the same name, nor vice versa.
 
-`hx_os_ini_get(document, section, key, &text, &error)` returns a copied `hx_string`. `hx_os_ini_remove_key()` removes one key; `hx_os_ini_remove_section()` removes its whole section. NULL or an empty section selects global keys, while section removal requires a nonempty name. Names are literal and case-sensitive: slashes, dots and tildes do not introduce paths. A section name cannot replace a scalar global key, nor vice versa.
-
-INI values remain strings. There is no array syntax, implicit numeric conversion, comment preservation or whitespace-preserving editing. The existing INI profile rejects unrepresentable text, such as embedded newlines or leading/trailing whitespace that would disappear on reading. Failure preserves the owner. The document's allocator and limits apply; edited trees remain immutable and can be shared by retaining them. Serialize or save separately to write the file.
+> [!NOTE]
+> **INI Representation Rules and Persistence:**
+> All INI values are stored as strings without array syntax, implicit number conversion, or comment/whitespace preservation. Values that cannot round-trip through the INI grammar—such as strings containing embedded newlines or leading/trailing whitespace that would be trimmed on reload—are rejected immediately during `hx_os_ini_set()`, leaving the existing document untouched. In-memory edits do not touch the disk until you call a serialize or save function.
 
 ## 2. Run a complete example
 
-[config_edit.c](../examples/config_edit.c) creates the following file:
+The complete [config_edit.c](../examples/config_edit.c) example creates and updates the following INI file:
 
 ```ini
 [network]
@@ -22,7 +30,7 @@ host=localhost
 port=8080
 ```
 
-From the repository root:
+From the repository root, configure and build the example target:
 
 ```sh
 cmake -S . -B build -DHX_OS_BUILD_EXAMPLES=ON
@@ -33,9 +41,13 @@ cmake --build build --config Release --target hx_os_config_edit
 .\build\bin\Release\hx_os_config_edit.exe
 ```
 
-It prints `Saved preferences.ini` and writes to the working directory. Run it once to create the file, change the port in the file to `9000`, then run it again. The new primary contains `8080`, while `preferences.ini.bak` contains your previous `9000` version. Run the same executable with `--restore` to explicitly restore that previous version. Do this demonstration in a disposable directory, not on your application's production configuration.
+Running the binary prints `Saved preferences.ini` and writes `preferences.ini` in the current working directory. Try the following sequence in a scratch directory (not on production config files):
+1. Run the program once to create `preferences.ini` with `port=8080`.
+2. Edit `preferences.ini` by hand and change `port` to `9000`.
+3. Run the program a second time: `preferences.ini` is updated to `8080`, while `preferences.ini.bak` preserves your previous `9000` version.
+4. Run the binary with `--restore` to explicitly restore the `9000` backup back to `preferences.ini`.
 
-In C++11, `<hx/Config.hpp>` provides the same operations through `ConfigDocument::emptyIni()`, `setIni()`, `ini()`, `removeIniKey()` and `removeIniSection()`. For example, this complete function creates one port setting:
+In C++11, include `<hx/Config.hpp>` to access `hx::ConfigDocument::emptyIni()`, `setIni()`, `ini()`, `removeIniKey()`, and `removeIniSection()`:
 
 ```cpp
 hx::Result<hx::ConfigDocument> network_preferences() noexcept
@@ -52,34 +64,35 @@ hx::Result<hx::ConfigDocument> network_preferences() noexcept
 }
 ```
 
-Check the result, then use `saveBackup("preferences.ini", HX_OS_CONFIG_INI)` or ordinary `save()`. `ConfigDocument` copies retain their previous immutable tree; editing one facade does not edit another copy. No exceptions are involved.
+After checking that the result succeeded, call `saveBackup("preferences.ini", HX_OS_CONFIG_INI)` or `save()`. Copying a `ConfigDocument` shares the underlying immutable tree; calling `setIni()` on one instance points it at the newly created replacement tree without mutating other copies. No C++ exceptions are used.
 
 ## 3. What backup saving guarantees
 
-`hx_os_config_save_backup()` works with each supported serialized format, not just INI. It first serializes the new document, then reads and validates the existing primary within the selected limits. A valid primary is copied byte-for-byte into `path + ".bak"` using atomic publication; the new primary is published afterward. The two paths must be exclusively managed during this operation.
+`hx_os_config_save_backup()` works across all supported output formats (JSON, YAML, XML, INI, TOML, ENV, and properties), not just INI. It executes in three steps:
+1. Serializes the new document in memory.
+2. Reads and parses the existing primary file on disk (if present) within the configured limits to verify that it is valid.
+3. Atomically publishes the existing primary file's **exact bytes** to `path + ".bak"`, and then atomically publishes the newly serialized bytes to `path` (callers must serialize access to both paths during the call).
 
-| Situation | Result |
+| Scenario on disk | `hx_os_config_save_backup()` behavior |
 | --- | --- |
-| Primary does not exist | Create the primary; leave any previous backup unchanged |
-| Primary is valid | Publish its exact bytes to `.bak`, then publish the new primary |
-| Primary is corrupt or exceeds limits | Fail without replacing either file; keep an existing usable backup |
-| Backup publication fails | Keep the primary unchanged |
-| Primary publication fails after backup succeeds | Preserve the published backup and report failure; no automatic rollback |
+| Primary file does not exist | Creates the primary file; leaves any existing `.bak` file untouched |
+| Existing primary file is valid | Atomically publishes its exact bytes to `.bak`, then publishes the new primary file |
+| Existing primary file is corrupt or exceeds limits | Fails without modifying either file (protecting a previously good `.bak` from being overwritten by a corrupt primary) |
+| Publishing `.bak` fails | Fails immediately and leaves the primary file unchanged |
+| Publishing `.bak` succeeds, but publishing the new primary fails | Preserves the newly published `.bak` and reports the error (no automatic rollback) |
 
-The optional `hx_os_config_backup_result` separately reports `backup` and `primary` publication and parent-directory synchronization. Success means publication. It does not turn two file updates into a power-loss-safe transaction. The lower-level atomic file operation syncs the file and then attempts directory sync; Windows currently reports directory sync as unsupported. Temporary cleanup failure can leave a recoverable temporary file, as with existing atomic file saving.
-
-`hx_os_config_restore_backup()` explicitly reads `.bak`, parses it, then publishes its exact bytes to the primary. Invalid, oversized or missing backups do not replace the primary. The backup remains available. Ordinary `hx_os_config_load()` never restores automatically. In C++, call `ConfigDocument::restoreBackup(path, format)`; the result contains the parsed recovered document. An optional output records publication/directory-sync details.
+- **Publication status & durability boundaries**: The optional `hx_os_config_backup_result` output struct reports `backup` publication, `primary` publication, and parent-directory sync status separately. Atomic file publication flushes the file and then attempts a parent-directory sync (Windows currently reports directory sync as unsupported). Note that updating two paths sequentially is not a power-loss-atomic multi-file transaction.
+- **Explicit restoration (`hx_os_config_restore_backup`)**: Reads `path + ".bak"`, validates that it parses cleanly, and atomically publishes its exact bytes over the primary path. If `.bak` is missing, oversized, or malformed, the primary file and `.bak` remain untouched. Ordinary `hx_os_config_load()` never restores from `.bak` automatically. In C++11, call `hx::ConfigDocument::restoreBackup(path, format)` to restore the file and receive the parsed `ConfigDocument` in one step.
 
 ## 4. Apply one set of settings to another
 
-For existing mutable settings, use `hx_settings_apply(current, incoming, &applied, &error)` or `current.apply(incoming)` in C++. The source's explicit values are snapshotted first; its defaults are not copied. Unmentioned destination keys and destination defaults stay in place.
+To merge entries from one mutable runtime settings container (`hx_settings`) into another, call `hx_settings_apply(current, incoming, &applied, &error)` in C or `current.apply(incoming)` in C++11:
 
-For example, if current settings contain `{port: 8080, title: "app"}` and incoming settings contain `{port: 9000, retries: 3}`, applying them produces `{port: 9000, title: "app", retries: 3}`. A nested object/array replaces the corresponding whole value; members are not recursively merged. User pointers remain borrowed; other values are copied into the destination's context.
-
-Each key is committed and notifies observers separately, in byte-sorted key order. The first failure stops the operation while preserving earlier successes. The C output or C++ result's carried value reports how many keys succeeded, including on failure. This matches the existing `Settings::update()` behavior. Reentrant observers and concurrent writers follow the usual setter rules; this is not a transaction. Applying a settings object to itself is valid. `hx_settings_apply_value()` / `Settings::apply(SettingValue)` accepts a retained object snapshot when you already have one; scalar and array roots return TYPE_MISMATCH.
+- **Explicit values only**: The function first snapshots `incoming`'s **explicitly set values** (ignoring `incoming`'s registered defaults). Keys not present in `incoming`—along with `current`'s own defaults—remain untouched. For example, applying `{port: 9000, retries: 3}` onto `{port: 8080, title: "app"}` produces `{port: 9000, title: "app", retries: 3}`.
+- **Whole-value replacement for nested containers**: Nested objects and arrays replace the target key's value as a whole rather than recursively merging inner members. User pointers remain borrowed, while all other values are deep-copied into `current`'s memory context.
+- **Commit order & observer notifications**: Keys are committed one by one in byte-sorted key order, notifying observers after each key. The first failure stops the loop while keeping earlier keys committed, and reports the number of applied keys via `applied` (or the C++ `Result` value), matching `Settings::update()`. If you already hold a retained object value snapshot, call `hx_settings_apply_value()` / `Settings::apply(SettingValue)` (passing a scalar or array root returns `HX_OS_TYPE_MISMATCH`).
 
 ## 5. Limits and costs
 
-INI edits build one replacement tree and validate the INI representation with the existing serializer's counting pass; they do not allocate an extra serialized text buffer. Old retained trees can coexist with the new tree. Repeated single-key edits therefore copy the tree repeatedly; use ordinary configuration construction or settings snapshots for large batch workloads.
-
-Backup/recovery reads are bounded by configuration options. Old bytes, parsed trees and serialized new text can coexist; limits apply to each documented buffer/tree rather than a process-wide quota. These operations are synchronous and intended for configuration persistence, not a logging hot path. Settings apply copies one value and performs the existing root update per key, adding no background worker. See [platform support](PLATFORMS.md) for target boundaries.
+- **Cost of single-key edits**: Each `hx_os_ini_set()` or removal call constructs a replacement immutable tree and runs the serializer's counting pass to validate INI representability without allocating a temporary serialized buffer. Because repeated single-key calls copy the tree each time, use `hx_os_config_create()` or settings snapshots when building large documents in bulk.
+- **Memory & I/O bounds**: Backup and restore file reads obey the limits in `hx_os_config_options`. During `save_backup`, the old file bytes, validation tree, and new serialized text may coexist briefly in memory, each bounded by its respective option limit. All file operations are synchronous and designed for configuration persistence rather than high-frequency logging paths. See [platform support](PLATFORMS.md) for target filesystem boundaries.

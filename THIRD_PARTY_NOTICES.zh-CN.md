@@ -1,100 +1,132 @@
-# 第三方声明
+# 第三方组件与许可证声明
 
-[English](THIRD_PARTY_NOTICES.md)
+[English](THIRD_PARTY_NOTICES.md) · [返回首页](README.zh-CN.md)
 
-基础库不要求 OBS、hx_c_log、Qt 或 C++ 运行库。可选模块的私有依赖分别列在下方。
+`hx_c_platform` 基础库本身不依赖 OBS、`hx_c_log`、Qt 或 C++ 运行时库。各可选功能模块在内部集成或引用的第三方开源组件及其固定版本、SHA256 校验值与许可证声明汇总如下。
 
-## 可选 C 容器
+> [!IMPORTANT]
+> **自有代码与第三方组件许可边界**：
+> - `hx_c_platform` 自有代码的分发许可证尚未最终确定，对外分发前需由项目所有者明确指定。
+> - `deps/` 目录下引用的第三方组件均保持原始上游源码不变，并各自遵循其原始许可证。启用对应模块并安装时，原始许可证文件会自动安装到 `share/hx_c_platform/licenses/` 目录。
 
-哈希 map 私有包含 `deps/uthash/upstream` 下未改动的 uthash 2.4.0 头文件，其他容器表示及所有权适配属于自有代码。 CONTAINERS 默认 ON，不需要外部安装包；OFF 时排除此实现依赖。
+---
 
-- 上游：https://github.com/troydhanson/uthash/tree/v2.4.0
-- 标签提交：a49bed0b4abb7dff16c73906dcdc8a9718d582d2
-- 头文件 SHA256： 1636295b3b97fe8b7b76677bba2de782b0daef5d5f0fa26c471d39967c505d3b
-- LICENSE SHA256： 40f48f89e1d0095bf1c5fb4d00affd74959c3ff77463b672cf7fac547d1d6465
-- [保留的 BSD-1-Clause 许可证](deps/uthash/upstream/LICENSE)
+## 1. 可选 C 容器后端（`uthash`）
 
-版本表示实际集成源码，不表示上游最新版。分配器钩子及可恢复 OOM 由自有适配文件配置，不修改第三方文件。公共 ABI 不出现 uthash 类型。启用时安装 `share/hx_c_platform/licenses/uthash-LICENSE`。
+开启 `HX_OS_ENABLE_CONTAINERS=ON`（默认开启）时，哈希映射（Hash Map）在内部私有包含 `deps/uthash/upstream` 下未修改的 `uthash` 2.4.0 头文件；其余容器结构与所有权管理均为本库自有实现。关闭该开关即可完全移除此依赖。
 
-仓库还保留初期评估时取得的 minicoro 0.1.3 原始源码和 [MIT 许可证](deps/minicoro/v0.1.3/LICENSE)。它没有参与构建、安装、链接或公共 API。当前协程调度器和 POSIX 上下文切换由本库自研，Windows 使用操作系统原生 fiber；保留的评估副本不用于本模块。
+- **上游地址**：https://github.com/troydhanson/uthash/tree/v2.4.0
+- **固定提交**：`a49bed0b4abb7dff16c73906dcdc8a9718d582d2`
+- **头文件 SHA256**：`1636295b3b97fe8b7b76677bba2de782b0daef5d5f0fa26c471d39967c505d3b`
+- **LICENSE SHA256**：`40f48f89e1d0095bf1c5fb4d00affd74959c3ff77463b672cf7fac547d1d6465`
+- **许可证**：[BSD-1-Clause](deps/uthash/upstream/LICENSE)（安装路径：`share/hx_c_platform/licenses/uthash-LICENSE`）
 
-## 可选 KCP 可靠 UDP
+自定义内存分配器钩子与可恢复的内存不足（OOM）处理均通过本库自有适配层完成，公共 ABI 不暴露任何 `uthash` 符号或类型。
 
-`HX_OS_ENABLE_KCP` 默认开启；关闭后不编译此依赖，公共 C 入口明确报告不支持。上游 v1 源码保持原样，编译为私有对象代码。自有适配隔离符号、按实例预留有界内存，不更改进程级分配器。公共 ABI 不出现 KCP 类型；安装时包含 `share/hx_c_platform/licenses/kcp-LICENSE`。
+> [!NOTE]
+> 仓库 `deps/minicoro/v0.1.3/` 下还保留了一份早期技术评估时的 `minicoro` 0.1.3 源码与 [MIT 许可证](deps/minicoro/v0.1.3/LICENSE)。该副本**不参与任何构建、安装或链接**；本库当前的协程调度器与 POSIX 上下文切换均为自研实现（Windows 端使用操作系统原生 Fiber）。
 
-- [固定版本上游源码](https://github.com/skywind3000/kcp/tree/8004f7eba5d1bf33f0691eef5f887f2cd3140cb5)
-- 提交：`8004f7eba5d1bf33f0691eef5f887f2cd3140cb5`，v1 分支集成版本，不宣称为最新版。
-- `ikcp.c` SHA256：`b476f4ae41b555f28e819f3a6f34b7e2307c93e17875b4864a8f5fc217f67f60`
-- `ikcp.h` SHA256：`f04f978a0893a8209d7b82095d19c38cefcf8f30bc932a85bb7fa53b33f9e76c`
-- `LICENSE` SHA256：`6587fd02a924b97dbd6758b0573ddec056fb494a84f3709c5aaa33ce1f7f029c`
-- [保留的 MIT 许可证](deps/kcp/upstream/LICENSE)
+---
 
-IPC 分帧、会话管理、多线程协调和原生传输属于自有代码。普通 UDP 不经过 KCP，调用和协议见 [IPC 教程](docs/IPC.zh-CN.md)。
+## 2. 可选 KCP 可靠 UDP 传输（`kcp`）
 
-当前 KCP、uthash 使用 `deps/kcp/upstream`、`deps/uthash/upstream` 固定提交的子模块，也可通过 FetchContent 取得同一版本。旧源码快照原样保留，不再参与当前构建；上述文件散列指原始 LF 源码内容，Git 检出可能应用平台换行。可选解析器使用同一入口，GNU libiconv 保留官方发布包及 SHA256 校验。操作见[依赖准备](docs/DEPENDENCIES.zh-CN.md)。
+开启 `HX_OS_ENABLE_KCP=ON`（默认开启）时，库内部将未修改的上游 KCP v1 源码编译为私有目标代码；关闭后不再编译该依赖，相关 C 接口将返回 `HX_OS_NOT_SUPPORTED`。
 
-## 警告配置
+- **上游地址**：https://github.com/skywind3000/kcp/tree/8004f7eba5d1bf33f0691eef5f887f2cd3140cb5
+- **固定提交**：`8004f7eba5d1bf33f0691eef5f887f2cd3140cb5`
+- **`ikcp.c` SHA256**：`b476f4ae41b555f28e819f3a6f34b7e2307c93e17875b4864a8f5fc217f67f60`
+- **`ikcp.h` SHA256**：`f04f978a0893a8209d7b82095d19c38cefcf8f30bc932a85bb7fa53b33f9e76c`
+- **`LICENSE` SHA256**：`6587fd02a924b97dbd6758b0573ddec056fb494a84f3709c5aaa33ce1f7f029c`
+- **许可证**：[MIT](deps/kcp/upstream/LICENSE)（安装路径：`share/hx_c_platform/licenses/kcp-LICENSE`）
 
-cmake/HxWarnings.cmake 复制自相邻 hx_c_log 项目，保留其版权声明和 OBS 提交引用，适用 [保留的 MIT 许可证](licenses/hx_c_log-MIT.txt)。没有链接 hx_c_log 运行库或日志实现。
+本库自有适配层对 KCP 符号进行了隔离，按实例预留有界内存，不会修改进程级全局分配器，且不在公共 ABI 中暴露 KCP 类型。IPC 消息帧、会话管理与多线程协调均为本库自研实现（普通 UDP 不经过 KCP，详见 [IPC 教程](docs/IPC.zh-CN.md)）。
 
-## 可选 GNU libiconv
+> [!NOTE]
+> 当前构建使用 `deps/kcp/upstream` 与 `deps/uthash/upstream` 子模块（或通过 `FetchContent` 拉取相同固定提交），目录中旧版快照仅作原样保留，不参与构建。上述文件 SHA256 均基于原始 LF 换行格式计算。详见 [依赖构建指南](docs/DEPENDENCIES.zh-CN.md)。
 
-可复现的源码集成固定使用 GNU libiconv 1.18：
+---
 
-- [GNU 项目](https://www.gnu.org/software/libiconv/)
-- 压缩包：https://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.18.tar.gz
-- SHA256： 3b08f5f4f9b4eb82f151a7040bfd6fe6c6fb922efe4b1659c66ea933276965e8
-- [保留的 LGPL 正文](licenses/libiconv-COPYING.LIB)
+## 3. CMake 编译器警告配置模块
 
-这是固定的集成版本，不表示最新版本。下载源码保持不变，配置头生成在构建目录。只将库的 C 源码编译为私有对象目标，不构建 iconv 命令行程序；通过符号别名避免与宿主的另一个 iconv 冲突。上游 Windows 指针偏移警告与自有代码的警告即错误策略分开。
+[cmake/HxWarnings.cmake](cmake/HxWarnings.cmake) 复用自相邻的 `hx_c_log` 项目，保留了原始版权声明与 OBS 提交引用，遵循 [MIT 许可证](licenses/hx_c_log-MIT.txt)。本项目不链接 `hx_c_log` 运行库。
 
-源码方式启用后，编码对象代码被包含到 hx_c_platform 中，共享构建也是如此，并非单独交付一个 libiconv DLL。因此产物包含 LGPL 组件；具体分发方式需要对应的许可证、源码／重新链接材料，本次开发安装不是完整的发布合规包。系统 iconv 的许可证和映射表取决于其实际提供方。关闭 ICONV 后仍能使用核心 Unicode 转换。
+---
 
-新编写的 hx_c_platform 自有代码采用何种许可证，仍需由项目所有者在对外分发前确定。
+## 4. 可选传统字符编码转换（`GNU libiconv`）
 
-## 可选配置解析器
+开启 `HX_OS_ENABLE_ICONV=ON`（默认关闭）且使用源码构建模式时，固定拉取 GNU libiconv 1.18 官方发布包：
 
-无第三方依赖的内置语法子集不需要下列组件。启用后，其对象代码私有编入 hx_c_platform，第三方头文件不进入公共 ABI。上游文件保持原样；配置生成、符号别名和调用重定向属于自有构建适配。
+- **上游项目**：https://www.gnu.org/software/libiconv/
+- **官方归档**：https://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.18.tar.gz
+- **归档 SHA256**：`3b08f5f4f9b4eb82f151a7040bfd6fe6c6fb922efe4b1659c66ea933276965e8`
+- **许可证**：[LGPL-2.1-or-later](licenses/libiconv-COPYING.LIB)
 
-| 组件 | 固定版本 | 许可证 | 上游 |
-|---|---|---|---|
-| cJSON | 1.7.19 | MIT | https://github.com/DaveGamble/cJSON |
-| libyaml | 0.2.5 | MIT | https://github.com/yaml/libyaml |
-| Mini-XML | 4.0.6 | Apache-2.0 | https://github.com/michaelrsweet/mxml |
-| inih | r62 | BSD-3-Clause | https://github.com/benhoyt/inih |
-| tomlc17 | R260821 | MIT | https://github.com/cktan/tomlc17 |
+启用源码版 `ICONV` 时，仅将库源码编译为带符号别名的私有对象并直接编入 `hx_c_platform`（包括动态库构建，不会单独生成 `libiconv.dll`）。
 
-源码地址和固定 Git 提交记录在 [HxDependencySources.cmake](cmake/HxDependencySources.cmake)；这些是集成锁定版本，不表示最新版本。 TOMLC 后端使用 tomlc17，所选版本虽名为 c17，仍按 C99 编译。启用组件的原始许可证安装到 share/hx_c_platform/licenses。 Mini-XML 的上游 NOTICE（含可选许可例外）也保持原样安装。解析范围及后端差异见 [CONFIGURATION.zh-CN.md](docs/CONFIGURATION.zh-CN.md)。
+> [!WARNING]
+> **LGPL 合规提示**：
+> 从源码启用 `HX_OS_ENABLE_ICONV=ON` 会使编译产物包含 LGPL 代码，对外分发时需按 LGPL 要求提供相应许可证及重链接所需材料。如果只需要核心 UTF-8 / UTF-16 / UTF-32 校验与转换，保持 `HX_OS_ENABLE_ICONV=OFF` 即可完全不含此组件；也可通过 `HX_OS_ICONV_USE_SYSTEM=ON` 改用目标系统自带的 `iconv` 实现。
 
-## 可选 Linux 桌面系统运行库
+---
 
-独立的 Linux 桌面适配可动态使用系统安装的 libsystemd／libelogind。项目不随附、构建或静态合入这些系统运行库；若另行分发它们，应按其上游许可证处理，见 [systemd 许可证](https://github.com/systemd/systemd/blob/main/LICENSE.LGPL2.1) 和 [elogind](https://github.com/elogind/elogind)。适配使用公开的不透明 C 接口，没有复制实现／SDK 头。可选运行时与卸载边界见 [Linux 桌面](docs/LINUX_DESKTOP.zh-CN.md)。
+## 5. 可选配置文件解析器后端
 
-## 可选 OpenSSL 与归档依赖源码
+本库内置了零外部依赖的配置语法解析器。当你需要完整规范特性并显式开启以下可选解析器后端时，其未修改的上游源码会被私有编译进 `hx_c_platform`，第三方头文件不会进入公共 ABI：
 
-原生依赖默认使用 `deps/` 下固定提交的 Git 子模块，也支持相同提交的 FetchContent。CRYPTO、TLS 和 ARCHIVE 复用默认动态链接的 OpenSSL；完全裁剪它需同时关闭 CRYPTO 与 ARCHIVE。见[依赖构建](docs/DEPENDENCIES.zh-CN.md)和[压缩后端边界](docs/ARCHIVE.zh-CN.md)。
-
-| 组件 | 固定版本 | 保留的许可证 | 提交号 |
+| 组件名称 | 固定版本 | 许可证 | 上游仓库 |
 | --- | --- | --- | --- |
-| OpenSSL | 3.5.9 | [Apache-2.0](deps/openssl/LICENSE.txt) | `45e844fa2a14ec92d146bd8f5778ac130b6625fb` |
-| libarchive | 3.8.9 | [BSD-2-Clause and file-specific permissive notices](deps/libarchive/COPYING) | `27cbc7827172698143e440801fc0ba39ccb4f1f5` |
-| zlib | 1.3.2 | [Zlib](deps/zlib/LICENSE) | `da607da739fa6047df13e66a2af6b8bec7c2a498` |
-| liblzma (XZ) | 5.8.4 | [0BSD for liblzma; other upstream files have separate terms](deps/xz/COPYING) | `d3e650e63c110e830fd5391e7f8b45df0b91d3da` |
-| zstd | 1.5.7 | [BSD-3-Clause (selected license option)](deps/zstd/LICENSE) | `f8745da6ff1ad1e7bab384bd1f9d742439278e99` |
-| 7-Zip (optional) | 26.04 | [LGPL/BSD/unRAR](deps/7zip/DOC/License.txt), [LGPL text](deps/7zip/DOC/copying.txt), [unRAR terms](deps/7zip/DOC/unRarLicense.txt) | `9128b80e3a471108678e2b3ec3c985861c8d7b0f` |
+| **cJSON** | `1.7.19` | MIT | https://github.com/DaveGamble/cJSON |
+| **libyaml** | `0.2.5` | MIT | https://github.com/yaml/libyaml |
+| **Mini-XML** | `4.0.6` | Apache-2.0（含上游 NOTICE 例外） | https://github.com/michaelrsweet/mxml |
+| **inih** | `r62` | BSD-3-Clause | https://github.com/benhoyt/inih |
+| **tomlc17** | `R260821` | MIT | https://github.com/cktan/tomlc17 |
 
-只构建 `tools/dependencies` 明确选择的库组件。上游许可证文本保持原样，分发时按实际组件保留适用说明。默认压缩组合没有选择 LGPL/GPL 压缩后端。独立可选的 7-Zip 动态后端有自己的 LGPL/BSD/unRAR 条件，使用独立子模块；默认 SDK 不构建它；原有可选 GNU libiconv 仍适用前文的 LGPL 说明。固定版本表示本次集成选择，不表示永远是上游最新版。
+各组件的固定 Git 提交记录在 [cmake/HxDependencySources.cmake](cmake/HxDependencySources.cmake) 中（`tomlc17` 虽包含 `c17` 名称，所选版本仍按标准 C99 编译）。启用后对应的许可证与 `NOTICE` 文件会安装到 `share/hx_c_platform/licenses/`。内置解析器与外部后端的差异详见 [配置格式说明](docs/CONFIGURATION.zh-CN.md)。
 
-## SQLite、libcurl 和 Unicode 变换
+---
 
-| 组件 | 固定源码 | 许可证／归属 |
+## 6. 可选 Linux 桌面电源管理运行库
+
+Linux 桌面防休眠适配层在运行时可按需动态调用系统已安装的 `libsystemd` 或 `libelogind`。本项目不随附、不编译也不静态链接这些系统库；若你在发行版或容器镜像中另行分发它们，请遵循其各自的上游许可证（见 [systemd LGPL-2.1](https://github.com/systemd/systemd/blob/main/LICENSE.LGPL2.1) 与 [elogind](https://github.com/elogind/elogind)）。详见 [Linux 桌面电源管理](docs/LINUX_DESKTOP.zh-CN.md)。
+
+---
+
+## 7. 密码学与归档压缩原生依赖（OpenSSL / libarchive / 压缩库）
+
+原生依赖默认通过 `deps/` 下固定提交的 Git 子模块（或相同提交的 `FetchContent`）构建。`CRYPTO`、`TLS`、`ARCHIVE` 以及 `libcurl` SDK 默认共享动态链接的 OpenSSL（若需完全移除 OpenSSL，需同时关闭 `CRYPTO`、`TLS`、`ARCHIVE`、`HTTP` 与 `URL`；独立的 `COMPRESSION` 内存压缩模块仅依赖压缩编解码库）。详见 [依赖构建指南](docs/DEPENDENCIES.zh-CN.md) 与 [压缩与归档教程](docs/ARCHIVE.zh-CN.md)。
+
+| 组件名称 | 固定版本 | 许可证声明 | 固定 Git 提交 |
+| --- | --- | --- | --- |
+| **OpenSSL** | `3.5.9` | [Apache-2.0](deps/openssl/LICENSE.txt) | `45e844fa2a14ec92d146bd8f5778ac130b6625fb` |
+| **libarchive** | `3.8.9` | [BSD-2-Clause 及文件级宽松许可](deps/libarchive/COPYING) | `27cbc7827172698143e440801fc0ba39ccb4f1f5` |
+| **zlib** | `1.3.2` | [Zlib](deps/zlib/LICENSE) | `da607da739fa6047df13e66a2af6b8bec7c2a498` |
+| **liblzma (XZ)** | `5.8.4` | [liblzma 采用 0BSD；其余工具文件见 COPYING](deps/xz/COPYING) | `d3e650e63c110e830fd5391e7f8b45df0b91d3da` |
+| **zstd** | `1.5.7` | [BSD-3-Clause（所选许可项）](deps/zstd/LICENSE) | `f8745da6ff1ad1e7bab384bd1f9d742439278e99` |
+| **7-Zip（可选）** | `26.04` | [LGPL / BSD / unRAR](deps/7zip/DOC/License.txt)、[LGPL 正文](deps/7zip/DOC/copying.txt)、[unRAR 条款](deps/7zip/DOC/unRarLicense.txt) | `9128b80e3a471108678e2b3ec3c985861c8d7b0f` |
+
+> [!NOTE]
+> 默认 SDK 构建（`tools/dependencies`）不包含任何 LGPL/GPL 压缩后端。`7-Zip` 动态后端（用于加密 7z 及加密文件名）属于完全独立的可选模块，需通过 `tools/sevenzip` 单独编译，默认不构建也不合入主安装包。
+
+---
+
+## 8. SQLite、libcurl 与 utf8proc
+
+| 组件名称 | 固定版本与校验信息 | 许可证声明 |
 | --- | --- | --- |
-| SQLite | 官方 3.54.0 amalgamation，SHA256 `68e913b0fe8ec6b4e5f391c594a28872884e80d6cd042a1e50c957be46b5aa4d` | [公有领域声明](https://www.sqlite.org/copyright.html)，保留原始源码声明 |
-| libcurl | `curl-8_22_0` 标签，提交 `01346829096c61b372692f6dc43ffa778c6caccd`；上游版本文字为 `8.22.0-DEV` | [curl 许可证](deps/curl/COPYING) |
-| utf8proc | 2.12.0，提交 `79cdd5ab40c79afa559f689ffc13b76812dee1ac` | [MIT 及保留的 Unicode 数据声明](deps/utf8proc/LICENSE.md) |
+| **SQLite** | 官方 `3.54.0` Amalgamation 归档，SHA256：`68e913b0fe8ec6b4e5f391c594a28872884e80d6cd042a1e50c957be46b5aa4d` | [公有领域（Public Domain）](https://www.sqlite.org/copyright.html) |
+| **libcurl** | 标签 `curl-8_22_0`，提交 `01346829096c61b372692f6dc43ffa778c6caccd`（上游头文件版本号显示为 `8.22.0-DEV`） | [curl 许可证](deps/curl/COPYING) |
+| **utf8proc** | `2.12.0`，提交 `79cdd5ab40c79afa559f689ffc13b76812dee1ac` | [MIT 及 Unicode 数据许可声明](deps/utf8proc/LICENSE.md) |
 
-这些可选适配保留上游源码和许可证，安装后仍可通过原生依赖目标调用对应头文件。自研正则不链接 PCRE2，本地 PCRE2 对照只供维护者验证，不作为发布后端。CRYPTO、TLS、ARCHIVE、curl SDK 共用默认动态 OpenSSL；完全移除 OpenSSL 还需关闭 HTTP／URL。独立 COMPRESSION 只依赖压缩编解码库。
+上述组件在启用并安装后，也可通过导出的 CMake 原生依赖目标直接调用其底层头文件（见 [底层依赖调用](docs/NATIVE_DEPENDENCIES.zh-CN.md)）。此外，本库的正则表达式引擎为纯 C99 自研实现，不链接 PCRE2。
 
-## 可选 c-ares DNS 解析器
+---
 
-c-ares 1.34.8 固定使用[上游](https://github.com/c-ares/c-ares)提交 `c7a3138dcfe3bb0eaaf10c0c24c36dc66dc790ab`。源码保持原样放在 `deps/c-ares`，或通过 FetchContent 使用相同提交。[MIT 许可证及保留声明](deps/c-ares/LICENSE.md) 安装为 `share/hx_c_platform/licenses/c-ares-LICENSE.md`。开启时链接静态解析器并安装原生 SDK，关闭后不依赖它。该固定版本说明本次集成，不代表永久使用最新上游版本。
+## 9. 可选可取消 DNS 解析器（`c-ares`）
+
+开启网络模块时，`HX_OS_ENABLE_CARES` 默认开启，直接将 `deps/c-ares` 下未修改的 `c-ares` 1.34.8 源码编译为位置无关（PIC）静态库链接入库，无需额外部署 DNS 动态库。
+
+- **上游地址**：https://github.com/c-ares/c-ares
+- **固定版本与提交**：`1.34.8`，提交 `c7a3138dcfe3bb0eaaf10c0c24c36dc66dc790ab`
+- **许可证**：[MIT](deps/c-ares/LICENSE.md)（安装路径：`share/hx_c_platform/licenses/c-ares-LICENSE.md`）
+
+传入 `-DHX_OS_ENABLE_CARES=OFF` 可移除该依赖并仅使用系统原生 DNS。

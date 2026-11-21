@@ -2,19 +2,18 @@
 
 [简体中文](FAST_TOOLS.zh-CN.md) | [General algorithms](ALGORITHMS.md)
 
-**Start with a complete program.** Start here for sampling records, sorting integer keys or finding several alert words in one message.
+When your program needs an owning, growable binary byte buffer (`hx_bytes`), Fisher–Yates array shuffling or order-preserving random sampling, linear-time stable radix sorting for 32/64-bit integer keys, or fast pattern matching and membership filtering (KMP single-pattern search, Aho–Corasick multi-pattern scanning, and Bloom filters), use the utilities documented on this page.
 
-Open [fast_algorithms.c](../examples/fast_algorithms.c). Seed the RNG → shuffle/sample → radix_sort → bytes_find → matcher_scan callbacks → bloom insertion/query → release objects.
+A complete runnable program combining all of these features is available in [fast_algorithms.c](../examples/fast_algorithms.c): it seeds a deterministic `hx_os_rng`, shuffles and samples an array, sorts signed integers with `hx_os_radix_sort_i32`, locates a byte substring with `hx_os_bytes_find`, scans a message for multiple alert keywords at once using a compiled `hx_os_matcher`, and queries a `hx_os_bloom` filter before releasing all resources.
 
-Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_fast_algorithms`. This program needs no arguments or input files.
-
-**Expected result:** Sorted endpoints are `-3 .. 9`; error starts at byte 16, with callbacks for warning and error. Bloom `possibly present` requires a real lookup; the seeded RNG is not a key generator.
-
-Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+Follow the [example run instructions](../examples/README.md#run) to configure with `-DHX_OS_BUILD_EXAMPLES=ON` and build `hx_os_fast_algorithms` (no arguments or input files are required). The output shows the radix-sorted endpoints `-3 .. 9`, `"error"` found at byte offset `16`, callbacks fired for both `"warning"` and `"error"`, and the Bloom filter lookup results. You can also drop the example source into the [minimal project](USAGE.md#c-project) as `main.c`.
 
 ## 1. Owned binary bytes
 
-`hx_bytes` is the binary counterpart to `hx_string`: initialize with `HX_BYTES_INIT`, then assign, append, reserve or resize. It accepts NUL and arbitrary encoding, and adds no terminator. Resize zero-fills an extension. Assign/append may borrow the current value; failure leaves it unchanged. Capacity is at most 64 MiB, with old+new storage during growth. Use move/copy operations instead of copying its owning structure. Mutations require external serialization.
+`hx_bytes` is the binary counterpart to `hx_string`. Initialize it with `HX_BYTES_INIT`, then call `hx_bytes_assign`, `hx_bytes_append`, `hx_bytes_reserve`, or `hx_bytes_resize`:
+- Accepts arbitrary binary bytes including embedded `NUL` (`0x00`), performs no UTF-8 validation, and appends no trailing terminator.
+- Growing a buffer with `hx_bytes_resize` zero-fills the newly added tail.
+- `assign` and `append` safely accept input views borrowed from the target `hx_bytes` itself, even when reallocation occurs; if allocation fails or exceeds the `64 MiB` maximum capacity, the existing contents remain unchanged.
 
 ```c
 hx_bytes packet = HX_BYTES_INIT;
@@ -28,11 +27,11 @@ if (status == HX_OS_OK)
 hx_bytes_destroy(&packet);
 ```
 
-C++ `hx::Bytes` is move-only. Its `view()` borrows storage until mutation or destruction. This buffer is always built in the core and is not a queue; use ByteQueue/Ring for buffered consumption.
+In C++11, `hx::Bytes` is a move-only RAII wrapper whose `view()` method borrows the underlying byte span until the next mutation or destruction. `hx_bytes` is always built into the core library; for FIFO stream buffering and consumption, use [ByteQueue](BYTE_QUEUE.md) or [Ring](RING.md).
 
 ## 2. Shuffle, sample and integer radix sorting
 
-The C operations work directly on ordinary arrays and record arrays; copying into a library container is unnecessary.
+Like the [general array algorithms](ALGORITHMS.md), these C functions operate directly on plain arrays and struct arrays without requiring a library container:
 
 ```c
 int32_t values[] = {5, -9, 0, 12, 2};
@@ -50,13 +49,14 @@ if (status == HX_OS_OK)
 	status = hx_os_radix_sort_i32(NULL, values, 5, 0, NULL);
 ```
 
-Shuffle uses Fisher–Yates. Sampling chooses up to output capacity without replacement, preserving source order; input and output cannot overlap. Records must be byte-relocatable. A caller-owned RNG avoids system calls per element. With RNG `NULL`, the operation seeds a local generator once using system randomness. Explicit seed 1234 above makes the example reproducible.
-
-`hx_os_rng` uses xoshiro256** with SplitMix64 seeding and rejection for unbiased bounded integers. It is a fast deterministic PRNG, not cryptographic randomness. Use `hx_os_random_bytes` for OS-provided cryptographically secure bytes. That API does not promise a physical hardware true-random source on every call.
-
-`hx_os_radix_sort_i32/u32/i64/u64` uses stable LSD radix sorting: four/eight byte passes, ascending numeric order, including negative signed values. The implementation reads numeric values with `memcpy` and does not assume host byte order. One array-sized scratch allocation is required; default budget is 16 MiB including allocation overhead. Allocation/limit failures preserve the array. Small arrays may be faster with ordinary sort; complexity alone is not a benchmark.
-
-C++ `hx::algo::shuffle` follows standard random-access iterator requirements. `sample` is available in C++11: forward input supports a general output iterator, while single-pass input needs random-access output for reservoir sampling. Capacity and nonthrowing element/iterator operations are caller contracts.
+- **Shuffle and sampling (`hx_os_array_shuffle` / `hx_os_array_sample`)**:
+  - `hx_os_array_shuffle` runs an in-place Fisher–Yates shuffle. `hx_os_array_sample` selects up to the destination capacity without replacement while **preserving the relative source order** of selected records (input and output buffers must not overlap, and elements must be bitwise-relocatable).
+  - Passing a caller-owned `hx_os_rng` avoids per-call OS entropy requests; passing `NULL` seeds a temporary generator once from OS randomness (requiring `HX_OS_ENABLE_RANDOM=ON`).
+  - `hx_os_rng` uses `xoshiro256**` with `SplitMix64` seeding and rejection sampling for unbiased bounded integers. It is a fast deterministic PRNG, **not a cryptographic RNG**—use `hx_os_random_bytes` when generating cryptographic keys or nonces.
+- **Stable integer radix sort (`hx_os_radix_sort_i32` / `u32` / `i64` / `u64`)**:
+  - Performs a stable least-significant-digit (LSD) radix sort in 4 or 8 byte passes, ordering integers in ascending numerical order (handling negative signed integers properly and remaining independent of host endianness).
+  - Requires one array-sized scratch buffer (default budget `16 MiB` including allocation headers). Exceeding the budget returns `HX_OS_LIMIT` and allocation failure returns `HX_OS_NO_MEMORY`, leaving the input array untouched.
+- **C++11 iterator shuffle and sample**: In `<hx/Algorithms.hpp>`, `hx::algo::shuffle` accepts random-access iterators, and `hx::algo::sample` supports forward input iterators with any output iterator (or single-pass input iterators with a random-access output range for reservoir sampling):
 
 ```cpp
 #include <hx/Algorithms.hpp>
@@ -69,11 +69,11 @@ hx::algo::shuffle(values, values + 5, generator);
 auto end = hx::algo::sample(values, values + 5, selected, 2, generator);
 ```
 
-`end - selected` is the actual selected count. These C++ iterator operations are separate from the C byte-relocation interfaces.
+Here `end - selected` gives the number of sampled elements written.
 
 ## 3. Find a binary pattern
 
-`hx_os_bytes_find` uses KMP and accepts counted arbitrary bytes, including NUL. Pass a start offset and optional scratch budget; result is the first match offset. Empty pattern matches at start. Missing pattern returns `NOT_FOUND` and preserves the previous offset. Input is borrowed for the synchronous call.
+`hx_os_bytes_find` searches a byte span for a single pattern using the Knuth–Morris–Pratt (KMP) algorithm, supporting embedded `NUL` bytes:
 
 ```c
 size_t offset = 0;
@@ -84,20 +84,30 @@ hx_os_status status = hx_os_bytes_find(NULL,
 	(hx_os_bytes_view){"\0b", 2}, 0, 0, &offset, NULL);
 ```
 
-This finds offset 1. Preprocessing uses O(pattern length) scratch, bounded by the default 16 MiB budget. Search is O(input + pattern) and performs no allocation per byte.
+- The call above searches from offset `0` for the 2-byte pattern `"\0b"` and sets `offset` to `1`.
+- An empty pattern matches immediately at `start_offset`; if the pattern is not found, `hx_os_bytes_find` returns `HX_OS_NOT_FOUND` and leaves `offset` unchanged.
+- Prefix-table preprocessing uses `O(pattern length)` scratch memory (bounded by the default `16 MiB` budget), and the scan runs in `O(input + pattern)` time with no per-byte allocations.
 
 ## 4. Match many patterns
 
-Compile an immutable `hx_os_matcher` once from byte views, then search multiple messages. The sparse Aho–Corasick automaton supports duplicate and overlapping patterns. Callbacks report pattern index, start and length; views/indices refer to caller input and the compiled pattern order. Different searches may use the same matcher concurrently, but cannot race its destruction. Callbacks cannot destroy it or throw/longjmp.
-
-Limits: 4096 patterns, 1 MiB combined pattern bytes, default 16 MiB compile budget and 65536 delivered matches per search. A result limit reports `LIMIT` with the delivered prefix count. Failure links and output chains are retained once; matched suffix lists are not duplicated per state. Runtime has no background work or per-match allocation. C++ `hx::Matcher` wraps the same object.
+When you need to scan messages or buffers for dozens or thousands of patterns simultaneously, compile the pattern list once into an immutable `hx_os_matcher` (a sparse Aho–Corasick automaton, wrapped in C++11 by `hx::Matcher`) and reuse it across searches:
+- **Overlapping and duplicate patterns**: Each match invokes your callback synchronously with the pattern index (matching the compilation order), start offset, and byte length.
+- **Concurrent read sharing**: A compiled `hx_os_matcher` is immutable and **can be shared across concurrent search threads** without locking, provided no thread destroys the matcher while a scan is in flight. Callbacks must not destroy the matcher, throw exceptions, or `longjmp`.
+- **Bounds**: A matcher accepts up to `4096` patterns, `1 MiB` of combined pattern bytes, and a `16 MiB` default compilation budget, delivering up to `65,536` matches per scan. Hitting the match-delivery ceiling returns `HX_OS_LIMIT` alongside the count of matches delivered so far.
 
 ## 5. Bloom membership filter
 
-`hx_os_bloom_create(context, expected_items, false_positive_rate, budget, ...)` creates a bounded membership filter. Add arbitrary byte keys, then query `hx_os_bloom_contains`. False means the key was not inserted; true can be a false positive and must be checked in the real store. Expected items is sizing information, not an insertion limit; overfilling raises false positives. There is no deletion or automatic resize. `clear` resets all bits.
-
-The accepted target rate is 1e-9..0.5, with default memory budget 16 MiB and maximum 64 MiB. Double hashing performs no insertion allocation. Hashes are noncryptographic; the filter does not authenticate keys or isolate untrusted participants. Serialize mutations; concurrent immutable queries are allowed. C++ uses `hx::Bloom`.
+`hx_os_bloom_create(context, expected_items, false_positive_rate, budget, &bloom, error)` (wrapped in C++11 as `hx::Bloom`) creates a bounded-memory probabilistic membership filter:
+- **Query semantics (no false negatives)**: After inserting byte keys, test membership with `hx_os_bloom_contains`. A false (`0`) result guarantees the key was **never inserted**; a true (`1`) result means the key is *possibly present* and should be verified against the authoritative data store.
+- **Sizing and reset**: `expected_items` sizes the bit array and hash-function count at creation time rather than imposing a hard insertion cap (inserting many more items than expected increases the false-positive rate). Individual keys cannot be deleted, and the filter does not resize automatically; `hx_os_bloom_clear` resets all bits to zero.
+- **Budget and concurrency**: Target false-positive rates between `1e-9` and `0.5` are accepted, with a `16 MiB` default memory budget (`64 MiB` maximum). Double hashing uses non-cryptographic hashes and performs zero allocations during insertion or lookup. Serialize mutations externally; concurrent lookups on an unchanging filter are safe.
 
 ## 6. Run and configure
 
-Build/run `hx_os_fast_algorithms`: it shuffles and samples an array, radix-sorts it, searches warning patterns and uses a Bloom filter. See [fast_algorithms.c](../examples/fast_algorithms.c). C algorithms, matching and Bloom require `HX_OS_ENABLE_CONTAINERS`; disabled calls report `NOT_SUPPORTED`. System-seeded randomness additionally requires RANDOM. The core byte buffer and deterministic RNG do not require a global initialization step.
+Build and run `hx_os_fast_algorithms` ([fast_algorithms.c](../examples/fast_algorithms.c)) with `-DHX_OS_BUILD_EXAMPLES=ON` to exercise shuffling, sampling, radix sorting, KMP/Aho–Corasick pattern matching, and Bloom filtering end to end.
+
+> [!NOTE]
+> **CMake feature switches**:
+> - `hx_bytes` and the deterministic PRNG `hx_os_rng` are always available in the core library without global initialization.
+> - Array shuffle/sample, radix sort, `hx_os_bytes_find`, `hx_os_matcher`, and `hx_os_bloom` require `HX_OS_ENABLE_CONTAINERS=ON` (returning `HX_OS_NOT_SUPPORTED` when disabled).
+> - Passing `NULL` for the RNG in `shuffle` or `sample` to seed from OS entropy additionally requires `HX_OS_ENABLE_RANDOM=ON`.

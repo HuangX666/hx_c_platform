@@ -2,28 +2,28 @@
 
 [English](PLATFORM_UTILITIES.md)
 
-**从一个实际动作开始读。** 这页涵盖多个系统功能，按需要选择下面一行。先按[示例运行说明](../examples/README.zh-CN.md#run)构建对应目标；运行参数和文件输入见[输入准备](../examples/README.zh-CN.md#inputs)。
+本页汇总了 `hx_c_platform` 提供的跨平台系统级工具与便利接口，涵盖系统硬件与资源查询、动态库（插件）加载、文件与路径快捷操作、环境变量与标准目录、线程扩展与信号量、匿名/异步管道、定位读写、内存映射、目录监听、子进程管理与输出捕获、本地套接字、注册表、防睡眠电源请求、日历与翻译表、同步信号分发、可变设置（Settings）以及有界区间计时器。
 
-| 想做什么 | 完整程序 | 调用顺序与得到的结果 |
+你可以先从下表中挑选要完成的任务，按[示例运行说明](../examples/README.zh-CN.md#run)编译对应示例，并参考[输入准备](../examples/README.zh-CN.md#inputs)准备测试文件或命令行参数：
+
+| 想做什么 | 完整示例程序 | 核心调用流程与预期输出 |
 | --- | --- | --- |
-| 查看当前系统和本进程 CPU 用量 | [system_info.c](../examples/system_info.c) | 系统版本 → 创建 CPU 采样器 → 间隔后 query → 输出版本与百分比 |
-| 读取文字，另存一份 | [text_file.c](../examples/text_file.c) | read_text → 可选 write_text → 显示内容 → 释放字符串 |
-| 从文件中间读四个字节 | [positioned_read.c](../examples/positioned_read.c) | open → read_at(4) → close；demo.txt 输出 34 35 36 37 |
-| 映射已有文件 | [mapped_file.c](../examples/mapped_file.c) | map_open → 使用字节视图 → 输出大小和 CRC32 → destroy |
-| 查询环境变量 | [environment.c](../examples/environment.c) | 传 PATH 等变量名 → get_string → 显示该值；不修改变量 |
-| 找到用户配置目录 | [special_paths.c](../examples/special_paths.c) | config_home_string → 输出路径；返回路径不代表已创建目录 |
-| 监听目录变化 | [watch_directory.c](../examples/watch_directory.c) | create watch → 五秒内处理回调 → close；另一个终端修改文件 |
-| 启动程序并收集输出 | [capture_process.c](../examples/capture_process.c) | 传可执行文件及参数 → capture_run → 等退出 → 使用输出并关闭 |
-| 加载自己的插件 | [load_plugin.c](../examples/load_plugin.c) | 打开 → 查 ABI → 绑定函数 → 调用 → 卸载，配套[公开插件](../examples/README.zh-CN.md#plugin) |
-| 在本地管道传递数据 | [pipe_transfer.c](../examples/pipe_transfer.c) | 创建 loop 和端点 → 提交 I/O → 收到完成 → 关闭 |
+| 查询操作系统版本与当前进程 CPU 占用率 | [system_info.c](../examples/system_info.c) | 读取系统版本 → 创建 CPU 采样器 → 睡眠间隔后调用 `query` → 打印系统版本与 CPU 百分比 |
+| 一次性读取 UTF-8 文本文件并可选原子另存 | [text_file.c](../examples/text_file.c) | `hx_os_file_read_text` → 可选 `hx_os_file_write_text` → 打印内容 → 销毁字符串 |
+| 不移动文件游标，从指定偏移量读取 4 个字节 | [positioned_read.c](../examples/positioned_read.c) | 打开文件 → `hx_os_file_read_at(offset=4)` → 关闭（对 `demo.txt` 输出 `34 35 36 37`） |
+| 将磁盘文件直接映射到内存并计算校验值 | [mapped_file.c](../examples/mapped_file.c) | `hx_os_file_map_open` → 读取借用字节视图 → 打印字节数与 CRC32 → 销毁映射 |
+| 读取进程环境变量 | [environment.c](../examples/environment.c) | 传入 `PATH` 等变量名 → `hx_os_env_get_string` → 打印变量值（只读，不修改环境） |
+| 获取当前用户的配置目录等标准路径 | [special_paths.c](../examples/special_paths.c) | `hx_os_path_config_home_string` → 打印绝对路径（仅查询路径，不自动创建文件夹） |
+| 实时监听目录内的文件增删改事件 | [watch_directory.c](../examples/watch_directory.c) | 创建监听器 → 在 5 秒窗口内接收并打印变更回调 → 安全关闭（可在另一终端修改文件观察输出） |
+| 启动子进程并捕获其 `stdout` / `stderr` 输出 | [capture_process.c](../examples/capture_process.c) | 传入可执行文件路径与参数 → `hx_os_process_capture_run` → 等待退出 → 读取输出并关闭会话 |
+| 动态加载业务插件并绑定导出函数 | [load_plugin.c](../examples/load_plugin.c) | 打开动态库 → 校验 ABI 版本 → 绑定函数指针 → 调用 → 卸载（配套[公开插件](../examples/README.zh-CN.md#plugin)） |
+| 在本地异步管道两端传输数据 | [pipe_transfer.c](../examples/pipe_transfer.c) | 创建本地事件循环与管道对 → 提交异步读写 → 轮询完成回调 → 关闭管道与循环 |
 
-这些程序中的 status 都要检查。路径、系统指标、事件数量随环境变化；API 表中的“支持”仍受平台能力和权限约束。后面的短片段说明单个调用，完整初始化和关闭顺序以链接中的程序为准。
-
-常用操作提供直接可用的 C 入口，可选 C++11 头文件封装同一份实现。 NULL context 使用现有不可变默认分配器。关闭功能时保留声明和失败桩，对应能力位清零。
+以上功能均提供直接可用的 C99 入口，并在 `include/hx/` 下提供共用同一底层实现的 C++11 无异常封装。向接口传入 `NULL` 上下文（`hx_context *`）会自动选用内置的不可变默认分配器。当某项功能通过 CMake 开关裁剪关闭时，公共头文件声明与失败桩函数仍会保留，对应能力位（Capability Bit）清零，调用时明确返回 `HX_OS_NOT_SUPPORTED`。
 
 ## 系统信息
 
-`hx_os_sysinfo.h` 提供内存字节数、CPU 拓扑、页大小、文件系统空间、当前进程内存和系统版本。`HX_OS_ENABLE_SYSINFO` 默认 ON；关闭后，库版本和 ABI 查询仍然可用。这些操作不启动线程、安装处理器或修改进程状态。
+`hx_os_sysinfo.h`（由 `HX_OS_ENABLE_SYSINFO` 控制，默认开启）提供物理/可用内存字节数、CPU 逻辑与物理核心拓扑、内存页大小、磁盘文件系统空间、当前进程内存占用以及操作系统版本字符串查询。即使关闭 `HX_OS_ENABLE_SYSINFO`，库版本与 ABI 版本查询依然可用。所有查询均为无副作用的按需读取，不会在后台启动线程或修改进程状态：
 
 ```c
 hx_string version = HX_STRING_INIT;
@@ -35,15 +35,12 @@ hx_os_status status = hx_os_sys_version_string(&version, &error);
 hx_string_destroy(&version);
 ```
 
-带版本的磁盘／进程结果结构使用对应的 `*_INFO_INIT` 宏初始化。缓冲区文本接口返回的所需容量包含 NUL。标量和结构化输出在失败时保持不变。
-
-CPU 数量表示系统在线 CPU，Windows 包含全部处理器组，不等同于进程亲和性掩码或 cgroup 配额。Linux 通过 sysfs 去重在线 package/core 配对；拓扑不可取得时返回 NOT_SUPPORTED，不用逻辑核心数冒充物理核心数。
-
-可用内存分别采用 Windows 可用物理内存、Linux `MemAvailable`、macOS 空闲页加非活跃页。macOS 的值为估计值，各平台快照都不保证随后分配成功。 Linux 数据反映操作系统视图，不等同于容器专属内存上限。 POSIX 磁盘可用空间使用 `f_bavail`，与所有空闲块 `f_bfree` 分开。
-
-当前进程驻留字节表示工作集／RSS；虚拟字节分别采用 Windows 已保留和已提交虚拟地址空间、Linux `/proc/self/statm` 大小、macOS Mach virtual size。它不表示提交费用或物理内存消耗。原生资源查询可能阻塞。
-
-`hx_os_cpu_usage_create` 保存进程 CPU 与单调时钟起点。每次成功查询返回上次采样以来的平均值： `100 * process_cpu_delta / elapsed_delta / initial_logical_cpu_count`。不计入子进程。每个采样器需由调用者串行使用，采样器彼此独立，并使用自己的 context 分配内存。间隔为零时返回 WOULD_BLOCK，保留原采样。计数器精度及 CPU 拓扑变化可能影响短间隔结果；库不强行截断百分比。
+- **结构初始化与缓冲区约定**：带版本号的磁盘空间与进程内存结构体请使用对应的 `*_INFO_INIT` 宏初始化。基于字符缓冲区的文本查询接口返回的所需容量均包含末尾 `NUL` 终止符；查询失败时，标量与结构体输出均保持原值不变。
+- **CPU 拓扑与内存/磁盘口径**：
+  - **CPU 核心数**：反映系统当前在线的 CPU 数量（Windows 下跨全部处理器组统计），不等同于当前进程的亲和性掩码或容器 cgroup 配额。Linux 下通过 `sysfs` 对在线 `package/core` 组合去重来统计物理核心数；当宿主环境无法提供真实物理拓扑时，明确返回 `HX_OS_NOT_SUPPORTED`，绝不用逻辑核心数冒充物理核心数。
+  - **可用内存与磁盘空间**：可用内存分别读取 Windows 可用物理内存、Linux `MemAvailable` 以及 macOS 的空闲页加非活跃页估算值（注意：系统内存快照不代表随后的大块 `malloc` 必然成功，且 Linux 读取的是宿主内核视图而非容器专属限额）。POSIX 磁盘可用空间读取非特权用户可用的 `f_bavail`（区别于包含根用户保留块的 `f_bfree`）。
+  - **当前进程内存**：驻留字节（Resident Bytes）对应 Windows 工作集（Working Set）或 POSIX RSS；虚拟字节（Virtual Bytes）对应 Windows 已保留加已提交地址空间、Linux `/proc/self/statm` 总大小或 macOS Mach 虚拟大小（虚拟地址空间大小不等同于物理内存消耗或系统 Commit 账目）。
+- **进程 CPU 占用率采样器（`hx_os_cpu_usage` / `hx::CpuUsage`）**：调用 `hx_os_cpu_usage_create` 会记录当前进程 CPU 时间与单调时钟的初始基线。此后每次调用查询，都会返回自上一次成功采样以来的平均 CPU 占用百分比：`100 * process_cpu_delta / elapsed_delta / initial_logical_cpu_count`（不含子进程）。若两次查询间隔为零，则返回 `HX_OS_WOULD_BLOCK` 并保留原采样基线。每个采样器实例互相独立，需由调用方串行访问。C++11 封装返回 `hx::Result<T>`（详见 [Result 契约](CPP_RESULTS.zh-CN.md) 与 [system_info.c](../examples/system_info.c)）：
 
 ```cpp
 #include <hx/SystemInfo.hpp>
@@ -64,11 +61,9 @@ hx::Result<double> sample_cpu() noexcept
 }
 ```
 
-C++ 便利方法返回 Result<T>，复制保存原生错误详情。CpuUsage::create 返回 Result<CpuUsage>，采样器支持移动。头文件要求 C++11，支持关闭异常编译，核心继续使用 C99。详见 [Result 契约](CPP_RESULTS.zh-CN.md) 和 examples/system_info.c。
-
 ## 动态库
 
-`HX_OS_ENABLE_LIBRARY` 默认 ON。`hx_os_library_open`、`symbol`、`close` 提供基础 C 入口；`_ex` 版本可以接收已初始化的 `hx_string`，保存属于调用者的诊断文本。`hx::Library` 通过 Result 提供可移动的所有权和 `symbol<Pointer>(name)`，失败保留原状态／错误域／代码；可选的调用者持有 String 接收加载器诊断文本。
+`HX_OS_ENABLE_LIBRARY` 默认开启。`hx_os_library_open`、`hx_os_library_symbol` 和 `hx_os_library_close` 提供基础动态库加载与符号查找；带 `_ex` 后缀的变体还可额外接收一个已初始化的 `hx_string`，用于捕获系统加载器返回的错误诊断文本。在 C++11 中，`hx::Library` 提供移动语义的句柄管理与类型化符号查找 `symbol<Pointer>(name)`：
 
 ```cpp
 #include <hx/Library.hpp>
@@ -89,27 +84,27 @@ hx::Result<uint32_t> plugin_abi(const char *path) noexcept
 }
 ```
 
-输入是 UTF-8 文件系统路径，相对文件名按当前目录解析，不按裸 POSIX soname 搜索；被加载模块的依赖仍遵循原生加载器规则。POSIX 使用 RTLD_NOW 和 LOCAL/GLOBAL，Windows 忽略可见性选项。库不修改加载器搜索路径。 POSIX 加载错误没有可移植的数值代码，因此主错误使用 HX_OS_ERROR_LOADER，可选诊断保存文本。在调用可能重入加载器的分配器前，先复制最多 2047 字节，必要时标记截断，并转义无效 UTF-8 字节。诊断分配失败不覆盖原始操作错误。
-
-每个句柄的使用与关闭由调用者串行协调。符号借用模块存储；POSIX 数据符号地址即使为 NULL，也可能成功。卸载前必须结束调用、释放插件对象、断开回调，并完成插件 TLS 析构。关闭失败也消耗句柄；C++ 显式 close 可报告错误，析构不抛异常。加载／卸载可能执行模块构造／析构代码，因此可能阻塞。
-
-[load_plugin.c](../examples/load_plugin.c) 与 [demo_plugin.c](../examples/demo_plugin.c) 是配套公开示例。按[运行步骤](../examples/README.zh-CN.md#plugin)构建两者，输出 `Compatible plugin: Example plugin 1.0`；不需要私有测试模块。
-
-C 调用者可用 `hx_os_library_bind` 或 `_bind_ex`，传入函数指针变量的地址和 `sizeof(variable)`，直接取得可调用的指针，不必重复编写转换代码。失败时目标变量保持不变。
+- **路径解析与加载器诊断**：输入为 UTF-8 文件系统路径。相对文件名会按当前工作目录解析为文件，而不会当作裸 POSIX `soname` 去系统库目录搜索（被加载模块自身依赖的其他动态库仍遵循操作系统加载器规则）。POSIX 下固定使用 `RTLD_NOW` 搭配可选的 `LOCAL` / `GLOBAL` 可见性标志（Windows 忽略可见性标志）。由于 POSIX `dlerror()` 只提供文本而无标准错误码，加载失败时主错误域设为 `HX_OS_ERROR_LOADER`，并在触发任何可能重入加载器的分配器回调前先在栈上拷贝最多 `2,047` 字节的诊断文本（转义非法 UTF-8 字节并标记截断）。
+- **直接绑定函数指针（`hx_os_library_bind`）**：C 语言调用方可以使用 `hx_os_library_bind` 或 `hx_os_library_bind_ex`，直接传入函数指针变量的地址和 `sizeof(variable)`，一步完成符号查找与指针写入，无需手写冗长的类型转换；查找失败时目标变量保持原值不变。
+- **卸载生命周期安全**：对同一个库句柄的操作与关闭需由调用方串行化。在卸载（`close`）插件之前，宿主必须确保插件中的所有函数调用已返回、插件分配的对象已释放、注册的回调已断开，且插件相关的线程局部存储（TLS）析构函数已执行完毕。`close` 即使遇到底层报错也会消费句柄。你可以按[运行步骤](../examples/README.zh-CN.md#plugin)一同编译并运行公开示例 [load_plugin.c](../examples/load_plugin.c) 与 [demo_plugin.c](../examples/demo_plugin.c)，查看完整的 `Compatible plugin: Example plugin 1.0` 验证输出。
 
 ## 文件与路径便利操作
 
-`HX_OS_ENABLE_FILE_UTILS` 默认 ON。用 `hx_os_file_read_text(path, &text, &error)` 直接读取文本，使用 `hx_os_file_write_text(path, &text, &error)` 发布已有 `hx_string`。默认严格校验 UTF-8、移除开头的 UTF-8 BOM，并限制整个输入为 16 MiB；显式 load 接口可调整上限和 BOM 策略。无效编码、超限、分配或 I/O 失败均保留已有输出字符串。二进制读取交付调用者持有的内存；空文件同样交付可释放的空分配，统一用 `hx_os_memory_free` 释放。
+`HX_OS_ENABLE_FILE_UTILS` 默认开启，提供文本/二进制文件一键读写、原子文件发布、安全复制/备份替换、路径解析、通配符 `glob` 以及目录遍历与递归删除：
 
-原子保存依次在目标目录独占创建临时文件、完整写入、请求文件同步、关闭，再重命名覆盖目标。它替换目录项，包括目标链接，可能改变文件标识和元数据。扩展结果区分文件发布与父目录同步；发布成功不保证掉电后仍然存在。 Windows 的父目录同步在扩展结果中报告 NOT_SUPPORTED，不把已经完成的发布改报为失败。发布前失败会尽量删除临时文件；权限或外部修改可能阻止清理。
-
-复制会拒绝覆盖同一文件对象，不承诺元数据保留，也不提供并发变化源文件的一致快照。普通保存／复制失败可能留下部分输出。显式备份是复制，不承诺持久化。带备份替换在 Windows 使用原生操作，POSIX 使用两次重命名。已有备份名称会被拒绝，调用者负责排除参与路径的并发修改；后续步骤失败没有自动回滚。POSIX 在冲突检查后使用普通 rename，也适用于不支持 no-replace rename 的 WSL 挂载盘。
-
-当前／绝对路径都有缓冲区和 `hx_string` 入口。绝对路径要求目标存在并解析链接。切换 cwd 明确影响整个进程，调用者需协调相对路径操作。 basename／dirname／extension 为无分配的借用视图，两种分隔符都识别，关闭 FILE_UTILS 后仍可使用。扩展名包含点，文件开头唯一的点不算扩展名。
-
-glob 返回持有 `hx_string` 元素的 vector，用 `hx_os_sequence_destroy` 释放。支持 UTF-8 `*`／`?`，后者匹配一个码点；参与匹配的组件区分大小写，字面目录前缀仍按原生文件系统查找。不提供字符类、转义或 `**` 递归展开。点开头的名称要求模式显式以点开头。无匹配返回空结果，顺序不保证。该功能同时依赖 CONTAINERS 与 FILE_UTILS。
-
-遍历默认深度 64（可配置上限 256）、最多访问一百万项、最多 65,536 个匹配， vector 存储和保留文本各限 16 MiB。遍历帧同样受限，原生目录缓冲不计入分配器预算。递归删除不跟随链接，使用堆上的遍历帧；超限或失败可能已经删除部分条目。POSIX 相对目录描述符并用 NOFOLLOW 打开子目录；Windows 打开重解析点本身，遍历期间保持目录句柄以阻止重命名。外部并发修改仍需调用者协调。
+- **一次性读写文本与二进制文件**：
+  - `hx_os_file_read_text(path, &text, &error)` 默认严格校验 UTF-8 编码、自动剥离文件开头的 UTF-8 BOM，并将整个文件大小限制在 `16 MiB` 以内（可通过显式 `load` 扩展接口调整大小上限与 BOM 保留策略）。编码错误、超出大小上限或 I/O 失败均保持原输出字符串不变。
+  - `hx_os_file_write_text(path, &text, &error)` 将已有字符串写入文件。完整示例见 [text_file.c](../examples/text_file.c)。
+  - 二进制读取接口返回由调用方独占持有的内存块（哪怕读取的是 0 字节空文件，也会返回一块合法的可释放分配），用完后统一调用 `hx_os_memory_free` 释放。
+- **原子保存（Atomic Save）与带备份替换**：
+  - 原子保存先在目标文件所在目录排他创建临时文件、完整写入数据、请求文件刷盘（`fsync` / `FlushFileBuffers`）、关闭句柄，最后通过原子重命名覆盖目标路径。扩展结果结构体可区分“文件重命名已发布”与“父目录同步结果”（例如 Windows 不支持对目录句柄刷盘，会在扩展结果中报告 `HX_OS_NOT_SUPPORTED`，而不会将已成功的发布改判为失败）。
+  - 文件复制拒绝自我覆盖；带备份替换在 Windows 上调用原生替换 API，在 POSIX 上执行两次重命名（已存在同名备份文件时会明确拒绝，避免覆盖旧备份）。
+- **路径拆解、当前工作目录与 `glob` 展开**：
+  - `basename`、`dirname` 和 `extension` 为零分配的纯词法借用视图（同时识别 `/` 和 `\` 分隔符，即使关闭 `HX_OS_ENABLE_FILE_UTILS` 也依然可用；扩展名包含前导 `.`，但纯以 `.` 开头的隐藏文件名本身不算扩展名）。
+  - 获取或切换当前工作目录（`cwd`）会影响整个进程，多线程程序须自行协调相对路径访问。查询绝对路径要求目标文件存在并会解析符号链接。
+  - `hx_os_path_glob`（需同时启用 `HX_OS_ENABLE_CONTAINERS` 与 `HX_OS_ENABLE_FILE_UTILS`）返回持有 `hx_string` 元素的序列容器（用 `hx_os_sequence_destroy` 释放）。支持区分大小写的 UTF-8 `*` 和 `?`（单码点匹配），前导 `.` 文件需显式匹配 `.`，不支持 `[...]` 或 `**` 跨层级展开。
+- **目录枚举与递归删除**：
+  - 目录遍历与递归删除默认限制最大深度 `64`（可调至 `256`）、最多访问 `1,000,000` 个目录项、最多 `65,536` 个匹配，容器与文本预算各 `16 MiB`。递归删除严格**不跟随符号链接**（POSIX 使用目录描述符相对 `openat` 加 `O_NOFOLLOW`，Windows 直接打开重解析点本身并保持目录句柄防止并发改名）。
 
 ```cpp
 #include <hx/Files.hpp>
@@ -134,19 +129,11 @@ hx::Result<void> list_directory(const char *path) noexcept
 }
 ```
 
-File::open 和 Directory::open 返回唯一持有核心句柄的 Result，即使 FILE_UTILS 关闭仍可使用。File::get 借用句柄，游标操作由调用者串行化。readSome/readAt 返回 Result<ReadResult>，EOF 和失败时可通过 hasValue() 读取字节进度；Files 返回 Result<String> 或 Result<Buffer>。Directory::next(true) 额外查询类型，默认 next() 不要求启用 FILE_INFO。
-
-`examples/text_file.c` 一次调用读取 UTF-8，并可原子发布到第二个路径。传入第二个路径前，确认它是你要保存的目标。
-
-`File::read` 将 EOF 作为成功的 `ReadResult{bytes, eof}`，错误仍保留进度。`hx_os_directory_visit` 和 `Directory::forEach` 内部复用有界名称缓冲区，完成遍历后关闭，EOF／主动停止均成功。详见 [遍历与文本视图契约](COMMON_UTILITIES.zh-CN.md)。
+在 C++11 `<hx/Files.hpp>` 中，`hx::File::open` 与 `hx::Directory::open` 返回只可移动的核心句柄包装（即使关闭 `HX_OS_ENABLE_FILE_UTILS` 也可用）。`File::read` 将到达文件末尾作为成功的 `ReadResult{bytes, eof}` 返回，而 `readSome` / `readAt` 在遇到 `HX_OS_EOF` 或错误时仍可通过 `hasValue()` 检查已传输字节数。单层目录回调遍历可使用 `hx_os_directory_visit` 或 `hx::Directory::forEach`（详见[遍历与文本视图契约](COMMON_UTILITIES.zh-CN.md)）。
 
 ## 环境变量
 
-HX_OS_ENABLE_ENV 默认开启。hx_os_env_get_string 使用输出字符串自身 context，hx::Environment::get/getOr 返回 Result<String>，可指定输出 context。只在变量缺失时使用默认值，空值仍为空值；缓冲区查询容量包含 NUL。
-
-`hx_os_env_set(name, value, replace, error)` 明确修改当前进程环境； replace=0 保留已有值，包括空值。删除不存在的变量成功。输入仅在调用期间借用，名称不得为空或含 '='，无效 UTF-8 会被拒绝。操作系统复制设置值，修改影响以后启动的子进程，不影响父进程或已运行子进程。
-
-同一份已加载库内的调用互相同步；原生 API、CRT 或另一份库实例的修改仍需宿主协调。输出分配器回调在锁外执行，允许再次调用读取接口。字符串容量最多重试八次；值持续增长时返回 BUSY 并保留原输出。 Windows 使用 Win32 Unicode 环境块，CRT 的 `getenv`／`_environ` 缓存独立，可能看不到 Win32 修改，应成组使用本库读写接口。 POSIX 原生值不是 UTF-8 时返回 INVALID_ENCODING，不修改 locale 或猜测编码。
+`HX_OS_ENABLE_ENV` 默认开启。`hx_os_env_get_string` 使用输出 `hx_string` 自身的分配器上下文读取环境变量（若变量不存在则返回 `HX_OS_NOT_FOUND`，参见 [environment.c](../examples/environment.c)）；C++11 的 `hx::Environment::get` 与 `getOr` 返回 `hx::Result<hx::String>`（仅在变量完全不存在时回退默认值，已存在的空字符串变量仍返回空字符串）：
 
 ```cpp
 #include <hx/Environment.hpp>
@@ -157,115 +144,85 @@ hx::Result<hx::String> application_mode() noexcept
 }
 ```
 
-`examples/environment.c` 直接查询指定变量。传入不存在的变量名时返回 NOT_FOUND，读取本身不修改宿主设置。
+- **修改与删除环境变量**：`hx_os_env_set(name, value, replace, &error)` 用于修改当前进程的环境变量（当 `replace == 0` 时保留已有值，包括已有的空值）；删除一个本来就不存在的变量视为成功。变量名不得为空或包含 `'='`。修改后的环境块会被之后新启动的子进程继承，不影响父进程或已经运行的子进程。
+- **并发与平台编码边界**：同一份已加载库实例内的环境变量读写通过内部锁自动同步（若其他线程在锁外持续扩增同一变量导致连续 8 次容量重试仍不够，查询会返回 `HX_OS_BUSY` 并保持原输出不变）。在 Windows 上，本库直接操作 Win32 Unicode 环境块——由于 C 运行库（CRT）的 `getenv` / `_environ` 维护的是独立缓存，可能看不到 Win32 层面的修改，请成对使用本库的环境变量读写接口。在 POSIX 上，若原生环境变量包含非法 UTF-8 字节，查询会返回 `HX_OS_INVALID_ENCODING`。
 
 ## 常用目录
 
-PATHS 默认开启。C 直接调用 `hx_os_path_config_home_string(&path, &error)`， C++ 调用 `hx::Paths::configHome()`。七个查询均有缓冲区和 `hx_string` 版本，无需全局初始化，不创建目录、不修改工作目录。返回绝对 UTF-8 路径，根目录以外不保留尾分隔符；路径不保证存在或可写。所需容量含 NUL；失败保留字符串原值，内存使用输出字符串自己的 context。
+`HX_OS_ENABLE_PATHS` 默认开启（独立于 `ENV`、`FILE_UTILS` 和 `LIBRARY` 开关）。C 接口如 `hx_os_path_config_home_string(&path, &error)` 与 C++11 接口如 `hx::Paths::configHome()` 提供七类标准系统路径查询（详见 [special_paths.c](../examples/special_paths.c)）。所有查询均返回不带尾部斜杠的绝对 UTF-8 路径（根目录除外），**仅返回路径字符串，不会在磁盘上自动创建目录，也不保证路径当前一定存在或可写**：
 
-| 查询 | Windows | Linux | macOS |
+| 路径查询项 | Windows 解析来源 | Linux 解析来源 | macOS 解析来源 |
 | --- | --- | --- | --- |
-| home | 绝对 USERPROFILE，否则 Profile 已知目录 | 绝对 HOME，否则当前 UID 数据库 | 相同 POSIX 查询 |
-| config_home | RoamingAppData | 绝对 XDG_CONFIG_HOME，否则 HOME/.config | HOME/Library/Application Support |
-| data_home | LocalAppData | 绝对 XDG_DATA_HOME，否则 HOME/.local/share | HOME/Library/Application Support |
-| program_data | ProgramData | /var/lib | /Library/Application Support |
-| temp | GetTempPathW | 绝对 TMPDIR，否则 /tmp | 绝对 TMPDIR，否则 Darwin 用户临时目录，再回退 /tmp |
-| executable | GetModuleFileNameW | /proc/self/exe | _NSGetExecutablePath + realpath |
-| module | 本库所在目录 | dladdr 返回绝对名称时的目录 | 同左 |
+| `home` | 绝对路径 `USERPROFILE`，否则回退系统 Profile 已知目录 | 绝对路径 `HOME`，否则查询当前 UID 密码数据库 | 与 Linux 相同的 POSIX 查询 |
+| `config_home` | `FOLDERID_RoamingAppData` | 绝对路径 `XDG_CONFIG_HOME`，否则 `HOME/.config` | `HOME/Library/Application Support` |
+| `data_home` | `FOLDERID_LocalAppData` | 绝对路径 `XDG_DATA_HOME`，否则 `HOME/.local/share` | `HOME/Library/Application Support` |
+| `program_data` | `FOLDERID_ProgramData` | `/var/lib` | `/Library/Application Support` |
+| `temp` | `GetTempPathW` | 绝对路径 `TMPDIR`，否则 `/tmp` | 绝对路径 `TMPDIR`，否则 Darwin 用户临时目录，再回退 `/tmp` |
+| `executable` | `GetModuleFileNameW` | `/proc/self/exe` | `_NSGetExecutablePath` + `realpath` |
+| `module` | 当前动态库（或静态链接时的可执行文件）所在目录 | `dladdr` 返回绝对路径时的所在目录 | 与 Linux 相同 |
 
-`program_data` 表示机器共享的应用数据和状态，与用户数据、只读安装资源分开。消费者自行添加应用子目录，并明确决定何时创建。[XDG 规范](https://specifications.freedesktop.org/basedir/latest/) 要求忽略空值及相对路径；无效 UTF-8 仍报错。Windows 使用 SHGetKnownFolderPath、 KF_FLAG_DONT_VERIFY 和 CoTaskMemFree，测试进程没有调用 CoInitialize。不引入 Objective-C 或新的第三方依赖。
-
-静态链接时 `module` 指可执行文件所在目录。POSIX 加载器若仅给出相对模块名称，返回 NOT_SUPPORTED，避免工作目录改变后猜错位置。Linux 可执行路径查询依赖 procfs，并保留原生失败；已移动或删除的镜像可能返回系统记录的原名称，不保证路径仍存在。POSIX 原生路径临时容量上限为 1 MiB，目录服务及 UID 查询可能阻塞。
-
-PATHS 独立于 ENV、FILE_UTILS、LIBRARY 开关。内部环境读取共用锁和编码处理，关闭 ENV 后其公共入口仍报不支持。宿主协调原生环境或 cwd 的并发修改。没有隐藏线程，不影响已有热路径；显式查询会分配临时字符串及原生缓冲区。 `examples/special_paths.c` 在 Windows/Linux 使用同一份 C 源码直接调用。
+> [!NOTE]
+> - `program_data` 表示整机共享的应用数据目录，应用使用时应在其下拼接自己的子目录名并按需创建。
+> - 遵循 [XDG 基础目录规范](https://specifications.freedesktop.org/basedir/latest/)，Linux 下为空或为相对路径的 `XDG_*` 环境变量会被自动忽略并回退到默认路径（但若包含非法 UTF-8 字节则会明确报错）。
+> - Windows 下使用 `SHGetKnownFolderPath`（带 `KF_FLAG_DONT_VERIFY`）加 `CoTaskMemFree`，无需调用方预先执行 `CoInitialize`。POSIX 下若动态加载器只记录了相对模块名，`module` 查询会返回 `HX_OS_NOT_SUPPORTED`，防止工作目录改变后拼出错误路径。
 
 ## 线程选项、命名与信号量
 
-THREAD_EX 默认开启，不自动启动线程。使用 `HX_OS_THREAD_OPTIONS_INIT` 后设置以字节表示的栈预留大小，传给 `hx_os_thread_create_with_options`；零保持原生默认值。显式初始化函数接收调用方容量，只写已知前缀，创建先验证 size/version。 POSIX 按原生最小值和对齐要求拒绝无效栈大小。Windows 保留 `_beginthreadex` 的 CRT 清理，配合 STACK_SIZE_PARAM_IS_A_RESERVATION；超出 unsigned 参数范围报 RANGE。原有 create 保持默认原生路径，不增加分配或锁。
+`HX_OS_ENABLE_THREAD_EX` 默认开启，提供自定义线程栈大小、UTF-8 线程命名以及有界计数信号量：
 
-名称严格使用 UTF-8。Linux/macOS 分别在 15/63 字节内截断到完整码点；macOS 只能给当前线程命名。Windows 从 KernelBase 动态查找 SetThreadDescription，兼容较早 Windows 10 的导出位置；Win7 等不可用环境返回 NOT_SUPPORTED。原生失败保留 errno/HRESULT。对对象命名时由调用方排除并发 join/destroy，已 join 线程报 CLOSED。
-
-信号量用互斥锁和条件变量实现有界计数。post(count>0) 无等待者时仍保留通知，超过上限整体报 LIMIT，不部分增加。wait_until 使用单调绝对截止时间；NOW 时有令牌立即消费，无令牌报 TIMEOUT；允许显式 INFINITE。超时保留对象可重试，不承诺 FIFO 或硬截止时间。销毁前排除所有操作及等待者。创建为三次 context 分配，post/wait 不分配、各持有一次互斥锁，不建立线程或队列。
-
-`hx::Semaphore` 提供可移动 RAII；`hx::Thread` 沿用 ThreadPool 的显式所有者变量封装：closeUntil 成功后 join 并销毁，超时保留所有者，析构不等待、不终止。回调数据借用至 join 完成。`examples/thread_options.c` 演示栈配置及明确的关闭策略；嵌入式小栈还须计入回调、TLS 和 sanitizer 的额外开销。
+- **自定义线程栈大小（`hx_os_thread_create_with_options`）**：使用 `HX_OS_THREAD_OPTIONS_INIT` 初始化选项结构体后，可设置以字节为单位的 `stack_size`（设为 `0` 表示沿用操作系统默认栈大小；示例见 `examples/thread_options.c`）。POSIX 会校验最小栈大小与页对齐要求；Windows 底层继续使用 `_beginthreadex` 配合 `STACK_SIZE_PARAM_IS_A_RESERVATION`（超出 `unsigned` 范围返回 `HX_OS_RANGE`）。在嵌入式环境配置小栈时，请为回调函数、TLS 变量及 Sanitizer 留出余量。
+- **线程命名**：名称必须为合法 UTF-8。Linux 与 macOS 分别在 `15` 字节和 `63` 字节上限内按完整 Unicode 码点安全截断（macOS 仅支持为当前调用线程自身命名）。Windows 动态查找 `KernelBase.dll` 中的 `SetThreadDescription`（在不支持该 API 的旧版 Windows 7 上返回 `HX_OS_NOT_SUPPORTED`）。对已 `join` 的线程命名返回 `HX_OS_CLOSED`。
+- **有界信号量（`hx_os_semaphore` / `hx::Semaphore`）**：基于互斥锁与条件变量实现有界令牌计数。`post(count > 0)` 在当前无等待线程时也会累计令牌，若加上 `count` 后超过创建时设定的最大值，则整体拒绝并返回 `HX_OS_LIMIT`（不做部分增加）。`wait_until` 支持单调时钟截止时间（传入 `HX_OS_DEADLINE_NOW` 时若有令牌则立即消费，无令牌则立即返回 `HX_OS_TIMEOUT`；也支持 `HX_OS_DEADLINE_INFINITE`）。
+- **C++11 线程所有权模型**：`hx::Thread` 采用与线程池一致的显式 `owner` 指针托管模型——调用 `closeUntil` 成功完成 `join` 后才销毁句柄；若等待超时则保留 `owner` 供后续重试，析构函数绝不会隐式阻塞等待或强行终止线程。
 
 ## 管道与本地 I/O 循环
 
-`hx_os_pipe_pair_anonymous` 返回两个同步文件端点，直接使用文件读写和关闭入口。两平台均为阻塞字节流，不创建等待线程；磁盘专用操作返回 NOT_SUPPORTED。零字节操作成功；全部写端关闭后，读完缓冲数据才返回 EOF。断开后写入返回 CLOSED，保留原生错误。关闭不能与同步读写竞争。Linux 使用带 CLOEXEC 的 pipe2；macOS 通过 fcntl 设置 CLOEXEC，创建期间宿主须协调并发 fork/exec。
+当进程内或父子进程间需要流式字节通道时，可以使用同步匿名管道或接入本地事件循环的异步管道（示例见 [pipe_transfer.c](../examples/pipe_transfer.c)）：
 
-需要截止时间、取消时，使用 `hx_os_pipe_pair_async` 和 read_async/write_async。默认写入复制缓冲区并完成全部字节，扩展入口可借用；读取返回当前可读字节或 EOF。新的管道操作结构按容量初始化，不改变 hx_os_operation。内容保持原始字节，不自动解码。`hx_os_pipe_pair_child` 支持两个方向的“异步父端、同步子端”，初始均不可继承；后续进程创建明确选择复制给子进程的端点。
-
-`hx_os_loop_create_local(NULL, NULL, &loop, &error)` 无需网络对象或网络初始化。支持投递、定时器与本地 I/O，网络和 DNS 操作明确报不支持。原网络工厂继续可用。 LOOP 和 NETWORK 可独立裁剪；PIPE 开启而 LOOP 关闭时仍提供同步端点， ASYNC_PIPE 能力需要两者同时开启。
-
-每个端点同一时间接受一个请求，由 loop 创建线程提交。管道共享 loop 的请求数与待处理字节预算，借用缓冲区也计入字节预算。拒绝不持有资源、不触发回调；接受后在轮询线程回调一次，不在提交内联调用。request 等待包括回调返回，但不代替轮询。 POSIX 使用非阻塞描述符及与套接字共用的 epoll/kqueue 注册。Windows 使用私有单实例字节模式命名管道、重叠端点和 IOCP；CreatePipe 仅用于同步端点。不承诺硬截止时间。
-
-close_until 禁止新请求，发起取消并驱动原生操作退出。超时保留指针、原生状态和缓冲区供重试；期间可能执行其他 loop 回调。回调等待同 loop 未完成操作或重入正在进行的关闭，报 DEADLOCK。销毁 loop 前须关闭附属管道。最终原生 close 即使报错也消费端点，不能对已消费指针重试。关闭 loop 会取消请求，不隐式释放端点。
-
-POSIX 写管道仅临时阻塞调用线程的 SIGPIPE，保留已有待决信号、消费本次断开写入新产生的信号，然后恢复原掩码。不安装进程级信号处理器。宿主不能用其他信号等待机制并发消费该线程的待决 SIGPIPE。失败或取消报告原生提供的部分字节进度，不代表对端一定没有收到数据。
-
-C++ Pipes::anonymous 返回 Result<pair<File, File>>，IoLoop 和 AsyncPipe 保留宿主 owner 以重试关闭。IoRequest 持有观察引用，丢弃便利对象不取消原生工作；读写缓冲区（含 StringView 写入）借用到回调返回。类型化捕获使用 loop context，每次提交单独分配一个状态块，每次回调不分配。请求容量限制活动回调状态数量，保留的便利对象可能继续持有诊断状态。回调返回 void、状态码或 Result<void>，完成后通过 callbackResult() 查询。C 接口不产生该 C++ 状态分配。
-
-`examples/pipe_transfer.c` 完成一次本地异步传输和明确关闭。已有普通文件 I/O 只增加类型判断，不增加锁或分配；套接字 readiness 改为共用的两个 int 记录，不增加其分配或系统调用。异步管道复用请求分配及队列锁；默认写另有数据副本。 POSIX 写管道额外执行线程信号掩码和待决信号查询。
+- **同步匿名管道（`hx_os_pipe_pair_anonymous` / `hx::Pipes::anonymous`）**：创建一对阻塞式 `hx_os_file` 读写端点，直接复用常规文件读写与关闭接口。所有写端关闭且缓冲区数据读尽后，读端返回 `HX_OS_EOF`；读端关闭后继续写入则返回 `HX_OS_CLOSED`。Linux 下使用带 `O_CLOEXEC` 的 `pipe2` 创建；macOS 通过 `fcntl` 设置 `FD_CLOEXEC`（在 macOS 上并发创建管道与 `fork`/`exec` 时需由宿主同步）。
+- **异步管道与父子进程半异步管道**：
+  - `hx_os_pipe_pair_async` 创建一对支持截止时间与取消的异步管道端点，配合 `hx_os_pipe_read_async` / `hx_os_pipe_write_async` 使用（写入默认复制缓冲区并写满全部字节，扩展接口支持借用缓冲区）。
+  - `hx_os_pipe_pair_child` 创建“一端为父进程异步管道、另一端为子进程同步文件”的混合管道对（初始均为不可继承，待调用 `hx_os_process_spawn` 时按需复制给子进程标准流）。
+- **无网络的本地事件循环（`hx_os_loop_create_local`）**：无需初始化网络模块，即可驱动任务投递（Post）、周期定时器与本地异步管道（开启 `HX_OS_ENABLE_PIPE` 与 `HX_OS_ENABLE_LOOP` 即具备 `HX_OS_CAP_ASYNC_PIPE` 能力，完全独立于 `HX_OS_ENABLE_NETWORK`）。
+  - 每个异步管道端点同一时刻只接受一个由 `loop` 创建线程提交的请求，并与套接字共享 `loop` 的请求槽位与在途字节预算。
+  - `close_until` 会阻止新请求、发起取消并轮询驱动底层原生 I/O 安全退役；若超时则保留指针与借用缓冲区供重试（在回调中等待同一 `loop` 的未完成操作或重入关闭会返回 `HX_OS_DEADLOCK`）。必须在销毁 `loop` 之前先关闭所有附属管道。
+  - **POSIX 线程局部 `SIGPIPE` 屏蔽**：在 POSIX 上向已断开的管道写入时，库仅在调用线程上临时阻塞 `SIGPIPE`、吸收本次断管信号并恢复原信号掩码（保留线程原先已挂起的 `SIGPIPE`），绝不安装或覆盖进程级的 `SIGaction` 信号处理器。
 
 ## 套接字选项与定位文件 I/O
 
-配置 TCP Keepalive 时间、IPv6 双栈监听、广播、组播成员关系和网卡快照，请看[网络选项与设备发现](NETWORK_OPTIONS.zh-CN.md)。该教程提供完整程序，并说明怎样选择 IPv4 或 IPv6 网卡索引。
+如果你需要配置 TCP Keepalive 探测参数、IPv6 双栈监听、UDP 广播、组播加组或枚举本机网卡地址，请参阅专门的[网络选项与设备发现](NETWORK_OPTIONS.zh-CN.md)指南。
 
-NET_OPTIONS 默认开启，能力位同时依赖 NETWORK。直接调用 hx_os_socket_set_nodelay、set_keepalive、set_reuseaddr，库内部选择原生层级和名称。地址复用保持显式开启，create/bind 不改变默认值。原生地址复用行为和 keepalive 时间安排仍遵守各系统契约。套接字一旦附属 loop，setter 即报 BUSY，即使当前无请求也不能设置。`hx::SocketOptions` 是借用外观，提供这些设置和 peerAddress()，不关闭对象。
-
-原始 option_set/get 使用目标 SDK 的 level/name/值布局，属于平台扩展入口。长度以字节计，最大 INT_MAX；get 成功才更新实际长度，不提供两段式容量查询。失败保留输入长度，但原生缓冲区内容可能已变。本机 Windows 提供者的 TCP_NODELAY 在 int 大小缓冲区中返回 1 字节，调用方应检查实际长度。C++ get<T> 要求原生结果大小与类型完全匹配，否则报 RANGE，不推测任意原生选项的类型。对端查询失败保留输出，未连接时保留 getpeername 原生错误。与套接字操作串行并排除并发关闭。
-
-POSITIONED_IO 独立于 FILE_UTILS。read_at/write_at 接收绝对字节偏移，返回一次实际传输的字节数。短读写成功、EOF 和错误分别表示；请求零字节成功。单次最多 INT_MAX 字节，偏移及本次范围必须适配有符号 64 位原生位置。后续分块和重试由调用方决定。追加模式定位写报 NOT_SUPPORTED，打开模式不允许访问时报 ACCESS_DENIED，管道不支持定位。调用可能阻塞，不提供取消或截止时间保证。
-
-POSIX 使用 pread/pwrite 并重试 EINTR。Windows 首次定位操作通过 ReOpenFile 重新打开同一文件对象的重叠句柄，以原生 interlocked 安全发布缓存；每次调用使用独立事件和 OVERLAPPED。不会定位再恢复共用游标，也不会扩大原打开权限。对象由调用方保留到所有操作完成，关闭/截断须外部排除，重叠写入范围自行协调。文件最终关闭会释放两个句柄。C++ File::readAt 区分 EOF，writeAt 返回部分进度，失败通过 Result::hasValue() 保留实际进度。
-
-普通文件打开和顺序读写不为定位功能增加分配或锁。Windows 内部文件对象 x64 变为 24 字节、x86 为 16 字节，POSIX 为 12 字节。首次并发调用可能创建竞争的候选句柄，最终只保留已发布的一个。Windows 每次定位调用增加原子缓存查询、事件创建/关闭、原生 I/O 及必要等待；POSIX 仅定位系统调用。这是成本清单，不作为吞吐提升证据。
-
-`examples/positioned_read.c` 无需 seek 即读取偏移 4 起的四个字节。同时修正了 Windows 管道 ReadFile/WriteFile 的参数，提供 Win7 文档要求的非空、随请求保留的字节数存储；异步最终进度仍取自 IOCP 完成结果。Win7 实机执行仍待验证。
+- **常用套接字开关（`HX_OS_ENABLE_NET_OPTIONS`）**：提供跨平台的 `hx_os_socket_set_nodelay`、`hx_os_socket_set_keepalive` 和 `hx_os_socket_set_reuseaddr`（地址复用保持显式开启，`create` / `bind` 不会隐式打开它）。注意：一旦套接字附加到了事件循环（`loop`），即使当前空闲，修改选项也会返回 `HX_OS_BUSY`。C++11 借用外观 `hx::SocketOptions` 同时提供这些 setter 以及 `peerAddress()` 查询。底层逃生舱接口 `option_set` / `option_get` 允许直接传入目标平台 SDK 的 `level` / `name`（C++ `get<T>` 要求操作系统返回的长度与 `sizeof(T)` 严格相等，否则返回 `HX_OS_RANGE`；例如 Windows 下 `TCP_NODELAY` 可能在 4 字节缓冲区中仅返回 1 字节，C 调用方应检查返回的实际长度）。
+- **定位文件读写（`HX_OS_ENABLE_POSITIONED_IO`）**：独立于 `FILE_UTILS`。`hx_os_file_read_at` 与 `hx_os_file_write_at`（C++11 为 `File::readAt` / `writeAt`）接收绝对字节偏移量，在不改变文件常规顺序读写游标的前提下传输数据（完整示例见 [positioned_read.c](../examples/positioned_read.c)）：
+  - 单次传输上限为 `INT_MAX` 字节，偏移量加长度必须落在有符号 64 位整数范围内。以追加模式（Append）打开的文件不支持定位写入（返回 `HX_OS_NOT_SUPPORTED`），打开权限不匹配时返回 `HX_OS_ACCESS_DENIED`。
+  - **底层实现机制**：POSIX 直接调用 `pread` / `pwrite`（自动重试 `EINTR`）。Windows 在首次执行定位读写时，内部通过 `ReOpenFile` 为同一文件对象惰性开启第二个带 `FILE_FLAG_OVERLAPPED` 的句柄并通过原子 CAS 发布缓存；此后每次定位调用使用独立的事件与 `OVERLAPPED` 结构，从而既不篡改主文件句柄的共享游标，又支持多线程并发定位读写（文件最终关闭时会一并释放这两个句柄）。
 
 ## 文件属性、目录项类型与 BOM
 
-FILE_INFO 默认开启，提供 hx_os_path_stat_extended 和 hx_os_directory_next_info。扩展输出使用 HX_OS_FILE_INFO_EXTENDED_INIT 或带容量的初始化函数。既有文件信息结构及目录 next 签名保持不变；扩展查询失败保留输出，成功仅写已知结构大小。跟随链接的选择显式传入，名称继续使用 UTF-8；原生属性投影与旧 stat 共用。
-
-时间为有符号 Unix 秒加 [0, 1e9) 范围的纳秒。元数据变更时间使用 POSIX ctime 或 Windows FILE_BASIC_INFO.ChangeTime，不拿创建时间替代。精度、延迟更新和访问时间关闭策略由文件系统决定。Windows 两次元数据查询持有同一个文件句柄，仍不保证并发修改期间所有字段来自同一时刻。read_only 取 Windows 属性或 POSIX owner-write 模式位缺失。POSIX 标记 owner-read/write 模式摘要有效；Windows 两者均标为未知，不推测 ACL。摘要不能充当访问鉴权，也不表示挂载只读；Windows 的只读属性不对目录实施写保护。
-
-目录类型针对条目本身，不跟随链接。Windows 重解析点报告 LINK；POSIX 优先使用 d_type，未知时通过已打开目录执行相对 fstatat。并发删除可能造成原生查询失败；容量不足及原生属性查询失败保留待返回条目和 kind 输出，可重试或调用旧 next 跳过过期条目。无效 UTF-8 沿用既有跳过并报错行为。不承诺枚举顺序和快照一致性。旧 next 不新增类型查询系统调用。C++ Files::info、Directory::next(true) 直接返回结果；examples/file_info.c 展示一次调用查询属性。
-
-BOM 为独立默认开启的纯工具。hx_os_text_bom_detect 识别完整前缀中的 UTF-8、 UTF-16LE/BE、UTF-32LE/BE 标记，优先检查 UTF-32。无标记报 NOT_FOUND，前缀长度为零，编码输出保持原值。它不做流式编码猜测：仅有 FF FE 两字节时是完整 UTF-16LE 标记；识别可能的 UTF-32 流应先取得四字节。检测不验证或转换正文。 hx_os_text_bom_bytes 最多生成四字节、不加终止符，无受支持 BOM 的编码报不支持。 C++ Text::detectBom 返回 found/bytes/encoding，encoding 仅在 found 时有效；生成入口返回拥有内存的字节 vector。原有编解码器仍不隐式增删 BOM。
-
-C BOM 函数不分配、不加锁；属性查询不建立后台任务，但原生查询可能阻塞。POSIX 已知目录类型不调用 stat，未知时增加一次 fstatat。Windows 扩展 stat 在共用句柄及基础投影的基础上增加一次 FileBasicInfo 查询。
+- **扩展文件属性与目录项类型（`HX_OS_ENABLE_FILE_INFO`，默认开启）**：
+  - `hx_os_path_stat_extended`（需用 `HX_OS_FILE_INFO_EXTENDED_INIT` 初始化输出结构）和 `hx_os_directory_next_info`（C++11 为 `hx::Files::info` 与 `directory.next(true)`，示例见 `examples/file_info.c`）提供纳秒级时间戳、权限摘要与不跟随链接的目录项分类。
+  - **时间戳与权限摘要**：时间戳为有符号 Unix 秒加 `[0, 10^9)` 纳秒；元数据变更时间读取 POSIX `ctime` 或 Windows `FILE_BASIC_INFO.ChangeTime`（而非创建时间）。`read_only` 反映 Windows 只读属性或 POSIX 缺少 owner-write 位；POSIX 还会标记 owner-read/write 摘要有效，而 Windows 下将该模式位摘要标为未知（不臆测复杂的 NTFS ACL）。
+  - **目录项类型识别**：针对目录项本身分类（不跟随符号链接，Windows 重解析点统一报告为 `LINK`；POSIX 优先读取 `d_type`，未知时基于已打开目录描述符执行相对 `fstatat`）。
+- **字节序标记检测与生成（BOM 工具，默认开启）**：
+  - `hx_os_text_bom_detect`（C++11 为 `hx::Text::detectBom`）按最长前缀优先识别 `UTF-32LE/BE`、`UTF-8` 和 `UTF-16LE/BE` 的完整 BOM 标记；若无 BOM 则返回 `HX_OS_NOT_FOUND` 且 `prefix_bytes = 0`（注意：它不做流式半截猜测——若只传入 `FF FE` 两个字节，会被识别为完整的 `UTF-16LE` BOM；要区分 `UTF-32LE` 请先读够 4 个字节）。`hx_os_text_bom_bytes` 则生成最多 4 字节的原始 BOM 序列。
 
 ## 配置序列化与数字文本
 
-CONFIG_SERIALIZE 默认开启，依赖 CONFIG。`hx_os_config_serialize` 写入 `hx_string`，`hx_os_config_save` 完成序列化和原子发布；保存还需要 FILE_UTILS，保持既有的持久化和部分失败契约。七种格式均已提供输出：YAML 输出 block 集合，XML 保留元素/属性/文本模型，TOML 输出根赋值与内联容器，ENV 输出扁平引用字符串。详细范围、构造和结构体映射见[序列化教程](SERIALIZATION.zh-CN.md)。文档仍不可变；写出固定使用内置实现，显式写出选项的 backend 必须为 BUILTIN。
-
-JSON 输出紧凑 UTF-8，合法 JSON 数字保留原始拼写，不经过 double 舍入。TOML 进制整数精确转为十进制，十进制下划线和前导加号去除；非有限数字、XML 节点和日期节点不能悄悄改成 JSON 字符串。INI 支持根字符串键值及一层字符串 section，先写全局键再写 section，各组内部保持顺序，不保留注释和排版。会被 INI 解析器裁剪或误解的内容报 UNREPRESENTABLE。properties 支持平面字符串对象，转义分隔符、空格、反斜杠及控制字符，Unicode 保持 UTF-8。数字、布尔、数组、null 和嵌套对象不能静默转成行式格式的字符串。无法表达时保留原输出。
-
-序列化先有界测量，再一次分配输出并写入。两个遍历共同计入 max_work，每次遵守 max_nodes/max_depth，递归最多 128 帧。max_input_bytes 在写入时限制输出字节； max_memory_bytes 限制新输出分配及分配器元数据，不包含调用方持有的文档、旧输出和有界 C 栈。输出使用 hx_string 自己的 context。分配失败或任一阶段超限均保留旧值。并发读取使用独立输出并保留文档至调用结束；不增加锁、全局可变设置或后台活动。
-
-TEXT_NUMBER 可独立于 CONFIG 使用 parse_double/format_double。配置 getter、数值语法和第三方适配共用同一份自有助手；关闭公共数字文本模块不改变配置 getter 行为。解析接受既有数值语法的完整 ASCII token，包括 TOML 下划线/进制及带符号 inf/nan，不接受外围空白或内嵌 NUL；上溢/下溢报 RANGE。IEEE binary64 格式化使用 17 位有效数字，nan/inf 规范化，并使用 C 数值 locale。不修改进程 locale；POSIX 暂时选择调用线程 locale，随后恢复。locale 对象沿用原配置 getter 的原生 CRT 分配方式，不计入注入分配器账目。
-
-C++ ConfigDocument 持有不可变引用，支持复制和移动。parse/load、类型化查询、serialize/save 以及仅键缺失时回退的 stringOr 返回 Result。可选 hx_os_config_error 输出保留解析位置和诊断；文本转换和序列化返回 Result<String>，可指定 context。examples/config_save.c 展示大整数精确保留。
-
-`ConfigDocument::stringView(pointer)` 返回 Result<StringView>，无需复制字节。保持不可变文档有效，该 getter 拒绝持有者临时对象；既有 string/stringOr 方法继续返回独立持有的副本。
+- **多格式配置序列化与原子保存（`HX_OS_ENABLE_CONFIG_SERIALIZE`）**：默认开启，依赖 `HX_OS_ENABLE_CONFIG`。`hx_os_config_serialize` 将不可变配置文档序列化到 `hx_string`，`hx_os_config_save`（还需 `HX_OS_ENABLE_FILE_UTILS`）则一步完成序列化与原子文件保存（支持 JSON、INI、`.properties`、YAML、XML、TOML 和 `.env` 七种格式，详见[序列化教程](SERIALIZATION.zh-CN.md)与 `examples/config_save.c`）。
+  - JSON 输出保留原始合法数字拼写（大整数不经过 `double` 舍入而损失精度）；TOML 非十进制整数精确转为十进制。INI 与 `.properties` 遇到无法无损表达的嵌套类型、非字符串或特殊字符时会明确返回 `HX_OS_UNREPRESENTABLE`，绝不静默伪造字符串。
+  - 序列化采用“有界测量 + 一次性分配写入”两遍扫描，严格受 `max_work`、`max_nodes`、`max_depth`（最大 128 层）、`max_input_bytes` 与 `max_memory_bytes` 约束。C++11 `hx::ConfigDocument` 除提供 `string()` / `stringOr()` 拷贝读取外，还提供零拷贝的 `stringView(pointer)`。
+- **独立数值文本转换（`HX_OS_ENABLE_TEXT_NUMBER`）**：提供不受进程当前 `locale` 干扰的 `parse_double` 与 `format_double`（IEEE 754 `binary64` 输出 17 位有效数字，支持 TOML 下划线/进制语法与规范化的 `nan`/`inf`，上溢或下溢返回 `HX_OS_RANGE`）。
 
 ## 周期定时器
 
-TIMER 默认开启，依赖 LOOP，可在 NETWORK 关闭时使用。 hx_os_timer_create(loop, interval_ns, callback, user, &timer, &error) 在创建后一个正数间隔开始触发，由创建线程驱动 loop。间隔单位为单调纳秒，不保证纳秒精度或硬实时截止时间。后续沿原定时间轴调度，错过的周期以及回调消耗的时间合并处理，每次 poll 最多为该定时器触发一次。原有一次性请求及公共 operation 布局保持不变。
+`HX_OS_ENABLE_TIMER` 默认开启（依赖 `HX_OS_ENABLE_LOOP`，无需开启 `NETWORK`）。调用 `hx_os_timer_create(loop, interval_ns, callback, user, &timer, &error)`（C++11 为 `hx::PeriodicTimer::every`，示例见 `examples/periodic_timer.c`）可在事件循环上注册按单调纳秒间隔触发的周期定时器：
 
-回调在 poll 线程锁外执行，error 指针仅借用到回调返回；OK 表示一次触发，终止性的时钟／范围错误表示停止。stop 可跨线程请求，不额外发送取消回调。 wait_until 包含最终回调和可选 cleanup 返回；创建线程等待未完成对象返回 DEADLOCK。close_until 仅创建线程调用，驱动取消，TIMEOUT 保留对象供重试。完成退役后即使报告终止错误也消费对象。触发后的时钟失败可能另行通知终止错误。
-
-带 cleanup 的创建入口仅在接受成功后接管清理职责，在锁外执行一次，清理返回后才发布完成。回调／cleanup 内同步关闭自身返回 DEADLOCK，可改为请求 stop。 user 借用数据保持到退役；其他线程结束使用后才能销毁对象。loop 关闭会取消定时器，但仍须逐个关闭定时器对象，否则 loop_destroy 返回 BUSY。
-
-每个活动定时器占用一个现有 loop 请求名额，仅创建时增加一个小对象；每次触发无分配、无建线程、无队列增长。到期路径读取单调时钟并直接调用 C 回调，常规请求路径增加私有 timer 指针及分支。对象大小／对齐实测为 Windows x86 40/8、Windows/Linux x64 64/8；原有公共布局不变。这是资源成本记录，不能代替运行性能测试。
-
-C++ PeriodicTimer::every 返回 Result<PeriodicTimer> 并引用宿主原生指针，显式 closeUntil。回调返回失败会请求停止，退役后通过 callbackResult() 查询；即使便利对象继续保留诊断，cleanup 仍销毁捕获。wait/close 保留原生终止错误。C 示例见 examples/periodic_timer.c。
+- **固定时间轴与漏拍合并**：定时器在创建后经过一个 `interval_ns` 首次触发，后续严格沿原定时间轴调度；如果某次回调耗时较长或轮询延迟导致错过了多个周期，错过的周期会合并为当次 `poll` 的**单次触发**，不会突发连跑多次回调。
+- **停止、等待与关闭边界**：回调在轮询线程锁外执行（返回 `HX_OS_OK` 继续，返回终止性错误停止）。`hx_os_timer_stop` 支持跨线程异步请求停止；`close_until` 仅限创建线程调用，负责驱动取消并等待最终回调与 `cleanup` 完成（若超时返回 `HX_OS_TIMEOUT`，保留对象供重试；在回调或 `cleanup` 内同步关闭自身会返回 `HX_OS_DEADLOCK`）。注意：销毁 `loop` 前必须先逐一关闭所有关联的定时器对象，否则 `hx_os_loop_destroy` 会返回 `HX_OS_BUSY`。
 
 ## 线程池身份查询
 
-hx_os_thread_pool_inside(pool, &inside) 查询当前线程是否属于指定的存活线程池，任务 cleanup 中也返回真。无效参数／模块关闭返回 INVALID／NOT_SUPPORTED，输出不变；调用期间保持池存活，不转移所有权。复用现有线程局部状态，不新增锁、分配、系统调用或工作线程记账；C++ 直接调用 pool.inside()。
-
-工作线程等待本池未完成任务返回 DEADLOCK，零截止时间同样如此；等待已经完成的任务可以成功。关闭自身线程池也返回 DEADLOCK。查询其他池为假不代表跨池等待必然安全，循环依赖仍由调用方避免。这里不提供任务依赖图、工作窃取或内联执行。
+当一段通用业务函数既可能在外部线程调用、也可能在线程池的工作线程内部被调用时，可以使用 `hx_os_thread_pool_inside(pool, &inside)`（C++11 为 `pool.inside()`）判断当前线程是否属于指定线程池的工作线程（包括正在执行任务 `cleanup` 回调的阶段）：
 
 ```c
 int inside;
@@ -276,61 +233,52 @@ if (status == HX_OS_OK && !inside)
 // Inside a worker, continue asynchronously instead of waiting for new work.
 ```
 
+该查询直接读取现有的线程局部标识（TLS），零分配、零加锁、零系统调用。由于线程池的工作线程如果阻塞等待同一个池中尚未完成的任务（或试图关闭自身所属的线程池）会立即触发 `HX_OS_DEADLOCK`，提前查询 `inside` 可以安全分流同步等待与异步续接逻辑（注：若存在多个线程池，跨池循环等待仍需由调用方自行避免）。
+
 ## 原生错误文本
 
-hx_os_error_message 为 GAI 错误追加严格 UTF-8 的原生说明，Apple 上还支持 Mach 域。既有状态／domain／code 前缀和其他域行为保持不变。说明不可用、过长、不符合 UTF-8 或原生值超出 int 范围时，保留数值诊断；原始 error 中的 cause_code 不变。required 包含 NUL，小缓冲区会终止，但截断结果不保证落在 UTF-8 字符边界；按所需容量取得完整文本。
+`hx_os_error_message` 会将 `hx_os_error` 格式化为可读的严格 UTF-8 诊断字符串。除了常规系统错误码外，它还支持追加地址解析错误（`GAI` 错误域，POSIX 使用 `gai_strerror`，Windows 直接使用线程安全的 `FormatMessageW` 宽字符转换，无需 `WSAStartup`，避免了[微软文档指出非线程安全的 `gai_strerrorW`](https://learn.microsoft.com/en-us/windows/win32/api/ws2tcpip/nf-ws2tcpip-gai_strerrorw)）以及 Apple 平台的 `Mach` 错误域（`mach_error_string`）。
 
-POSIX 使用 gai_strerror，Apple 增加 mach_error_string。Windows 用调用内宽字符缓冲区接收 FormatMessageW，再严格转为 UTF-8；无须 WSAStartup， NETWORK 关闭也可用。[Microsoft 文档](https://learn.microsoft.com/en-us/windows/win32/api/ws2tcpip/nf-ws2tcpip-gai_strerrorw) 明确 gai_strerrorW 使用非线程安全存储。原生措辞取决于系统及 locale，不应用于程序分支判断，也不要并发修改进程 locale。C 路径不新增本库分配或锁。 C++ Result::error() 保留原生错误记录，可传给 hx_os_error_message 输出到调用者缓冲区。hello C 示例已接入详细错误输出。
+输出的 `required` 容量包含末尾 `NUL`；由于原生错误措辞取决于操作系统版本与语言环境，请仅将其用于日志打印，**不要在代码中通过匹配错误文本来编写分支逻辑**。
 
 ## 随机数、UUID、CRC32 和安全清零
 
-RANDOM 默认开启。hx_os_random_bytes 使用系统密码学随机源填满调用方缓冲区，不以时间种子或普通 PRNG 回退。可能等待系统熵，不承诺截止时间或取消。NULL 仅可搭配零长度；原生失败会清零整个输出，无效参数／模块关闭则保持输出不变。不需要 context、本库分配或后台线程；操作系统提供程序可能自行分配内存。
-
-Windows 从绝对系统目录加载 BCryptGenRandom，仅入口不可用时回退 CryptGenRandom；每次释放模块／provider，不建立隐藏的全进程缓存。CNG 失败保留有符号 NTSTATUS，使用新增枚举域输出数值；传统路径保留 Win32 错误。 advapi32 是私有原生依赖，也记入静态 pkg-config 依赖。Linux 使用 getrandom 系统调用，重试 EINTR／短读，仅 ENOSYS 或目标头无系统调用编号时走旧路径。旧路径先从 /dev/random 读 32 字节，再使用 /dev/urandom，核对设备类型与编号，关闭描述符；熵不足的旧嵌入式内核可能无限等待，权限拒绝明确失败。由于公开 file_open 只支持普通文件，随机设备由专用底层适配处理。Apple 使用 arc4random_buf，原生环境待验证。[Linux 设备契约](https://www.man7.org/linux/man-pages/man4/random.4.html) 说明了启动早期不能直接依赖 /dev/urandom 的原因。
-
-UUID 设置 v4 版本和 variant 位，失败保持输出。格式化为小写 8-4-4-4-12 加 NUL，允许输入输出重叠，RANDOM 关闭也能格式化已有 UUID。 hx_os_uuid_generate_string(&text, &error) 一次完成生成与格式化，使用字符串自己的 context；分配失败也保持原值。C++ Random::uuid 返回持有字符串， fill/bytes 提供原始字节。测试不代表唯一性保证或熵质量认证，C 示例见 examples/random_uuid.c。
-
-CRC32 始终可用：反射 CRC-32/ISO-HDLC，多项式 0xedb88320，初末异或全 1；种子 0 开始，前次结果继续增量。固定 16 项表占 64 字节只读空间，每字节两次查表，无延迟初始化、分配或锁。仅用于意外损坏检测，不是密码学完整性验证。 secure_zero 使用 SecureZeroMemory、Linux 检测到的 explicit_bzero，或 volatile 逐字节写入；防止删除这些写入，不保证擦除其他副本／寄存器／交换区，也不提供线程同步。两项微工具均不建立全局配置。
+- **系统密码学随机数（`HX_OS_ENABLE_RANDOM`，默认开启）**：
+  - `hx_os_random_bytes` 直接调用操作系统密码学安全随机源填满缓冲区，**绝不使用时间种子或普通伪随机数发生器（PRNG）回退**。若底层失败，函数会将整个输出缓冲区清零。
+  - **各平台随机源实现**：Windows 从系统目录加载 `BCryptGenRandom`（仅在入口不存在时回退 `CryptGenRandom`）；Linux 优先调用 `getrandom` 系统调用（自动重试 `EINTR` 与短读，仅在旧内核返回 `ENOSYS` 时先从 `/dev/random` 读够 32 字节熵再读取 `/dev/urandom`，原因详见 [Linux `random(4)` 手册](https://www.man7.org/linux/man-pages/man4/random.4.html)）；Apple 使用 `arc4random_buf`。
+- **UUID v4 生成与格式化**：`hx_os_uuid_generate_string(&text, &error)`（C++11 为 `hx::Random::uuid()`，示例见 `examples/random_uuid.c`）一步生成符合 RFC 规范的随机 UUID v4 并格式化为小写 `8-4-4-4-12` 字符串（独立格式化函数即使在关闭 `RANDOM` 模块时也可用）。
+- **CRC32 与安全清零（始终可用）**：
+  - `hx_os_crc32` 计算标准反射 `CRC-32/ISO-HDLC`（多项式 `0xedb88320`，初始种子传 `0`，支持分块增量计算）。内部采用 64 字节只读半字节查表（Nibble Table），零动态分配、无锁（仅用于意外数据损坏校验，非密码学哈希）。
+  - `hx_os_memory_secure_zero` 使用 `SecureZeroMemory`（Windows）、`explicit_bzero`（Linux）或 `volatile` 逐字节覆写，防止编译器因死存储优化删掉敏感内存擦除操作。
 
 ## 按页内存与文件映射
 
-VIRTUAL_MEMORY 默认开启，不依赖 SYSINFO 或 FILE_UTILS。 hx_os_pages_alloc 把正数字节数向上取整至系统页大小，拥有初始清零的匿名内存和使用 context 分配的元数据。支持 NONE、READ、READ|WRITE、READ|EXECUTE、 READ|WRITE|EXECUTE 请求；缺少 READ 的 WRITE／EXECUTE 返回 NOT_SUPPORTED。系统策略可能拒绝可执行页，库不静默降低保护要求；整块 protect 开启 EXECUTE 时包含指令缓存同步。保护失败可能已经部分生效，须恢复已知权限后使用。操作系统／硬件权限不等于安全隔离保证；修改保护与销毁期间由调用方排除访问。
+`HX_OS_ENABLE_VIRTUAL_MEMORY` 默认开启（独立于 `SYSINFO` 和 `FILE_UTILS`），提供匿名页分配与文件内存映射（示例见 [mapped_file.c](../examples/mapped_file.c)）：
 
-hx_os_file_map_open(path, mode, &map, &error) 一次映射整个 UTF-8 路径普通文件；create 可指定 context、已打开文件、字节偏移和长度，长度 0 表示到 EOF。空区间返回 EOF，越界返回 RANGE，不延长文件。内部对齐原生偏移，返回用户请求的视图，不修改文件位置。每个映射持有独立复制的文件资源，Windows 另持有映射对象；create 返回后可关闭原文件，创建期间仍须排除关闭与截断。
-
-READ 返回只读借用视图，write_view 为 NULL；SHARED_WRITE 要求读写打开，拒绝 APPEND；PRIVATE_COPY 可从只读文件句柄建立私有写入，不回写文件。两种映射都不是快照，其他修改和并发截断需调用方协调。截断或存储失败产生的页错误可能表现为 SIGBUS／原生异常，无法由普通 C 状态返回兜底。远程文件系统、映射与普通 I/O 混用的一致性遵循原生系统，不额外承诺。
-
-仅 SHARED_WRITE 可以 flush，先用 msync(MS_SYNC)／FlushViewOfFile 写回， durable=1 再对独立持有资源调用 fsync／FlushFileBuffers。成功不等于硬件绝对持久化；失败保留映射可重试，销毁不隐式 sync。原生 unmap 失败保留对象； unmap 成功后，即使句柄关闭报告错误也消费对象。页释放失败同样保留；借用视图不得越过对象寿命。参见 [Windows 冲刷契约](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-flushviewoffile) 及 [Linux 映射契约](https://www.man7.org/linux/man-pages/man2/mmap.2.html)。
-
-C++ Pages／MappedFile 提供只移动的同步 RAII，显式 close 可观察释放错误，析构无法报告错误且不隐式冲刷。C 便利示例为 examples/mapped_file.c。每个对象增加一次元数据分配，真实页由系统管理、不计入 context 堆字节预算。映射创建增加复制和映射原生 API，无库内共享锁、后台工作或逐次访问封装。实测大小／对齐：Windows x86 pages 8/4、map 28/4；Windows x64 16/8、56/8； Linux x64 16/8、40/8。既有公共结构体保持不变。
+- **按页匿名内存（`hx_os_pages_alloc` / `hx::Pages`）**：将请求的正数字节数向上取整到系统页大小，分配初始清零的匿名页。支持 `NONE`、`READ`、`READ|WRITE`、`READ|EXECUTE` 和 `READ|WRITE|EXECUTE` 权限组合（不支持缺少 `READ` 的单独写或执行权限；启用 `EXECUTE` 时会自动同步指令缓存，但若操作系统安全策略禁止可执行内存，则会原样返回错误，详见 `hx_os_pages_protect`）。
+- **文件内存映射（`hx_os_file_map_open` / `hx_os_file_map_create` / `hx::MappedFile`）**：
+  - 支持一次性映射整个普通文件，或按指定字节偏移量与长度映射子区间（内部自动对齐系统分配粒度，并向调用方返回恰好指向所请求偏移处的视图，且不改变原文件的读写游标）。每个映射对象内部持有独立复制的底层文件句柄，因此创建映射后调用方可以随时关闭原文件句柄。
+  - **三种映射模式**：`READ`（只读借用视图）、`SHARED_WRITE`（要求读写文件句柄，修改可写回文件，拒绝 `APPEND` 模式句柄）以及 `PRIVATE_COPY`（写时复制私有页，可基于只读文件句柄创建，修改绝不写回磁盘文件）。
+  - **显式刷盘与风险边界**：仅 `SHARED_WRITE` 模式支持调用 `flush`（底层调用 `msync(MS_SYNC)` / `FlushViewOfFile`；当 `durable = 1` 时进一步调用 `fsync` / `FlushFileBuffers`，详见 [Windows 冲刷契约](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-flushviewoffile) 与 [Linux `mmap(2)` 手册](https://www.man7.org/linux/man-pages/man2/mmap.2.html)）。注意：销毁映射对象不会隐式自动刷盘；此外，内存映射不是文件快照——若文件在映射期间被外部进程并发截断或遇到底层存储故障，直接解引用映射指针可能触发操作系统级 `SIGBUS` 信号或结构化异常。
 
 ## 文件区间锁、时间戳与权限摘要
 
-FILE_EXTRA 默认开启，不依赖 FILE_INFO 或 FILE_UTILS。lock_at(file, offset, bytes, shared, deadline, error) 对正数字节范围尝试加锁，不改变文件位置，区间终点须可用有符号 64 位表达。共享锁要求 READ，排他锁要求 WRITE。NOW 尝试一次，冲突返回 TIMEOUT；有限／无限等待使用单调截止时间，原生非阻塞尝试与最多请求 10 ms 的睡眠间隔。系统调用和调度可能越过截止时间。失败保留文件，超时保留原生冲突详情；按已取得锁的原区间解锁。库不为锁操作分配、加内部锁或启动线程。
+`HX_OS_ENABLE_FILE_EXTRA` 默认开启，提供字节区间文件锁、纳秒级文件时间戳修改以及所有者权限更新（示例见 `examples/file_attributes.c`）：
 
-POSIX fcntl 记录锁属于进程且为建议锁，关闭同一 inode 的任何描述符，包括映射持有的副本，都可能释放进程的锁。Windows LockFileEx 按句柄持有，会限制普通冲突 I/O，不限制映射访问。Windows 定位 I/O 使用另一个句柄，因此持锁时应通过加锁句柄使用带游标的读写。不要用区间锁代替线程互斥，不重叠、升级或重入同一区间，也不承诺公平性。参见 [Linux 记录锁](https://www.man7.org/linux/man-pages/man2/fcntl_locking.2.html) 和 [Windows 区间锁](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-lockfileex)。 C++ FileRangeLock 借用 File 到解锁／析构，默认 NOW，允许移动构造转移持有；显式 unlock 可报告错误。
-
-时间结构用 HX_OS_FILE_TIMES_INIT 或按容量初始化。fields 选择访问／修改时间，单位是 Unix 秒加纳秒；未选择字段保持不变。fields=0 是无操作，不检查路径是否存在或权限。纳秒越过 [0,1e9)、原生时间范围不足、size/version 错误均明确报告。POSIX 使用 utimensat/UTIME_OMIT 并指定是否跟随链接；Windows 使用宽字符属性句柄和 SetFileTime，截断到 100 ns，文件系统精度可更低。不设置创建／元数据变更时间；Windows 不表达 1601 年前日期，time_t 为 32 位的目标可能拒绝部分 64 位秒值。关闭句柄失败时，时间更新可能已经完成。
-
-POSIX 权限更新替换 owner 的读／写／执行位，保留 group/other；调用方排除并发路径替换和权限修改。不跟随链接必须真正支持，否则失败。Windows 必须包含 READ，不支持 EXECUTE；WRITE 仅控制只读属性，不编辑 ACL、不保证有效访问权限。原有 v1 stat 权限摘要仍只覆盖读写。C++ FileAttributes::setTimes/permissions 及 examples/file_attributes.c 提供直接调用。Windows 路径转换和属性句柄为短期资源；POSIX 元数据原生调用不增加注入堆分配。新时间结构在 Windows x86/x64 和 Linux x64 均为 40/8 字节大小／对齐；既有布局不变。
+- **字节区间锁（`hx_os_file_lock_at` / `hx::FileRangeLock`）**：对正数字节区间加共享锁（需读权限）或排他锁（需写权限），不改变文件游标。支持立即尝试（`HX_OS_DEADLINE_NOW`，冲突时返回 `HX_OS_TIMEOUT`）或带单调截止时间的轮询等待。
+  - **重要平台差异**：POSIX `fcntl` 记录锁属于**进程级建议锁（Advisory Lock）**——只要关闭当前进程内指向同一 inode 的**任何一个**文件描述符（包括文件映射关闭时释放的内部副本描述符），该进程在该文件上的所有 `fcntl` 锁都会被内核释放！而 Windows `LockFileEx` 则是**按句柄持有的强制锁**（会拦截冲突的常规读写，但不拦截内存映射视图；此外，由于本库在 Windows 上的定位读写 `read_at`/`write_at` 使用独立的第二个句柄，持锁期间请通过加锁的原文件句柄执行顺序游标读写）。详见 [Linux `fcntl` 记录锁](https://www.man7.org/linux/man-pages/man2/fcntl_locking.2.html) 与 [Windows `LockFileEx` 文档](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-lockfileex)。
+- **修改文件时间戳与权限摘要（`hx::FileAttributes`）**：
+  - 时间戳结构用 `HX_OS_FILE_TIMES_INIT` 初始化，通过 `fields` 掩码按需选择更新访问时间（atime）或修改时间（mtime），支持指定是否跟随符号链接（POSIX 使用 `utimensat` + `UTIME_OMIT`，Windows 使用 `SetFileTime` 截断至 100 纳秒单位）。
+  - 权限更新在 POSIX 上替换文件所有者（Owner）的读/写/执行位并保留 Group/Other 位；在 Windows 上必须包含 `READ`（不支持 `EXECUTE`，`WRITE` 标志仅用于控制文件的只读属性位，不编辑复杂的 NTFS ACL）。
 
 ## 目录监听与外部描述符就绪通知
 
-WATCH 默认开启，不依赖 LOOP／NETWORK／FILE_UTILS。一次 hx_os_watch_create(context, path, recursive, callback, user, &watch, &error) 创建一个可等待退出的线程，并等到原生订阅就绪。仅链接或开启模块不会启动线程。回调开始前已经写入输出指针，但回调可能先于 create 返回运行。用户回调在该线程锁外执行，可请求 stop。close_until 停止并等待线程、cleanup、TLS 清理返回；完成退役后即使报告后端终止错误也消费对象。TIMEOUT 保留对象供重试，自身关闭返回 DEADLOCK。排除并发销毁／使用；仅接受成功后接管可选 cleanup，执行一次，拒绝不转移用户数据。
-
-如果启动失败，而且回滚时工作线程仍未完成 join／释放，创建会保留原始错误，并返回非空、已请求停止的 watch。使用这个 owner 重试 `hx_os_watch_close_until()`。创建失败不转移回调或 cleanup 的所有权；保留下来的 watch 释放前，context 仍需有效。普通启动失败返回 NULL。
-
-事件路径为回调期间借用的严格 UTF-8 相对路径，分隔符为斜线，空字符串表示根。变更／新增／删除／重命名为尽力通知，不承诺事务顺序或完整审计历史。old_path 可为空：Linux 未组装配对时报告观察到的重命名路径，Windows 配对同一缓冲区相邻的新旧名称，Apple 提供观察路径。DIRECTORY 标志只表示确定为目录，缺少标志可能是未知，Windows 通知不提供类型。ERROR 终止监听；OVERFLOW 要求重新扫描目录快照，不能只重试最后一条事件。无法表示的原生文件名也明确报告溢出与编码错误详情。
-
-默认原生输入缓冲 64 KiB，路径上限 32 KiB，软件监听记录 1024，深度 64，持有可变存储预算 4 MiB。分配头、增长／重建期间并存的新旧副本计入预算。固定线程／事件控制对象、原生线程栈、有界的临时 Windows 路径转换、系统和 CF 管理存储不在此预算内。路径暂存与树记录按需增长，没有库内事件队列；慢回调可能使原生缓冲溢出。目录数／深度限制作用于 Linux 软件递归扫描，Windows／Apple 树订阅使用一个原生源。
-
-Windows 使用重叠 ReadDirectoryChangesW 和独立停止／完成事件，在线程内等待原生取消退役后才释放缓冲。Linux 使用 inotify/eventfd，通过 openat 的 O_NOFOLLOW 与 /proc/self/fd 固定目录；缺少 procfs、重复 inode 别名或 9p 返回 NOT_SUPPORTED。目录结构变更后重建有界覆盖，再报告 OVERFLOW，因为扫描期间可能丢增量事件。记录查找在有界目录数内线性进行；重建可短期并存两棵树，预算或扫描失败会终止，不能静默变成不完整递归。根移动／删除结束覆盖。其他远程文件系统的通知仍受原生限制。
-
-Apple 使用纯 C 的 FSEvents/CoreFoundation，无 Objective-C 或第三方运行库。 stream 在自有线程 CFRunLoop 上运行，run loop 保留到等待退出完成；局部使用已弃用的调度 API，以保留单线程回调契约及 10.13 基线。合并／丢弃／根变更标志转成溢出或终止事件。源码已实现，原生编译运行及沙箱行为待验证，参见 [Apple 调度契约](https://developer.apple.com/documentation/coreservices/1447824-fseventstreamschedulewithrunloop)。 C++ DirectoryWatch 保留宿主 C 指针，显式 closeUntil，记录回调 Result 失败，cleanup 释放捕获内容；关闭后调用 callbackResult()。C 示例为 watch_directory.c。
-
-LOOP_FD 是单独默认开启的 POSIX 扩展，依赖 LOOP。attach_fd 持有 CLOEXEC 副本和一个固定请求名额，不修改 O_NONBLOCK；创建线程驱动 loop，回调通过借用描述符执行自己的非阻塞 I/O。READ／WRITE 也可表示 EOF／错误就绪，由实际 I/O 确定。descriptor 查询仅创建线程调用，不得关闭返回的借用句柄。原描述符可独立关闭，但文件位置和打开标志仍共享，也受 POSIX 记录锁关闭语义影响。 Windows 明确返回 NOT_SUPPORTED，不声明对应能力位。
-
-停止／等待／关闭包含最终回调与 cleanup；创建线程的 close 驱动取消，取消注册失败保留源供重试；取消注册成功后，描述符关闭错误也消费对象。所有监听对象关闭前 loop_destroy 返回 BUSY。每次就绪不分配；定时器和描述符共用同一份取消／驱动等待逻辑。C++ DescriptorWatch 提供 noexcept lambda 和显式结果。 loop/request 各增加一个私有指针，Windows x86/x64、Linux x64 实测各增加 8 字节；既有公共布局不变。watch 大小／对齐：x86 152/8、两端 x64 216/8； options/event：x86 28/4、48/8，x64 48/8、56/8；描述符监听为 44/4 或 72/8。
+- **跨平台目录变更监听（`HX_OS_ENABLE_WATCH`，默认开启）**：
+  - 调用 `hx_os_watch_create(context, path, recursive, callback, user, &watch, &error)`（C++11 为 `hx::DirectoryWatch`，完整示例见 [watch_directory.c](../examples/watch_directory.c)）会启动一个专用的可汇合工作线程，并等待底层订阅就绪后返回。
+  - **事件类型与溢出重扫**：回调在工作线程锁外运行，接收借用的相对 UTF-8 路径（以 `/` 分隔，空串代表被监听根目录本身）。事件涵盖 `CHANGED`、`ADDED`、`REMOVED`、`RENAMED`（尽力通知，非事务审计日志）、终止性的 `ERROR` 以及 `OVERFLOW`（当收到 `OVERFLOW` 时，说明内核通知缓冲发生过丢包或 Linux 子目录树完成了拓扑重建，业务应当重新扫描一次目录快照）。
+  - **底层机制与资源配额**：默认原生缓冲 `64 KiB`、路径上限 `32 KiB`、软件监听记录上限 `1,024` 个目录、最大深度 `64`、可变内存预算 `4 MiB`。Windows 使用重叠 `ReadDirectoryChangesW`；Linux 使用 `inotify` + `eventfd` 并通过 `openat(..., O_NOFOLLOW)` 与 `/proc/self/fd` 固定目录（不支持缺少 `procfs` 或 `9p` 挂载盘）；Apple 使用纯 C 的 `FSEvents` / `CoreFoundation`（参见 [Apple FSEvents 调度说明](https://developer.apple.com/documentation/coreservices/1447824-fseventstreamschedulewithrunloop)）。
+  - **安全关闭与启动失败残留清理**：调用 `hx_os_watch_close_until` 停止并等待线程退出（若在创建阶段启动失败且回滚时工作线程未能立即完成 `join`，创建函数会在返回错误码的同时交付一个非空、已处于停止状态的 `watch` 指针，请对该指针调用 `hx_os_watch_close_until` 完成最终回收）。
+- **POSIX 外部文件描述符就绪监听（`HX_OS_ENABLE_LOOP_FD`）**：允许将任意支持轮询的 POSIX 文件描述符附加到 `hx_os_loop` 上监听可读/可写就绪事件（Windows 返回 `HX_OS_NOT_SUPPORTED`）：
 
 ```c
 hx_os_loop_watch *watch = NULL;
@@ -345,49 +293,26 @@ hx_os_status status = hx_os_loop_attach_fd(loop, fd, HX_OS_WAIT_READ,
 
 ## 进程、输出捕获与系统工具
 
-PROCESS 与 SYSTEM_UTILS 默认开启，可独立关闭。Windows 的系统工具为原生 Unicode 参数读取增加 Shell32 链接。捕获依赖 PROCESS、PIPE、LOOP，关闭 NETWORK 仍可用。整数微工具和显式 POSIX timespec 转换不依赖这两个模块； Windows 的 timespec 操作返回 NOT_SUPPORTED。
+`HX_OS_ENABLE_PROCESS` 与 `HX_OS_ENABLE_SYSTEM_UTILS` 默认开启，提供无 Shell 注入风险的子进程启动、标准输出/错误并发捕获以及系统参数/CPU 指令集查询：
 
-`hx_os_process_spawn` 接收 UTF-8 可执行文件路径、参数数组、可选完整环境和标准流重定向。参数不包含 argv[0]，由库根据路径补入；不执行 shell，不搜索 PATH。NULL 参数表示无参数；NULL 环境表示继承快照，{NULL} 表示空环境。环境项为非空名称=value，名称必须唯一，Windows 不区分名称大小写。显式环境不会自动补入 SystemRoot/PATH，调用者提供子程序需要的变量。输入只在启动期间借用，启动成功后由进程对象持有原生资源。
-
-参数和环境分别限制为 4 MiB、65536 项。Windows 转为 UTF-16，按 CRT / CommandLineToArgvW 规则转义引号和反斜杠，检查原生 32767 宽字符命令行限制，排序 Unicode 环境，显式选择可执行文件。自定义命令行解析器可能采用不同规则。标准句柄通过私有允许列表继承；缺失的 Windows 父标准流用 NUL。临时可继承副本存在期间，宿主需协调其他“不限制继承列表”的启动操作。 POSIX 使用 posix_spawn、CLOEXEC 私有副本及 dup2 动作；宿主没有设置 CLOEXEC 的描述符仍会继承，相关关闭与启动操作需宿主协调。继承的 POSIX 环境保留原始字节，公共环境枚举则在任何回调前严格验证 UTF-8。
-
-spawn 成功表示已经创建子进程，不保证业务程序已经就绪。POSIX 允许部分 exec 前失败在之后以退出码 127 报告，Android Bionic 采用这种行为。因此既要检查 spawn 状态，也要检查等待结果；仅凭 127 无法区分启动失败和程序主动返回 127。需要确认业务就绪时，应显式交换启动消息。[POSIX 规范允许这两种报告路径](https://pubs.opengroup.org/onlinepubs/9799919799/functions/posix_spawn.html)。
-
-同一进程对象的操作需要外部互斥。NOW 尝试一次；有限及无限等待沿用单调截止时间，原生完成查询之间请求最多 5 ms 睡眠，不保证硬截止时间。超时保留对象与结果，可重试；成功结果缓存，非零退出码也属于等待成功。 POSIX 信号退出单独报告，不伪造 128+signal 退出码；Windows 先判断完成再取退出码，因此真实退出码 259 不会被误判为仍运行。 destroy 在仍运行时返回 BUSY；close_until 先等待再销毁。库不强杀、不分离、不创建回收线程、不修改 SIGCHLD；宿主不能自行回收同一子进程或将 SIGCHLD 设为忽略。
-
-`hx_os_process_capture_run` 内部启动进程并通过私有 loop 同时收集 stdout / stderr，子进程 stdin 为 EOF；不启动工作线程。默认每路保留 1 MiB 原始字节。管道、loop 和首批读请求在启动前准备好；子进程一旦启动，即使返回 TIMEOUT、 LIMIT 或 I/O 错误，仍向调用者交付会话对象，可在原对象上继续等待或关闭。成功要求子进程退出且两路都达到 EOF；继承写端的后代进程可能延迟 EOF。
-
-如果启动失败，而且内部回滚也失败，`run` 会保留原始错误，并返回一个只供清理的非空会话。对它调用 `wait`、`view`、`text`、`raise_limit` 或 `discard` 会得到 `HX_OS_CLOSED`；应在创建线程调用 `close_until` 重试清理，不会等待一个未启动的子进程。普通启动失败仍返回 NULL。正常关闭已经完成等待、进入资源释放后，如果释放失败，也会保留只供清理的会话。关闭成功前，继续持有 owner 和它的 context。正常等待阶段的超时或输出上限不会进入这个状态，仍可读取已收集输出并继续捕获。
-
-恰好达到上限也会返回 LIMIT，即使下一次读取可能就是 EOF。调用者可提高上限，或显式选择丢弃后续输出并继续排空。已经接受的读请求仍提交保留的前缀；I/O 失败后选择丢弃，会关闭已经退役的失败流，子进程可能看到断管。库不静默截断。字节视图借用到下次等待／关闭；文本转换默认严格 UTF-8，保留 BOM，使用输出字符串自己的 context，失败保持输出不变。超时快照可能停在字符中间，此时转换可以失败。旧编码仍取决于已有可选编码后端，内置 Unicode／ISO-8859-1 转换不依赖该后端。
-
-会话占用两个请求槽、32 KiB 在途字节预算，保留缓冲按需几何增长；显式丢弃时每路可再分配 16 KiB 临时缓冲。上限约束保留输出，不等于整个堆内存上限：扩容峰值同时持有旧／新缓冲，还需请求对象、分配器元数据、启动快照和原生资源。每次读取复用现有请求的分配、锁、事件机制。既有文件、线程、线程池热路径没有增加锁、间接调用、分配或系统调用；同步管道创建补记实际读写方向，以便验证进程重定向权限。
-
-`hx_os_process_arguments` 返回独立持有的 UTF-8 快照，包含 argv[0]： Windows 从原生宽字符命令行读取，Linux 读取 /proc/self/cmdline，Apple 使用原生 argc/argv。Linux 缺失 procfs 时返回 NOT_SUPPORTED。示例共用参数入口在 Windows 使用该 API，在 POSIX 验证并使用 main 的 UTF-8 argv。转译器／解释器可能出现在 procfs 中，系统快照是操作系统观察值，不能代替 main 收到的业务参数。裁剪后的 Windows 版本不能保证窄字符 CRT 的 Unicode 保真。主机名支持缓冲和 hx_string 输出，进程 ID 使用原生标识。环境枚举在库内环境锁下取有界快照，锁外回调允许重入和修改；外部 CRT／原生环境修改仍需宿主互斥。锁内暂存采用 CRT 分配，避免调用注入分配器回调。
-
-CPU 位集覆盖能确认可用的 SSE/SSE2/SSE4.1/AVX/AVX2/NEON；AVX 同时检查 XSAVE、 OSXSAVE 与 XCR0 的 XMM/YMM 状态。ARM 使用可用的原生辅助向量／系统能力查询，未知位不声称支持。WOW64／Rosetta 是系统兼容／翻译状态，不是虚拟机探测；无法可靠确定的 Linux 仿真状态返回 NOT_SUPPORTED 并保留输出。字节序交换和 udiv64 使用可移植头内联 C；除零返回 INVALID 并保留输出。 ARM 工具链选择自身除法 ABI 辅助实现；除法基准与相同原生表达式对照，不声称采用汇编获得加速。
-
-POSIX 时长转换检查 time_t 范围。截止时间转换要求明确传入 CLOCK_MONOTONIC 或 CLOCK_REALTIME，通过采样原生时钟并加上库截止时间的剩余时长完成，不直接转换不同时钟的纪元；无限截止时间返回 NOT_SUPPORTED。墙钟调整、休眠及调度仍影响原生等待，唤醒后必须重新检查条件和截止时间。
-
-C++ System 返回 Result<String>、Result<StringList> 或标量结果。Process 和 ProcessCapture 在失败、超时后保留宿主原生句柄，析构不等待、不分离、不强杀。进程参数为有界 UTF-8 字符串初始化列表，在调用期间借用并由底层复制或消费。进程示例见 [capture_process.c](../examples/capture_process.c)，macOS、Win7 和嵌入式目标仍需原生验证。
+- **直接启动子进程（`hx_os_process_spawn` / `hx::Process`）**：
+  - 接收 UTF-8 可执行文件路径、不含 `argv[0]` 的参数数组（`argv[0]` 由库自动补入）、可选完整环境变量表以及标准流重定向。**直接启动目标可执行文件，绝不经过 Shell 解析，也不会沿 `PATH` 搜索裸文件名**。参数表与环境表各限 `4 MiB` / `65,536` 项（传入 `NULL` 环境表表示继承当前进程环境，传入 `{NULL}` 表示空环境；在 Windows 上传入显式环境表时不会自动塞入 `SystemRoot` 或 `PATH`，请按子程序需要显式提供）。
+  - **启动成功与 POSIX 退出码 `127`**：`spawn` 返回 `HX_OS_OK` 表示子进程已创建，但如 [POSIX `posix_spawn` 规范](https://pubs.opengroup.org/onlinepubs/9799919799/functions/posix_spawn.html)所述，部分 `exec` 前的失败（如 Android Bionic 下文件不存在）可能延后体现为子进程以退出码 `127` 结束，因此请同时检查等待结果。
+  - **等待与销毁**：`wait_until` 支持单调截止时间（非零退出码也属于等待成功；POSIX 信号终止单独标记，Windows 先检查进程完成状态再读取退出码，因此真实退出码 `259` 不会被误判为仍在运行）。进程仍在运行时调用 `destroy` 会返回 `HX_OS_BUSY`；`close_until` 则先等待退出再销毁。库绝不强杀子进程、不分离句柄，也不篡改 `SIGCHLD`。
+- **一键运行并捕获子进程输出（`hx_os_process_capture_run` / `hx::ProcessCapture`）**：
+  - 在内部启动子进程（其 `stdin` 设为 `EOF`），并在当前调用线程的私有 `loop` 上并发收集 `stdout` 和 `stderr`，无需启动后台工作线程（默认每路流上限 `1 MiB` 原始字节，完整示例见 [capture_process.c](../examples/capture_process.c)）。
+  - **会话保留与超限处理**：一旦子进程成功启动，即便等待中途遇到 `HX_OS_TIMEOUT`、达到输出上限 `HX_OS_LIMIT` 或发生 I/O 错误，函数也会向调用方交付非空的 `capture` 会话对象，供调用方读取已捕获的前缀、调用 `raise_limit` 扩容或调用 `discard` 丢弃后续输出并继续排空，最后调用 `hx_os_process_capture_close_until` 完成清理（若启动阶段本身失败且回滚清理也未完成，同样会返回一个仅用于调用 `close_until` 重试清理的残留会话对象）。
+- **命令行快照、主机名与 CPU 特性检测（`HX_OS_ENABLE_SYSTEM_UTILS`）**：
+  - `hx_os_process_arguments` 返回包含 `argv[0]` 的原生 UTF-8 命令行参数快照（Windows 读取宽字符命令行，Linux 读取 `/proc/self/cmdline`，macOS 读取原生参数）。同时提供主机名、原生进程 ID、线程安全的环境变量枚举、CPU SIMD 指令集检测（`SSE`/`SSE2`/`SSE4.1`/`AVX`/`AVX2`/`NEON`，其中 `AVX` 同时校验操作系统 `XSAVE`/`XCR0` 状态）、`WOW64` / `Rosetta` 转译状态查询、字节序交换、`udiv64` 以及 POSIX `timespec` 单调/实时时钟转换。
 
 <a id="调度请求与延迟任务第-19-批"></a>
 
 ## 调度请求与延迟任务
 
-THREAD_EX 增加指定线程及当前线程的优先级、亲和性请求。Windows 映射原生 idle/normal/time-critical 相对优先级，仍受进程优先级类影响；Linux 请求 SCHED_IDLE／SCHED_OTHER 的零优先级，或 SCHED_RR 的原生最高优先级。 Apple 使用原生调度器低／中／高范围，低与普通对应 SCHED_OTHER，高对应 RR。权限及原生失败明确返回；这些请求不保证固定 CPU 频率或硬实时响应。测试提高被阻塞线程的优先级后，先恢复普通再放行；旧系统恢复优先级也可能需要权限。调用者需排除同一目标的并发 join、销毁及调度参数修改。
-
-亲和性零掩码返回 INVALID。Linux 位对应 CPU 0..63，设置后读回实际掩码，避免内核与 cpuset／在线 CPU 求交后被误认为完整成功。不一致时返回 NOT_SUPPORTED 并尝试恢复旧掩码，恢复 errno 放入 error.cause_code。失败可能已经短暂或永久改变亲和性，成功读回也不能阻止之后的热插拔／ cpuset 调整。Windows 位对应线程当前处理器组，受指针宽度限制，x86 高位明确返回 NOT_SUPPORTED；macOS 严格绑定返回 NOT_SUPPORTED。 C++ Thread 提供 setPriority／setAffinity。
-
-DELAYED_TASKS 默认开启，依赖 THREAD_POOL，独立于 LOOP／TIMER／NETWORK，有单独能力位。绝对单调 due 时间表示“最早可运行”，不表示完成截止时间。 NOW 进入普通就绪队列；INFINITE 返回 INVALID。C++ submitAfter 接收毫秒，非正值等同 NOW；submitAt 接收库截止时间值。可取消版本沿用现有取消令牌、类型化结果、显式失败和有界准备流程。
-
-有序未来任务链表与就绪 FIFO 共用 queued+submitting 容量，不增加管理定时线程、第二份队列额度或任务依赖图。现有工作线程通过条件变量等待最早 due 时间或通知；同一 due 按入队顺序转移到已有就绪工作后面。多工作线程实际开始／完成顺序仍可能不同。插入和排队取消最多扫描有界未来链表的长度；转移时唤醒其他工作线程。时钟或条件等待失败时，受影响未来任务返回失败的 work_status，仍走正常 cleanup。
-
-取消未来任务会将其移入就绪队列，不用等到原 due 时间；cleanup 在工作线程、池锁外恰好执行一次。DRAIN 保留未来时间；CANCEL_PENDING 将排队的未来任务标为取消并尽快清理。超时保留池和任务，重试可从排空升级为取消待执行任务；运行中的任务仍靠协作取消。
-
-未来任务的元数据与任务共用一次分配，额外创建一个私有互斥锁。取消方先持有此锁再访问池；工作线程在池锁外清除元数据中的池指针，然后才执行任务／cleanup。所有工作线程 join 后，保留的任务和取消源可安全晚于池销毁。内部关闭路径在池锁下直接标记取消，不取得任务私有锁，避免锁顺序反转。分配器和 prepare 回调继续在池锁外执行，关闭与准备并发时也遵守原契约。
-
-开启延迟任务模块后，线程池保留对应的私有状态。没有未来任务时，普通任务不会为延迟调度增加分配、锁或时钟读取；未来任务需要额外的同步对象及定时等待。关闭模块会裁掉这些状态和逻辑，实际资源成本应按目标负载测量。
+- **线程优先级与 CPU 亲和性（`HX_OS_ENABLE_THREAD_EX`）**：
+  - 支持为指定线程或当前线程请求相对调度优先级（Windows 映射 `idle` / `normal` / `time-critical`；Linux 请求 `SCHED_IDLE` / `SCHED_OTHER` 或最高 `SCHED_RR`；macOS 映射原生低/中/高范围）与 CPU 亲和性掩码（`0` 掩码返回 `HX_OS_INVALID`；Linux 设置后会读回内核实际生效的掩码，若因 `cpuset` 限制导致不一致则返回 `HX_OS_NOT_SUPPORTED` 并尝试恢复旧掩码；macOS 不支持严格核心绑定，固定返回 `HX_OS_NOT_SUPPORTED`）。
+- **线程池延迟任务（`HX_OS_ENABLE_DELAYED_TASKS`，默认开启）**：
+  - 依赖 `HX_OS_ENABLE_THREAD_POOL`（独立于 `LOOP` 和 `TIMER`）。调用 `hx_os_thread_pool_submit_delayed`（C++11 为 `pool.submitAfter` / `pool.submitAt`，完整示例见 [delayed_task.c](../examples/delayed_task.c)）可提交一个在指定单调时间点（Due Time）之后才允许开始执行的任务：
 
 ```c
 hx_os_task *task = NULL;
@@ -407,29 +332,17 @@ hx::Result<hx::Task<int>> delayed_answer(hx::ThreadPool &pool) noexcept
 }
 ```
 
-C 示例见 [delayed_task.c](../examples/delayed_task.c)；关闭与持有规则沿用现有线程池契约。macOS、Win7、ARM/musl、处理器组及真实板卡仍待目标验证。
+有序未来任务链表与普通就绪队列共享线程池容量配额，直接由池内现有工作线程通过条件变量定时等待，不额外创建定时器管理线程。若对尚未到期的延迟任务发起取消（`cancel`），该任务会被立即移入就绪队列并由工作线程在锁外执行一次 `cleanup`，无需傻等到原定到期时间。
 
 <a id="本地套接字与双向文件端点第-20-批"></a>
 
 ## 本地套接字与双向文件端点
 
-LOCAL_SOCKETS 默认开启，依赖 NETWORK。本地路径流使用 HX_OS_LOCAL / HX_OS_LOCAL_STREAM，专用工厂和普通 socket_create 都支持这一组合。路径地址使用独立类型，不扩展既有 IP 地址及 operation ABI。路径为严格 UTF-8，108 字节内必须有 NUL；macOS 继续检查更短的原生 sun_path 上限。本接口不含抽象名字、传递描述符、对端凭据及数据报。查询返回的原生名字也必须放得下且为合法 UTF-8，不静默截断；空输出表示未命名对端。
-
-local_listen 合并创建／绑定／监听，不删除已有路径；close 不移除文件系统名字，调用者拥有目录并在使用后删除自己的套接字名字。绑定成功后监听失败，可能遗留新创建的名字。Windows 使用原生 AF_UNIX 提供程序及 Win32 UTF-8 路径语义，适用于支持该能力的 Windows 10+。Win7 的其他基础能力仍保留，本工厂在不支持时返回 NOT_SUPPORTED。能力位表示适配已编译，实际提供程序是否可用仍由原生操作判断。
-
-local_connect 合并创建及带截止时间的连接；TIMEOUT 保留套接字， finish_connect 使用已复制的路径继续。重试必须保持同一路径，终止失败后需要关闭。Linux AF_UNIX 队列满的 EAGAIN 表示连接还没开始，库会在单调截止时间内重新发起连接，不会把可写误报为已连通；真正进行中的连接同时检查 SO_ERROR 与 getpeername。便利工厂其他失败会关闭新对象并保留原错误。
-
-本地流复用 send／receive／wait／shutdown／close。新增 socket_receive_until 合并一次流读取和就绪等待，返回实际字节、EOF、错误或 TIMEOUT，没有暗中缓冲。已经接受／连接的本地流支持现有 loop READ／WRITE 以及取消退役。 loop CONNECT／ACCEPT 明确拒绝本地套接字，因为旧 IP operation／completion 放不下路径；相应操作用直接 accept_until 和 connect_until／finish_connect。不能混用直接 I/O 与未完成 loop 请求，线程互斥、loop 所有者、network 持有规则沿用既有契约。
-
-DUPLEX_PIPE 默认开启，独立于 NETWORK、PIPE、LOOP。pipe_pair_socket 返回两个各自可读写的 hx_os_file。POSIX 使用 socketpair(AF_UNIX, SOCK_STREAM)， Windows 使用私有 IPv4 TCP loopback 回退。默认创建截止时间为单调 5 秒， _until 入口允许调用者指定；POSIX 执行一次本地 socketpair 操作，截止时间不会取消同步原生调用，也不承诺硬返回时间。失败时两端均为 NULL。
-
-Windows 握手使用非阻塞连接／接受和截止时间等待、排他的本地绑定、最多 64 次接受尝试，并核对本进程客户端的回环地址／端口。交付后两端为阻塞、不可继承对象，各持有一份平衡的 Winsock 引用，因此不需要 network 实例。读写／关闭分别使用 recv／send／closesocket，不把套接字交给文件句柄 API。只有这种文件对象分配附加存储；Windows 进程启动明确拒绝把它用作子进程标准句柄，POSIX 的描述符可作为标准流。
-
-遵守文件短读、短写、EOF 契约；同一端允许一个读取者和一个写入者并行，同方向操作及关闭需互斥。shutdown(SHUT_WRITE) 发出 EOF 而保留读取方向。定位、查询大小、sync、截断及映射不支持，也没有持久化、消息边界或凭据保证。Windows 回退具有端口、TCP 缓冲、防火墙／提供程序失败差异。同步双向配对不替代已有专用异步管道。POSIX 管道与套接字文件写入共用线程局部 SIGPIPE 处理，不安装进程级信号处理器。
-
-C++ DuplexPipe::pair 返回两个可移动 File 所有者；LocalSocket 引用宿主持有的指针，提供 connect／finishConnect／acceptUntil、显式 close、 readUntil／writeUntil、路径字符串及 shutdown。超时或 I/O 未退役时仍能找到原对象。
-
-网络和独立双向端点共用套接字设置、错误、就绪等待代码；普通套接字创建不增加原生调用数和分配次数。开启本地模块会增加一个私有可空指针；只有本地套接字在同一次分配尾部附加 112 字节路径／状态。Windows 普通文件读写／关闭增加类型判断分支，不增加分配或原生调用。POSIX 在 PIPE 已开启时复用原有管道写分支。Windows 双向工厂有两次包装对象分配、两份 WSAStartup 引用、临时监听套接字和两个连通端点，关闭平衡各自引用。
+- **本地路径流套接字（`HX_OS_ENABLE_LOCAL_SOCKETS`，默认开启）**：
+  - 依赖 `HX_OS_ENABLE_NETWORK`。使用 `HX_OS_LOCAL` / `HX_OS_LOCAL_STREAM`（即 `AF_UNIX` 流套接字，路径为含末尾 `NUL` 在内不超过 `108` 字节的严格 UTF-8 文件路径，支持 Linux、macOS 及 Windows 10+ 原生 `AF_UNIX` 提供程序；Windows 7 返回 `HX_OS_NOT_SUPPORTED`）。
+  - `hx_os_socket_local_listen` 一步完成创建、绑定与监听（不会自动删除已有同名文件，关闭监听套接字后也需由调用方自己删除套接字路径文件）。`hx_os_socket_local_connect` 支持带截止时间的连接与超时后的 `finish_connect` 续连。已建立连接的本地流套接字可直接复用 `send`、`receive`、`hx_os_socket_receive_until` 以及事件循环 `loop` 的异步读写（注：由于历史 IP 完成结构放不下长路径，本地套接字的 `accept` 与 `connect` 请直接调用带截止时间的 `accept_until` / `connect_until`，不要提交给 `loop` 的 `ACCEPT`/`CONNECT`）。
+- **免网络初始化的全双工文件端点对（`HX_OS_ENABLE_DUPLEX_PIPE`，默认开启）**：
+  - 独立于 `NETWORK`、`PIPE` 和 `LOOP`。调用 `hx_os_pipe_pair_socket`（C++11 为 `hx::DuplexPipe::pair`，完整示例见 [duplex_message.c](../examples/duplex_message.c)）返回一对各自可读可写的同步 `hx_os_file` 端点（POSIX 底层使用 `socketpair(AF_UNIX, SOCK_STREAM)`，Windows 底层使用带严格本机回环地址校验的私有 IPv4 TCP Loopback 配对并自动管理独立的 Winsock 引用计数）：
 
 ```c
 hx_os_file *first = NULL, *second = NULL;
@@ -458,90 +371,57 @@ hx::Result<std::pair<hx::File, hx::File>> make_channel() noexcept
 }
 ```
 
-可执行示例见 [duplex_message.c](../examples/duplex_message.c)。 macOS、Win7、嵌入式原生环境仍待验证。
-
+同一个端点支持一个读线程与一个写线程全双工并行；调用 `shutdown` 可单向关闭写端（向对端发送 `EOF`）同时继续保留读端。
 
 <a id="注册表电源请求和字符串混淆第-21-批"></a>
 
 ## 注册表、电源请求和字符串混淆
 
-常用入口 `hx_os_registry_open_user` 打开显式 HKCU 相对路径， `hx_os_registry_read_string` 直接输出严格 UTF-8 的 `hx_string`； `read_string_buffer` 共用解码实现，保留两段式容量协议。字符串读取接收 REG_SZ/REG_EXPAND_SZ 的字面值，不展开环境变量；原生值上限 1 MiB，容量变化最多重试 8 次。损坏 UTF-16、内部 NUL、错误 DWORD 长度和类型不匹配明确失败，失败保留输出。注册表路径用反斜杠、相对于指定根键，不按文件路径处理。创建、写权限、WOW64 视图均须显式选择；独占创建保护已有键。原生创建可能创建父键，不是事务。同一对象调用需串行，并排除并发关闭；关闭即使失败也消耗对象。非 Windows 或关闭模块时返回不支持。
-
-`hx_os_sleep_inhibit_create(NULL, "Exporting project", &request, &error)` 直接创建已激活请求；重复激活不增加引用，销毁只撤销当前对象持有的请求。宿主同步后可以跨线程转移，单个对象的并发调用由宿主互斥。不创建后台线程。 Windows 用 Win7 已有的 PowerCreateRequest/SystemRequired 按句柄隔离消费者；原草案 SetThreadExecutionState 会共享线程状态，因此调整为独立句柄。性能请求使用 ExecutionRequired，Win8 起可用，Win7 返回不支持，不改变电源计划、不保证固定频率或实时调度，系统和用户策略可能覆盖请求。 Apple 防睡眠使用 IOKit C 接口；性能活动使用 NSProcessInfo 公共接口，所需 Objective-C 限制在单个实现文件，异常不越过 C ABI。关闭 PERFORMANCE_REQUEST 即可去掉 Foundation/Objective-C，保留纯 C 的 IOKit 防睡眠。Linux 桌面防睡眠现在提供可选的 sd-bus 作用域适配，见 [Linux 桌面](LINUX_DESKTOP.zh-CN.md)；Linux 性能请求仍返回不支持。释放消耗对象并报告原生清理错误。 C++11 的 Registry、SleepInhibit、PerformanceRequest 提供可移动同步 RAII；显式 close 可观察清理错误，析构不会无限等待。
-
-字符串混淆使用可逆 XOR，不提供加密。开发工具 `tools/obfuscate_string.py --name app_label --text "example"` 输出预编码 C99 数据，输入严格 UTF-8、最多 1 MiB；Python 不属于核心运行或构建依赖。 `hx_os_obfuscate_string(&app_label, &text, &error)` 使用输出字符串的 context，失败保持输出，清零内部临时明文；结果明文由调用方管理生命周期。缓冲入口也支持原始字节，允许完全原地解码或互不重叠缓冲，容量不足不写入。 C++11 可用 `constexpr auto text = hx::obfuscate<0x5a>("example")`。编译器和调试信息仍可能保留字面量，不能据此保护秘密。直接调用示例见 `examples/obfuscated_string.c`。
-
-四个独立默认开启的开关为 REGISTRY、SLEEP_INHIBIT、PERFORMANCE_REQUEST、 OBFUSCATION。能力位表示编入适配，仍需处理运行系统和策略限制。Windows 在注册表或原有随机数回退需要时链接 advapi32；Apple 静态消费正确传递 framework 及 Objective-C runtime 链接依赖。
-
+- **Windows 注册表读写（`HX_OS_ENABLE_REGISTRY`）**：
+  - `hx_os_registry_open_user` 打开 `HKCU` 下的反斜杠相对路径，`hx_os_registry_read_string` 直接输出校验过 UTF-8 的 `hx_string`（字面读取 `REG_SZ` / `REG_EXPAND_SZ`，绝不隐式展开 `%环境变量%`，单值上限 `1 MiB`）。创建键、写权限与 32/64 位 WOW64 注册表视图均须显式指定；非 Windows 平台返回 `HX_OS_NOT_SUPPORTED`（C++11 为 `hx::Registry`）。
+- **防睡眠与性能活动请求（`HX_OS_ENABLE_SLEEP_INHIBIT` / `HX_OS_ENABLE_PERFORMANCE_REQUEST`）**：
+  - 调用 `hx_os_sleep_inhibit_create(NULL, "Exporting project", &request, &error)`（C++11 为 `hx::SleepInhibit`）创建按句柄独立隔离的防系统休眠请求，销毁或停用该对象只会撤销其自身持有的请求，绝不干扰同一进程内其他模块的防睡眠状态。
+  - **各平台后端**：Windows 使用按句柄隔离的 `PowerCreateRequest` + `PowerRequestSystemRequired`（Windows 8+ 性能请求使用 `PowerRequestExecutionRequired`）；macOS 防睡眠使用纯 C 的 `IOKit` 断言，性能请求使用 `NSProcessInfo`（关闭 `HX_OS_ENABLE_PERFORMANCE_REQUEST` 即可完全移除 Objective-C / Foundation 依赖）；Linux 桌面防睡眠通过可选的 `sd-bus` 会话总线适配实现（详见[Linux 桌面](LINUX_DESKTOP.zh-CN.md)）。
+- **编译期/构建期字符串可逆混淆（`HX_OS_ENABLE_OBFUSCATION`）**：
+  - 使用开发脚本 `python tools/obfuscate_string.py --name app_label --text "example"` 生成预编码的 C99 数组，运行时调用 `hx_os_obfuscate_string(&app_label, &text, &error)`（或 C++11 编译期 `constexpr auto text = hx::obfuscate<0x5a>("example")`）通过可逆 XOR 还原明文（示例见 `examples/obfuscated_string.c`）。注意：**可逆混淆仅用于防止二进制文件中直接裸露明文字面量，不是密码学加密，切勿用于存储密钥或密码**。
 
 <a id="日期翻译表和位流第-22-批"></a>
 
 ## 日期、翻译表和位流
 
-`hx_os_wall_time_format_utc_string(milliseconds, NULL, &text, &error)` 直接输出拥有存储的 UTF-8 UTC 时间；缓冲入口提供两段式容量查询，容量不足不产生部分输出。Unix 毫秒向下取整到秒，包括负值。共用公历实现覆盖 0001—9999 年，不受原生 time_t 年限限制。格式为严格 UTF-8，最多 65536 字节，支持 %CCYY、%MM、%DD、%hh、%mm、%ss、%%；NULL 使用 %CCYY-%MM-%DDT%hh:%mm:%ssZ。非法格式、编码错误、日期越界均保留输出。不表示闰秒，不修改 locale。缓冲格式化零分配；字符串入口使用自身 context 分配有界临时存储和结果。
-
-`hx_os_wall_time_local_offset_minutes` 返回当前本地相对 UTC 向东的分钟偏移， DST 为 0/1/-1（未知）。遵循宿主运行库时区规则，外部 TZ/时区修改须由宿主同步；不提供历史命名时区查询。无法用整分钟表示的偏移返回不支持。
-
-翻译表通过 `hx_os_text_lookup_create` 创建，add 复制 UTF-8 原文/译文， get_string 直接给出拥有存储的结果。仅缺失键回退原文，空译文保持为空。键区分大小写、不做 Unicode 规范化。默认最多 4096 项、键值连同 NUL 合计 1 MiB，可通过 options 设置其他有限上限。按需增长，有序数组二分查询，插入为 O(n)；元数据另计。事务替换可能暂时保留新旧文本，最多两倍文本上限；数组增长同样暂存新旧数组。支持并发只读，修改/销毁由调用方排除并发。无目录锁、全局 locale 单例或后台服务；读取缓冲零分配，字符串使用输出的分配器。C 组合示例见 `examples/localized_time.c`。
-
-位流 reader/writer 在栈上，借用调用方缓冲区。初始化单位为字节，读写单位为 0—64 位，所有 CPU 均为字节内和值内 MSB 优先。读越界 EOF、写容量不足 OUTPUT_FULL、值超出位宽 RANGE；失败不移动游标、不修改缓冲或输出。只替换写入范围，writer 对齐补零，reader 对齐跳过；零位操作只允许零值。检查字节乘八的溢出，避免移位 64 位。无分配、锁、间接调用、系统调用或汇编。
-
-CALENDAR、TEXT_LOOKUP、BITSTREAM 独立默认开启；关闭时能力位清零、操作返回不支持。C++11 便利层为 Calendar::utc、TextLookup::get、BitReader/ BitWriter；复用 C 实现，位游标继续借用缓冲，翻译表提供可移动同步 RAII。
-
+- **跨平台 UTC 日历格式化与本地时区偏移（`HX_OS_ENABLE_CALENDAR`）**：
+  - `hx_os_wall_time_format_utc_string(milliseconds, NULL, &text, &error)`（C++11 为 `hx::Calendar::utc`）将 Unix 毫秒时间戳（向负无穷取整到秒）按公历规则格式化为覆盖 `0001–9999` 年的 UTF-8 字符串，不受 32 位系统 `time_t` 2038 年上限限制。模式串支持 `%CCYY`、`%MM`、`%DD`、`%hh`、`%mm`、`%ss` 和 `%%`（传 `NULL` 默认输出 ISO 8601 格式 `%CCYY-%MM-%DDT%hh:%mm:%ssZ`）。`hx_os_wall_time_local_offset_minutes` 则查询当前本地时区相对 UTC 向东的分钟偏移与夏令时（DST）标志。
+- **轻量级内存翻译表（`HX_OS_ENABLE_TEXT_LOOKUP`）**：
+  - `hx_os_text_lookup_create`（C++11 为 `hx::TextLookup`，示例见 `examples/localized_time.c`）创建一个基于有序数组二分查找的独立键值翻译目录（默认上限 `4,096` 词条、总文本 `1 MiB`）。调用 `get_string` 查询时，仅当键完全不存在时才回退返回传入的原文；构建完成后支持多线程无锁并发只读查询。
+- **大端序按位读写器（`HX_OS_ENABLE_BITSTREAM`）**：
+  - `hx_os_bit_reader` 与 `hx_os_bit_writer`（C++11 为 `hx::BitReader` / `hx::BitWriter`）是纯栈上结构体，直接借用调用方传入的字节缓冲区（初始化长度按**字节**计，`read_bits` / `write_bits` 每次读写 `0..64` **比特**）。在所有 CPU 架构上统一采用字节内与数值内最高有效位优先（MSB-first）编码，零内存分配、零系统调用。读越界返回 `HX_OS_EOF`，写越界返回 `HX_OS_OUTPUT_FULL`，数值超出所给位宽返回 `HX_OS_RANGE`，且失败时不移动位游标。
 
 <a id="同步信号和栈上参数包第-23a-批"></a>
 
 ## 同步信号和栈上参数包
 
-使用 `hx_os_signal_handler_create` 创建分发器，connect 注册复制的信号名， emit 传入可选的栈上 `hx_os_calldata` 参数包；完整 C 示例为 `examples/signal_notifications.c`。不创建后台线程或队列。回调在发出信号的线程、内部锁外同步执行，按本次快照的注册顺序调用。接受后新连的回调留到下一次发出；未开始前已断开的回调跳过。多个 emit 可以同时执行同一回调，用户状态须支持相应并发。一个回调失败不阻止其余符合条件的回调；返回首个失败状态，并保留与该状态匹配的原生错误详情。回调收到已初始化且非 NULL 的借用错误指针；返回状态和 error.status 不一致时只保留返回状态。
+`HX_OS_ENABLE_SIGNALS` 默认开启，提供零后台线程的观察者信号分发器（`hx_os_signal_handler` / `hx::SignalHandler`）与固定布局的栈上命名参数包（`hx_os_calldata` / `hx::CallData`，完整示例见 `examples/signal_notifications.c`）：
 
-连接标识包含代次，旧标识不会误断开复用同一容量的新连接；它只属于一个分发器，不得自行构造。连接由分发器持有，输出标识可省略。信号名严格 UTF-8、 1—127 字节并复制；user 为借用，接受后可选 cleanup 接管并调用一次，拒绝不调用回调或 cleanup。disconnect 立即阻止新启动，可能同步执行已可清理的 cleanup；disconnect_until 还等待正在执行的回调和清理返回。单调截止时间到期保留资源，可重试；回调/清理等待自身或嵌套祖先返回 DEADLOCK。跨线程形成的一般循环等待仍由宿主避免。
-
-stop 仅阻止新连接、发出和回调启动；close_until 随后清理订阅、等待已接受的发出与清理，成功才消耗对象，失败保留。最终关闭时由所有者排除其他新调用及并发关闭，已经接受的 emit 可继续完成。关闭不会等待宿主线程退出；卸载平台 DLL 前还须保证所有 API 调用已返回。卸载消费者插件前，先退役它的回调与清理。用户代码须正常返回，不能 longjmp、线程退出或在回调期间切换 fiber。同步清理可能超过等待截止时间，不保证硬取消；库不会终止进程或分离宿主线程。
-
-默认 256 个连接槽、64 个同时发出、16 层嵌套，可设更小的嵌入式预算；硬上限为 65535 个槽/发出、64 层。创建时分配槽，非空 emit 只在锁外分配匹配标识，最多每次 8 * max_connections 字节，再排序并间接调用回调。连接仅一对互斥锁操作且零分配，空 emit 零分配；每次扫描有界槽数组。选择和退役时加锁，用户函数在锁外。线程局部指针仅指向当前栈帧，没有 TLS 析构或全局回调注册表；现有模块热路径没有新增锁、分配或系统调用。
-
-参数包为固定布局：16 项、512 字节共享名称/字符串存储（含 NUL）。名称严格 UTF-8、1—127 字节，字符串允许内部 NUL。bool/i64/double/string/pointer 类型读取区分缺失与类型错误，失败保留输出；用户指针借用且不自动释放。设置具有事务性，替换会回收旧文本空间，零堆分配。内部使用偏移，因此整个参数包直接复制仍有效；借用视图在修改后失效。emit 借用只读参数到调用返回。
-
-CallData setter 分别返回 Result<void>，getter 返回 Result<T>。SignalHandler::connect 在自身 context 中存储具体类型的捕获并在退役时销毁。CallDataView 借用参数包，string 返回 Result<String>。回调声明 noexcept，返回 void、状态码或 Result<void>；emit 直接返回失败并保留原生详情。便利层引用宿主 owner，要求显式 closeUntil；SIGNALS 仍独立可裁剪，关闭后操作返回 NOT_SUPPORTED。
-
-
-`CallData::edit()`／`hx_os_calldata_edit_*` 连续立即赋值，最后检查一次；后续失败保留之前成功项。`CallDataView::stringView` 不分配，借用参数包直到修改／销毁，`string` 继续复制。它们保留既有信号与命名过程发布契约。
+- **栈上命名参数包（`hx_os_calldata`）**：固定包含 `16` 个键值槽位与 `512` 字节的共享名称/字符串存储区（全程零堆内存分配，且内部采用相对偏移量存储，因此整个结构体按值拷贝依然安全有效）。支持读写 `bool`、`int64_t`、`double`、UTF-8 字符串与借用裸指针，也可使用 `hx_os_calldata_edit_*` / `CallData::edit()` 链式连续赋值并在最后统一检查状态码。
+- **同步信号连接与触发（`connect` / `emit`）**：
+  - 调用 `emit` 时，分发器会在当前触发线程、内部锁外按注册顺序同步调用匹配的槽函数（如果其中某个回调返回非 `HX_OS_OK` 错误，不会阻止后续已匹配的回调继续执行，最终 `emit` 返回第一个遇到的错误状态码）。
+  - **连接代次与安全断开**：每个连接 ID 包含代次号（Generation），防止槽位复用后旧 ID 误删新连接。`disconnect` 立即阻止后续新触发；`disconnect_until` 还会等待当前正在执行中的该回调及其 `cleanup` 彻底返回（在回调内部同步等待自身或外层嵌套祖先会返回 `HX_OS_DEADLOCK`）。卸载插件前，请务必先通过 `disconnect_until` 或 `close_until` 退役插件注册的所有回调。
 
 <a id="可变设置与保留快照第-23b-批"></a>
 
 ## 可变设置与保留快照
 
-`hx_settings_create` 创建独立对象，直接使用类型化 set/get 和 set_default_*；常用路径见 `examples/settings.c`。显式值与默认值分开，只有键缺失才回退； null、类型错误、损坏数据和权限错误均不回退。不做数字字符串强制转换或递归默认值合并，点号是普通键字符。view 接口支持空键、含 NUL 的 UTF-8 键值；普通 C 字符串便利入口在调用期间借用参数，设置结果复制到对象自身 context。
+`HX_OS_ENABLE_SETTINGS` 默认开启，提供支持多线程并发读写的分层键值设置中心（`hx_settings` / `hx::Settings`）与不可变引用计数快照（`hx_setting_value` / `hx::SettingValue`，完整示例见 `examples/settings.c`）：
 
-值类型包括 null、bool、int64、有限 double、UTF-8 字符串、数组、对象和用户指针。数组/对象构造会深复制输入，随后可以释放输入值。不可变值采用引用持有，可在可变设置关闭后继续存在。字符串读取复制到输出的 context；复合值读取返回持有的快照。copy 深复制两层到指定 context，不复制观察者与清理函数。分配器及其代码/用户数据必须活到所有快照释放；保留用户指针值不会延长其指向对象的生命周期，库不会自动释放该对象。
-
-并发读写通过不可变根和短暂互斥完成获取/发布。分配、释放、观察者都在锁外。写入先准备存储再检查版本，默认最多尝试 8 次，争用耗尽返回 BUSY，避免覆盖别人的更新。发布前失败保持两层不变，已有快照不受后续写入影响。EFFECTIVE 快照只合并顶层缺失默认键，合并超出树预算时返回 LIMIT。调用者可保留多个快照，其内存由调用者的持有行为决定。
-
-默认每层 4096 节点、4 MiB 持有分配成本、深度 32、64 个在途操作、8 次更新尝试、16 层观察者嵌套。硬上限：65536 节点、16 MiB 持有树存储、深度 64、 65535 个在途操作、64 次更新尝试/观察者层数；不可变值工厂采用树硬上限。临时键值数组另计但受项数约束；导入先测量完整目标，再分配子节点。旧根与准备中的新根可以同时存在，预算不是进程总内存配额。不启动后台线程或队列。
-
-可选观察者在创建时配置，提交后、锁外同步执行；借用事件提供键、层、版本号及准确的新旧值，整体加载的事件携带根值。并发通知可能不按版本号顺序抵达。支持重入读取，嵌套写入单独限深。观察者/清理必须正常返回，不得抛异常、 longjmp、退出线程或切换 fiber；通知不是可恢复失败通道，不能回滚已被观察到的提交。C++ 便利层通过 options 接受同一明确的 C 观察者契约。
-
-close_until 拒绝新操作，等待已接受操作与观察者，再调用一次可选 cleanup。支持 NOW/INFINITE，超时保留资源重试；自身关闭返回 DEADLOCK 且不启动关闭。所有者须排除其他新调用及并发最终关闭，慢同步清理可能超过截止时间。不会终止或分离宿主线程。快照在关闭后仍有效，可继续让 context 返回 BUSY；卸载平台库或分配器插件前须等所有调用返回并释放相关值。标量读取零分配、两段短互斥并保留/释放两层根；已有不可变快照查询不加锁。更新复制一个紧凑根/键块，保留同 context 的未改子项，外部传入复合值深复制。仅关闭中最后一个在途操作退役时通知等待者。
-
-配置接入保持 hx_config 不可变。import/load 要求对象根，只接收 JSON 型可表示节点；XML、日期时间类型、整数越界均失败。加载先完成整个显式层的新树再发布，默认层保留，失败不改旧值；加载是整体替换。JSON/INI/properties 复用原序列化及可表示性规则，默认保存仅写显式值。用户指针（包括带指针标签的 NULL）序列化失败；JSON null 使用 null 类型。to_config 可导出任一层， to_json/load_json/save_json 提供直接入口；保存沿用原子发布和持久化边界。 config options 继续约束文本、内存、深度与工作量，完整加载错误保留来源、位置和原生原因。浮点格式化和内部文档创建复用已有代码；即使关闭公共 TEXT_NUMBER，设置转换仍能使用内部公共实现。
-
-SETTINGS 独立于 CONFIG、CONFIG_SERIALIZE、FILE_UTILS、SIGNALS 和 CONTAINERS，缺少组合依赖时返回 NOT_SUPPORTED。C++ Settings setter 分别返回 Result<void>，getter 返回 Result<T>，字符串为持有存储的 String。SettingValue 工厂返回 Result<SettingValue>，快照支持复制/移动，数组和对象接受已检查值的初始化列表。可变 Settings 引用宿主 owner，显式关闭并保留超时重试能力。C 公共布局和导出函数保持不变。
-
-设置字符串引用（`hx_settings_get_string_ref`、`SettingValue::asStringView`、`Settings::stringView`）持有不可变字节，不复制、不分配。owner 更新／关闭后仍有效，并保留原 context；C 引用须初始化、通过引用接口复制并释放。`Settings::update`／`hx_settings_update_*` 复用逐项 setter 和通知，首次失败保留此前成功项，finish 报告成功次数，不执行回滚或整体原子发布。详见 [常用调用所有权](COMMON_UTILITIES.zh-CN.md)。
+- **显式值与默认值双层隔离**：通过 `set_*` 写入显式值，通过 `set_default_*` 配置默认值。读取时**仅当键在显式层中完全不存在时才回退默认值**（显式层中的 `null` 或类型不匹配不会回退默认值）。键名按字面字节精确匹配（点号 `.` 只是普通字符，不自动拆分为嵌套路径）。
+- **写时复制不可变根与并发快照**：支持 `null`、`bool`、`int64`、有限 `double`、UTF-8 字符串、数组、对象以及借用用户指针。底层采用不可变树根（Immutable Root）实现：标量读取仅经过极短的互斥区获取根引用，零内存分配；写入操作在锁外准备好新节点并校验版本号（默认最多重试 8 次，并发争用耗尽时返回 `HX_OS_BUSY`，绝不静默覆盖他人更新）。已取出的快照或零拷贝字符串引用（`hx_settings_get_string_ref` / `Settings::stringView`）在设置中心继续更新甚至关闭后依然合法有效。
+- **同步变更观察者与配置导入导出**：创建时可注册在锁外同步执行的变更观察者回调。当同时启用 `HX_OS_ENABLE_CONFIG` 与 `HX_OS_ENABLE_CONFIG_SERIALIZE` 时，还可通过 `to_config`、`to_json`、`load_json` 和 `save_json` 与配置文件无缝互转（批量连续更新可使用 `hx_settings_update_*` / `Settings::update`，详见[常用调用所有权](COMMON_UTILITIES.zh-CN.md)）。
 
 <a id="有界区间计时树第-23c-批"></a>
 
 ## 有界区间计时树
 
-独立结构化快照、均值、标准差和按需开启的有界 P50／P95／P99，见 [Profiler 教程](PROFILER.zh-CN.md)。下方既有 TSV 格式和关闭行为保持兼容。
+`HX_OS_ENABLE_PROFILER` 默认开启，提供无需后台线程、无需捕获原生调用栈的显式层级区间计时器（`hx_os_profiler` / `hx::Profiler` 及 RAII 作用域守卫 `hx::ProfileScope`，基础示例见 `examples/profile_intervals.c`）。如果你还需要获取独立持有的结构化统计快照、均值/标准差以及有界对数直方图分位数（P50 / P95 / P99），请参阅专门的 [Profiler 教程](PROFILER.zh-CN.md)：
 
-`hx_os_profiler_create/start_root/reach/leave/dump_string` 完成显式区间计时，示例见 `examples/profile_intervals.c`。不创建后台线程，不捕获原生调用栈。 C++11 提供 `hx::Profiler` 和词法作用域 `hx::ProfileScope`。成功进入后才需要配对 leave，必须在同一线程/纤程完成。名称复制为严格 UTF-8；不同线程的相同父路径和名称合并统计。单调墙钟纳秒记录包含/独占耗时，并发区间总和可能超过进程经过的墙钟时间。
-
-默认最多 1024 条记录、64 个线程/纤程缓存、32 层嵌套、127 字节名称、 4 MiB 输出（包含 NUL）和 64 个同时进入的 API 调用。路径和线程预热后不再分配 context 内存，但进入/离开仍有短互斥区、TLS 查询和时钟读取，不能称为零开销。已完成子区间从父区间独占耗时中扣除；线程退出或 restart_thread 将未完成区间记为中止并清理当前线程缓存，不伪造耗时，也不删除既有统计。
-
-计数饱和在 UINT64_MAX 并设置标志 1；时钟错误设置标志 2。leave 的时钟失败保留帧供重试。导出在锁内取一致快照、锁外格式化，失败不改变输出；TSV 中名称使用 JSON 引号和转义。记录增长竞争最多重试八次，然后返回 BUSY。保存复用既有原子文件发布，不改变持久化保证。
-
-stop 拒绝新进入，仍允许 leave/restart/dump。close 自动分离调用线程的空闲缓存，等待在途 API 和其它线程缓存；本线程仍有打开区间时返回 DEADLOCK，不改变停止状态。超时保留句柄，原生 TLS 包装器尚未退役时可返回 BUSY，重试完成 key 销毁。长驻线程必须 restart_thread 或退出，才能卸载插件。宿主排除新入口和并行最终关闭，等待所有 API 返回后卸载。检测到分配器重入时返回 DEADLOCK，不允许跨 C 调用异常展开。C++ 作用域不能与手动栈操作混用，不能晚于 profiler 销毁；关闭策略仍由宿主显式控制。
-
-PROFILER 可单独关闭；仅 save 依赖 FILE_UTILS。其余接口不依赖设置、配置或信号模块。
+- **配对计时与独占耗时扣除**：进入根区间调用 `start_root`，进入子区间调用 `reach`，退出调用 `leave`（每次成功进入必须在同一线程或协程上配对一次 `leave`）。已完成子区间的耗时会自动从父区间的“独占耗时（Exclusive Duration）”中扣除；不同线程下相同父路径与名称的区间会自动合并统计。
+- **预热零分配与安全关闭**：默认支持最多 `1,024` 条路径记录、`64` 个线程/纤程局部栈缓存和 `32` 层嵌套。路径与线程缓存预热后，重复进入/离开不再触发动态内存分配。调用 `close` 时若当前线程仍有未退出的活动区间，会明确返回 `HX_OS_DEADLOCK`；对于长期存活的外部线程，在卸载插件或销毁 Profiler 前请先调用 `restart_thread` 释放其线程局部缓存。

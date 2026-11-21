@@ -1,28 +1,33 @@
-# HTTP file transfers and streaming
+# HTTP File Transfers and Streaming
 
-[简体中文](HTTP_FILES.zh-CN.md) · [JSON HTTP requests](UTILITY_EXTENSIONS.md) · [Coroutine guide](COROUTINES.md)
+[简体中文](HTTP_FILES.zh-CN.md) · [JSON HTTP Requests](UTILITY_EXTENSIONS.md) · [Coroutine Guide](COROUTINES.md)
+
+When downloading large firmware images, media assets, or data exports over HTTP, buffering the entire response body in RAM wastes memory, and writing directly over the destination path leaves a corrupted partial file if the connection drops mid-transfer. `hx_c_platform`'s streaming HTTP file APIs solve both problems by **streaming chunks into a randomized temporary file in the destination directory and atomically publishing it only after a complete HTTP 2xx response**.
 
 ## 1. Download a file without keeping it all in memory
 
-Use `hx_os_http_download_file` for firmware, pictures or exported data. It opens a random temporary file in the destination's directory, writes chunks, closes it and publishes it only after a successful HTTP 2xx response. Existing destinations are preserved unless you explicitly pass `replace=1`.
+Call `hx_os_http_download_file()` to stream a remote resource straight to disk. It creates a temporary file alongside the target path, writes chunks as they arrive, closes the handle, and publishes the file to the destination path only when the server returns an **HTTP 2xx** status. By default (`replace = 0`), existing destination files are preserved; pass `replace = 1` only when you want to overwrite an existing file.
 
-Build the complete [http_file.c](../examples/http_file.c) program:
+Build the complete [http_file.c](../examples/http_file.c) example in your existing build directory:
 
 ```sh
 cmake --build build --config Release --target hx_os_http_file
 ```
 
-For a local demonstration, put `hello.txt` containing `hello` in a directory and run `python -m http.server 8080 --bind 127.0.0.1` there. Python is just an optional demonstration server; it is not a runtime dependency of the C library. In another terminal, from a different writable directory:
+To test locally, create a file named `hello.txt` containing `hello` and start a local HTTP server in that directory (for example, `python -m http.server 8080 --bind 127.0.0.1`—Python is only used as a quick local test server, not a C library runtime dependency). In a second terminal, switch to another writable directory and run:
 
 ```sh
-# Linux; use your executable's absolute path when changing directory.
+# Linux; use the absolute path to your built binary when running from another directory.
 /path/to/build/bin/hx_os_http_file download \
   http://127.0.0.1:8080/hello.txt downloaded.txt
 ```
 
-Windows uses `build/bin/Release/hx_os_http_file.exe`. The successful example prints `HTTP 200: download downloaded.txt`; the new file contains `hello`. Running it again with the same destination fails with `exists` and preserves that file. HTTPS accepts an optional final CA-file argument.
+(On Windows, run `build/bin/Release/hx_os_http_file.exe`.)
+- **First run**: Prints `HTTP 200: download downloaded.txt` and writes `hello` into `downloaded.txt`.
+- **Second run to the same path**: Fails with `exists` and leaves the existing `downloaded.txt` untouched.
+- **HTTPS**: Pass an optional trailing CA bundle path when downloading from an HTTPS endpoint.
 
-The equivalent C operation, after creating a reusable `hx_os_http *http`, is:
+In C, once you have created a reusable `hx_os_http *http` client handle, downloading a file takes just a few lines:
 
 ```c
 hx_os_http_response response = HX_OS_HTTP_RESPONSE_INIT;
@@ -35,37 +40,47 @@ if (status == HX_OS_OK)
 hx_os_http_response_destroy(&response);
 ```
 
-The call has a default 1 GiB streamed-body limit and the ordinary five-second HTTP budget. Set `hx_os_http_stream_options.request.timeout_ms` and `max_download_bytes` for your workload; the runnable example uses 30 seconds. No disk-sync or resume guarantee is implied. A filesystem that cannot provide the requested no-overwrite publication returns `NOT_SUPPORTED`; this can occur on WSL Windows-drive mounts. Do not replace this check with a racy “exists, then rename”.
+### Timeouts, Filesystem Atomicity, and Cleanup Rules
 
-Failures attempt to remove the temporary file. If cleanup itself fails, the HTTP client retains that resource: inspect `hx_os_http_pending_file(http)` and retry `hx_os_http_close(&http, &error)`. Close failure retains the client. Do not lose its last owner. New requests return `BUSY` until pending cleanup is resolved. A received HTTP error response may be inspected, but is never published as the requested file.
+- **Default Limits**: Streaming downloads default to a `1 GiB` body cap and the standard 5-second HTTP timeout budget. Customize `hx_os_http_stream_options.request.timeout_ms` and `max_download_bytes` for large files (the example uses 30 seconds). Note that this API does not imply an automatic `fsync` or broken-download resume.
+- **No-Overwrite Publication**: If the destination filesystem cannot guarantee atomic no-overwrite publication (which can happen on certain WSL Windows-drive mounts), the call returns `HX_OS_NOT_SUPPORTED` rather than falling back to a racy "check existence, then rename" sequence.
+- **Temporary File Cleanup**: On transfer failure or non-2xx HTTP responses (whose error bodies are never published as the target file), the library removes the temporary file automatically. If removing the temporary file fails, the HTTP client retains that pending cleanup path: inspect `hx_os_http_pending_file(http)` and retry `hx_os_http_close(&http, &error)` (subsequent requests on that handle return `HX_OS_BUSY` until cleanup succeeds; never leak a client handle whose close failed).
 
 ## 2. Upload and process chunks
 
-`hx_os_http_upload_file` reads a regular file in chunks and supplies its known length. Keep the file unchanged during the call. The example's `upload` mode sends HTTP PUT:
+- **Chunked File Uploads (`hx_os_http_upload_file`)**:
+  - Streams a regular file from disk in chunks using its known byte size (do not modify the file while the upload is in progress). The example's `upload` mode sends an HTTP `PUT` request:
 
 ```sh
 build/bin/hx_os_http_file upload http://your-server/upload firmware.bin
 ```
 
-That URL must implement PUT; Python's simple file server above does not. Generic upload returns completed HTTP 4xx/5xx responses normally, so check `response.status_code`. Uploads do not follow redirects or silently rewind/replay the body.
-
-For application-defined storage or processing, use `hx_os_http_request_stream`. Supply a `write(user, data, bytes, error)` callback that consumes each entire borrowed chunk, or a `read(user, buffer, capacity, completed, error)` callback with a known `upload_bytes`. A read returning no bytes before that length is complete fails with `TRUNCATED_INPUT`. Callback effects cannot be rolled back. With no write callback the response is collected under the existing memory limit.
-
-Callbacks run synchronously on the calling thread and cannot reenter the same client or retain chunk pointers. A progress callback can return an error to stop cooperatively. `low_speed_bytes_per_second` plus `low_speed_seconds` enables libcurl's low-speed timeout; set both or neither. Optional metrics report actual byte counts and cumulative DNS, connection, TLS, first-byte and total times in milliseconds. Cancellation does not prove a remote upload was undone.
+  - Note that Python's built-in `http.server` from Section 1 does not implement `PUT`. Because completed HTTP 4xx/5xx responses return `HX_OS_OK` at the transport layer, always inspect `response.status_code`. File uploads **never follow HTTP redirects or silently rewind and replay the request body**.
+- **Custom Streaming Callbacks (`hx_os_http_request_stream`)**:
+  - For custom storage, on-the-fly hashing, or in-memory streaming uploads, call `hx_os_http_request_stream()`:
+    - Supply a `write(user, data, bytes, error)` callback to consume each borrowed response chunk (if `write` is `NULL`, the response body is buffered in `response` up to the configured memory limit).
+    - Supply a `read(user, buffer, capacity, completed, error)` callback together with `upload_bytes` to stream outgoing request data. Returning `0` bytes before `upload_bytes` have been produced fails immediately with `HX_OS_TRUNCATED_INPUT`.
+  - **Callback Constraints**: Callbacks run synchronously on the calling thread and **must never re-enter the same `hx_os_http` client or retain borrowed chunk pointers after returning**. Progress callbacks can return an error status to abort a transfer cooperatively.
+  - **Low-Speed Timeouts & Metrics**: Set both `low_speed_bytes_per_second` and `low_speed_seconds` to enable `libcurl`'s low-speed abort timer. Passing an optional `metrics` struct reports actual transferred bytes alongside cumulative DNS, TCP connect, TLS handshake, first-byte (TTFB), and total elapsed times in milliseconds.
 
 ## 3. C++11 and coroutine use
 
-Include `<hx/Http.hpp>`. `hx::Http::create()` returns `Result<Http>`. Reuse that client with `downloadFile(url, path)` or `uploadFile(url, path)`; inspect the result and HTTP status. `pendingFile()` and explicit `close()` preserve the same cleanup contract. No exceptions are used.
+Include `<hx/Http.hpp>` and call `hx::Http::create()` to obtain an exception-free `hx::Result<hx::Http>`. Reuse that client across `downloadFile(url, path)` and `uploadFile(url, path)` calls, checking both the `Result` and `response.status_code`. `pendingFile()` and explicit `close()` preserve the exact same cleanup contract as C.
 
-For a coroutine runtime, explicitly create `hx_os_coro_http` once. Its defaults are two separate I/O threads, sixteen accepted requests and 64 MiB of reserved input/response capacity. The limits are configurable; the module does not start a worker per request. `hx_os_coro_http_request` copies the request before suspension; `get` is the common shortcut. C++ stackful callers can use `<hx/CoroutineNetwork.hpp>` and `hx::coro::Http(service).get(url, response)`.
+### Non-Blocking HTTP in Coroutines
 
-The coroutine resumes on completion, timeout or cancellation; it does not block a coroutine worker. Any still-running native DNS call retains only job-owned buffers. The I/O service stays owned until `hx_os_coro_http_close_until` succeeds; a close timeout can be retried. Use coroutine cancellation, or bind an external cancellation token to the coroutine: the copied HTTP options require `cancel=NULL`. Close the HTTP service from a native owner thread, then close the coroutine runtime. This bridge keeps a bounded I/O pool rather than a shared multi-transfer scheduler. With cancellable DNS enabled, each worker drives one transfer through libcurl multi and checks cancellation between bounded waits.
+Calling synchronous HTTP APIs directly inside a coroutine would block the underlying coroutine scheduler worker thread. Instead, create an explicit **`hx_os_coro_http` service bridge** once:
+- **Bounded Worker Pool & Memory Budget**: By default, `hx_os_coro_http` runs **2 dedicated I/O threads**, admits up to **16 concurrent requests**, and enforces a **64 MiB combined input/response reservation budget** (all configurable without spawning a thread per request).
+- **Issuing Requests**: In C coroutines, call `hx_os_coro_http_request()` (or the `get` shortcut), which copies the request before suspending the coroutine. In C++ stackful coroutines, include `<hx/CoroutineNetwork.hpp>` and call `hx::coro::Http(service).get(url, response)`. The coroutine suspends cleanly and resumes on completion, timeout, or cancellation without tying up a coroutine worker thread.
 
-Each accepted request reserves its configured maximum response size, not just the bytes currently received. The byte budget may therefore bind before the request-count limit: with the default 16 MiB response limit, the 64 MiB service admits three simultaneous requests after input/header overhead. For small JSON responses, set `options.max_body_bytes` to a suitable value such as 64 KiB; alternatively explicitly raise the service budget. Container growth peaks and native curl/TLS allocations are additional.
+> [!IMPORTANT]
+> **Reservation Accounting and Shutdown Order for `hx_os_coro_http`**
+> - **Up-Front Response Budget Reservation**: Each admitted request reserves its **configured maximum response size (`max_body_bytes`) up front**, not just the bytes received so far. With the default `16 MiB` per-response limit plus input/header overhead, a `64 MiB` service admits at most 3 default-sized requests simultaneously. When issuing small JSON requests from coroutines, lower `options.max_body_bytes` (for example, to `64 KiB`) or raise the service's overall byte budget at creation.
+> - **Cancellation & Shutdown**: Use coroutine cancellation (or bind an external cancel token to the coroutine; `options.cancel` inside the copied HTTP options must be `NULL`). At shutdown, close the HTTP service from a normal owner thread via `hx_os_coro_http_close_until()` (retrying on timeout) before closing the coroutine runtime.
 
 ## 4. Cancel even when DNS receives no reply
 
-The default SDK retains system DNS for compatibility. For cancellable DNS, explicitly build the SDK with `HX_DEPS_CURL_CARES=ON` following [dependency setup](DEPENDENCIES.md#8-optional-cancellable-dns), then enable it after client creation:
+By default, the dependency SDK uses the OS resolver for maximum compatibility, which means a hung system DNS query cannot be interrupted mid-flight. When **HTTP transfers must respond to cancellation and deadlines even during unresponsive DNS lookups**, build the dependency SDK with `-DHX_DEPS_CURL_CARES=ON` per the [Dependency Guide](DEPENDENCIES.md#8-optional-cancellable-dns), then enable cancellable DNS on your client:
 
 ```c
 hx_os_status status = hx_os_http_use_cancellable_dns(http, NULL, &error);
@@ -74,17 +89,14 @@ if (status == HX_OS_OK)
 		0, NULL, &response, &error);
 ```
 
-NULL uses the platform DNS configuration discovered by c-ares; pass numeric servers such as `"127.0.0.1:5353"` to choose your own. Configuration is copied and belongs only to this client. An SDK without c-ares immediately returns `NOT_SUPPORTED`; do not ignore that error and assume cancellation is available. Successful reconfiguration clears this client's connection/DNS cache.
+- **Configuration & Scope**: Passing `NULL` uses the platform DNS servers discovered by `c-ares`, or you can pass a numeric server list such as `"127.0.0.1:5353"`. The setting applies only to this `http` client and clears its existing connection/DNS cache. If the linked `libcurl` was built without `c-ares`, `hx_os_http_use_cancellable_dns()` immediately returns `HX_OS_NOT_SUPPORTED`.
+- **Coroutine HTTP Service**: Call `hx_os_coro_http_use_cancellable_dns(service, NULL, &error)` right after creating the service and before submitting requests (calling it while jobs are active returns `HX_OS_BUSY`). Both C++ `hx::Http` and `hx::coro::Http` expose `.useCancellableDns()`.
 
-The setting covers ordinary requests, JSON, streaming upload/download and redirects. libcurl still handles HTTPS certificate/hostname checks and proxies. No system DNS setting changes, and full enterprise VPN resolver compatibility is not implied. Cancellation/deadlines are checked within 50 ms of network waits, subject to scheduling. Configuration-file access, file I/O and application callbacks can still block; there is no hard-real-time guarantee. A remote proxy's own name resolution is outside this local DNS configuration.
-
-For coroutine HTTP, call `hx_os_coro_http_use_cancellable_dns(service, NULL, &error)` after service creation and before submitting work. All later requests inherit it. Exclude concurrent submissions, close and configuration calls; active jobs return `BUSY`. Cancellation stops waiting for the native DNS query, while service close retains its deadline/retry contract. C++ clients and `hx::coro::Http` expose `.useCancellableDns()`.
-
-Reuse the existing example targets:
+Test the integration with the existing example binaries by appending `--cancellable-dns` (after starting the local port-8080 server from Section 1):
 
 ```sh
 ./build/bin/hx_os_http_file download http://127.0.0.1:8080/hello.txt downloaded.txt --cancellable-dns
 ./build/bin/hx_os_coroutine_http http://127.0.0.1:8080/hello.txt --cancellable-dns
 ```
 
-Start the local server from section 1 first. The file example prints `HTTP 200` and saves the file; the coroutine example prints `HTTP 200` and `hello`. The ordinary SDK reports `not supported` with this flag; omit it to retain the original usage. Numeric-address demonstrations validate integration; actual DNS cancellation needs a hostname and an unresponsive DNS server.
+With the default non-`c-ares` SDK, passing `--cancellable-dns` reports `not supported`; omit the flag to use standard OS DNS resolution.

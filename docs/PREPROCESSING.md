@@ -2,37 +2,50 @@
 
 [简体中文](PREPROCESSING.zh-CN.md) · [README](../README.md)
 
-**Start with a complete program.** Preprocess runtime configuration text when it needs constants and conditional sections before JSON or custom parsing.
+When runtime configuration files need shared constants (`#define`), environment- or feature-gated sections (`#if` / `#ifdef`), or modular composition across relative files (`#include`), you can run a **bounded runtime preprocessing pass** before handing the resulting text to a JSON parser or custom grammar parser.
 
-Open [preprocess_config.c](../examples/preprocess_config.c). Prepare independent define/if text → preprocess_text_ex expands it → check status/diagnostic → use output → destroy.
+To see it in action, open [preprocess_config.c](../examples/preprocess_config.c). The program prepares a configuration snippet containing `#define` macros and `#if` branches, expands it in memory with `hx_os_preprocess_text_ex()`, checks the returned status and diagnostic struct, and prints the resulting JSON text. Follow the [example run instructions](../examples/README.md#run) to enable examples and build `hx_os_preprocess_config` (no command-line arguments or external input files are needed):
 
-Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_preprocess_config`. This program needs no arguments or input files.
+```json
+{
+  "title": "Camera",
+  "port": 8080,
+  "enabled": true
+}
+```
 
-**Expected result:** The JSON output contains title Camera, port 8080 and enabled true. The demo only prints this text; application code still parses and validates fields. Includes require an explicitly bounded loader.
-
-Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+In a real application, preprocessing produces the expanded text, which you then pass to the [configuration parser](CONFIGURATION.md) or your own lexer to extract typed fields. You can also drop the example source into the [minimal project](USAGE.md#c-project) as `main.c`.
 
 ## 1. Start with one operation
 
-The preprocessor transforms UTF-8 configuration text at runtime. It does not change C/C++ source syntax, invoke a compiler or add a code-generation step. Keep templates as data files, such as `.hxconf`, rather than compilation units.
+The runtime preprocessor transforms UTF-8 configuration data files (such as `.hxconf`) at runtime—it never alters C/C++ compilation units, invokes a C compiler, or requires a build-time code generator.
 
 ```c
-hx_string text = HX_STRING_INIT;
-hx_os_error error;
+#include <hx_os.h>
+#include <stdio.h>
 
-hx_os_status status =
-	hx_os_preprocess_file("device.hxconf", &text, &error);
-if (status == HX_OS_OK)
-	puts(hx_string_c_str(&text));
+int main(void)
+{
+	hx_string text = HX_STRING_INIT;
+	hx_os_error error;
 
-hx_string_destroy(&text);
+	hx_os_status status =
+		hx_os_preprocess_file("device.hxconf", &text, &error);
+	if (status == HX_OS_OK)
+		puts(hx_string_c_str(&text));
+
+	hx_string_destroy(&text);
+	return status == HX_OS_OK ? 0 : 1;
+}
 ```
 
-Include `<hx_os.h>` and `<stdio.h>`. Use `hx_os_preprocess_text(input, &text, &error)` for a C string. The advanced text entry accepts a byte span, source name, options and optional diagnostic. Output uses its own context, remains unchanged on failure and needs no global initialization.
-
-[preprocess_config.c](../examples/preprocess_config.c) is a complete executable. Build `hx_os_preprocess_config`, then run `build/bin/hx_os_preprocess_config` on Linux/macOS or `build/bin/Release/hx_os_preprocess_config.exe` with the Visual Studio generator. It prints valid JSON containing title `Camera`, port `8080` and enabled `true`; additional whitespace is normal. The paired files [device.hxconf](../examples/data/preprocess/device.hxconf) and [common.hxconf](../examples/data/preprocess/common.hxconf) demonstrate file inclusion. Copy them together, then pass the first path to the file entry. Feed processed text to the [configuration parser](CONFIGURATION.md) to obtain typed values.
+- **File entry vs. text entry**: Call `hx_os_preprocess_file()` to preprocess a file on disk, or `hx_os_preprocess_text(input, &text, &error)` for an in-memory C string. Use the extended entry points `hx_os_preprocess_text_ex()` and `hx_os_preprocess_file_ex()` when you want to pass an explicit byte length, custom source label, resource budget options, or an `hx_os_preprocess_diagnostic` struct.
+- **Transactional output**: Output is written into an initialized `hx_string` using its bound memory context, and any failure leaves the destination string untouched.
+- **Trying `#include` files**: The companion files [device.hxconf](../examples/data/preprocess/device.hxconf) and [common.hxconf](../examples/data/preprocess/common.hxconf) demonstrate relative file inclusion. Copy both files into the same directory, pass `device.hxconf` to `hx_os_preprocess_file()`, and pass the expanded output to the [configuration parser](CONFIGURATION.md) to read typed values.
 
 ## 2. Language rules
+
+Templates use familiar line-oriented `#` directives:
 
 ```text
 #define PORT 8080
@@ -46,32 +59,35 @@ Include `<hx_os.h>` and `<stdio.h>`. Use `hx_os_preprocess_text(input, &text, &e
 
 | Directive | Behavior |
 | --- | --- |
-| `#define NAME replacement` | Copies an object macro; the last successful definition wins |
-| `#define NAME` | Defines an empty replacement, still visible to ifdef |
-| `#undef NAME` | Removes a definition; a missing name is harmless |
-| `#if expression` | Starts a conditional branch |
-| `#ifdef NAME`, `#ifndef NAME` | Tests definition existence |
-| `#elif expression` | Selects a branch only when none was previously selected |
-| `#else`, `#endif` | Selects the remainder once, or closes the current condition |
-| `#include "relative.hxconf"` | Resolves and processes another source |
+| `#define NAME replacement` | Defines an object-like macro; if redefined, the latest successful definition wins |
+| `#define NAME` | Defines a macro with an empty replacement body (`#ifdef NAME` and `defined(NAME)` evaluate to true) |
+| `#undef NAME` | Removes a macro definition (succeeds harmlessly if `NAME` was not defined) |
+| `#if expression` | Evaluates a conditional expression and opens a conditional block |
+| `#ifdef NAME`, `#ifndef NAME` | Tests whether `NAME` is currently defined |
+| `#elif expression` | Evaluates and enters a branch only if no prior branch in the chain was taken |
+| `#else`, `#endif` | Enters the fallback branch (at most once per level) or closes the current conditional block |
+| `#include "relative.hxconf"` | Resolves and recursively preprocesses another source through the active include resolver |
 
-The `#` must be the first non-space/comment token on a line. Names are case-sensitive UTF-8 identifiers, at most 127 bytes, using the existing lexer rules. Strings/comments are copied without macro expansion. Each included source balances its own conditions; it cannot close the parent condition. Undefined ordinary identifiers remain unchanged.
+**Lexical and Conditional Evaluation Rules:**
+- **Directive placement & identifiers**: The `#` token must be the first non-whitespace, non-comment token on its physical line. Macro names are case-sensitive UTF-8 identifiers up to `127` bytes long. **Macros are never expanded inside string literals or comments**, and undefined identifiers in ordinary body text are emitted unchanged. Each source file (including included files) must close its own `#if ... #endif` blocks—an included file cannot close a conditional opened by its parent.
+- **Conditional expressions**: `#if` and `#elif` support signed 64-bit decimal and hexadecimal integers, `true` / `false` literals, `defined(NAME)` or `defined NAME`, unary `+`, `-`, and `!`, relational and equality operators (`<`, `<=`, `>`, `>=`, `==`, `!=`), logical `&&` and `||`, and parentheses `(...)`. Operator precedence from highest to lowest is: unary → relational → equality → `&&` → `||`.
+- **Macro expansion in conditions**: Identifiers in `#if` expressions (other than the target of `defined`) undergo text macro expansion before expression evaluation without implicitly wrapping macro bodies in extra parentheses. Identifiers that remain undefined after expansion evaluate to `0`; the keywords `defined`, `true`, and `false` cannot be redefined or undefined. Expression parentheses can nest up to `64` levels deep, and all operands are validated syntactically even when logical short-circuiting determines the result early.
 
-Conditions accept signed int64 decimal/hex and true/false literals, `defined(NAME)` or `defined NAME`, unary `+ - !`, comparisons, `&&`, `||` and parentheses. Precedence is unary, relational comparison, equality, `&&`, then `||`. Conditions expand as text first, preserving this precedence without silently parenthesizing macros. Undefined condition identifiers are zero. Names in `defined` are not expanded; defined/true/false cannot be redefined. Compound operator characters must be adjacent. All operands are validated, including unused logical operands; expression nesting is limited to 64.
-
-There are no function macros, stringification/token pasting, line continuation, binary arithmetic, bitwise operations, integer suffixes, character arithmetic, compiler/system includes or automatic host-variable access. Unsupported active directives/operators fail explicitly. Inactive branches still require lexically valid UTF-8, but do not invoke includes or evaluate nested conditions. A BOM is accepted at a complete source beginning, not in an internal fragment.
+> [!NOTE]
+> **Intentionally Omitted C Preprocessor Features:**
+> Function-like macros, stringification (`#`), token pasting (`##`), backslash line continuations, binary arithmetic and bitwise operators (`+ - * / & | ^ << >>`), integer suffixes (`ULL`), character constant arithmetic, angle-bracket system includes (`<...>`), and implicit host environment variable lookups are **not** supported. Unsupported active directives or operators fail explicitly. Inactive conditional branches do not execute `#include` directives or evaluate nested `#if` expressions, but must still contain lexically valid UTF-8 tokens.
 
 ## 3. Explicit file access
 
-The **text entry has no filesystem resolver by default**; an active include reports `HX_OS_NOT_SUPPORTED` unless options supply one. The **file entry provides a relative-file resolver**, using the directory of the including file and handling Windows UTF-8 conversion internally.
-
-The built-in resolver rejects absolute include names, colon syntax and `..` components, accepts either slash separator and follows filesystem links. It is bounded access for trusted configuration files, not a security sandbox. Use a custom resolver for an application resource map, package or approved file set. `HX_OS_PREPROCESS_NO_INCLUDES` disables includes even when a resolver exists. FILE_UTILS is needed only for the file entry.
-
-A resolver receives the parent identifier, requested name and remaining byte allowance. It fills initialized `hx_string` outputs and must honor that allowance. It must not retain the output pointers, change their contexts or destroy their owners. Returned sizes, UTF-8 and a nonempty resolved identifier up to 4,096 bytes are checked. Stable identifiers permit cycle detection; depth/byte bounds also limit aliases that do not compare equal. Callback side effects are not rolled back. Resolver and file I/O are synchronous, without a hard deadline or an automatically started worker.
+Filesystem access during preprocessing is strictly opt-in:
+- **Text entry points disable file access by default**: `hx_os_preprocess_text()` has no default filesystem resolver, so encountering an active `#include` returns `HX_OS_NOT_SUPPORTED` unless you supply a custom resolver in `options`.
+- **File entry points provide a relative-path resolver**: `hx_os_preprocess_file()` resolves `#include` paths relative to the **directory containing the including file**, handling UTF-8-to-UTF-16 path conversion on Windows internally.
+- **Built-in resolver constraints**: The built-in file resolver rejects absolute paths, colon (`:`) drive/scheme syntax, and `..` parent-directory components, while accepting both `/` and `\` separators and following filesystem symlinks. Note that this is a bounded path check for trusted configuration files, not an OS security sandbox. Pass `HX_OS_PREPROCESS_NO_INCLUDES` in `options.flags` to disable `#include` even when a resolver is present.
+- **Custom resolvers**: To load included fragments from an in-memory resource table, archive, or allowlisted file map, register a custom resolver callback in `options`. The callback receives the parent source identifier, the requested include name, and the remaining byte budget, populates an initialized `hx_string`, and outputs a non-empty resolved identifier up to `4,096` bytes long (used for include cycle detection).
 
 ## 4. C++11 and diagnostics
 
-Include `<hx/Preprocessor.hpp>` and `<cstdio>`. In a function returning `hx_os_status`:
+In C++11, include `<hx/Preprocessor.hpp>` and call `hx::Preprocessor::file()` or `hx::Preprocessor::text()`, passing an optional `hx::PreprocessDiagnostic` to capture 1-based line and column error locations:
 
 ```cpp
 hx::PreprocessDiagnostic why;
@@ -87,29 +103,25 @@ if (!text) {
 std::puts(text.value().c_str());
 ```
 
-Return `HX_OS_OK` on the successful path. `Preprocessor::text()` accepts `StringView`. Both methods return an owning String without exceptions. Options, diagnostic and context are optional; a normal call needs only the input.
-
-For C, initialize `hx_os_preprocess_diagnostic` with `HX_OS_PREPROCESS_DIAGNOSTIC_INIT` or its initializer and later destroy it. Each call clears old diagnostics. Failure records the source and 1-based invocation line/column when known. Description borrows static library text; source is copied best-effort and can be empty on OOM. Diagnostic failure never replaces the primary status/native error. Diagnostic storage must not alias input, source name or output. Keep the implementing module loaded through all string/diagnostic lifetimes.
-
-Output can gain spaces and blank lines to preserve token boundaries and separate included content; this is not a formatting-preserving editor or full source map. Lexer returns newline tokens by default; choose `HX_OS_LEXER_SKIP_NEWLINES` when the downstream grammar treats them as whitespace. Configuration parsers apply their own format rules.
+- In C, initialize an `hx_os_preprocess_diagnostic` with `HX_OS_PREPROCESS_DIAGNOSTIC_INIT` and release it with `hx_os_preprocess_diagnostic_destroy()`. On failure, it records the source name, 1-based line and column numbers, and a static English `description`.
+- **Whitespace and token separation**: Expanding macros and splicing `#include` files may insert spaces or blank lines so adjacent tokens never accidentally fuse together. When feeding preprocessed text into a custom lexer that treats newlines as whitespace, enable `HX_OS_LEXER_SKIP_NEWLINES`; standard JSON, YAML, and TOML parsers handle this whitespace automatically.
 
 ## 5. Limits and ownership
 
-| Option | Default | Maximum |
+To guard against recursive macro loops, exponential macro expansion ("Billion Laughs"), or deep include chains, every preprocessing call enforces explicit resource budgets (initialize with `HX_OS_PREPROCESS_OPTIONS_INIT`; setting any limit to `0` is rejected with `HX_OS_INVALID`):
+
+| Option field | Default bound | Maximum configurable ceiling |
 | --- | --- | --- |
-| `max_input_bytes` per source | 16 MiB | 64 MiB |
-| `max_total_input_bytes` across sources | 64 MiB | 64 MiB |
-| `max_output_bytes` | 16 MiB | 64 MiB |
-| `max_defines` | 256 | 4,096 |
-| `max_macro_bytes` retained names/replacements | 1 MiB | 64 MiB |
-| `max_expanded_bytes` cumulatively processed replacements | 64 MiB | 64 MiB |
-| `max_expansions`, `max_directives` | 65,536 each | 1,048,576 each |
-| `max_include_depth`, counting the root | 16 | 64 |
-| `max_expansion_depth` | 32 | 64 |
-| `max_condition_depth` per source | 64 | 64 |
+| `max_input_bytes` per source | `16 MiB` | `64 MiB` |
+| `max_total_input_bytes` across all sources | `64 MiB` | `64 MiB` |
+| `max_output_bytes` final output size | `16 MiB` | `64 MiB` |
+| `max_defines` active macro definitions | `256` | `4,096` |
+| `max_macro_bytes` retained macro names/bodies | `1 MiB` | `64 MiB` |
+| `max_expanded_bytes` cumulative replacement bytes | `64 MiB` | `64 MiB` |
+| `max_expansions`, `max_directives` | `65,536` each | `1,048,576` each |
+| `max_include_depth` (counting root source as 1) | `16` | `64` |
+| `max_expansion_depth` nested macro depth | `32` | `64` |
+| `max_condition_depth` per source | `64` | `64` |
 
-Use `HX_OS_PREPROCESS_OPTIONS_INIT` or the capacity-checked initializer. Zero limits are invalid. Initial definition count must fit max_defines; names/values are borrowed through the call and copied into its private macro map. Each invocation has independent definitions, also during concurrent calls. Every processed replacement consumes the expanded-byte budget. Existing lexer token-size/count limits still apply.
-
-Source and expansion stacks grow on demand within their limits; macros reuse PARAMETERS. These are payload/operation limits, not exact process RSS: allocation headers, geometric growth, lexer copies, current destination contents and temporary buffers add bounded library overhead. Custom resolver internals remain its responsibility. Lower limits to the actual requirements of an embedded application.
-
-Success replaces output; failure releases temporary strings, lexers, frames and macros while preserving it. Serialize access to participating output/diagnostic objects and keep callbacks, contexts and input alive until return. The module changes no process locale, environment, working directory or global configuration. `HX_OS_ENABLE_PREPROCESSOR` defaults to ON and also requires LEXER and PARAMETERS; `hx_os_preprocess_available()` checks this combination. Missing modules give NOT_SUPPORTED. No new third-party dependency is introduced.
+- **Per-call isolation**: Predefined macro names and values passed in `options` are borrowed only for the duration of the call and copied into the invocation's private macro table. Concurrent calls never share macro tables or mutate process-global state.
+- **Feature toggles**: `HX_OS_ENABLE_PREPROCESSOR` defaults to `ON` and requires `HX_OS_ENABLE_LEXER` and `HX_OS_ENABLE_PARAMETERS` (plus `HX_OS_ENABLE_FILE_UTILS` for `hx_os_preprocess_file`). Query `hx_os_preprocess_available()` at runtime; when disabled, preprocessing functions return `HX_OS_NOT_SUPPORTED`.

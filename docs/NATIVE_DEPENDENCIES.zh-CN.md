@@ -2,11 +2,13 @@
 
 [English](NATIVE_DEPENDENCIES.md) · [README](../README.zh-CN.md)
 
-**需要便利层以外的 SDK 功能时，继续用同一套底层库。** 例如已有 SQLite 代码仍可 include sqlite3.h、执行 SQL，不必为使用消息队列接口另带一套 SQLite。下面先说明 CMake 链接目标，再给一个只在内存中创建 sample 表的完整程序；成功退出码为 0，不会创建磁盘数据库。使用前仍需按[安装包接入教程](USAGE.zh-CN.md#installed-project)提供 prefix。
+当你的业务代码除了使用 `hx_c_platform` 提供的跨平台封装接口外，还需要直接调用底层第三方 SDK 的原生功能（例如已有的业务模块直接 `#include <sqlite3.h>` 执行自定义 SQL 查询，或直接调用 `OpenSSL`、`libcurl`、`utf8proc`、`zstd` 的底层 API）时，可以直接复用本库配套构建并导出的同一套底层依赖库，无需在项目中重复打包第二份 SQLite 或 OpenSSL。
+
+在使用已安装的 SDK 包之前，请先按[安装包接入教程](USAGE.zh-CN.md#installed-project)配置好 `CMAKE_PREFIX_PATH`。
 
 ## 1. 一次接入
 
-便利接口和底层原生 API 可以一起使用。安装后，业务项目这样接入：
+`hx_c_platform` 的高层便利接口与底层第三方原生 SDK 可以在同一个可执行文件或动态库中共存。在业务项目的 `CMakeLists.txt` 中，只需链接 `hx_c_platform::native` 聚合目标：
 
 ```cmake
 find_package(hx_c_platform CONFIG REQUIRED)
@@ -15,23 +17,26 @@ add_executable(app main.c)
 target_link_libraries(app PRIVATE hx_c_platform::native)
 ```
 
-`native` 包含 hx_c_platform 和本次构建启用的原生 SDK。需要减少依赖时，也可以分别链接核心和下面的目标。
+`hx_c_platform::native` 会自动链接 `hx_c_platform` 核心库以及当前构建中所有已启用的原生 SDK 目标。如果你希望控制链接范围、只引入实际用到的底层库，也可以单独链接核心目标与下表中的具体子目标：
 
-| 目标 | 原生头文件 | 启用条件 |
+| CMake 导出目标 | 暴露的原生头文件 | 启用条件（CMake 开关） |
 | --- | --- | --- |
-| hx_c_platform::sqlite | sqlite3.h、sqlite3ext.h | PERSISTENT_QUEUE，并启用 RANDOM、THREAD_EX |
-| hx_c_platform::openssl | openssl/evp.h、openssl/ssl.h | CRYPTO、ARCHIVE、HTTP 或 URL |
-| hx_c_platform::cares | ares.h | NETWORK 和 CARES |
-| hx_c_platform::curl | curl/curl.h | HTTP / URL |
-| hx_c_platform::utf8proc | utf8proc.h | UNICODE |
-| hx_c_platform::archive | archive.h、archive_entry.h | ARCHIVE 及其前置模块 |
-| hx_c_platform::zlib | zlib.h | ARCHIVE / COMPRESSION |
-| hx_c_platform::lzma | lzma.h | ARCHIVE / COMPRESSION |
-| hx_c_platform::zstd | zstd.h | ARCHIVE / COMPRESSION |
+| `hx_c_platform::sqlite` | `sqlite3.h`、`sqlite3ext.h` | 启用 `HX_OS_ENABLE_PERSISTENT_QUEUE`（同时需启用 `HX_OS_ENABLE_RANDOM` 与 `HX_OS_ENABLE_THREAD_EX`） |
+| `hx_c_platform::openssl` | `openssl/evp.h`、`openssl/ssl.h` | 启用 `HX_OS_ENABLE_CRYPTO`、`HX_OS_ENABLE_ARCHIVE`、`HX_OS_ENABLE_HTTP` 或 `HX_OS_ENABLE_URL` |
+| `hx_c_platform::cares` | `ares.h` | 启用 `HX_OS_ENABLE_NETWORK` 与 `HX_OS_ENABLE_CARES` |
+| `hx_c_platform::curl` | `curl/curl.h` | 启用 `HX_OS_ENABLE_HTTP` 或 `HX_OS_ENABLE_URL` |
+| `hx_c_platform::utf8proc` | `utf8proc.h` | 启用 `HX_OS_ENABLE_UNICODE` |
+| `hx_c_platform::archive` | `archive.h`、`archive_entry.h` | 启用 `HX_OS_ENABLE_ARCHIVE` 及其前置模块 |
+| `hx_c_platform::zlib` | `zlib.h` | 启用 `HX_OS_ENABLE_ARCHIVE` 或 `HX_OS_ENABLE_COMPRESSION` |
+| `hx_c_platform::lzma` | `lzma.h` | 启用 `HX_OS_ENABLE_ARCHIVE` 或 `HX_OS_ENABLE_COMPRESSION` |
+| `hx_c_platform::zstd` | `zstd.h` | 启用 `HX_OS_ENABLE_ARCHIVE` 或 `HX_OS_ENABLE_COMPRESSION` |
 
-被裁剪的 SDK 不导出对应目标。现有五个配置解析后端和 KCP 使用的内部符号继续隔离，没有通过这个目标公开为原生 SDK。
+> [!NOTE]
+> 如果某个模块在编译 `hx_c_platform` 时被裁剪关闭，对应的 `hx_c_platform::<sdk>` 目标将不会被导出。此外，库内部私有的五个配置解析后端（JSON/YAML/TOML/XML/INI）以及内部 KCP 实现均经过了符号隔离，不作为公共原生 SDK 目标向外导出。
 
 ## 2. 直接使用 SQLite
+
+链接 `hx_c_platform::native`（或 `hx_c_platform::sqlite`）后，业务代码可以直接包含 `<sqlite3.h>` 并操作自己的数据库连接。下面的完整程序在内存中创建一张 `sample` 表并以状态码 `0` 退出（不会在磁盘上生成数据库文件）：
 
 ```c
 #include <sqlite3.h>
@@ -52,33 +57,31 @@ int main(void)
 }
 ```
 
-这个连接由业务自己持有，使用与持久化队列相同的 SQLite SDK，不需要先创建队列对象。同样可以直接调用 OpenSSL 的 EVP／SSL、libcurl 的 easy／multi／URL、utf8proc 以及各压缩库的 API；原生 API 的行为由对应库规定。
+这个 `sqlite3 *` 连接由业务代码独立持有和关闭，它与本库持久化队列（`hx_os_persistent_queue`）共享同一个底层 SQLite 运行库，但无需先创建队列对象。同理，你也可以直接调用 OpenSSL 的 `EVP_*` / `SSL_*`、libcurl 的 `curl_easy_*` / `curl_multi_*` / `CURLU`、`utf8proc` 以及 `libarchive` / `zlib` / `lzma` / `zstd` 的原生函数。
 
-完整的 [native_dependencies.c](../examples/native_dependencies.c) 示例直接调用了 SQLite、EVP、CURLU、utf8proc 和已启用的压缩 SDK：
+仓库中的完整示例 [native_dependencies.c](../examples/native_dependencies.c) 演示了在同一个程序中直接调用 SQLite、OpenSSL EVP、libcurl URL、`utf8proc` 以及各个已启用的压缩 SDK：
 
 ```sh
+# Linux / macOS（复用已有构建目录）：
 cmake --build build-shared-linux --target hx_os_native_dependencies
-build-shared-linux/bin/hx_os_native_dependencies
-```
+./build-shared-linux/bin/hx_os_native_dependencies
 
-复用已有构建目录。Windows 添加 `--config Debug`，运行 `bin/Debug/hx_os_native_dependencies.exe`。
+# Windows PowerShell（以 Debug 配置为例）：
+cmake --build build-shared-msvc --config Debug `
+    --target hx_os_native_dependencies
+.\build-shared-msvc\bin\Debug\hx_os_native_dependencies.exe
+```
 
 ## 3. 对象归属与初始化
 
-业务创建的原生对象，通过对应 API 释放，例如 sqlite3_close、EVP_*_free、curl_easy_cleanup／curl_url_cleanup、archive_*_free。这些对象与 hx_c_platform 内部对象分别持有；原生库返回的内存按照它自己的分配规则释放。已有操作系统句柄借用接口见[原生对象互操作](NATIVE_INTEROP.zh-CN.md)。
-
-进程级原生配置和清理由宿主协调。库或其他消费者仍在使用时，不要更换 SQLite／OpenSSL 的全局分配器，也不要调用 sqlite3_shutdown／OPENSSL_cleanup。原生 curl_global_init／cleanup 要配对，相关工作完成后才释放宿主的初始化。本库分配器负责本库自己的内存，原生库仍使用它们的分配策略。
-
-头文件、导入库和运行库使用同一套安装包。不要额外混入另一个版本的 OpenSSL／libcurl／SQLite，再把两套库的对象交叉使用。业务直接调用原生接口，不改变自有 C++ 源码禁用异常的约定。
+- **谁创建谁释放**：业务代码直接调用原生 SDK 创建的对象，必须通过对应 SDK 的原生释放函数销毁（如 `sqlite3_close`、`EVP_MD_CTX_free`、`curl_easy_cleanup` / `curl_url_cleanup`、`archive_read_free` 等）。这些对象与 `hx_c_platform` 自身管理的对象完全独立；原生 SDK 分配的内存也遵循其自身的分配器规则（向 `hx_c_platform` 注入自定义 `hx_context` 分配器只接管本库自身的内存分配，不会替换底层第三方 SDK 的内存分配器）。如果你需要从本库已有的文件、套接字、线程或进程对象中借出操作系统底层句柄，请参阅[原生对象互操作](NATIVE_INTEROP.zh-CN.md)。
+- **进程级全局状态协调**：当 `hx_c_platform` 或进程内的其他模块仍在使用对应 SDK 时，**切勿**在外部篡改 SQLite 或 OpenSSL 的进程级全局分配器，也**切勿**提前调用 `sqlite3_shutdown()` 或 `OPENSSL_cleanup()`。若业务代码显式调用了 `curl_global_init()`，请确保与 `curl_global_cleanup()` 严格配对，并在所有相关请求结束后再执行清理。
+- **严禁混用不同版本的同名运行库**：编译、链接和运行部署时，请始终成套使用同一安装前缀下的头文件、导入库与动态运行库（`.dll` / `.so` / `.dylib`）。不要在同一个进程内混入另一套不同编译配置或不同版本的 OpenSSL、libcurl 或 SQLite，更不能将两套运行库创建的对象交叉传递。
 
 ## 4. 安装与发布
 
-只有编译好的 SDK 时，先按[安装包接入教程](INSTALL.zh-CN.md)跑通 C 或 C++ 的文件读取程序；其中包含完整 find_package 配置和 DLL／.so 运行路径命令，再按本页增加原生库调用。
+如果你手里只有编译打包好的 SDK 产物，建议先按[安装包接入教程](INSTALL.zh-CN.md)跑通最小 C/C++ 文件读取示例（其中包含完整的 `find_package` 命令以及 Windows `PATH` / Linux `LD_LIBRARY_PATH` 运行库配置说明），随后再按本文引入原生 SDK 调用：
 
-安装包带有所选 SDK 的头文件、CMake 导入文件和运行所需产物。Windows 动态库放在 `bin/`，Linux 放在 `lib/`。Windows 发布时把 DLL 放在程序旁边，或把这套安装包的 `bin/` 加入 PATH。Linux 保留共享库符号链接和本地运行库搜索路径。
-
-在自己的目标环境运行安装后的消费者示例，检查头文件、链接与运行库部署；桌面结果不能代替 Android、板卡或旧系统验收。发布底层 SDK 时保留[第三方许可说明](../THIRD_PARTY_NOTICES.zh-CN.md)。
-
-可以通过 HX_OS_DEPENDENCY_PREFIX 或普通的 CMAKE_PREFIX_PATH 选择准备好的 SDK。安装时使用 find_package 实际选中目标的头文件目录和包配置位置，同时保留 Unix 库的符号链接链，不改写第三方 SDK 文件。
-
-静态 hx_c_platform 的 `pkg-config --libs --static hx_c_platform` 会包含已启用的 curl、utf8proc、hx_sqlite3 及平台依赖，包括需要的 libm、librt。SQLite 及默认 curl／utf8proc 仍为共享库；静态链接本库不等于整个程序全部静态链接。PKG_CONFIG_PATH 需要包含本库安装目录的 lib/pkgconfig 和准备好的 SDK 的 lib/pkgconfig，以找到 OpenSSL／归档库的元数据。CMake 消费者直接使用导出目标。
+- **运行库部署位置**：安装包的 Windows 动态库（`.dll`）位于 `<prefix>/bin/`，Linux/macOS 共享库位于 `<prefix>/lib/`。发布 Windows 应用程序时，请将所需的 `.dll` 放置在可执行文件同级目录下，或将安装包的 `bin/` 加入进程 `PATH`；在 Linux 上请保留共享库的 SONAME 符号链接链与运行库搜索路径（RPATH / `LD_LIBRARY_PATH`）。
+- **构建时定位预编译依赖**：编译本库时，可通过 `-DHX_OS_DEPENDENCY_PREFIX=<path>` 或标准 `CMAKE_PREFIX_PATH` 指定预先准备好的第三方依赖 SDK。`cmake --install` 会自动提取 `find_package` 实际选中的目标头文件目录、CMake 配置及 Unix 符号链接链进行打包，不会篡改第三方源码或预编译产物。分发包含底层第三方 SDK 的软件时，请一并保留[第三方许可说明](../THIRD_PARTY_NOTICES.zh-CN.md)。
+- **`pkg-config` 静态链接注意事项**：当构建静态版本的 `hx_c_platform` 时，执行 `pkg-config --libs --static hx_c_platform` 会自动输出已启用的 `curl`、`utf8proc`、`hx_sqlite3` 以及所需的系统库（如 `libm`、`librt`）。请注意，SQLite 以及默认配置下的 `curl` / `utf8proc` 依然以共享库形式提供——静态链接 `hx_c_platform` 核心库并不意味着整个可执行文件变成纯静态二进制。使用 `pkg-config` 时，请将本库安装目录的 `lib/pkgconfig` 与依赖 SDK 的 `lib/pkgconfig` 一并加入 `PKG_CONFIG_PATH`，以便正确解析 OpenSSL 与 `libarchive` 的传递依赖（CMake 用户直接链接导出目标即可，无需手动配置 `pkg-config`）。

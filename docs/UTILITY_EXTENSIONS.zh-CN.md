@@ -2,30 +2,34 @@
 
 [English](UTILITY_EXTENSIONS.md)
 
-**这些功能分别解决不同任务，不需要一起初始化。** 压缩处理内存字节，URL 工具只整理地址，HTTP 才会访问服务器；串口需要真实设备协议，共享内存需要双方约定数据和同步方式。先选下表中的完整程序，确认它的输入和结果，再读对应小节的上限与并发规则。全部示例的构建目标和运行位置也可从[示例目录](../examples/README.zh-CN.md#sdk)查找。
+本页涵盖七项互不耦合的实用扩展模块：**内存帧压缩**、**URL 解析与查询参数**、**命令行参数解析**、**HTTP/HTTPS 客户端**、**安全临时文件与目录**、**串口字节收发**以及**跨进程命名共享内存**。每个模块都可以单独按需调用，不需要预先执行统一的全局初始化。
 
-先选一个你要完成的动作。下表链接到完整程序；本文后面的短代码块只展示关键步骤，需要放进自己的函数中。还没接入库时，先按[入门教程](USAGE.zh-CN.md#project)配置工程。
+你可以从下表中挑选最贴近当前任务的完整可运行程序，先查看它的输入与运行效果，再阅读对应小节了解配额限制与并发边界。全部示例的构建目标和运行目录说明也可在[示例目录](../examples/README.zh-CN.md#sdk)中查阅；如果尚未将库接入自己的工程，请先参考[入门教程](USAGE.zh-CN.md#project)。
 
-| 要做什么 | 完整程序 | 运行时会看到什么 |
+| 要做什么 | 完整示例程序 | 运行后会看到什么 |
 | --- | --- | --- |
-| 把 JSON 字节压缩后再还原 | [compress_memory.c](../examples/compress_memory.c) | 压缩前后大小，以及还原后的 JSON |
-| 给 URL 添加设备名参数 | [url_query.c](../examples/url_query.c) | 编码后的地址，以及读回的设备名称；不会访问网络 |
-| 从命令行读取端口和名称 | [command_line.c](../examples/command_line.c) | 解析后的选项；`--help` 显示用法 |
-| 向自己的服务发送 JSON | [http_json.c](../examples/http_json.c) | HTTP 状态与响应；地址必须换成自己的接口 |
-| 写入临时文件并在用完后删除 | [temporary_file.c](../examples/temporary_file.c) | 临时路径，以及删除完成的提示 |
+| 将内存中的 JSON 字节压缩后再解压还原 | [compress_memory.c](../examples/compress_memory.c) | 打印压缩前后的字节大小，以及完整还原出的 JSON 文本 |
+| 解析 URL 并添加或读取查询参数 | [url_query.c](../examples/url_query.c) | 打印百分号编码后的完整 URL 与解码出的设备名称（纯内存解析，不发起网络请求） |
+| 从命令行读取监听端口和设备名称 | [command_line.c](../examples/command_line.c) | 打印解析后的选项值；传入 `--help` 会输出自动生成的用法说明 |
+| 向 HTTP/HTTPS 服务端发送 JSON 请求 | [http_json.c](../examples/http_json.c) | 打印 HTTP 状态码与响应体（运行前需将参数替换为你自己的服务端地址） |
+| 创建排他临时文件、写入数据并在关闭时自动删除 | [temporary_file.c](../examples/temporary_file.c) | 打印生成的随机临时路径，并在关闭后确认文件已被清理 |
 
-压缩、URL 和 HTTP 示例需要对应的[依赖 SDK](DEPENDENCIES.zh-CN.md)。在库源码目录，使用已配置且开启 `HX_OS_BUILD_EXAMPLES=ON` 的构建目录，例如编译并运行压缩示例：
-
-```sh
-cmake --build build --config Release --target hx_os_compress_memory
-./build/bin/hx_os_compress_memory
-```
-
-`build` 替换成已有目录；Windows Visual Studio 的运行路径是 `.\build\bin\Release\hx_os_compress_memory.exe`。其余示例使用 `hx_os_` 加文件名作为构建目标。
+> [!NOTE]
+> 内存压缩、URL 解析和 HTTP 示例需要预先准备好对应的第三方[依赖 SDK](DEPENDENCIES.zh-CN.md)。在已开启 `HX_OS_BUILD_EXAMPLES=ON` 的构建目录中，可按 `hx_os_<源文件名>` 构建单个示例（以 `hx_os_compress_memory` 为例）：
+>
+> ```sh
+> cmake --build build --config Release --target hx_os_compress_memory
+>
+> # Linux / macOS：
+> ./build/bin/hx_os_compress_memory
+>
+> # Windows PowerShell（Visual Studio 生成器）：
+> .\build\bin\Release\hx_os_compress_memory.exe
+> ```
 
 ## 1. 在内存中压缩字节
 
-`hx_os_compress`／`hx_os_decompress` 接收格式、字节数据、可选限制和已初始化的 `hx_bytes` 输出，处理单个 Zlib、Gzip、XZ 或 Zstd 压缩帧。它与包含文件的 ZIP 归档不同。失败保持原输出不变，输入直接引用输出内存时也适用。
+当你需要在内存中直接压缩或解压一段二进制载荷（例如网络报文或缓存块），而不是打包多文件 `.zip` 归档时，可以使用 `hx_os_compress` 与 `hx_os_decompress`（C++11 对应 `hx::Compression::compress` / `decompress`，返回 `hx::Result<hx::Bytes>`）。该接口支持单帧 `Zlib`、`Gzip`、`XZ` 和 `Zstd` 格式（对应枚举如 `HX_OS_COMPRESS_ZSTD`）：
 
 ```c
 hx_bytes compressed = HX_BYTES_INIT, restored = HX_BYTES_INIT;
@@ -41,11 +45,12 @@ hx_bytes_destroy(&restored);
 hx_bytes_destroy(&compressed);
 ```
 
-默认输出上限 16 MiB、原生编解码工作内存预算 64 MiB、压缩级别 3；输出最多可配置到 64 MiB。原生内存不计入 hx 分配器，输出扩容期间可能同时持有新旧缓冲。解压拒绝尾随字节及多个串联压缩帧，截断、损坏和超限分别报告。C++ 使用 `hx::Compression::compress/decompress`，返回 `Result<Bytes>`。运行 `hx_os_compress_memory`；很短的数据压缩后可能变大。
+- **默认配额与内存边界**：默认压缩级别为 `3`，单次输出缓冲区上限为 `16 MiB`（可通过可选限制参数调高至最大 `64 MiB`），底层原生编解码器工作内存预算为 `64 MiB`。底层压缩库内部申请的工作内存不计入 `hx_context` 统计；输出 `hx_bytes` 在扩容过渡期间可能短暂同时持有新旧两块缓冲区。
+- **失败保持原值与帧完整性**：任何压缩或解压失败都会保持调用方原有的 `hx_bytes` 输出内容不变（即使输入视图直接指向输出缓冲区自身也是安全的）。解压器严格校验单帧完整性，遇到尾部多余字节、多个串联压缩帧、数据截断、校验损坏或超出输出上限时会分别返回明确的错误状态。请注意，极短的输入数据在加上压缩帧头后体积可能比原文略大。
 
 ## 2. URL 和查询参数
 
-`hx_os_url_parse` 持有一个绝对、包含层级的 URL。`part` 复制编码后的组成部分，`query_get` 复制解码后的 UTF-8 参数，`query_append` 保留同名参数，`query_set` 替换该键的全部值。`query_each` 同步遍历最多 1024 对参数，回调中的视图只在回调内有效，不能修改或销毁正在遍历的 URL。
+如果你需要安全地拆解、拼接 URL 或读写 `?key=value` 查询参数，应使用 `hx_os_url`（C++11 为 `hx::Url`），避免手写字符串拼接引发转义漏洞。解析过程纯在内存中完成，不会发起 DNS 查询或网络连接：
 
 ```c
 hx_os_url *url = NULL;
@@ -64,11 +69,19 @@ hx_os_url_destroy(&url);
 hx_string_destroy(&address);
 ```
 
-生成的地址末尾为 `name=Door%20A`。查询参数中的 `+` 解码为空格，真正的加号使用 `%2B`。缺失键返回 `NOT_FOUND`；读取同名参数时取第一项。URL 最长 16 KiB，同一对象的操作需要外部串行化。独立百分号编解码也支持任意字节：编码接受最多 16 KiB 原始输入，结果最多 48 KiB；解码接受最多 48 KiB 编码文本，结果最多 16 KiB。调用者明确选择 `plus_as_space`。无效转义返回 `SYNTAX`，解码出的 NUL 字节会保留。每个 URL 持有配对的原生 curl 初始化引用，宿主需协调其他 SDK 使用者的全局分配器／清理操作。C++ 使用 `hx::Url`。运行 `hx_os_url_query`，解析本身不会进行 DNS 或网络传输。
+运行上述代码后，`address` 中生成的完整 URL 末尾会自动编码为 `name=Door%20A`。
+
+- **组件提取与参数读写**：
+  - `hx_os_url_parse` 仅接受包含层级结构的绝对 URL（最大长度 `16 KiB`）。
+  - `hx_os_url_part` 提取并复制编码后的 URL 组成部分；`hx_os_url_query_get` 提取并百分号解码指定的 UTF-8 查询参数（若键不存在则返回 `HX_OS_NOT_FOUND`；若存在多个同名键则返回第一项）。
+  - `hx_os_url_query_append` 会在保留已有同名参数的基础上追加新键值对，而 `hx_os_url_query_set` 会替换该键名下的所有已有值。
+  - `hx_os_url_query_each` 支持同步遍历最多 `1,024` 对查询参数。回调收到的键值视图仅在当次回调期间有效，且回调内部不得修改或销毁正在遍历的 `hx_os_url` 对象。
+- **空格与百分号编解码规则**：在查询参数中，`+` 会被解码为空格，字面加号需编码为 `%2B`。独立提供的百分号编解码工具函数支持任意原始字节（包含内嵌的 `NUL` 字节）并由调用方显式指定 `plus_as_space`：编码输入上限为 `16 KiB`（输出最多 `48 KiB`），解码输入上限为 `48 KiB`（输出最多 `16 KiB`），遇到非法 `%` 转义序列时返回 `HX_OS_SYNTAX`。
+- **并发与底层生命周期**：同一个 `hx_os_url` 实例上的操作需由调用方串行化。每个存活的 `hx_os_url` 内部持有一份配对的 `libcurl` 全局初始化引用，若宿主程序在其他模块中也直接使用 `libcurl`，需协调好全局分配器与清理时机。
 
 ## 3. 命令行参数
 
-选项名只声明一次，然后解析和查询。`hx_os_cli_parse_process` 在 Windows 上直接读取 UTF-16 命令行，其他系统使用 `argc/argv`；普通 `main` 优先用这个入口，避免把 Windows 本地编码参数误当作 UTF-8。需要解析指定参数列表时使用 `hx_os_cli_parse`，输入必须为 UTF-8。
+`hx_os_cli`（C++11 为 `hx::Cli`）让你只需声明一次选项表，即可完成命令行解析、类型转换与 `--help` 帮助文本生成。在普通 `main(int argc, char **argv)` 中，推荐优先使用 `hx_os_cli_parse_process`——它在 Windows 上直接读取系统原生 UTF-16 命令行并转为 UTF-8，避免窄字符 CRT `argv` 因本地代码页丢失非 ASCII 字符；若需解析自定义的字符串数组，则调用 `hx_os_cli_parse`（输入必须为合法 UTF-8）：
 
 ```c
 const hx_os_cli_option options[] = {
@@ -85,11 +98,13 @@ if (status == HX_OS_OK && hx_os_cli_count(args, "port"))
 hx_os_cli_destroy(&args);
 ```
 
-上面放在普通 `main(int argc, char **argv)` 中。支持 `--port=9000`、`-p 9000`、合并短标志，以及 `--` 后的位置参数。同一选项可重复，普通 `value`／`i64` 取最后一次；按序号可以读取全部值，键名 `NULL` 表示位置参数。未知选项、缺值、缺少必需选项会报错，库不会直接退出程序。最多 256 项声明、4096 个参数／出现项、1 MiB 文本副本。解析对象持有字符串，借用视图有效到销毁。运行 `hx_os_command_line --port 9000 --name "门禁 A"`，用 `--help` 查看说明。C++ 使用 `hx::Cli`。
+- **支持的语法格式**：支持长选项 `--port=9000`、短选项 `-p 9000`、合并短标志（如 `-vv`）以及 `--` 分隔符后的位置参数。
+- **重复选项与位置参数读取**：同一个选项允许在命令行中出现多次；常规查询接口（如 `hx_os_cli_value`、`hx_os_cli_i64`）默认返回最后一次出现的值，也可按索引序号读取全部出现值。将键名传为 `NULL` 即可读取位置参数。
+- **错误处理与配额上限**：遇到未知选项、选项缺少参数值或缺失必填选项时，解析函数会明确返回错误状态，**绝不会在库内部擅自调用 `exit()` 终止进程**。单次解析最多支持 `256` 项选项声明、`4,096` 个参数/出现项以及 `1 MiB` 的字符串副本总预算。解析结果对象（`hx_os_cli`）内部持有所有字符串内存，返回的借用视图在调用 `hx_os_cli_destroy` 之前保持有效。可运行 `hx_os_command_line --port 9000 --name "门禁 A"` 或加上 `--help` 体验完整效果。
 
 ## 4. HTTP 和 HTTPS
 
-单次 GET 可以初始化 `hx_os_http_response` 后调用 `hx_os_http_get`。重复请求则创建并复用 `hx_os_http`，调用 `request`／`post_json`；复用客户端会保留 libcurl 的连接缓存。响应持有原始内容、原始响应头和最终 URL，需要 UTF-8 文本时再显式转换。
+如果你需要发起单次 HTTP `GET` 请求，只需初始化 `hx_os_http_response` 并调用 `hx_os_http_get`。若需要向同一服务端连续发送多次请求，建议创建并复用 `hx_os_http` 客户端实例（C++11 为 `hx::Http` 及 `hx::Result<hx::HttpResponse>`），调用 `hx_os_http_request` 或 `hx_os_http_post_json`，从而复用底层 `libcurl` 的连接池缓存：
 
 ```c
 hx_os_http *http = NULL;
@@ -108,77 +123,93 @@ hx_os_http_response_destroy(&response);
 hx_os_http_close(&http, NULL);
 ```
 
-JSON 入口会添加 `Content-Type: application/json`；动态字段建议用文档／codec 接口生成 JSON。HTTPS 同时验证证书和主机名，`ca_file` 可以明确指定信任的 CA 文件，不能关闭验证。Windows 可使用系统信任库。默认响应内容 16 MiB、响应头 64 KiB、等待 5 秒、不自动重定向、不使用环境代理。显式重定向有次数限制且不能从 HTTPS 降级；只允许 HTTP／HTTPS，不允许包含用户名的 URL。代理需显式配置。
+`hx_os_http_post_json` 会自动附加 `Content-Type: application/json` 请求头（若请求体包含动态字段，建议先用配置文档或序列化接口生成 JSON，避免手拼字符串）。响应对象持有原始响应体字节、原始响应头块和最终生效的 URL；若业务期望 UTF-8 文本，可在收到响应后显式校验转换。
 
-如果上面的示例需要最多跟随三次跳转，初始化以下选项，并把 `hx_os_http_post_json` 的选项参数从 `NULL` 换成 `&options`：
+### 安全策略与重定向规则
+
+- **强制 TLS 验证与安全默认值**：仅允许 `http://` 和 `https://` 协议，拒绝在 URL 中内嵌用户名或密码凭据。HTTPS 始终强制验证服务端证书链与主机名（**不支持关闭证书验证**）；Windows 支持直接使用系统根证书库，也可通过 `ca_file` 显式指定受信任的 PEM 根证书文件（在所选 `curl`/`OpenSSL` SDK 不含默认系统 CA 包的 Android 环境中，需通过 `ca_file` 传入应用认可的 CA 证书包）。
+- **默认配额与代理**：默认响应体上限为 `16 MiB`、响应头上限为 `64 KiB`、单次请求超时为 `5 秒`，默认**不自动跟随重定向**且**不读取环境变量代理**（如需代理必须通过选项显式配置）。
+- **开启受控重定向**：如果希望跟随最多 3 次 HTTP 跳转，可初始化 `hx_os_http_options` 并将其地址传给请求接口（文件流式下载则设置流选项中的 `request.redirects` 字段）：
 
 ```c
 hx_os_http_options options = HX_OS_HTTP_OPTIONS_INIT;
 options.redirects = 3;
 ```
 
-文件下载则设置流选项中的 `request.redirects` 字段。默认值为零，只返回第一次响应，包括 HTTP 3xx，不会继续请求跳转地址。
+重定向设有次数上限，且**严禁从 HTTPS 降级跳转到 HTTP**。开启重定向后，不同 3xx 状态码对下一个请求方法与请求体的影响如下表所示（流式上传因无法自动回退输入流位置，不支持开启重定向）：
 
-| 重定向响应 | 开启跟随后，下一个请求的行为 |
+| 重定向状态码 | 开启跟随后，下一个请求的行为 |
 | --- | --- |
-| 301／302 | POST 改为 GET，不带请求体；PUT／PATCH 等其他方法保留方法和请求体 |
-| 303 | 改为 GET，不带请求体；HEAD 仍为 HEAD |
-| 307／308 | 保留原方法和请求体 |
+| `301` / `302` | `POST` 转为无请求体的 `GET`；`PUT` / `PATCH` 等其他方法保留原方法与请求体 |
+| `303` | 统一转为无请求体的 `GET`（`HEAD` 仍保持 `HEAD`） |
+| `307` / `308` | 严格保留原 HTTP 方法与原始请求体（例如 `POST` JSON 会向新地址重发同一份 JSON） |
 
-例如，提交 JSON 后收到 303，会用 GET 读取结果；收到 307，则向新地址重新发送相同的 JSON POST。流式上传无法自动回到输入开头，因此拒绝开启重定向。
-
-如果使用 `hx_os_http_response_init(&response, context)` 指定分配器上下文，必须先销毁响应，再销毁 context；使用同一 context 的客户端也要先关闭。请求失败时仍按这个顺序清理，包括下载目标路径无效的情况。
-
-`OK` 表示收到完整响应，包括 HTTP 404／500，业务应检查 `status_code`。传输、证书、取消和超限失败都保持原响应，并保留 CURL 原生诊断。同一个客户端一次只接受一个请求，并发返回 `BUSY`，重入返回 `DEADLOCK`；不同客户端可在不同线程使用。截止时间和取消为协作式：默认 SDK 的阻塞 DNS 不能被中断；需要可取消 DNS 时选择[可选 SDK 和显式启用入口](HTTP_FILES.zh-CN.md#4-连-dns-无响应也需要取消时)，原生 TLS 和调用者回调也可能延迟返回。不自动启动线程，关闭前需要排除调用者，并协调宿主使用的 libcurl／OpenSSL 全局清理。C++ 使用 `hx::Http` 及 `Result<HttpResponse>`。
-
-运行 `hx_os_http_json URL [trusted-ca.pem]` 访问自己的 JSON 服务。本地回归夹具也覆盖 JSON 上传、HTTP 错误状态、响应上限和可信／不可信 HTTPS，不依赖外部互联网服务。
+> [!IMPORTANT]
+> **HTTP 状态码判定、并发与上下文释放顺序**
+> - **区分网络传输成功与业务状态码**：只要完整收到了服务端返回的 HTTP 报文（哪怕是 `HTTP 404` 或 `HTTP 500`），函数都会返回 `HX_OS_OK`；业务代码必须检查 `response.status_code`。网络断开、TLS 证书错误、主动取消或响应体积超限则会返回错误状态码，保持原有的 `response` 内容不变，并在 `hx_os_error` 中保留原生 `CURLcode` 诊断。
+> - **单客户端串行与协作式取消**：同一个 `hx_os_http` 实例同一时刻只允许执行一个请求（并发调用返回 `HX_OS_BUSY`，在回调中重入自身返回 `HX_OS_DEADLOCK`；不同线程可各自创建独立的 `hx_os_http` 实例）。超时与取消为协作式：默认 SDK 的系统阻塞式 DNS 解析无法被半途打断；若需要连 DNS 无响应时也能及时取消，请参阅[可选 SDK 和显式启用入口](HTTP_FILES.zh-CN.md#4-连-dns-无响应也需要取消时)。
+> - **自定义分配器销毁顺序**：如果通过 `hx_os_http_response_init(&response, context)` 为响应绑定了自定义 `hx_context`，无论请求成功还是失败（包括下载目标文件路径无效等早期错误），都**必须先销毁 `response` 并关闭使用同一 `context` 的 `hx_os_http` 客户端，最后才能销毁 `context`**。你可以运行 `hx_os_http_json <URL> [trusted-ca.pem]` 测试自己的 JSON 接口。
 
 ## 5. 临时文件和目录
 
-`hx_os_temp_create_file` 返回持有已打开文件和随机排他路径的对象；`create_directory` 创建空目录。传入可信的父目录，`NULL` 在支持的平台选择系统临时目录；Android 必须明确传入有权限的目录。`path` 和 `file` 为借用。
+当业务需要创建安全的临时工作文件或临时目录（例如先写入临时文件、校验无误后再原子替换为正式文件）时，使用 `hx_os_temp_create_file` 或 `hx_os_temp_create_directory`（C++11 为 `hx::Temp`）。可运行 `hx_os_temporary_file` 查看创建、写入并自动清理临时 JSON 文件的完整流程：
 
-`close` 关闭并删除资源；目录使用现有的有界、不跟随链接的递归清理。失败保留对象，允许重试，不过部分目录项或文件句柄可能已经处理。`keep` 明确保留路径；`publish` 关闭后在同一文件系统内移动，不跨盘复制，也不隐式请求持久化。需要持久化时先同步文件，并遵守现有目录持久化契约。
-
-POSIX 文件／目录权限为 0600／0700，Windows 继承父目录 ACL，不用于保护恶意父目录。读写、发布和清理需要外部串行化。C++ `hx::Temp` 借用长期保留的句柄，让清理失败仍能重试；便利对象析构不会删除这个句柄。运行 `hx_os_temporary_file` 查看创建、写入和删除临时 JSON 文件的完整流程。
+- **排他创建与父目录选择**：`hx_os_temp_create_file` 会使用密码学随机数生成排他文件名并打开文件，返回同时持有打开文件句柄与路径的对象（通过借用访问器获取 `path` 和 `file`）。传入受信任的父目录路径；在桌面系统上传入 `NULL` 会自动选用系统临时目录，而在 Android 上则**必须显式传入应用拥有写权限的目录路径**。POSIX 下新建文件/目录权限固定为 `0600` / `0700`，Windows 下继承父目录 ACL（请勿将不受信任的公共恶意目录作为父目录）。
+- **关闭清理、保留（Keep）与原子发布（Publish）**：
+  - `hx_os_temp_close`：关闭文件并删除临时文件或递归清理临时目录（采用有界、不跟随符号链接的安全递归删除）。若清理中途遇到 I/O 错误，函数会保留 `hx_os_temp` 句柄供调用方稍后重试关闭（C++ `hx::Temp` 同样借用调用方持久持有的句柄变量，析构函数不会丢弃未清理成功的句柄）。
+  - `hx_os_temp_keep`：关闭句柄但明确保留磁盘上的临时文件或目录不被删除。
+  - `hx_os_temp_publish`：先关闭文件，再在同一文件系统内将其重命名（移动）到目标路径。注意 `publish` 不会跨文件系统拷贝数据，也不会隐式调用 `fsync`——若业务要求掉电持久化，请在调用 `publish` 之前先对文件执行同步刷盘，并按需同步父目录。对同一临时对象的读写、发布和关闭操作需由调用方在外部串行化。
 
 ## 6. 串口字节收发
 
-打开串口失败时不交付 serial 对象，并保留原生错误。Windows 会先保存设备打开的错误，再释放临时路径内存，因此注入分配器的释放回调不会覆盖真正的失败原因。
+`hx_os_serial`（C++11 为 `hx::Serial`）提供跨平台的串口配置与带截止时间的字节收发封装：
 
-`hx_os_serial_open(NULL, "COM3", NULL, &serial, error)` 或 POSIX 设备路径会打开并配置串口。默认 115200 波特、8 数据位、1 停止位、无校验、无硬件流控。可配置 5–8 数据位、1／2 停止位、奇偶校验和 RTS／CTS；不支持的 POSIX 波特常量或硬件功能会报错。要协调其他设备使用者，Windows 使用排他打开。
-
-`read_until`／`write_until` 接收单调截止时间和可选取消令牌，允许短读短写，只重试尚未完成的后缀。一个接收线程可与一个发送线程并行，各方向自行串行组织。Windows 取消后先等待原生操作退休再返回缓冲区，驱动可能让实际返回超过截止时间。不自动创建线程、消息帧或后台队列；`discard` 显式丢弃待处理字节，关闭不会偷偷等待设备发送缓冲。关闭前排除所有 I/O 调用。C++ 使用 `hx::Serial` 和携带实际字节数的 `Result<size_t>`。
-
-运行 `hx_os_serial_message COM3` 或 `/dev/ttyUSB0`，设备需支持以换行结束的 JSON 请求及回复。示例的换行协议属于设备业务。Linux 伪终端验证软件收发和超时，不能当作实体 UART 时序、校验和流控线路验收。
+- **打开与参数配置**：调用 `hx_os_serial_open(NULL, "COM3", NULL, &serial, &error)`（Windows）或传入 `/dev/ttyUSB0` 等 POSIX 设备路径即可打开并配置串口。默认参数为：`115200` 波特率、`8` 数据位、`1` 停止位、无奇偶校验（None）、无硬件流控。你可以通过选项结构体配置 `5–8` 数据位、`1` 或 `2` 停止位、奇偶校验以及 `RTS/CTS` 硬件流控；若请求了当前系统不支持的波特率常量或硬件特性，函数会明确报错且不交付 `serial` 对象（Windows 会在释放临时路径内存前先锁存设备打开错误码，确保自定义分配器的释放回调不会冲掉真正的底层错误原因）。Windows 下串口以独占方式打开，请避免与其他串口软件争抢同一端口。
+- **读写、全双工并发与取消边界**：
+  - `hx_os_serial_read_until` 与 `hx_os_serial_write_until` 接收单调时钟截止时间和可选的取消令牌（C++ 返回携带实际传输字节数的 `hx::Result<size_t>`）。串口传输天然存在短读与短写，重试时只应提交尚未传输完毕的后缀字节。
+  - **支持单读单写全双工并行**：允许一个接收线程与一个发送线程同时操作同一个 `hx_os_serial` 对象（同方向的读取之间或写入之间仍需串行化）。
+  - **Windows 重叠 I/O 退役等待**：在 Windows 上触发超时或取消后，库内部会先等待底层驱动将挂起的原生 Overlapped I/O 安全退役，随后才返回，确保调用方栈上的借用缓冲区绝不会被驱动在后台继续覆写（因此实际返回时间受串口驱动响应速度影响，可能略晚于截止时间）。
+  - **显式清理与关闭**：本模块不隐式启动后台线程、不维护内部排队缓冲，也不内置任何帧定界协议。调用 `hx_os_serial_discard` 可显式丢弃操作系统串口缓冲区中的待处理字节；调用 `close` 前必须确保所有读写调用均已返回，且 `close` 不会在后台偷偷阻塞等待硬件发送移位寄存器排空。
+- **可运行示例**：连接好支持“以换行符 `\n` 结尾的 JSON 请求-响应”固件设备后，可运行 `hx_os_serial_message COM3` 或 `hx_os_serial_message /dev/ttyUSB0`（注：Linux 下的伪终端 `pty` 测试仅用于验证软件读写与超时状态机，不能替代真实物理 UART 的波特率时序、奇偶校验位及 `RTS/CTS` 硬件信号线验收）。
 
 ## 7. 命名共享内存
 
-`hx_os_shared_memory_create` 排他创建清零、可写的共享区，另一个进程用 `open` 映射。名称为 1–64 个 ASCII 字母、数字、`_`、`.`、`-`；数据区为 1–64 MiB，按 64 字节对齐。原生映射和页内存不计入 context 分配统计。Windows 默认名称是 `Local\hxcp_NAME`，作用于当前会话；POSIX 使用 `/hxcp_NAME`，Linux 上通常对应 `/dev/shm/hxcp_NAME`。
+当同一台机器上的两个独立进程需要高速交换大块数据（`1 MiB` ～ `64 MiB`）时，可以使用 `hx_os_shared_memory`（C++11 为 `hx::SharedMemory`）：
 
-Android 没有原生 `shm_open`，需使用 `create_at/open_at(directory, name, ...)`，目录必须允许双方访问。这个文件映射入口也可用于桌面，文件名为 `directory/hxcp_NAME.shm`。库不猜测 Android 应用私有目录，不越过沙箱权限，也不提升权限。`native_available` 和 `available` 分别查询原生后端与通用可用性。
+- **创建、打开与平台后端**：
+  - 创建方调用 `hx_os_shared_memory_create` 排他创建一块初始清零、可写的共享内存区；另一进程调用 `hx_os_shared_memory_open` 映射同一区域。
+  - **命名与大小限制**：名称由 `1–64` 个 ASCII 字母、数字、`_`、`.` 或 `-` 组成；有效数据区（Payload）大小范围为 `1B – 64 MiB`，起始地址保证按 `64` 字节对齐（底层页映射内存由操作系统管理，不计入 `hx_context` 堆预算）。
+  - **桌面与 Android 路径差异**：在桌面系统上，默认原生映射在 Windows 下使用当前会话命名空间 `Local\hxcp_<NAME>`，在 POSIX/Linux 下使用 `/hxcp_<NAME>`（通常对应 `/dev/shm/hxcp_<NAME>`）。由于 Android Bionic 不提供 POSIX `shm_open`，Android 应用必须使用基于授权目录的文件映射入口 `hx_os_shared_memory_create_at` / `open_at(directory, name, ...)`（该入口同样可在桌面系统上使用，对应文件名为 `<directory>/hxcp_<NAME>.shm`）。库不会猜测 Android 应用私有路径，也不会越权绕过沙箱。运行时可通过 `hx_os_shared_memory_native_available()` 和 `hx_os_shared_memory_available()` 分别查询原生共享内存与通用后端是否可用。
+- **64 字节固定元数据头布局**：共享映射区的最前面 `64` 字节为库内部元数据头，偏移 `64` 字节处才是返回给业务的 `data` 指针（若跨语言对接，其他语言必须严格遵守同一头部布局）：
 
-前 64 字节是库元数据：偏移 0 为本机对齐的 32 位原子 ready，偏移 4 是 `HXSM`，偏移 8 为版本 1，偏移 16 为小端 64 位数据区大小，偏移 64 才是业务数据，其余元数据保留并清零。通过 acquire 读取 ready 后再看元数据；创建尚未完成时返回 `WOULD_BLOCK`。发布后的头和文件大小必须保持不变。这个发布只说明映射准备好，业务内容还需要共享协议或外部通信同步；不要存进程内指针、普通进程内互斥锁或依赖本机内部锁的原子类型。
+| 字节偏移 | 宽度与格式 | 含义 |
+| --- | --- | --- |
+| `0` | 32 位本机对齐无锁原子整数 | `ready` 标志（创建方完成初始化后通过 Release 语义置位；打开方通过 Acquire 语义读取，若尚未就绪则返回 `HX_OS_WOULD_BLOCK`） |
+| `4` | 4 字节 ASCII | 魔数 `"HXSM"` |
+| `8` | 32 位整数 | 头部格式版本号（固定为 `1`） |
+| `16` | 64 位小端整数 | 业务数据区（Payload）字节大小 |
+| `24..63` | 40 字节 | 保留字段（必须全部清零） |
+| `64..` | `size` 字节 | 业务有效载荷数据区（Payload） |
 
-POSIX 名称保留到显式 unlink，现存映射仍可使用；Windows 原生对象在最后一个句柄关闭时消失，不支持显式 unlink。文件映射的名称保留到删除，删除服从系统规则。关闭前排除所有访问者，取消映射失败保留对象。外部截断可能让访问触发系统故障，因此需要协调文件大小和头写入。未完成的遗留对象会明确报告，不自动覆盖；可修改共享区的参与者之间也没有安全隔离。
-
-创建／打开即使报错，也要检查输出 owner。普通失败为 NULL；如果回滚无法解除映射，会保留非空对象，供调用 `hx_os_shared_memory_close` 显式重试。错误信息仍说明创建／打开失败的原因，而 `data` 返回 NULL、`size` 返回零，不可读写这个残留对象。清理消耗 owner 前，不要用同一个变量再次打开；它的分配器 context 也要继续保留。C++ `SharedMemory` 在返回失败 `Result` 时同样保留调用者的 owner。关闭也可能在消耗 owner 后报告原生句柄关闭错误，因此重试前同时检查状态和 owner。
-
-运行 `hx_os_shared_memory` 使用原生映射，或 `hx_os_shared_memory .` 使用文件映射。程序启动有界等待的子进程，借助业务 release／acquire 标志读取 JSON。C++ `hx::SharedMemory` 借用可显式关闭的持久句柄。其他语言需遵守相同元数据及业务同步协议。
+> [!WARNING]
+> **共享内存同步、生命周期与残留句柄清理**
+> - **业务数据同步与禁忌**：元数据头的 `ready` 标志仅代表共享内存映射本身已建立完毕；业务进程读写 Payload 内容时，必须自行通过无锁原子协议或外部 IPC 信号同步。**切勿在共享内存中存放进程内裸指针、普通进程内互斥锁或非无锁（Non-lock-free）的 C/C++ 原子对象**。此外，对可写共享内存拥有访问权的进程之间不构成安全隔离边界，请勿让不受信任的外部进程随意截断底层映射文件。
+> - **对象销毁与名称清理**：POSIX 原生共享内存名称会一直保留，直到显式调用 `unlink`（已建立的映射视图在 `unlink` 后仍可继续访问）；Windows 原生命名共享内存在最后一个句柄关闭时由内核自动回收，不支持显式 `unlink`；基于文件的映射（`create_at` / `open_at`）则会保留磁盘文件直到显式删除。
+> - **报错后也必须检查输出 `owner`**：调用 `create` 或 `open` 失败时，正常情况下输出的 `owner` 指针为 `NULL`；但在极少数情况下，若启动中途失败且操作系统拒绝在回滚阶段解除内存映射（`unmap`），函数会在返回创建/打开错误码的同时，**交付一个非空的残留 `owner` 句柄**（此时其 `data` 为 `NULL`、`size` 为 `0`，严禁读写该映射）。调用方必须使用该残留 `owner` 调用 `hx_os_shared_memory_close` 重试清理，且在 `owner` 被彻底消费置空前，不得复用同一个指针变量再次打开，也不能销毁其关联的 `hx_context`（注：若 `close` 已经成功解除映射并消费了 `owner`，但底层关闭文件句柄报错，则无需再次重试关闭；重试前请同时检查返回状态码与 `owner != NULL`）。
+> - **运行示例**：在桌面环境可直接运行 `hx_os_shared_memory`（原生映射）或 `hx_os_shared_memory .`（文件映射），程序会自动派生子进程并通过原子 Release/Acquire 标志交换 JSON 数据。在 Android 或不支持派生子进程的环境中，可在同一授权工作目录下先后运行两个独立进程：`hx_os_shared_memory --write demo .` 与 `hx_os_shared_memory --read demo .`（写端发布 JSON 后最多等待 10 秒读端确认，随后自动清理）。
 
 ## 8. 模块及底层调用
 
-| 功能 | 开关／依赖 |
-| --- | --- |
-| 内存压缩 | `HX_OS_ENABLE_COMPRESSION`；zlib、liblzma、zstd，独立于 ARCHIVE |
-| URL 解析 | `HX_OS_ENABLE_URL`；libcurl |
-| HTTP／HTTPS | `HX_OS_ENABLE_HTTP`；libcurl／OpenSSL |
-| 命令行 | `HX_OS_ENABLE_CLI`；Windows 进程参数使用 Shell API |
-| 临时资源 | `HX_OS_ENABLE_TEMP`；RANDOM、FILE_UTILS，默认父目录还需 PATHS |
-| 串口 | `HX_OS_ENABLE_SERIAL`；原生设备接口 |
-| 共享内存 | `HX_OS_ENABLE_SHARED_MEMORY`；VIRTUAL_MEMORY、本机无锁 32 位原子操作 |
+上述七项功能均可通过独立的 CMake 开关按需裁剪（默认全部开启，`cmake/minimal.cmake` 则提供面向嵌入式环境的最小裁剪配置；当功能被关闭或缺少前置模块时，创建入口会明确返回 `HX_OS_NOT_SUPPORTED`）：
 
-缺少必要模块时创建入口返回 `NOT_SUPPORTED`。默认开启，`cmake/minimal.cmake` 提供嵌入式最小配置。业务也能链接[底层依赖目标](NATIVE_DEPENDENCIES.zh-CN.md)，直接调用未修改的 SDK API。公开示例与忽略的本地回归独立。
+| 功能模块 | CMake 开关 | 前置模块与底层依赖 |
+| --- | --- | --- |
+| 内存压缩 | `HX_OS_ENABLE_COMPRESSION` | `zlib`、`liblzma`、`zstd`（独立于 `HX_OS_ENABLE_ARCHIVE`） |
+| URL 解析 | `HX_OS_ENABLE_URL` | `libcurl` |
+| HTTP / HTTPS | `HX_OS_ENABLE_HTTP` | `libcurl`、`OpenSSL` |
+| 命令行解析 | `HX_OS_ENABLE_CLI` | Windows 进程参数读取使用系统 Shell API |
+| 临时文件与目录 | `HX_OS_ENABLE_TEMP` | `HX_OS_ENABLE_RANDOM`、`HX_OS_ENABLE_FILE_UTILS`（使用默认系统临时目录还需 `HX_OS_ENABLE_PATHS`） |
+| 串口通信 | `HX_OS_ENABLE_SERIAL` | 操作系统原生串口设备 API |
+| 命名共享内存 | `HX_OS_ENABLE_SHARED_MEMORY` | `HX_OS_ENABLE_VIRTUAL_MEMORY` 及平台原生 32 位无锁原子操作 |
 
-Android 的 HTTP／HTTPS 调用在所选 curl／OpenSSL SDK 没有默认 CA 文件时，需要通过 `ca_file` 提供应用认可的 CA 集合。证书验证始终开启，不越过沙箱或应用信任策略；独立 TLS 模块使用自己的系统根证书适配。
-
-Android 或没有子进程启动能力的宿主，可在同一授权工作目录分别运行 `hx_os_shared_memory --write demo .` 和 `hx_os_shared_memory --read demo .`。写端发布 JSON，最多等待十秒的读端确认后清理。独立会话使用不同名称，不要求应用自己创建线程。
+如果你的业务代码除了使用上述封装接口外，还需要直接调用 `libcurl`、`OpenSSL`、`zlib`、`zstd` 或 `SQLite` 的原生 C API，可以直接链接本库导出的[底层依赖目标](NATIVE_DEPENDENCIES.zh-CN.md)，无需在工程里重复引入第二套第三方 SDK。

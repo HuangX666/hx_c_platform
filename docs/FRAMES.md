@@ -1,20 +1,26 @@
-# Message frames
+# Message Frames
 
 [简体中文](FRAMES.zh-CN.md)
 
-**Start with a complete program.** Wrap a TCP or TLS byte stream when the application wants one complete JSON message per receive.
+TCP sockets, local stream sockets (Unix domain sockets / named pipes), and TLS connections are unstructured byte streams: a single write on one side may arrive split across multiple reads on the other, or several small writes may coalesce into a single read buffer. When your application wants each receive call to return **one complete JSON or binary message** without adopting the full session handshake and request-routing machinery of `hx_ipc`, wrap the stream in `hx_os_frame` for **4-byte big-endian length-prefixed framing**.
 
-Open [framed_messages.c](../examples/framed_messages.c). Memory stream → from_stream → send_text_until writes length and JSON → seek to start → receive_text_until → destroy frame → close stream.
+Build and run the self-contained [framed_messages.c](../examples/framed_messages.c) example to see the framing lifecycle in action (enable `HX_OS_BUILD_EXAMPLES=ON` per the [example setup guide](../examples/README.md#run) and build `hx_os_framed_messages`; no arguments or input files are required):
 
-Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_framed_messages`. This program needs no arguments or input files.
+```sh
+cmake --build build --config Release --target hx_os_framed_messages
+```
 
-**Expected result:** It prints `{"device":"door-1","request":42}`. For a real connection use from_socket/from_tls, remove seek, and have the peer implement the same length framing.
+Expected output:
 
-Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+```text
+{"device":"door-1","request":42}
+```
+
+To run in a single process without opening network ports, the example wraps an in-memory stream (`hx_os_frame_from_stream`), writes a length-prefixed JSON message, seeks back to the beginning, and reads the complete message back out. On a live network connection, simply replace `from_stream` with `hx_os_frame_from_socket()` or `hx_os_frame_from_tls()`, omit the seek call, and use the same 4-byte length prefix on the peer. You can also drop this file straight into the [minimal C project template](USAGE.md#c-project).
 
 ## 1. Receive complete messages
 
-Include `hx_os_frame.h`. A frame uses a four-byte unsigned big-endian length followed by that many payload bytes. TCP, local stream sockets, TLS and user callbacks share this wire format. UDP keeps its datagram semantics and is not wrapped by this interface. Other languages need only implement this length prefix.
+Include `hx_os_frame.h`. On the wire, every frame consists of a **4-byte unsigned big-endian byte length (`uint32_t`) followed by exactly that many payload bytes**. TCP sockets, local stream sockets, TLS sessions, and custom stream callbacks all share this exact format (UDP already preserves datagram boundaries and is not wrapped by `hx_os_frame`). Peers written in Python, Go, Rust, C#, or Java only need to read and write the same 4-byte big-endian length prefix.
 
 ```c
 hx_os_frame *frame = NULL;
@@ -29,7 +35,7 @@ if (status == HX_OS_OK)
 	puts(hx_string_c_str(&json));
 ```
 
-`connected_socket` is an existing connected TCP/local socket. The frame borrows it: destroy the frame before closing the socket. A receive call returns exactly one message even when native reads split or combine messages. Parse the returned UTF-8 text with the configuration/document API when using JSON.
+Here `connected_socket` is an established TCP or local stream socket. Because `hx_os_frame` **borrows** the underlying transport handle, always **destroy the frame wrapper before closing the socket**. Even when the OS delivers partial frames or coalesces multiple frames into a single read, `hx_os_frame_receive_text_until()` buffers and splits the stream internally so each call returns exactly one complete, UTF-8-validated message ready for your JSON or configuration parser.
 
 ## 2. Send and retry
 
@@ -44,18 +50,28 @@ if (status == HX_OS_TIMEOUT && accepted)
 		frame, hx_os_deadline_after_ms(5000), NULL);
 ```
 
-The library copies a message before admitting it. If `accepted` is true, flush the retained message after a timeout; sending the same message again would duplicate it. Successful flushing confirms local transport progress, not peer processing. Use application request IDs and acknowledgements when delivery matters.
+When sending, the library copies the complete message into an internal frame buffer before writing to the transport:
+- **Checking `accepted` After a Timeout**: If `hx_os_frame_send_text_until()` returns `HX_OS_TIMEOUT` and sets `accepted` to non-zero (`1`), the frame object has **already taken ownership of your message and may have transmitted part of it**. **Do not call `send_text_until` again with the same message** (which would duplicate the frame on the wire); instead, call `hx_os_frame_flush_until()` to finish draining the retained frame buffer.
+- **What Flush Confirms**: `HX_OS_OK` from `flush_until` confirms that the local transport accepted the remaining bytes—not that the remote application processed the business command. Use application-level request IDs and replies when end-to-end confirmation is required.
 
 ## 3. Ownership and limits
 
-The default payload limit is 1 MiB per direction; an explicit limit may be at most 64 MiB. Empty messages are valid. Caller output copies and transient buffer growth consume additional memory. Partial receives survive timeout and output allocation failure. Invalid UTF-8 leaves the frame available for `hx_os_frame_receive_until` as raw bytes. Clean EOF is `EOF`; EOF inside a frame is `TRUNCATED_INPUT`. Excessive lengths return `LIMIT` and disable reading.
+- **Payload Limits & Status Codes**:
+  - By default, each direction buffers at most `1 MiB` per frame (configurable up to `64 MiB` at creation; zero-length empty frames are valid).
+  - Partial incoming frames survive read timeouts (`HX_OS_TIMEOUT`) and caller output-allocation failures so the next receive call can resume seamlessly.
+  - If `receive_text_until` encounters invalid UTF-8 bytes, it returns an encoding error while leaving the complete frame buffered so you can still retrieve the raw bytes via `hx_os_frame_receive_until()`.
+  - A clean disconnect on a frame boundary returns `HX_OS_EOF`; an abrupt EOF in the middle of a header or payload returns `HX_OS_TRUNCATED_INPUT`. An incoming length header that exceeds the configured frame cap returns `HX_OS_LIMIT` and disables further reading on that stream.
+- **Concurrency Rules**:
+  - Concurrent sender threads are serialized internally (time spent waiting behind an earlier sender counts against the caller's `deadline`, and `HX_OS_DEADLINE_NOW` returns `HX_OS_TIMEOUT` immediately if the send side is busy).
+  - When the underlying transport supports full-duplex I/O (such as sockets or TLS), **one reader thread and one writer thread can operate concurrently**.
+  - Stop all active send/receive calls before closing the underlying transport, calling `abort`, or destroying the frame. Note that single-stream adapters (`hx_os_frame_from_stream`) share a single file cursor and require external serialization, and wrapping a synchronous stream does not give its underlying blocking read/write calls hard real-time deadlines.
 
-Senders serialize internally. Waiting behind another sender uses the same deadline as sending; NOW returns TIMEOUT if that direction is occupied. No user callback or native I/O runs with the admission mutex held. A reader and a sender can run on separate threads when the backend supports full duplex. Exclude transport close, abort and frame destruction from active calls. Stream adapters share a cursor and require external serialization; their native calls do not gain a deadline from this wrapper. All deadlines are cooperative, not hard real-time guarantees.
-
-Destroy returns `BUSY` while partial framing remains. Finish receiving/flushing, or explicitly abort and abandon the transport before destroying. The library never silently drops a partial message. C++ `hx::Frame` is a borrowed facade over a durable `hx_os_frame *` owner and offers `Result` values, including the send acceptance flag.
+> [!WARNING]
+> **Drain or Explicitly `abort` Before Destroying**
+> Destroying an `hx_os_frame` while a partial incoming frame or unflushed outgoing frame remains buffered returns `HX_OS_BUSY` (the library never silently drops half-transmitted frames). Either finish receiving/flushing or call explicit `abort` when abandoning the connection before destroying the frame. The C++11 `hx::Frame` wrapper borrows a caller-owned `hx_os_frame *` and returns `hx::Result` values including the send `accepted` flag.
 
 ## 4. Run the example
 
-Build `hx_os_framed_messages` with `HX_OS_BUILD_EXAMPLES=ON`. [framed_messages.c](../examples/framed_messages.c) writes and reads JSON using a memory stream. Replace `from_stream` with `from_socket` or `from_tls` to retain the same framing on a connected transport. Enable with `HX_OS_ENABLE_FRAME`; backend factories additionally require their modules.
+Build `hx_os_framed_messages` with `-DHX_OS_BUILD_EXAMPLES=ON` to run [framed_messages.c](../examples/framed_messages.c). The module is controlled by `HX_OS_ENABLE_FRAME` (`ON` by default), and each transport adapter (`from_socket`, `from_tls`, `from_stream`) requires its corresponding base module.
 
-For a read/write pipe pair, `hx_os_frame_from_streams` accepts distinct reader and writer streams, or NULL for an absent direction. Their underlying operations remain synchronous; each stream must be independently safe for the requested concurrent use. `hx::Frame::fromStreams` provides the same C++ entry.
+When working with a pair of unidirectional pipes or streams (such as a child process's `stdin` and `stdout`), call `hx_os_frame_from_streams()` (`hx::Frame::fromStreams()` in C++11) with separate reader and writer `hx_os_stream *` handles (or `NULL` for an unused direction) instead of writing custom callback glue.

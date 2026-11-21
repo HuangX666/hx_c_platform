@@ -2,27 +2,34 @@
 
 [简体中文](ANALYSIS.zh-CN.md) · [Interval profiler](PROFILER.md) · [README](../README.md)
 
-Use this workflow to find CPU hotspots, invalid memory access, leaks or heap peaks. The existing interval profiler remains unchanged. Detailed analysis is explicit: enabling symbols does not record anything, start threads or install tools.
+Use the developer analysis workflow (`tools/hx_analyze.py`) when you want to find **CPU hotspots**, check for **invalid memory accesses, uninitialized reads, or memory leaks**, or inspect **heap allocation peaks** during development. It complements the manually instrumented [interval profiler](PROFILER.md) and stays completely off in normal builds—enabling debug symbols at build time never starts background recording or installs external hooks at runtime.
 
-For customer Windows crashes, use the separate [WER LocalDumps configuration API](LOCAL_DUMPS.md) to request local crash files. It is not enabled by analysis symbols or WPR, and does not replace memory checking or hang diagnosis.
+For post-mortem crash collection on customer Windows machines, use the separate [WER LocalDumps configuration API](LOCAL_DUMPS.md) instead (developer analysis flags and WPR traces do not configure crash dumps, and crash dumps do not replace memory checking or CPU profiling).
 
 ## 1. Choose a question
 
-| Question | Mode | Main result |
-| --- | --- | --- |
-| Which functions use CPU? | `perf` on Linux/WSL | `report.txt`, `perf.data` |
-| Invalid access, uninitialized data or leaks? | `memcheck` | `report.txt` |
-| Which calls execute many instructions? | `callgrind` | `report.txt`, `callgrind.out` |
-| Where does the heap peak come from? | `massif` | `report.txt`, `massif.out` |
-| Which Windows threads/functions use CPU? | `wpr` | `trace.etl`; `report.txt` if xperf is installed |
+Pick the `hx_analyze.py` mode that answers your current engineering question:
 
-Run from the source root with Python 3.9+. Python is a developer-tool dependency, not a library runtime dependency. `python tools/hx_analyze.py check` only lists installed tools. Linux normally uses `python3`.
+| Question | Mode | Platform & Tool | Primary Artifacts |
+| --- | --- | --- | --- |
+| Which functions spend the most user-space CPU time? | `perf` | Linux / WSL (`perf`) | `report.txt`, `perf.data` |
+| Are there out-of-bounds accesses, uninitialized reads, or memory leaks? | `memcheck` | Linux / WSL (Valgrind Memcheck) | `report.txt` |
+| Which call paths execute the most CPU instructions? | `callgrind` | Linux / WSL (Valgrind Callgrind) | `report.txt`, `callgrind.out` |
+| Which call stacks account for the heap memory peak? | `massif` | Linux / WSL (Valgrind Massif) | `report.txt`, `massif.out` |
+| Which Windows threads and functions spend the most CPU time? | `wpr` | Windows (WPR capture + WPA / optional `xperf`) | `trace.etl` (plus `report.txt` when `xperf` is installed) |
+
+Run the helper script from the repository root using Python 3.9+ (Python is only used by this developer script, never by the runtime library). To check which profiling tools are installed on your machine, run (`python3` on Linux):
+
+```sh
+python3 tools/hx_analyze.py check
+```
 
 ## 2. Enable symbols in an existing build
 
-Reuse your working compiler, SDK and build directory. The commands use existing `build-shared-linux` and `build-shared-msvc` directories; substitute yours. Prepare dependencies using [DEPENDENCIES.md](DEPENDENCIES.md) first. Windows Release analysis requires matching Release dependencies; do not mix Debug static libraries into a Release link or suppress CRT mismatch warnings.
+To get readable function names and source lines in call stacks, configure your existing build directory with `-DHX_OS_DEVELOPER_ANALYSIS=ON` and rebuild the targets you want to inspect (replace `build-shared-linux` or `build-shared-msvc` with your build directory; prepare third-party dependencies via [DEPENDENCIES.md](DEPENDENCIES.md) first):
 
 ```sh
+# Linux / macOS:
 cmake -S . -B build-shared-linux -DCMAKE_BUILD_TYPE=Release \
     -DHX_OS_DEVELOPER_ANALYSIS=ON -DHX_OS_BUILD_BENCHMARKS=ON \
     -DHX_OS_BUILD_EXAMPLES=ON
@@ -30,20 +37,23 @@ cmake --build build-shared-linux --target \
     hx_os_benchmark hx_os_profiler_benchmark hx_os_profile_statistics
 ```
 
-Windows PowerShell:
-
 ```powershell
+# Windows PowerShell (Visual Studio generator):
 cmake -S . -B build-shared-msvc -DHX_OS_DEVELOPER_ANALYSIS=ON `
     -DHX_OS_BUILD_BENCHMARKS=ON -DHX_OS_BUILD_EXAMPLES=ON
 cmake --build build-shared-msvc --config Release --target `
     hx_os_benchmark hx_os_profiler_benchmark hx_os_profile_statistics
 ```
 
-`HX_OS_DEVELOPER_ANALYSIS` defaults to OFF. ON adds private `-g -fno-omit-frame-pointer` options to owned GCC/Clang C/C++ targets, or `/Zi` and full linked PDBs for MSVC. Release linker optimization is retained. Vendor targets and exported consumer flags are unchanged. Frame pointers can affect generated code: compare builds with matching analysis, optimization and workload settings. Debug/Sanitizer speed is not a Release baseline.
-
-Keep matching executables, libraries and symbols with each recording. Windows shared-library installs include the PDB when analysis is ON. Static-library analysis also needs the original compiler PDBs from its build. Separate consumer applications and dependencies must provide their own symbols; this option does not configure them.
+> [!IMPORTANT]
+> **What `HX_OS_DEVELOPER_ANALYSIS=ON` Changes**
+> - `HX_OS_DEVELOPER_ANALYSIS` defaults to `OFF`. Turning it `ON` adds private `-g -fno-omit-frame-pointer` flags to first-party GCC/Clang C/C++ targets, or `/Zi` and full linked `.pdb` symbol files on MSVC while preserving `Release` linker optimizations.
+> - Third-party vendor targets and exported CMake consumer flags remain untouched (for Windows `Release` analysis, always link matching `Release` dependency builds—never mix `Debug` static libraries into a `Release` link).
+> - Because preserving frame pointers can slightly affect register allocation and codegen, keep analysis flags, optimization levels, and workloads identical when comparing before/after benchmark numbers.
 
 ## 3. Linux/WSL: CPU hotspots
+
+Run `hx_os_benchmark` under `perf` to sample user-space CPU call stacks:
 
 ```sh
 python3 tools/hx_analyze.py perf -B build-shared-linux -- \
@@ -51,15 +61,15 @@ python3 tools/hx_analyze.py perf -B build-shared-linux -- \
 perf report -i build-shared-linux/hx-analysis/perf/perf.data
 ```
 
-The existing benchmark accepts an optional iteration count, 1 through 100,000,000; its default remains 1,000,000. Twenty million iterations provide more samples than a very short run. The helper samples user-space CPU time at 199 Hz with DWARF stacks, without requiring hardware PMU events. `report.txt` groups sampled cost by library and function; percentages are not request latency or proof of inefficient code.
-
-perf records into a temporary native `/tmp` directory, then copies results into the existing build and removes that temporary directory. This avoids WSL DrvFS rejecting writes from perf's mapped buffer with `Bad address`. No extra build directory is created. The helper disables build-ID cache writes and limits sampled data to 64 MiB. Missing symbols, incomplete stacks, lost samples or reaching the limit restrict interpretation. It does not change perf permissions, mount tracefs or silently substitute unavailable counters.
+- **Iteration count**: `hx_os_benchmark` accepts an optional iteration count from `1` to `100,000,000` (default `1,000,000`). Passing `20000000` gives a longer run so the `199 Hz` user-space CPU clock sampler (with DWARF stack unwinding, requiring no hardware PMU counters) collects enough samples.
+- **WSL DrvFS compatibility**: To avoid WSL DrvFS rejecting writes from `perf`'s memory-mapped buffer with `Bad address`, `hx_analyze.py` records into a temporary native `/tmp` directory first, copies the completed artifacts (capped at `64 MiB`) into `<build>/hx-analysis/perf/`, and cleans up the temporary directory.
+- **Interpreting sampled percentages**: `report.txt` groups sampled CPU cost by shared library and function. Remember that a high percentage means the function did most of the active CPU work during the run—it is not a latency measurement or automatic proof of an inefficiency.
 
 ## 4. Linux/WSL: memory and instruction costs
 
-Install Valgrind with your distribution's package manager if `check` reports it missing. On Ubuntu, first review `apt-get -s install --no-install-recommends valgrind libc6-dbg`, then install those packages. libc symbols improve reports. perf packages must suit the running kernel; WSL kernel names can differ from distribution package names.
+If `hx_analyze.py check` reports that Valgrind is missing, install it through your distribution package manager (for example, `valgrind` and `libc6-dbg` on Ubuntu so `libc` frames resolve cleanly).
 
-The public statistics example creates a profiler and snapshot, prints results and releases them. It needs no private regression sources:
+You can run Memcheck, Callgrind, and Massif directly against the public profiler examples:
 
 ```sh
 python3 tools/hx_analyze.py memcheck -B build-shared-linux -- \
@@ -70,15 +80,14 @@ python3 tools/hx_analyze.py massif -B build-shared-linux -- \
     bin/hx_os_profiler_benchmark
 ```
 
-Memcheck checks invalid access, use of uninitialized values and leaks with origin tracking. Exit 86 indicates detected errors; definite, indirect and possible leaks count as failures. Still-reachable memory is reported but is not automatically a leak. Other nonzero exits can come from the workload or tool itself: inspect the reports.
-
-Callgrind reports instructions/calls by default, not native elapsed time or hardware cache measurements. Massif reports heap snapshots and allocation origins, not all RSS, mapped pages or coroutine stacks. Neither is a memory-correctness checker. Valgrind changes execution speed substantially; a timeout needs separate investigation and is not itself a memory defect.
-
-Use a normal symbol-enabled build for Valgrind. The helper rejects nonempty `HX_OS_SANITIZER`; run ASan/UBSan and TSan separately in existing configurations. Pools and stackful coroutines require dedicated validation; existing Sanitizer fiber hooks do not certify Valgrind compatibility. Do not hide first-party errors with broad suppressions.
+- **`memcheck` (invalid memory access and leak checker)**: Tracks out-of-bounds accesses, uninitialized values (with origin tracking), and memory leaks. Detected errors or definite/indirect/possible leaks fail with exit code `86` (`still reachable` blocks are reported in `report.txt` without failing the run).
+- **`callgrind` (instruction and call-graph profiler)**: Counts executed instructions and function calls to help analyze algorithmic scaling (instruction counts are not wall-clock time or hardware cache measurements).
+- **`massif` (heap peak profiler)**: Snapshots heap allocations over time to show which call stacks contributed to the peak heap footprint (covers heap allocations rather than all process RSS, mapped pages, or coroutine stacks).
+- **Do not combine Valgrind with compiler Sanitizers**: Run Valgrind against a standard symbol-enabled build (`HX_OS_SANITIZER` empty). `hx_analyze.py` rejects build directories configured with ASan, UBSan, or TSan so the two runtimes do not conflict.
 
 ## 5. Windows: WPR capture and WPA inspection
 
-Run native Windows Python in an elevated PowerShell. WPR records; WPA and optional xperf come from the Windows Performance Toolkit. Administrator rights are for capture only, not ordinary builds or library use.
+On Windows, use `wpr` (Windows Performance Recorder) and `wpa` (Windows Performance Analyzer) from the Windows Performance Toolkit. Because kernel ETW CPU sampling requires administrator privileges, run the capture command from an **elevated PowerShell** using native Windows Python (building and using the library itself never requires elevation):
 
 ```powershell
 python tools/hx_analyze.py wpr -B build-shared-msvc -- `
@@ -86,33 +95,34 @@ python tools/hx_analyze.py wpr -B build-shared-msvc -- `
 wpa build-shared-msvc/hx-analysis/wpr/trace.etl
 ```
 
-The supplied `hx_cpu.wprp` uses a 16 MiB circular CPU-sampling buffer. The helper preserves existing WPR recordings, owns a uniquely named session and stops it even when the workload fails. Temporary capture files stay inside the selected output directory. Long recordings can overwrite early samples; the ETL includes extra metadata, so its final size can exceed the ring size. No heap tracing or application registry settings are enabled.
-
-In WPA, add **CPU Usage (Sampled)**, filter by executable/PID from `run.log`, and group **Process → Thread ID → Stack**. Add matching EXE/DLL PDB directories to the symbol path and load symbols. If xperf is installed, the helper also exports a function summary using symbols beside the executable and a local symbol cache. System symbols may remain unresolved; no symbol server is contacted automatically. The ETL includes other host processes: keep it private and filter before interpreting percentages. xperf and perf use different percentage bases; do not compare their percentages directly.
+- **Isolated circular buffer**: The bundled `tools/hx_cpu.wprp` profile configures a `16 MiB` circular CPU-sampling buffer under a dedicated session name and stops its session cleanly even if the target workload exits with an error.
+- **Inspecting stacks in WPA**:
+  1. Open `trace.etl` in WPA and add the **CPU Usage (Sampled)** graph.
+  2. Filter to the target executable and PID logged in `run.log` (system-wide ETW traces capture all active processes on the host, so always filter to your process before reading percentages), then expand **Process → Thread ID → Stack**.
+  3. Add your build directory containing matching `.exe` / `.dll` `.pdb` files to WPA's symbol path and load symbols (if `xperf` is installed, the script also exports a text function summary to `report.txt`; note that `xperf` and Linux `perf` compute percentages against different denominators and should not be compared directly).
 
 ## 6. Own workloads, reports and limits
 
-Everything after `--` is the executable and its arguments. Paths are relative to `-B`, which is also the workload's working directory; absolute paths are accepted. Replace the benchmark with a finite, representative business example.
+Everything after `--` is the target executable and its arguments, resolved relative to the `-B` build directory (which also serves as the working directory). Replace the benchmark target with any finite, representative workload:
 
-Each mode reuses `<build>/hx-analysis/<mode>`. A second run requires `--replace`, which replaces that mode's known artifacts, not other modes. Default `--timeout 120` limits the workload. Timeout or Ctrl+C stops the launched process tree on Windows or its new process group on Linux, and records incomplete status 124. Use finite development programs, not production applications with unsaved work or services that daemonize outside the process group. It does not attach to or terminate an existing business process.
+- **Output directory and `--replace`**: Each mode writes to `<build>/hx-analysis/<mode>/`. Re-running the same mode requires passing `--replace`, which overwrites only that mode's artifacts while leaving other modes untouched.
+- **Timeout handling (`--timeout`)**: Runs default to `--timeout 120` seconds. If a run times out or receives `Ctrl+C`, the helper terminates the launched process tree (Windows) or new process group (Linux) and records exit status `124`. Only run finite development workloads—never point the runner at production services with unsaved state or processes that daemonize outside the process group.
 
-| File | Meaning |
+Generated files in `<build>/hx-analysis/<mode>/`:
+
+| File | Description |
 | --- | --- |
-| `result.json` | Command, symbol-option confirmation, elapsed time, exit code |
-| `run.log` | Workload output, PID, interruption information |
-| `report.txt` | Tool-specific text report, when available |
-| `perf.data`, `callgrind.out`, `massif.out`, `trace.etl` | Corresponding viewer's raw data |
-
-Exit 0 means the selected tool/workload completed under its rules, not that all library code is correct. A hot function, retained allocator cache or high RSS alone does not establish a defect. Keep sampling, native timing and memory diagnostics separate. Preserve matching binaries/symbols before rebuilding.
-
-All `hx-analysis/` directories are ignored. Regressions, traces, logs and local configuration stay out of commits. Installed documentation includes the helper/profile under `tools/`; use the consuming application's existing build directory and matching symbols.
+| `result.json` | Executed command, symbol-flag verification, elapsed time, and exit code |
+| `run.log` | Workload `stdout`/`stderr` output, PID, and timeout/interruption notes |
+| `report.txt` | Text summary generated by the selected tool (when supported) |
+| `perf.data`, `callgrind.out`, `massif.out`, `trace.etl` | Raw trace files for `perf report`, `kcachegrind`, `ms_print`, or `wpa` |
 
 ## 7. Return to normal
+
+When you finish profiling, set `HX_OS_DEVELOPER_ANALYSIS=OFF` and rebuild affected targets to return to standard binaries (existing reports under `hx-analysis/` are preserved):
 
 ```sh
 cmake -S . -B build-shared-linux -DHX_OS_DEVELOPER_ANALYSIS=OFF
 ```
 
-Use the MSVC directory on Windows. Rebuild affected targets to remove analysis options from binaries. OFF restores previous build behavior, keeps the separate interval profiler available and preserves local reports. Neither ON nor OFF starts recording automatically.
-
-References: [perf](https://perfwiki.github.io/main/tutorial/), [Valgrind](https://valgrind.org/docs/manual/manual.html), [WPR profiles](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/authoring-recording-profiles), [WPR/WPA](https://learn.microsoft.com/en-us/troubleshoot/windows-server/support-tools/support-tools-xperf-wpa-wpr).
+References: [Linux `perf` Tutorial](https://perfwiki.github.io/main/tutorial/), [Valgrind User Manual](https://valgrind.org/docs/manual/manual.html), [Authoring WPR Recording Profiles](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/authoring-recording-profiles), and [WPR / WPA Performance Analysis](https://learn.microsoft.com/en-us/troubleshoot/windows-server/support-tools/support-tools-xperf-wpa-wpr).

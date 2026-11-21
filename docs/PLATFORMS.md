@@ -1,43 +1,51 @@
-# Platform support and deployment
+# Platform Support and Deployment Guide
 
-[简体中文](PLATFORMS.zh-CN.md) · [README](../README.md)
+[简体中文](PLATFORMS.zh-CN.md) · [Back to README](../README.md)
 
-## 1. Select a target
+## 1. Target Platforms and Toolchain Baselines
 
-The core is C99 with a C ABI; the optional facade uses C++11 without exceptions. C++20 stackless syntax is opt-in. Use CMake 3.16 or newer and an SDK built for the same architecture, runtime and configuration as the consumer.
+The `hx_c_platform` core is written in standard C99 and exports a stable C ABI. The optional C++ convenience layer (`include/hx/`) is a header-only C++11 facade built without C++ exceptions, and C++20 stackless coroutines are opt-in. Building requires **CMake 3.16+**, and any prebuilt dependency SDK must match your application's architecture, C runtime (CRT), and Debug/Release configuration.
 
-| Target | Compatibility baseline | Deployment requirements |
+| Target Platform | Compatibility Baseline | Deployment & Integration Requirements |
 | --- | --- | --- |
-| Windows | Windows 7 SP1; x86/x64 MSVC | Deploy matching DLLs from `bin/`; older-Windows compatibility must also hold for selected third-party SDKs |
-| Linux desktop/server | GCC or Clang, POSIX/Linux adapters | Match libc and toolchain; desktop services are optional |
-| Embedded Linux | ARMv7 and AArch64 adapters | Match sysroot, floating-point ABI and device permissions; start with `cmake/minimal.cmake` |
-| Android | API 21; arm64-v8a and armeabi-v7a | Match NDK ABI/API and application permissions; see [Android](ANDROID.md) |
-| macOS | Intel 10.13; ARM64 11.0 design baselines | Apple adapters exist; target build and runtime acceptance remain pending |
+| **Windows** | Windows 7 SP1 and newer; MSVC x86 / x64 | Deploy matching DLLs from `bin/`; when targeting legacy Windows releases, ensure selected third-party SDKs are also built for that OS baseline |
+| **Linux Desktop / Server** | GCC or Clang; native POSIX / Linux APIs | Match target libc and toolchain; desktop power services (D-Bus) are optional at runtime |
+| **Embedded Linux** | ARMv7-A and AArch64 | Match board sysroot, floating-point ABI (e.g., hard-float), and device permissions; start from `cmake/minimal.cmake` for small footprints |
+| **Android** | API 21+; `arm64-v8a` and `armeabi-v7a` | Match NDK ABI/API level and app sandbox permissions; see the [Android Build Guide](ANDROID.md) |
+| **macOS** | Intel 10.13, Apple Silicon (ARM64) 11.0 | Apple adapters (kqueue / Mach) are implemented; native Apple hardware build and runtime verification are pending |
 
-These are implementation and compatibility boundaries, not certification of every OS release or device. Windows 7/8.1, Android 5.0, Android ARMv7 execution, physical ARM boards and other libc/toolchain combinations need target-specific acceptance. Emulation, native-bridge execution and QEMU cannot establish physical-device behavior or performance. BSD, iOS, FreeRTOS and bare metal are not advertised as validated ports.
+> [!NOTE]
+> **Target Hardware Acceptance**:
+> The table above defines the OS API baselines targeted by the codebase. When deploying to Windows 7/8.1, Android 5.0, physical ARM boards, or custom libc/toolchain combinations, always run acceptance checks on the actual target environment—user-mode QEMU, emulators, and native-bridge translation do not substitute for physical hardware verification. BSD, iOS, FreeRTOS, and bare-metal targets are outside the current scope.
 
-## 2. Query capabilities and handle limits
+## 2. Querying Capabilities and Handling Platform Limits
 
-Use module availability queries and returned statuses. An enabled module does not imply that every platform-specific operation exists. Unsupported operations return `HX_OS_NOT_SUPPORTED`; native permission and I/O failures retain diagnostic information.
+Use `hx_os_capabilities()` at runtime to check which optional modules are compiled into the library, and always inspect the returned `hx_os_status`. Even when a module is enabled at build time, OS-specific operations that are unavailable on the current host return `HX_OS_NOT_SUPPORTED`, while permission and I/O failures preserve native OS diagnostic codes in `hx_os_error`.
 
-Common boundaries include:
+Common cross-platform boundaries include:
 
-- Linux sleep inhibition requires an available desktop D-Bus service. Embedded/headless deployments can disable it; see [desktop power requests](LINUX_DESKTOP.md).
-- Android application directories come from the host application. Process support depends on the build minimum API, and local sockets remain subject to SELinux and UID permissions.
-- Stackful coroutines require an implemented CPU/context backend. Active Linux shadow-stack restrictions are reported explicitly; see [coroutines](COROUTINES.md).
-- Clocks, timeouts, file synchronization and device access retain their documented native limits. A deadline is not a guarantee that arbitrary native I/O can be interrupted.
-- Ordinary UDP can lose, reorder or duplicate datagrams. Fragmented IPv4 traffic can also be affected by WSL mirrored networking; use path-sized datagrams or TCP/KCP as appropriate. See [IPC transport choices](IPC.md).
+- **Linux Idle-Sleep Inhibition**: Requires an active desktop D-Bus service (`systemd-logind` or `elogind`). Headless server and embedded Linux builds can disable this module at configure time; see [Linux Desktop Power Management](LINUX_DESKTOP.md).
+- **Android Sandbox and API Level Limits**: Application directories must be supplied by the host Android app. Child process creation requires building against Android API 28 or newer, and local Unix domain sockets and network interface notifications remain subject to Android SELinux policies and UID permissions.
+- **Stackful Coroutines**: Require a CPU/context-switch backend for the target architecture. On Linux systems with active hardware shadow stacks (CET), unsupported operations fail explicitly with `HX_OS_NOT_SUPPORTED`; see [Coroutines](COROUTINES.md).
+- **Clocks, Deadlines, and Synchronous File I/O**: Clock resolution, timer wakeup latency, and disk flushing (`fsync` / `FlushFileBuffers`) follow the underlying OS kernel and storage hardware. Passing a deadline bounds waiting operations, but cannot forcefully interrupt an arbitrary blocking kernel file I/O syscall.
+- **UDP Fragmentation and Virtualized Networks**: Standard UDP datagrams can be lost, reordered, or duplicated, and fragmented IPv4 UDP packets may be dropped under virtualized networking such as WSL mirrored mode. Keep UDP payloads within path MTU or use TCP/KCP when reliability is required; see [IPC and Transport Choices](IPC.md).
 
-## 3. Build, install and run examples
+## 3. Building, Installing, and Deploying
 
-New configurations build the library only. Enable `HX_OS_BUILD_EXAMPLES=ON` to compile public examples; they require no private maintainer files. Reuse one build directory per toolchain/configuration.
+By default, CMake builds only the core library. Pass `-DHX_OS_BUILD_EXAMPLES=ON` to compile the standalone public examples under `examples/`. Maintain a separate build directory for each toolchain, architecture, and Debug/Release configuration.
 
-See [dependency preparation](DEPENDENCIES.md), [build options and installation](REFERENCE.md#section-27), and [native SDK access](NATIVE_DEPENDENCIES.md). Shared-library deployments include their selected runtime dependencies. Static core linkage does not automatically make every dependency static.
+- **Preparing Third-Party Native SDKs**: See the [Dependency Build Guide](DEPENDENCIES.md).
+- **CMake Switches and Installation**: See [Build Options and Installation](REFERENCE.md#section-27).
+- **Calling Bundled Native SDKs Directly**: See [Native Dependencies](NATIVE_DEPENDENCIES.md).
 
-Start with a small example for the facility used by your application, then check its actual permissions, paths, input sizes and close behavior on the deployment target. Detailed regression logs and historical audit records are maintained locally and are excluded from the repository and installed SDK. Remote CI is disabled.
+> [!IMPORTANT]
+> **Static vs. Shared Runtime Dependencies**:
+> Linking `hx_c_platform` statically does not automatically make all external SDK dependencies static—by default, OpenSSL, libcurl, and utf8proc build as shared libraries (DLLs / `.so`). Always bundle the required runtime libraries from your SDK prefix and test a small example on the target machine to verify permissions, file paths, and shutdown behavior.
 
-## 4. Additional network boundaries
+## 4. Platform Boundaries for Advanced Networking
 
-The new UDP packet metadata, vector I/O, bounded TCP dialer, c-ares resolver, TLS profiles, HTTP streaming and coroutine bridges target Windows, Linux and Android. Linux ARMv7/AArch64 use the shared POSIX path; cross-compilation and QEMU/emulator execution do not establish hardware acceptance. BSD, iOS, QNX, RTOS, Harmony and WASM are not new validated targets in this work.
+UDP packet metadata, scatter/gather vector I/O, bounded TCP dialing, c-ares cancellable DNS, TLS security profiles, HTTP file streaming, and coroutine I/O bridges are supported on **Windows, Linux, and Android** (with Linux ARMv7/AArch64 sharing the POSIX/Linux implementation):
 
-Interface changes use native notifications and can be rejected by Android sandbox/SELinux permissions. Requery the snapshot after a notification; it is not a guaranteed event history. TCP user timeout is Linux/Android-specific, UDP ICMP reset control is Windows-specific. Named IPv6 zones require NET_OPTIONS. IDNA depends on the selected curl backend; unsupported conversions report `NOT_SUPPORTED`. c-ares is optional and is not a replacement for every system/VPN DNS policy. No adapter changes firewall rules, WSL mode or global networking settings.
+- **Network Interface Notifications**: Uses native OS change notifications, which may be blocked by Android sandbox/SELinux policies. Treat notifications as a signal to re-query the interface snapshot rather than a lossless event log.
+- **OS-Specific Socket Options**: TCP user timeout is specific to Linux and Android; UDP ICMP connection-reset suppression (`SIO_UDP_CONNRESET`) is specific to Windows; named IPv6 zone resolution requires `HX_OS_ENABLE_NET_OPTIONS`.
+- **IDNA and Cancellable DNS**: Internationalized domain name (IDNA) conversion depends on the linked `libcurl` backend and returns `HX_OS_NOT_SUPPORTED` when unavailable. The optional `c-ares` resolver can be disabled at build time and performs direct DNS queries rather than replicating every host OS or enterprise VPN name-resolution policy. None of the networking adapters modify firewall rules, WSL networking modes, or global OS network settings.

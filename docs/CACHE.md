@@ -2,23 +2,30 @@
 
 [简体中文](CACHE.zh-CN.md)
 
-**Start with a complete program.** Use LRU caching for frequently repeated device lookups or calculations when only a limited number of recent results should remain.
+When your application repeatedly looks up device metadata, routing records, or expensive calculation results and needs to keep only the most recently accessed entries within strict item-count and memory-budget limits (with optional monotonic-clock TTL expiry), use the bounded LRU cache `hx_os_cache` (or `hx::LruCache<T>` in `<hx/Cache.hpp>` for C++11).
 
-Open [lru_cache.c](../examples/lru_cache.c). Limit storage to two entries → put sensor-a/sensor-b → get sensor-a → put sensor-c → observe sensor-b eviction → insert temporary with a TTL → query after expiry → destroy.
+To see it in action, open [lru_cache.c](../examples/lru_cache.c): the program creates a two-entry cache, inserts `sensor-a` and `sensor-b`, reads `sensor-a` with `hx_os_cache_get` (promoting it to most recently used), inserts `sensor-c` (which evicts the least recently used `sensor-b`), inserts a `temporary` entry with a `10 ms` TTL and queries it after expiry, and finally destroys the cache.
 
-Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_lru_cache`. This program needs no arguments or input files.
+Follow the [example run instructions](../examples/README.md#run) to configure with `-DHX_OS_BUILD_EXAMPLES=ON` and build `hx_os_lru_cache` (no command-line arguments or input files are required):
 
-**Expected result:** It prints `Recent sensor-a: 20`, followed by eviction and expiry messages. Use device IDs as keys and copyable records as values. Reads do not extend the TTL.
+```text
+Recent sensor-a: 20
+sensor-b evicted
+temporary expired
+```
 
-Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+You can also use the example source as `main.c` in the [minimal project](USAGE.md#c-project).
 
 ## 1. Keep recently used results
 
-`hx_os_cache` stores copied binary keys and fixed-size values. A successful `get` makes its entry most recently used; `peek` reads without changing the order. When a successful insertion exceeds `max_items`, an expired entry is removed first if available; otherwise the least recently used entry is evicted. Updating an existing key also makes it recent.
-
-Use this for recently queried device metadata or calculation results. It is not a database, a persistent store, or a thread-safe message queue. Optional per-entry expiry uses the monotonic clock and no background worker. Reading never renews the lifetime. Enable `HX_OS_ENABLE_CONTAINERS` to use it; disabled builds retain the cache API and return `HX_OS_NOT_SUPPORTED` on creation.
+`hx_os_cache` combines a hash table (expected `O(1)` lookup) with a doubly linked recency list to store copied binary keys and fixed-size values:
+- **Recency ordering**: A successful `hx_os_cache_get` promotes the entry to the most-recently-used (MRU) position; `hx_os_cache_peek` inspects the value without changing recency order or hit/miss counters. Updating an existing key also promotes it to MRU.
+- **Eviction priority**: When inserting a new key would exceed `options.max_items`, the cache first removes an expired entry if one exists; otherwise it evicts the least-recently-used (LRU) live entry at the tail of the list.
+- **Monotonic TTL and CMake switch**: Per-entry lifetimes use the library's monotonic clock, **reads do not extend an entry's TTL**, and no background worker thread is spawned. Enable `HX_OS_ENABLE_CONTAINERS=ON` to use the cache; when disabled, the cache symbols remain exported and creation returns `HX_OS_NOT_SUPPORTED`.
 
 ## 2. C usage
+
+Include `<hx_cache.h>` and initialize `hx_os_container_options` with the value size, `max_items`, and `max_bytes`:
 
 ```c
 #include <hx_cache.h>
@@ -38,15 +45,16 @@ if (status == HX_OS_OK)
 if (status == HX_OS_OK)
 	status = hx_os_cache_get(cache, "sensor-01", 9, &value, NULL);
 
-// On success, read *(const int *)value before replacing/removing its entry.
+// On HX_OS_OK, read *(const int *)value before replacing/removing its entry.
 (void)hx_os_cache_destroy(&cache, NULL);
 ```
 
-A key is a byte sequence with an explicit length, so embedded NUL bytes are supported and `"a"` differs from `"a\0"`. `NULL, 0` denotes an empty key. A missing key returns `HX_OS_NOT_FOUND` and clears the output pointer.
-
-The complete [C example](../examples/lru_cache.c) reads sensor A before inserting C into a two-entry cache, demonstrating that B is evicted. It also stores a temporary value for 10 ms and reads it after expiry. Build the example target `hx_os_lru_cache` in your existing examples-enabled build directory.
+- **Binary keys**: Keys are byte sequences with an explicit length, so embedded `NUL` bytes are preserved (`"a"` of length 1 and `"a\0"` of length 2 are distinct keys, and `NULL, 0` represents an empty key).
+- **Missing or expired lookups**: `hx_os_cache_get` and `hx_os_cache_peek` return `HX_OS_NOT_FOUND` and set the output `value` pointer to `NULL` when a key is absent or expired. See the complete [C example](../examples/lru_cache.c) for eviction and TTL expiry in context.
 
 ## 3. C++11 usage
+
+Include `<hx/Cache.hpp>` to use `hx::LruCache<T>`, whose methods return `hx::Result` without throwing exceptions:
 
 ```cpp
 #include <hx/Cache.hpp>
@@ -72,9 +80,11 @@ int main()
 }
 ```
 
-The wrapper uses `Result`, requires no exceptions and accepts trivially copyable values. Pointer values remain borrowed. Use the C `copy`/`drop` callbacks for resource-owning values; the existing string-container options also work for `hx_string` values.
+`hx::LruCache<T>` accepts trivially copyable value types `T` (pointer types are stored as borrowed addresses). To store values that own dynamic resources, use the C API with `options.copy` and `options.drop` callbacks (for example, `hx_os_string_container_options_init` configures deep-copy and drop callbacks for `hx_string` values).
 
 ## 4. Add a lifetime when writing
+
+Alongside non-expiring `hx_os_cache_put`, you can attach a relative duration in milliseconds (`put_for`) or an absolute monotonic deadline (`put_until`) when writing an entry, and call `hx_os_cache_purge_expired` at any time to sweep expired entries:
 
 ```c
 // Keep this result for five seconds from this write.
@@ -89,33 +99,30 @@ size_t removed = 0;
 status = hx_os_cache_purge_expired(cache, &removed, NULL);
 ```
 
-C++ equivalents are `putFor("sensor-01", 26, 5000)`, `putUntil(key, value, deadline)`, and `purgeExpired()`, which returns `Result<size_t>` containing the number removed. Check each result before continuing, as with ordinary `put`.
+In C++11, call `putFor("sensor-01", 26, 5000)`, `putUntil(key, value, deadline)`, and `purgeExpired()` (which returns `hx::Result<size_t>` with the number of purged entries).
 
-| Operation | Expiry behavior |
+| Operation (`hx_os_cache_*`) | Expiry behavior |
 |---|---|
-| `put` / `put_take` | Store without expiry; replacement removes a previous lifetime. |
-| `put_for` / `put_take_for` | Relative lifetime in milliseconds, sampled after value copying and before index publication. Overflow saturates to the largest finite deadline. |
-| `put_until` / `put_take_until` | Absolute deadline from this library's monotonic clock. `HX_OS_DEADLINE_INFINITE` disables expiry. Do not pass wall-clock timestamps. |
-| `get` | An expired entry returns `NOT_FOUND`, counts as a miss, and is physically removed. Successful reads do not extend its lifetime. |
-| `peek` | An expired entry returns `NOT_FOUND` without removing storage or changing statistics. |
-| `purge_expired` | Explicitly remove every entry expired at one clock sample; return how many were removed. |
-| `size` / `memory` | Report physically retained entries and allocated bytes, including expired entries not yet cleaned up. |
-| `erase` | Explicitly remove retained storage, even when expired; a non-NULL output may take that value. |
+| `put` / `put_take` | Stores the entry without an expiry deadline; updating an existing key removes any previous TTL |
+| `put_for` / `put_take_for` | Sets a relative lifetime in milliseconds, sampled after value construction and before index publication (overflow saturates to the largest finite deadline) |
+| `put_until` / `put_take_until` | Sets an absolute deadline from the library's monotonic clock (`HX_OS_DEADLINE_INFINITE` disables expiry; never pass wall-clock Unix timestamps) |
+| `get` | If the entry has expired, returns `HX_OS_NOT_FOUND`, increments the miss counter, and physically removes the entry; hits do not extend TTL |
+| `peek` | If the entry has expired, returns `HX_OS_NOT_FOUND` without freeing storage or updating hit/miss counters |
+| `purge_expired` | Samples the monotonic clock once, removes every expired entry (`O(n)` scan, zero allocation), and outputs the removed count |
+| `size` / `memory` | Reports physically retained entries and charged bytes, including expired entries that have not been swept yet |
+| `erase` | Removes a key's storage even if expired; passing a non-`NULL` output buffer transfers ownership of the stored value |
 
-Zero lifetime, `HX_OS_DEADLINE_NOW`, and already elapsed deadlines expire immediately. Such writes still honor copy/take and failure guarantees, but the new value is removed after successful insertion and never displaces a live item. There is no periodic timer. Time alone does not release memory: reads of expired keys, explicit purge, capacity cleanup, clear, or destruction perform the cleanup. Sleeping/suspending follows the library's monotonic-clock contract.
-
-Capacity pressure prefers an expired entry before a live LRU entry. The cache keeps a conservative earliest-expiry bound to avoid rescanning while entries are still fresh; a full-cache insertion with TTL entries can nevertheless scan O(n). `purge_expired` is O(n) and does not allocate. Pure non-expiring caches retain the path without clock reads. Expiry cleanup does not increment `evictions`; that statistic continues to count capacity eviction of live entries.
-
-Clock failures are reported before a logical write or expiry cleanup commits. Failed writes do not purge old entries first: if stale entries consume the byte budget, explicitly purge and retry. A successful `purge_expired` can change the count without changing any still-live value.
+> [!NOTE]
+> **Lazy cleanup and immediate expiry details:**
+> - Because the cache runs no background timer thread, the passage of time alone does not free memory; expired entries are reclaimed when accessed by `get`, displaced during a full-cache insertion, swept by `purge_expired`, or cleared/destroyed. If uncollected expired entries fill `max_bytes` and cause a write to return `HX_OS_LIMIT`, call `hx_os_cache_purge_expired` and retry the write.
+> - A lifetime of `0`, `HX_OS_DEADLINE_NOW`, or a deadline already in the past expires immediately: the call still validates and copies/takes the input value, then removes the newly staged entry immediately without evicting any live item.
+> - The cache tracks a conservative lower bound on the earliest expiry timestamp so insertions do not rescan the table while all TTL entries are still fresh, and caches that never use TTL entries skip clock reads entirely.
 
 ## 5. Ownership, failures and memory bounds
 
-- `put` copies the key and constructs the value using the usual container callbacks. Without callbacks, the value is copied as bytes. `put_take` transfers the release obligation only on success; its source must not already belong to the cache.
-- Eviction, replacement, clear and destruction call `drop` once per discarded value. `erase` with a non-NULL output transfers that value without calling `drop`; output storage must be uninitialized and outside the cache.
-- Returned values are borrowed until their own entry is replaced, erased, evicted, cleaned up after expiry, or the cache is cleared/destroyed. The absence of a background worker keeps the pointer allocated when time passes, but does not make an expired value fresh. Reading another entry does not invalidate them. All concurrent access involving mutation, including `get`, requires external synchronization. Callbacks cannot reenter the cache.
-- `max_bytes` is a hard limit for memory requested by the cache from its context: cache/context objects, index, copied keys, values, allocation headers, alignment slack, and temporary insertion storage. It excludes allocator-internal overhead, callback allocations and resources behind stored pointers. `memory()` reports currently charged bytes.
-- The limit includes the old contents and a fully staged new entry. Leave room for one candidate and possible hash-bucket growth. If staging exceeds the budget, `put` returns `HX_OS_LIMIT` without evicting existing entries. An allocator failure returns `HX_OS_NO_MEMORY`. Failed insertions keep contents and recency unchanged, although index capacity may change.
-- Eviction is triggered by `max_items`, not by the byte budget. This explicit policy avoids losing an old entry and then failing to allocate its replacement. An item larger than the budget cannot be stored even in an otherwise empty cache.
-- `get_stats` returns saturating hit, miss and eviction counters. Only `get` updates hits/misses; only capacity eviction of a live entry updates evictions; expiry cleanup does not. `clear` preserves these counters.
-
-The implementation reuses the existing hash map and maintains a doubly linked recency list. Lookup is expected O(1) excluding key hashing/comparison; a hit does not allocate. TTL lookup adds a clock read, and removal may execute the user drop callback. Key processing is O(key length), copying depends on the value callback, and hash growth may allocate. No unconditional speed claim is made against direct map access.
+- **Value ownership**: `put` copies the key and constructs the value using `options.copy` (or raw bytes when no callback is set). `put_take` transfers the `drop` obligation only on success (never pass a pointer borrowed from inside the cache back to `put_take`). Eviction, replacement, expiry removal, `clear`, and `destroy` invoke `drop` once per discarded value; `erase` with a non-`NULL` uninitialized external output buffer transfers ownership to the caller without calling `drop`.
+- **Borrowed pointer lifetime and concurrency**: Pointers returned by `get` and `peek` are borrowed until that entry is replaced, erased, evicted, purged after expiry, or the cache is cleared/destroyed (reading other keys does not invalidate them). Because `get` mutates the recency list and removes expired entries, synchronize all concurrent access—including concurrent `get` calls—externally.
+- **Hard memory budget (`max_bytes`) vs. item eviction (`max_items`)**:
+  - `max_bytes` caps the memory requested by the cache from its `hx_os_context` (cache/context headers, hash index, copied keys, values, allocation headers, alignment slack, and temporary staging storage during insertion; allocator-internal overhead, nested callback allocations, and external pointees are excluded).
+  - Every `put` stages the new candidate entry before modifying the index or evicting an old item. Consequently, **eviction is triggered by `max_items`, not by `max_bytes`**—if staging the new entry would exceed `max_bytes`, `put` returns `HX_OS_LIMIT` without evicting existing entries (allocator failures return `HX_OS_NO_MEMORY`). Size `max_bytes` with room for at least one staged candidate and hash-bucket growth.
+- **Cache statistics (`hx_os_cache_get_stats`)**: Reports saturating `hits`, `misses`, and `evictions` counters (`UINT64_MAX` ceiling). Only `get` updates `hits` and `misses`, and only capacity eviction of a **live** entry increments `evictions` (purging expired entries does not). `clear` resets stored entries while preserving cumulative statistics.

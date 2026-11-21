@@ -2,23 +2,30 @@
 
 [简体中文](PROFILER.zh-CN.md) · [README](../README.md)
 
-For automatic CPU sampling, invalid-access/leak checks and heap reports, see [optional developer analysis](ANALYSIS.md). It complements manually marked intervals and stays off in ordinary builds.
+Use the bounded interval profiler (`hx_os_profiler` / `hx::Profiler`) when you want to measure how long specific application operations take (such as reading a sensor, parsing a message, or running subsystems inside a frame), inspect mean and standard deviation, and query bounded tail-latency percentiles (`P50`, `P95`, `P99`). For uninstrumented CPU sampling, memory-error/leak detection, or heap peak profiling, pair this module with the [optional developer analysis](ANALYSIS.md) workflow.
 
-**Start with a complete program.** Record repeated intervals and inspect a snapshot to understand timing distributions of collection or parsing work.
+To see interval statistics and percentiles right away, build and run [profile_statistics.c](../examples/profile_statistics.c). The program creates a profiler with histogram support enabled, records 12 `read_sensor` intervals, captures an independent snapshot, closes the profiler, and prints the mean, standard deviation, and `P50`/`P95`/`P99` bounds from the retained snapshot.
 
-Open [profile_statistics.c](../examples/profile_statistics.c). Create with histogram support → record 12 read_sensor intervals → create snapshot → close profiler → read means/percentiles → release snapshot.
+Follow the [example run instructions](../examples/README.md#run) to enable `HX_OS_BUILD_EXAMPLES=ON` and build `hx_os_profile_statistics` (it needs no arguments or input files):
 
-Follow the [example run instructions](../examples/README.md#run), enable examples and build only `hx_os_profile_statistics`. This program needs no arguments or input files.
+```sh
+cmake --build build --config Release --target hx_os_profile_statistics
 
-**Expected result:** Output includes `read_sensor: 12 samples`, mean, deviation and P50/P95/P99 intervals. Timing depends on scheduling; replace the simulated sleep with measured work.
+# Linux / macOS:
+./build/bin/hx_os_profile_statistics
 
-Short snippets below explain individual calls; use the complete example when running them. You can also use its source as main in the [minimal project](USAGE.md#c-project).
+# Windows PowerShell (Visual Studio generator):
+.\build\bin\Release\hx_os_profile_statistics.exe
+```
+
+Running the program prints `read_sensor: 12 samples` along with its mean, standard deviation, and `P50`/`P95`/`P99` duration intervals (exact numbers vary with OS scheduling). Replace the simulated sleep in the example with the code you want to measure, or drop the source into the [minimal project](USAGE.md#c-project) setup.
 
 ## 1. What this measures
 
-Use the profiler to answer questions such as “how long did reading the sensor take?” or “which child operation occupied most of a frame?” Call `start_root` before an operation and `leave` after it. Call `reach` to enter a child operation. Each successful entry needs one matching leave on the same thread or library coroutine.
-
-The profiler records monotonic elapsed time, in nanoseconds. This includes sleeping, waiting and scheduling delays. It is not a CPU usage counter. Identical names under identical parent paths merge across threads. Overlapping threads can accumulate more time than the process's elapsed wall time.
+The profiler builds a hierarchical tree of timed intervals from explicit scope markers:
+- Call `hx_os_profiler_start_root` before a top-level operation and `hx_os_profiler_leave` when it finishes.
+- Call `hx_os_profiler_reach` to enter a nested child operation and `hx_os_profiler_leave` when the child finishes.
+- Every successful entry must be balanced by one matching `leave` on the **same thread or library coroutine**.
 
 ```mermaid
 flowchart LR
@@ -30,21 +37,15 @@ flowchart LR
     E --> G[Close profiler; snapshot remains valid]
 ```
 
-The frame's inclusive time includes `read_sensor`; its exclusive time subtracts completed child durations. An open or aborted interval contributes no duration sample. `last_*` means the last completed sample. Restarting a thread aborts its open intervals and releases its timing stack; it does not reset historical statistics.
+Key measurement rules:
+- **Monotonic wall-clock duration (not CPU utilization)**: Intervals are timed with the nanosecond monotonic clock, which includes sleeping, lock waits, and OS scheduling delays.
+- **Inclusive vs. exclusive duration**: In the diagram above, `frame`'s **inclusive time** includes the time spent inside `read_sensor`, whereas `frame`'s **exclusive time** subtracts all completed child durations (`read_sensor`) so you can separate parent overhead from child work.
+- **Cross-thread path merging**: Identical interval names under identical parent paths merge across threads (so overlapping threads executing the same path can accumulate more total inclusive time than elapsed process wall-clock time).
+- **Open or aborted scopes never skew samples**: An interval that is still open or aborted via `hx_os_profiler_restart_thread` increments `aborted` without contributing a duration sample. `last_*` always records the most recently completed sample.
 
 ## 2. Run the complete C example
 
-[profile_statistics.c](../examples/profile_statistics.c) simulates twelve sensor reads, closes the profiler and prints the retained snapshot. Replace the sleep with your operation. The usual project build also builds this program:
-
-```sh
-cmake --build build --config Release --target hx_os_profile_statistics
-# Linux / macOS:
-./build/bin/hx_os_profile_statistics
-# Windows with Visual Studio:
-./build/bin/Release/hx_os_profile_statistics.exe
-```
-
-Output has this shape; timings vary with the machine and scheduler:
+[profile_statistics.c](../examples/profile_statistics.c) produces output in this format:
 
 ```text
 read_sensor: 12 samples, mean ... ms, deviation ... ms
@@ -53,39 +54,43 @@ P95: [..., ...] ms (approximate interval)
 P99: [..., ...] ms (approximate interval)
 ```
 
-`hx_os_profiler_create()` enables basic statistics. To request inclusive percentiles, use `hx_os_profiler_create_with_features()` with `HX_OS_PROFILER_HISTOGRAM_INCLUSIVE`. Add `HX_OS_PROFILER_HISTOGRAM_EXCLUSIVE` for percentiles of the interval's own time. Flags are fixed when the profiler is created; no worker thread starts.
+`hx_os_profiler_create()` enables basic aggregate statistics (counts, totals, min/max, mean, and standard deviation). To enable percentile queries, create the profiler with `hx_os_profiler_create_with_features()`:
+- Pass `HX_OS_PROFILER_HISTOGRAM_INCLUSIVE` to record histograms for **inclusive** durations.
+- Add `HX_OS_PROFILER_HISTOGRAM_EXCLUSIVE` to also record histograms for **exclusive** durations.
 
-The common reporting calls are:
+Histogram flags are fixed at creation time and spawn no background threads:
 
-| Operation | C entry | C++11 entry |
+| Operation | C99 Entry Point | C++11 Entry Point |
 | --- | --- | --- |
-| Capture all paths | `hx_os_profiler_snapshot_create` | `profiler.snapshot()` |
-| Iterate entries | `snapshot_count` and `snapshot_at` | Range-for over `ProfileSnapshot` |
-| Inclusive P95 | `snapshot_percentile(snapshot, id, 95, ...)` | `snapshot.percentile(id, 95)` |
-| Exclusive P95 | `snapshot_quantile(snapshot, id, 1, 95, 100, ...)` | `snapshot.percentile(id, 95, true)` |
-| Release a snapshot | `hx_os_profiler_snapshot_release` | RAII |
-| Keep existing text reports | `hx_os_profiler_dump_string` | `profiler.dump()` |
+| Capture a structured snapshot of all paths | `hx_os_profiler_snapshot_create` | `profiler.snapshot()` |
+| Iterate recorded path entries | `hx_os_profiler_snapshot_count` & `hx_os_profiler_snapshot_at` | Range-`for` over `hx::ProfileSnapshot` |
+| Query an inclusive integer percentile (e.g., P95) | `hx_os_profiler_snapshot_percentile(snapshot, id, 95, ...)` | `snapshot.percentile(id, 95)` |
+| Query an exclusive rational quantile (or P95) | `hx_os_profiler_snapshot_quantile(snapshot, id, 1, 95, 100, ...)` | `snapshot.percentile(id, 95, true)` |
+| Release a structured snapshot | `hx_os_profiler_snapshot_release` | Automatic RAII destruction |
+| Format a tab-separated (TSV) text report | `hx_os_profiler_dump_string` | `profiler.dump()` |
 
-The table abbreviates snapshot query names; each C query begins with `hx_os_profiler_`. Quantiles use `entry.identifier`, which starts at 1. `snapshot_at` uses a zero-based array index. Parent identifiers are local to the originating profiler; parent 0 means a root.
+> [!NOTE]
+> **Array Index vs. Path Identifier (`entry.identifier`)**
+> `hx_os_profiler_snapshot_at` takes a zero-based array index `0 .. count - 1`, whereas `hx_os_profiler_snapshot_percentile` and `hx_os_profiler_snapshot_quantile` take `entry.identifier` (which starts at `1`; `entry.parent == 0` denotes a root interval).
 
 ## 3. Read the statistics directly
 
-Snapshots expose immutable `hx_os_profiler_entry` records. There is no need to parse the TSV report.
+Snapshots expose immutable `hx_os_profiler_entry` structs directly without requiring TSV parsing:
 
-| Fields | Meaning |
+| Struct Fields | Meaning |
 | --- | --- |
-| `name`, `name_bytes`, `identifier`, `parent`, `depth` | Copied UTF-8 name and interval tree position |
+| `name`, `name_bytes`, `identifier`, `parent`, `depth` | Copied UTF-8 interval name and position in the interval tree |
 | `completed`, `aborted` | Counts of completed and aborted intervals |
-| `inclusive_ns`, `exclusive_ns` | Accumulated elapsed time |
-| `minimum_ns`, `maximum_ns`, `last_inclusive_ns` | Inclusive minimum, maximum and last completion |
-| `minimum_exclusive_ns`, `maximum_exclusive_ns`, `last_exclusive_ns` | Corresponding exclusive values |
-| `mean_inclusive_ns`, `deviation_inclusive_ns` | Mean and population standard deviation |
-| `mean_exclusive_ns`, `deviation_exclusive_ns` | Corresponding exclusive statistics |
-| `flags` | 1: saturated counters; 2: clock error |
+| `inclusive_ns`, `exclusive_ns` | Accumulated inclusive and exclusive nanosecond totals |
+| `minimum_ns`, `maximum_ns`, `last_inclusive_ns` | Inclusive minimum, maximum, and most recent completed duration (ns) |
+| `minimum_exclusive_ns`, `maximum_exclusive_ns`, `last_exclusive_ns` | Exclusive minimum, maximum, and most recent completed duration (ns) |
+| `mean_inclusive_ns`, `deviation_inclusive_ns` | Inclusive arithmetic mean and population standard deviation (`double`) |
+| `mean_exclusive_ns`, `deviation_exclusive_ns` | Exclusive arithmetic mean and population standard deviation (`double`) |
+| `flags` | Diagnostic bitmask: `1` = counter saturated at `UINT64_MAX`; `2` = clock error observed |
 
-Means and standard deviations are approximate doubles. Empty statistics are zero. Individual duration samples are not retained; snapshots contain aggregate statistics. Treat flagged entries as diagnostics, not exact measurements.
+When `completed == 0`, all duration fields are `0`. Treat any entry with non-zero `flags` as a diagnostic warning rather than an exact measurement.
 
-For example, after recording work with an initialized `hx::Profiler profiler`, this C++11 reporting block prints each path's mean and optional P95. Include `<hx/Profiler.hpp>` and `<cstdio>`:
+In C++11, include `<hx/Profiler.hpp>` and `<cstdio>` to capture a snapshot and iterate over its entries:
 
 ```cpp
 auto report = profiler.snapshot();
@@ -112,43 +117,32 @@ else {
 }
 ```
 
-The profiler's host-owned handle still needs explicit close after participating threads have exited or detached their timing caches. The reporting block does not close it. `ProfileSnapshot` itself owns its data and can be copied or moved without copying all records. Copies retain one shared immutable snapshot; ordinary iteration does not allocate.
+`hx::ProfileSnapshot` owns a reference-counted immutable snapshot—copying or moving it shares the same read-only buffer without deep-copying records, and iterating over it performs zero heap allocations. Because the snapshot is self-contained, it remains valid even after the originating `profiler` is closed.
 
 ## 4. Interpret P50, P95 and P99
 
-A percentile describes a completed duration sample at the requested rank. P95 chooses the `ceil(sample_count * 95 / 100)`-th sample in sorted order. With only twelve samples, P95 and P99 both choose the maximum; this is expected, not evidence of a precise tail estimate.
+- **Order-statistic rank**: A percentile selects the `ceil(sample_count * P / 100)`-th completed duration in sorted order. With only 12 samples, both `P95` and `P99` select the 12th (maximum) sample by definition; collect larger sample counts when estimating tail behavior.
+- **252 bounded logarithmic bins**: Each enabled channel uses `252` fixed bins: durations `0..3 ns` each have an exact 1-ns bin, and each subsequent power-of-two range is subdivided into four equal bins (for example, `1,024..1,279 ns` share one bin) all the way up to `UINT64_MAX`. Aside from the exact `0..3 ns` bins, every bin's width is at most one quarter (`25%`) of its lower bound.
+- **Interval result `{lower_ns, upper_ns, samples}`**: Queries return the `[lower_ns, upper_ns]` bin bounds containing the target rank, clipped to the exact observed `minimum_ns` and `maximum_ns` (`P0` and `P100` return the exact observed extrema). This is a deterministic bucket interval, not a statistical confidence interval or linear interpolation. For fractional quantiles such as `P99.9`, call `hx_os_profiler_snapshot_quantile` with `numerator = 999` and `denominator = 1000`.
 
-Each enabled channel has 252 fixed logarithmic bins. Values from 0 through 3 ns have exact bins, then each power-of-two range is split into four bins. For example, 1,024–1,279 ns share a bin. The largest bins also cover `UINT64_MAX` safely. A bucket width is at most one quarter of its lower bound, apart from the exact small bins.
+Percentile query return codes (failures leave the output struct untouched and never synthesize a percentile from mean or min/max alone):
 
-Queries return `{lower_ns, upper_ns, samples}`. The interval contains the selected order statistic; it is not a confidence interval or an interpolated exact duration. The result is clipped to the observed minimum and maximum. P0/P100 return the exact observed extrema. Fractional percentiles can use the rational `snapshot_quantile` entry, such as 999/1000 for P99.9.
-
-| Condition | Result |
+| Condition | Return Status |
 | --- | --- |
-| Selected histogram was not enabled | `HX_OS_NOT_SUPPORTED` |
-| Path has no completed sample | `HX_OS_NOT_FOUND` |
-| Invalid identifier, numerator above denominator or saturated counters | `HX_OS_RANGE` |
-| Null required argument, zero denominator or invalid exclusive flag | `HX_OS_INVALID` |
-
-Query failures preserve the output structure. No query synthesizes a percentile from the mean or min/max alone. Features do not change at runtime, and counts accumulate over the profiler's lifetime; rolling windows and exact sample exports are not provided.
+| The requested histogram channel was not enabled at profiler creation | `HX_OS_NOT_SUPPORTED` |
+| The path has zero completed samples (`completed == 0`) | `HX_OS_NOT_FOUND` |
+| Invalid `identifier`, `numerator > denominator`, or saturated counters | `HX_OS_RANGE` |
+| `NULL` required pointer, `denominator == 0`, or invalid `exclusive` flag | `HX_OS_INVALID` |
 
 ## 5. Memory, concurrency and shutdown
 
-Each enabled histogram adds exactly 2,016 bytes per distinct recorded path, plus at most seven bytes of alignment padding before the histogram area. Both channels add 4,032 bytes. The copied snapshot includes the enabled histogram data too. Defaults allow 1,024 paths; lowering `max_records` is useful on embedded devices. Names and thread timing stacks have their existing separate limits.
-
-The existing options layout is preserved. `max_output_bytes` also limits each new owned snapshot, including its allocation header/alignment allowance. Old TSV output retains its original formatted-output limit. Default options allow 4 MiB; creating both histograms with null options selects 8 MiB. Explicit options keep exactly the budget supplied. A capture that exceeds the budget fails with `HX_OS_LIMIT`; it does not silently omit paths or histograms. Applications must also bound the number of simultaneously retained snapshots.
-
-After warmup, repeating an existing path with a retained thread or coroutine context needs no new context allocation. First use and new paths can allocate memory.
-
-The profiler synchronizes shared statistics across threads; recording is not lock-free. Allocation/free callbacks and context cleanup run outside the statistics lock; reentry restrictions still apply. Exit reads the end timestamp before waiting for the statistics-update lock, so that wait is not added to the completed interval.
-
-Paths match by parent and name contents, so dynamically generated UTF-8 names can be passed directly without retaining a lookup token.
-
-Prefer timing a meaningful operation, such as parsing one message, instead of wrapping every character or atomic increment. The cost of entering and leaving a very short interval can be comparable to the work itself. Concurrent recording can add lock contention; measure with a representative application workload. Use the [optional analysis workflow](ANALYSIS.md) for automatic CPU sampling without marking each small operation.
-
-Check the returned `hx_os_status`; pass an error object when you need native diagnostics.
-
-A snapshot captures statistics and histogram data consistently. Capture work grows with the number of paths and bins, so capture periodically rather than on every timed operation. Concurrent path growth retries at most eight times, then returns `HX_OS_BUSY`; retry later. The snapshot records a monotonic observation timestamp. Caller output becomes null on capture failure.
-
-Default snapshot allocation is independent of the profiler's allocator, allowing the original context to close once its resources are released. `snapshot_create_with_context` selects a separate allocator explicitly; that context reports busy while the snapshot is retained. Entry pointers and names borrow the snapshot until its last release. Concurrent readers hold their own references, published through normal synchronization. All snapshots and profiler/TLS state must be gone before unloading the implementing library.
-
-The existing stop/close contracts remain: stop rejects new entries; leave, detach and capture remain available. Close never kills another thread or discards its active timing stack. Timeout/BUSY retain the handle for retry, including when another thread is still running an allocator callback or retiring its context. The caller must prevent new calls from racing final destruction and serialize final close attempts. No signal handler or native stack capture is installed. With `HX_OS_ENABLE_PROFILER=OFF`, creation/capture/queries explicitly report not supported.
+- **Histogram and snapshot memory budget**:
+  - Each enabled histogram channel adds `2,016` bytes per distinct recorded path (plus up to 7 bytes of alignment padding); enabling both inclusive and exclusive histograms adds `4,032` bytes per path. Defaults allow up to `1,024` paths (reduce `options.max_records` on memory-constrained embedded targets).
+  - `options.max_output_bytes` bounds each captured snapshot including allocation headers and alignment (defaulting to `4 MiB`, or `8 MiB` when both histograms are enabled with `options == NULL`). Exceeding the budget fails with `HX_OS_LIMIT` rather than silently dropping paths or histograms.
+- **Zero-allocation steady state and timestamp ordering**:
+  - Once a path and thread/coroutine cache are warmed up, entering and leaving existing paths performs **zero new `hx_context` allocations**.
+  - On `leave`, the profiler **reads the monotonic end timestamp before acquiring the shared statistics lock**, so mutex contention wait time is never added to the completed interval's duration.
+  - **Choose sensible instrumentation granularity**: Time meaningful operations (such as parsing a message or executing a query) rather than wrapping every single-byte loop or atomic increment. For automatic instruction/CPU hotspot discovery without manual markers, use the [optional analysis workflow](ANALYSIS.md).
+- **Snapshot allocators and clean shutdown**:
+  - `hx_os_profiler_snapshot_create` uses the built-in default allocator so the profiler's custom `hx_context` can close as soon as the profiler itself closes; `hx_os_profiler_snapshot_create_with_context` binds a snapshot to an explicit `hx_context` (which stays busy until the last snapshot reference is released). Release all snapshots and profiler/TLS state before unloading the library or plugin.
+  - `hx_os_profiler_stop` blocks new scope entries while allowing active scopes to `leave`, threads to detach via `restart_thread`, and snapshots to be captured. `hx_os_profiler_close` waits for active calls and foreign TLS caches to finish, returning `HX_OS_DEADLOCK` if the calling thread still has an open scope, or `HX_OS_TIMEOUT` / `HX_OS_BUSY` (retaining the handle for retry) if another thread is still active. When built with `HX_OS_ENABLE_PROFILER=OFF`, all profiler calls return `HX_OS_NOT_SUPPORTED`.
