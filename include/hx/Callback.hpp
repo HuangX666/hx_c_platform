@@ -107,6 +107,12 @@ template <typename F> bool NullCallable(const F &, std::false_type) noexcept
 	return false;
 }
 
+template <typename F, typename C>
+bool NullCallable(F C::*function, std::false_type) noexcept
+{
+	return function == nullptr;
+}
+
 template <typename F> bool NullCallable(F function, std::true_type) noexcept
 {
 	return function == NULL;

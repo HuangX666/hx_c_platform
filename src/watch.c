@@ -347,6 +347,10 @@ hx_os_status hx_os_watch_close_until(
 	if (!hx_os_atomic_compare_exchange(&value->close_claim, &expected, 1,
 		    HX_OS_ACQUIRE, HX_OS_RELAXED))
 		return hx_os_i_error(error, HX_OS_BUSY, 0, 0);
+	if (value->thread && hx_os_thread_is_current(value->thread)) {
+		hx_os_atomic_store(&value->close_claim, 0, HX_OS_RELEASE);
+		return hx_os_i_error(error, HX_OS_DEADLOCK, 0, 0);
+	}
 	hx_os_watch_stop(value);
 
 	status = hx_os_thread_join_until(value->thread, deadline, NULL, error);

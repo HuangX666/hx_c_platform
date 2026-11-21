@@ -456,7 +456,7 @@ hx_os_status hx_os_regex_replace(const hx_os_regex *regex,
 		end = match.captures[0].offset + match.captures[0].size;
 		previous = end;
 		start = end;
-		if (!match.captures[0].size) {
+		if (budget.match_start == end) {
 			if (end == subject.size)
 				break;
 			start = hx_os_rx_advance(subject, end);
@@ -513,7 +513,7 @@ hx_os_status hx_os_regex_split(const hx_os_regex *regex, hx_string_view subject,
 		end = match.captures[0].offset + match.captures[0].size;
 		previous = end;
 		start = end;
-		if (!match.captures[0].size) {
+		if (budget.match_start == end) {
 			if (end == subject.size) {
 				if (*completed == budget.limits.max_results)
 					return hx_os_i_regex_error(error,

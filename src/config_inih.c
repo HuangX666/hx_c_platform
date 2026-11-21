@@ -80,8 +80,8 @@ static int hx_os_cfg_ini_preflight(
 		return hx_os_cfg_reject(
 			parser, HX_OS_LIMIT, "Too many INI lines");
 
-	state->offsets = hx_os_cfg_alloc(parser, lines * sizeof(size_t));
-	buffer = hx_os_cfg_alloc(parser, parser->length + 2);
+	state->offsets = hx_os_cfg_vendor_malloc(lines * sizeof(size_t));
+	buffer = hx_os_cfg_vendor_malloc(parser->length + 2);
 	if (!state->offsets || !buffer)
 		return 0;
 
@@ -134,6 +134,22 @@ static int hx_os_cfg_ini_preflight(
 				return hx_os_cfg_reject(parser, HX_OS_SYNTAX,
 					"Trailing content after INI section");
 		}
+		else if (line.bytes && line.data[0] != ';' &&
+			line.data[0] != '#') {
+			size_t pos = 0;
+
+			while (pos < line.bytes && line.data[pos] != '=' &&
+				line.data[pos] != ':')
+				++pos;
+			if (pos < line.bytes) {
+				hx_os_config_slice value = {line.data + pos + 1,
+					line.bytes - pos - 1};
+
+				value = hx_os_cfg_inline_comment(value, ';');
+				end = (size_t)(value.data - parser->text) +
+					value.bytes;
+			}
+		}
 
 		memcpy(buffer + written, parser->text + start, end - start);
 		written += end - start;
@@ -151,17 +167,20 @@ static int hx_os_cfg_ini_preflight(
 int hx_os_cfg_inih(hx_os_cfg_parser *parser, hx_os_config_node **out)
 {
 	hx_os_cfg_ini_state state;
-	hx_os_config_slice input;
+	hx_os_config_slice input = {NULL, 0};
 	hx_os_cfg_parser *previous;
 	int status;
 
 	memset(&state, 0, sizeof(state));
 	state.parser = parser;
 	state.root = hx_os_cfg_node(parser, HX_OS_CONFIG_OBJECT, 1);
-	if (!state.root || !hx_os_cfg_ini_preflight(&state, &input))
+	if (!state.root)
 		return 0;
-
 	previous = hx_os_cfg_vendor_enter(parser);
+	if (!hx_os_cfg_ini_preflight(&state, &input)) {
+		hx_os_cfg_vendor_leave(parser, previous);
+		return 0;
+	}
 
 	status = ini_parse_string_length(
 		input.data, input.bytes, hx_os_cfg_ini_handler, &state);

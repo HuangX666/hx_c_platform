@@ -97,7 +97,8 @@ HX_OS_API void HX_OS_CALL hx_os_watch_stop(hx_os_watch *watch);
 /**
  * \brief Stop/join/close, including callback, cleanup and TLS return.
  *
- * \details Timeout keeps *watch alive for retry. Self-close reports DEADLOCK.
+ * \details Timeout keeps *watch alive for retry. Calling close from its own
+ * callback returns DEADLOCK before requesting a stop.
  * Once retired consumes it, even when reporting a terminal backend error.
  * Exclude parallel close.
  */

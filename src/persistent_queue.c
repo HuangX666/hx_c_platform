@@ -182,17 +182,20 @@ static int hx_os_store_schema(hx_os_persistent_queue *queue)
 		code = hx_os_store_prepare(queue,
 			"INSERT INTO hxq_meta VALUES(1,1,?,?,?,0,0,?)",
 			&statement);
-	if (code == SQLITE_OK) {
-		(void)sqlite3_bind_int64(statement, 1,
+	if (code == SQLITE_OK)
+		code = sqlite3_bind_int64(statement, 1,
 			(sqlite3_int64)queue->options.max_messages);
-		(void)sqlite3_bind_int64(statement, 2,
+	if (code == SQLITE_OK)
+		code = sqlite3_bind_int64(statement, 2,
 			(sqlite3_int64)queue->options.max_content_bytes);
-		(void)sqlite3_bind_int64(
+	if (code == SQLITE_OK)
+		code = sqlite3_bind_int64(
 			statement, 3, queue->options.max_message_bytes);
-		(void)sqlite3_bind_blob(
+	if (code == SQLITE_OK)
+		code = sqlite3_bind_blob(
 			statement, 4, queue->identity, 16, SQLITE_STATIC);
+	if (code == SQLITE_OK)
 		code = sqlite3_step(statement);
-	}
 	(void)sqlite3_finalize(statement);
 
 	return code;
@@ -376,11 +379,11 @@ static hx_os_status hx_os_store_insert(hx_os_persistent_queue *queue,
 	int code = hx_os_store_prepare(
 		queue, "SELECT body FROM hxq_record WHERE id=?", &statement);
 
-	if (code == SQLITE_OK) {
-		(void)sqlite3_bind_text(
+	if (code == SQLITE_OK)
+		code = sqlite3_bind_text(
 			statement, 1, item->id, -1, SQLITE_STATIC);
+	if (code == SQLITE_OK)
 		code = sqlite3_step(statement);
-	}
 	if (code == SQLITE_ROW) {
 		size_t size = (size_t)sqlite3_column_bytes(statement, 0);
 		int same = size == item->data.size &&
@@ -399,15 +402,16 @@ static hx_os_status hx_os_store_insert(hx_os_persistent_queue *queue,
 
 	code = hx_os_store_prepare(queue,
 		"INSERT INTO hxq_record(id,body) VALUES(?,?)", &statement);
-	if (code == SQLITE_OK) {
-		(void)sqlite3_bind_text(
+	if (code == SQLITE_OK)
+		code = sqlite3_bind_text(
 			statement, 1, item->id, -1, SQLITE_STATIC);
-		// A zero-byte message is an empty blob, not SQL NULL.
-		(void)sqlite3_bind_blob64(statement, 2,
+	// A zero-byte message is an empty blob, not SQL NULL.
+	if (code == SQLITE_OK)
+		code = sqlite3_bind_blob64(statement, 2,
 			item->data.size ? item->data.data : "",
 			(sqlite3_uint64)item->data.size, SQLITE_STATIC);
+	if (code == SQLITE_OK)
 		code = sqlite3_step(statement);
-	}
 	status = hx_os_store_error(queue, code, error);
 	(void)sqlite3_finalize(statement);
 
@@ -500,10 +504,10 @@ hx_os_status hx_os_persistent_queue_take(hx_os_persistent_queue *queue,
 		"WHERE receipt IS NULL OR expires<=? ORDER BY seq "
 		"LIMIT 1",
 		&statement);
-	if (code == SQLITE_OK) {
-		(void)sqlite3_bind_int64(statement, 1, now);
+	if (code == SQLITE_OK)
+		code = sqlite3_bind_int64(statement, 1, now);
+	if (code == SQLITE_OK)
 		code = sqlite3_step(statement);
-	}
 	status = hx_os_store_error(queue, code, error);
 	if (code == SQLITE_DONE)
 		status = hx_os_i_error(error, HX_OS_WOULD_BLOCK, 0, 0);
@@ -547,13 +551,15 @@ hx_os_status hx_os_persistent_queue_take(hx_os_persistent_queue *queue,
 		code = hx_os_store_prepare(queue,
 			"UPDATE hxq_record SET receipt=?,expires=? WHERE seq=?",
 			&statement);
-		if (code == SQLITE_OK) {
-			(void)sqlite3_bind_blob(statement, 1, message->receipt,
+		if (code == SQLITE_OK)
+			code = sqlite3_bind_blob(statement, 1, message->receipt,
 				16, SQLITE_STATIC);
-			(void)sqlite3_bind_int64(statement, 2, until);
-			(void)sqlite3_bind_int64(statement, 3, sequence);
+		if (code == SQLITE_OK)
+			code = sqlite3_bind_int64(statement, 2, until);
+		if (code == SQLITE_OK)
+			code = sqlite3_bind_int64(statement, 3, sequence);
+		if (code == SQLITE_OK)
 			code = sqlite3_step(statement);
-		}
 		status = hx_os_store_error(queue, code, error);
 	}
 	(void)sqlite3_finalize(statement);
@@ -580,17 +586,18 @@ static hx_os_status hx_os_store_receipt(hx_os_persistent_queue *queue,
 	int code = hx_os_store_prepare(queue, sql[operation], &statement);
 	hx_os_status status;
 
-	if (code == SQLITE_OK) {
-		(void)sqlite3_bind_text(
+	if (code == SQLITE_OK)
+		code = sqlite3_bind_text(
 			statement, 1, message->id, -1, SQLITE_STATIC);
-		(void)sqlite3_bind_blob(
+	if (code == SQLITE_OK)
+		code = sqlite3_bind_blob(
 			statement, 2, message->receipt, 16, SQLITE_STATIC);
-		if (operation != 1)
-			(void)sqlite3_bind_int64(statement, 3, now);
-		if (operation == 2)
-			(void)sqlite3_bind_int64(statement, 4, until);
+	if (code == SQLITE_OK && operation != 1)
+		code = sqlite3_bind_int64(statement, 3, now);
+	if (code == SQLITE_OK && operation == 2)
+		code = sqlite3_bind_int64(statement, 4, until);
+	if (code == SQLITE_OK)
 		code = sqlite3_step(statement);
-	}
 	status = hx_os_store_error(queue, code, error);
 	if (status == HX_OS_OK && sqlite3_changes(queue->database) != 1)
 		status = hx_os_i_error(error, HX_OS_CLOSED, 0, 0);
@@ -681,10 +688,10 @@ hx_os_status hx_os_persistent_queue_stats(hx_os_persistent_queue *queue,
 		"WHERE receipt IS NOT NULL AND expires>?) "
 		"FROM hxq_meta WHERE k=1",
 		&statement);
-	if (code == SQLITE_OK) {
-		(void)sqlite3_bind_int64(statement, 1, now);
+	if (code == SQLITE_OK)
+		code = sqlite3_bind_int64(statement, 1, now);
+	if (code == SQLITE_OK)
 		code = sqlite3_step(statement);
-	}
 	status = hx_os_store_error(queue, code, error);
 	if (code == SQLITE_ROW) {
 		result.messages = (uint64_t)sqlite3_column_int64(statement, 0);

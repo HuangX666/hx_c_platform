@@ -126,7 +126,8 @@ hx_os_status hx_os_process_spawn(hx_os_context *context, const char *path,
 	}
 
 	status = hx_os_i_process_spawn(
-		context, path, args, env, options, process, error);
+		context, path, args, env, !environment, options, process,
+		error);
 	if (status == HX_OS_OK) {
 		*out = process;
 		process = NULL;

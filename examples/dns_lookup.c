@@ -37,12 +37,12 @@ static hx_os_status resolve_in_coroutine(
 
 int main(int argc, char **argv)
 {
-	lookup_state state = {0};
+	static lookup_state state = {0};
 	hx_os_resolver *resolver = NULL;
-	hx_os_loop *loop = NULL;
-	hx_os_request *request = NULL;
-	hx_os_coro_runtime *runtime = NULL;
-	hx_os_coro *task = NULL;
+	static hx_os_loop *loop = NULL;
+	static hx_os_request *request = NULL;
+	static hx_os_coro_runtime *runtime = NULL;
+	static hx_os_coro *task = NULL;
 	hx_os_status status, closed;
 	size_t i;
 	int first = 1, mode = 0, ok;
@@ -105,7 +105,7 @@ int main(int argc, char **argv)
 	// Retire callbacks before releasing their state, including on timeout.
 	if (loop) {
 		closed = hx_os_loop_close_until(
-			loop, hx_os_deadline_after_ms(2000), NULL);
+			loop, hx_os_deadline_after_ms(500), NULL);
 		if (closed != HX_OS_OK) {
 			fputs("Loop close pending; keep owners to retry.\n",
 				stderr);
@@ -117,7 +117,7 @@ int main(int argc, char **argv)
 	if (runtime) {
 		hx_os_coro_cancel(task);
 		closed = hx_os_coro_runtime_close_until(
-			runtime, hx_os_deadline_after_ms(2000), NULL);
+			runtime, hx_os_deadline_after_ms(500), NULL);
 		if (closed != HX_OS_OK) {
 			fputs("Runtime close pending; keep owners to retry.\n",
 				stderr);

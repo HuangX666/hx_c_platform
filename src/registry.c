@@ -233,7 +233,7 @@ hx_os_status hx_os_registry_read_string(hx_os_registry *key, const char *name,
 		}
 
 		characters = bytes / sizeof(*buffer);
-		if (characters && !buffer[characters - 1])
+		while (characters && !buffer[characters - 1])
 			--characters;
 
 		if (wmemchr(buffer, 0, characters)) {

@@ -2,7 +2,7 @@
 #define HX_C_PLATFORM_CPP_ONCE_HPP
 
 #include <hx_os_once.h>
-#include <hx/Status.hpp>
+#include <hx/Callback.hpp>
 
 namespace hx {
 class Once {
@@ -51,6 +51,9 @@ public:
 		hx_os_cancel_token *cancel = NULL) noexcept
 	{
 		using Callable = typename std::remove_reference<Function>::type;
+		if (detail::NullCallable(function, std::is_pointer<Callable>()))
+			return Failure(HX_OS_INVALID);
+
 		Callable *callback = &function;
 		hx_os_error error = {};
 		auto status = hx_os_once_run_until(m_once_, invoke<Callable>,

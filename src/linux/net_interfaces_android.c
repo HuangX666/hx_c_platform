@@ -75,13 +75,20 @@ static hx_os_status hx_os_interface_address_message(int query,
 	if (!address)
 		return HX_OS_OK;
 
-	if (!if_indextoname(message->ifa_index, name))
-		return hx_os_i_errno(error, errno ? errno : ENODEV);
+	errno = 0;
+	if (!if_indextoname(message->ifa_index, name)) {
+		if (!errno || errno == ENODEV || errno == ENXIO)
+			return HX_OS_OK;
+		return hx_os_i_errno(error, errno);
+	}
 
 	memset(&request, 0, sizeof(request));
 	memcpy(request.ifr_name, name, strlen(name) + 1);
-	if (ioctl(query, SIOCGIFFLAGS, &request))
+	if (ioctl(query, SIOCGIFFLAGS, &request)) {
+		if (errno == ENODEV || errno == ENXIO)
+			return HX_OS_OK;
 		return hx_os_i_errno(error, errno);
+	}
 
 	info.flags = hx_os_i_interface_flags((unsigned short)request.ifr_flags);
 	if (!ioctl(query, SIOCGIFMTU, &request) && request.ifr_mtu > 0)

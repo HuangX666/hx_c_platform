@@ -309,7 +309,6 @@ void hx_os_i_tls_cleanup(void *value)
 		return;
 
 	key = slot->key;
-	(void)hx_os_i_tls_set_native(key, NULL, NULL);
 	if (key->destructor)
 		key->destructor(slot->value, key->user);
 
@@ -399,7 +398,10 @@ hx_os_status hx_os_tls_set(hx_os_tls_key *key, void *value, hx_os_error *error)
 
 void hx_os_tls_clear(hx_os_tls_key *key)
 {
-	hx_os_i_tls_cleanup(hx_os_i_tls_get_native(key));
+	hx_os_i_tls_value *slot = hx_os_i_tls_get_native(key);
+
+	if (slot && hx_os_i_tls_set_native(key, NULL, NULL) == HX_OS_OK)
+		hx_os_i_tls_cleanup(slot);
 }
 
 hx_os_status hx_os_tls_key_destroy(hx_os_tls_key **key, hx_os_error *error)

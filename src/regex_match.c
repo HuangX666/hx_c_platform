@@ -1087,6 +1087,8 @@ hx_os_status hx_os_i_regex_run(const hx_os_regex *regex, hx_string_view subject,
 			state.stack.size = 0;
 			state.status = HX_OS_OK;
 			status = hx_os_rx_execute(&state, full, &result);
+			if (status == HX_OS_OK)
+				budget->match_start = position;
 			if (status != HX_OS_NOT_FOUND ||
 				position == subject.size || full ||
 				state.committed)

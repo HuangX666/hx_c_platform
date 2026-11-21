@@ -172,7 +172,11 @@ static uint32_t hx_os_rx_reference(
 				number =
 					parser->regex->group_count - number + 1;
 		else if (positive) {
-			if (number > UINT32_MAX - parser->regex->group_count)
+			if (!number)
+				hx_os_rx_fail(parser, HX_OS_SYNTAX,
+					HX_OS_RX_BAD_REFERENCE);
+			else if (number >
+				UINT32_MAX - parser->regex->group_count)
 				hx_os_rx_fail(parser, HX_OS_RANGE,
 					HX_OS_RX_BAD_REFERENCE);
 			else
@@ -810,6 +814,7 @@ static uint32_t hx_os_rx_condition(hx_os_rx_parser *parser)
 static uint32_t hx_os_rx_group_parse(hx_os_rx_parser *parser)
 {
 	uint32_t type = HX_OS_RX_GROUP, group = 0, flags = 0;
+	uint32_t opening = (uint32_t)(parser->position - 1);
 	uint32_t old_flags = parser->flags, node;
 	uint32_t name_offset = 0, name_length = 0;
 	int capture = !(parser->flags & HX_OS_REGEX_NO_AUTO_CAPTURE);
@@ -977,6 +982,7 @@ static uint32_t hx_os_rx_group_parse(hx_os_rx_parser *parser)
 			parser, type, node, HX_OS_RX_NONE, group, 0, 0);
 		if (node != HX_OS_RX_NONE) {
 			hx_os_rx_node_at(parser, node)->flags |= flags;
+			hx_os_rx_node_at(parser, node)->offset = opening;
 			if (capture)
 				parser->regex->groups[group].node = node;
 		}
@@ -1160,9 +1166,11 @@ static uint32_t hx_os_rx_quantified(hx_os_rx_parser *parser)
 		return HX_OS_RX_NONE;
 	}
 	lazy = !!(parser->flags & HX_OS_REGEX_UNGREEDY);
-	if (hx_os_rx_take(parser, '?'))
-		lazy = !lazy;
 	possessive = hx_os_rx_take(parser, '+');
+	if (possessive)
+		lazy = 0;
+	else if (hx_os_rx_take(parser, '?'))
+		lazy = !lazy;
 	node = hx_os_rx_node_add(parser, HX_OS_RX_REPEAT, node, HX_OS_RX_NONE,
 		0, minimum, maximum);
 	if (node != HX_OS_RX_NONE && lazy)

@@ -87,8 +87,9 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_proc_add_params(
  * with default limits.
  *
  * \details Publishes a new owned result only on success (*out=NULL on failure).
- * Input stays alive and unchanged through the call. Own result with
- * params_destroy. Callback side effects through borrowed pointers/OS objects
+ * Keep input alive through the call. Cloning needs exclusive access to input.
+ * Its values stay unchanged. Release the result with hx_os_params_destroy().
+ * Callback side effects through borrowed pointers/OS objects
  * cannot be rolled back. No implicit conversion to/from fixed calldata.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_proc_call_params(

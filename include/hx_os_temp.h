@@ -13,8 +13,9 @@ typedef struct hx_os_temp hx_os_temp;
  * \brief Atomically creates a random exclusive file/directory in a trusted
  * parent.
  *
- * \details parent=NULL uses the native temporary directory (requires PATHS);
- * prefix NULL uses "hx", otherwise at most 64 UTF-8 bytes, no separators/colon.
+ * \details A NULL parent uses the native temporary directory (requires PATHS).
+ * An empty parent returns INVALID. A NULL prefix uses "hx". Other prefixes
+ * allow up to 64 UTF-8 bytes and cannot contain separators or a colon.
  * Does not create parent directories. POSIX files/directories use 0600/0700;
  * Windows inherits parent ACLs. Not a sandbox for an adversarial parent.
  * Externally serialize calls and borrowed file I/O with cleanup/publication.

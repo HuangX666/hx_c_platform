@@ -105,8 +105,8 @@ hx_os_status hx_os_i_text_copy(const char *text, char *buffer, size_t capacity,
 hx_os_status hx_os_i_env_get(const char *name, char *buffer, size_t capacity,
 	size_t *required, hx_os_error *error);
 
-hx_os_status hx_os_i_env_get_string(
-	const char *name, hx_string *out, hx_os_error *error);
+hx_os_status hx_os_i_env_get_string(const char *name, hx_string *out,
+	size_t maximum, hx_os_error *error);
 
 hx_os_status hx_os_i_utf_decode(hx_os_encoding encoding,
 	const unsigned char *input, size_t bytes, uint32_t *point,

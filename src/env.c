@@ -2,7 +2,8 @@
 #include "hx_os_env.h"
 #include "system_private.h"
 
-#if HX_OS_ENABLE_ENV || HX_OS_ENABLE_PATHS || HX_OS_ENABLE_PROCESS
+#if HX_OS_ENABLE_ENV || HX_OS_ENABLE_PATHS || HX_OS_ENABLE_PROCESS || \
+	HX_OS_HAVE_LINUX_DESKTOP
 #if defined(_WIN32)
 #include <windows.h>
 
@@ -326,7 +327,7 @@ hx_os_status hx_os_env_enumerate(hx_os_context *context,
 hx_os_status hx_os_i_env_get(const char *name, char *buffer, size_t capacity,
 	size_t *required, hx_os_error *error)
 {
-#if HX_OS_ENABLE_ENV || HX_OS_ENABLE_PATHS
+#if HX_OS_ENABLE_ENV || HX_OS_ENABLE_PATHS || HX_OS_HAVE_LINUX_DESKTOP
 	hx_os_status status = hx_os_env_name(name, error);
 	if (status != HX_OS_OK)
 		return status;
@@ -386,8 +387,8 @@ hx_os_status hx_os_i_env_get(const char *name, char *buffer, size_t capacity,
 #endif
 }
 
-hx_os_status hx_os_i_env_get_string(
-	const char *name, hx_string *out, hx_os_error *error)
+hx_os_status hx_os_i_env_get_string(const char *name, hx_string *out,
+	size_t maximum, hx_os_error *error)
 {
 	hx_string value;
 	hx_os_status status = HX_OS_BUSY;
@@ -402,7 +403,14 @@ hx_os_status hx_os_i_env_get_string(
 	for (attempt = 0; attempt < 8; ++attempt) {
 		status = hx_os_i_env_get(
 			name, value.data, value.capacity, &required, error);
-		if (status != HX_OS_OUTPUT_FULL)
+		if (status != HX_OS_OUTPUT_FULL && status != HX_OS_OK)
+			break;
+
+		if (required - 1 > maximum) {
+			status = hx_os_i_error(error, HX_OS_LIMIT, 0, 0);
+			break;
+		}
+		if (status == HX_OS_OK)
 			break;
 
 		status = hx_string_reserve(&value, required - 1, error);
@@ -442,7 +450,7 @@ hx_os_status hx_os_env_get_string(
 	const char *name, hx_string *out, hx_os_error *error)
 {
 #if HX_OS_ENABLE_ENV
-	return hx_os_i_env_get_string(name, out, error);
+	return hx_os_i_env_get_string(name, out, SIZE_MAX, error);
 #else
 	(void)name;
 	(void)out;

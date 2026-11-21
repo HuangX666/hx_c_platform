@@ -178,6 +178,14 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_http_response_text(
 HX_OS_API hx_os_status HX_OS_CALL hx_os_http_close(
 	hx_os_http **http, hx_os_error *error);
 
+/**
+ * \brief Close the idle client while keeping any unpublished temporary file.
+ *
+ * \details Copy the pending path before closing to remove the file later.
+ */
+HX_OS_API hx_os_status HX_OS_CALL hx_os_http_close_keep_file(
+	hx_os_http **http, hx_os_error *error);
+
 #ifdef __cplusplus
 }
 #endif

@@ -404,7 +404,8 @@ hx_os_status hx_os_map_find(const hx_os_map *map, const void *key,
 	(void)map;
 	(void)key;
 	(void)key_bytes;
-	(void)value;
+	if (value)
+		*value = NULL;
 
 	return HX_OS_NOT_SUPPORTED;
 }
@@ -756,7 +757,8 @@ hx_os_status hx_os_sequence_replace_if(hx_os_sequence *sequence,
 	(void)predicate;
 	(void)user;
 	(void)replacement;
-	(void)replaced;
+	if (replaced)
+		*replaced = 0;
 
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }

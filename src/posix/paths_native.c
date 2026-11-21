@@ -14,7 +14,8 @@ static const char hx_os_paths_module_anchor = 0;
 static hx_os_status hx_os_path_environment(
 	const char *name, hx_string *out, hx_os_error *error)
 {
-	hx_os_status status = hx_os_i_env_get_string(name, out, error);
+	hx_os_status status =
+		hx_os_i_env_get_string(name, out, SIZE_MAX, error);
 	if (status == HX_OS_OK && (!out->size || out->data[0] != '/'))
 		status = hx_os_i_error(error, HX_OS_NOT_FOUND, 0, 0);
 

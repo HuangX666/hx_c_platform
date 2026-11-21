@@ -208,8 +208,11 @@ hx_os_status hx_os_shared_memory_create_at(hx_os_context *context,
 	const char *directory, const char *name, size_t bytes,
 	hx_os_shared_memory **out, hx_os_error *error)
 {
-	if (!directory)
+	if (!directory) {
+		if (out)
+			*out = NULL;
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	}
 	return hx_os_shm_open(context, directory, name, bytes, 1, out, error);
 }
 
@@ -217,8 +220,11 @@ hx_os_status hx_os_shared_memory_open_at(hx_os_context *context,
 	const char *directory, const char *name, hx_os_shared_memory **out,
 	hx_os_error *error)
 {
-	if (!directory)
+	if (!directory) {
+		if (out)
+			*out = NULL;
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	}
 	return hx_os_shm_open(context, directory, name, 0, 0, out, error);
 }
 

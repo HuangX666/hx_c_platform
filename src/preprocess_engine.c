@@ -71,7 +71,10 @@ static hx_os_status hx_os_pp_append(hx_os_pp_state *state, hx_string *out,
 {
 	hx_os_status status;
 
-	if (text.size > state->options.max_output_bytes - out->size)
+	size_t limit = out == &state->output ? state->options.max_output_bytes
+					    : state->options.max_expanded_bytes;
+
+	if (text.size > limit - out->size)
 		return hx_os_i_pp_fail(state, HX_OS_LIMIT,
 			"preprocessed output exceeds its limit", NULL, error);
 	status = hx_string_append(out, text, error);
@@ -258,8 +261,11 @@ static hx_os_status hx_os_pp_expand(hx_os_pp_state *state, hx_string_view input,
 		}
 		if (status != HX_OS_OK)
 			break;
+		if (token.kind == HX_OS_TOKEN_COMMENT) {
+			status = hx_os_pp_separator(state, out, ' ', error);
+			continue;
+		}
 		if (condition && token.kind != HX_OS_TOKEN_SPACE &&
-			token.kind != HX_OS_TOKEN_COMMENT &&
 			token.kind != HX_OS_TOKEN_NEWLINE) {
 			if (defined_state) {
 				if (defined_state == 1 &&
@@ -684,9 +690,12 @@ static hx_os_status hx_os_pp_process(hx_os_pp_state *state, hx_os_error *error)
 			hx_os_pp_pop_source(state);
 			continue;
 		}
-		if (status != HX_OS_OK)
+		if (status != HX_OS_OK) {
+			(void)hx_os_lexer_position(source->lexer, NULL,
+				&token.line, &token.column);
 			return hx_os_i_pp_fail(state, status,
-				"invalid source token", NULL, error);
+				"invalid source token", &token, error);
+		}
 		if (token.kind == HX_OS_TOKEN_NEWLINE) {
 			source->line_start = 1;
 			status = hx_os_pp_append(

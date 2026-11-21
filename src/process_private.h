@@ -18,7 +18,7 @@ struct hx_os_process {
 
 hx_os_status hx_os_i_process_spawn(hx_os_context *context, const char *path,
 	const hx_os_string_list *arguments,
-	const hx_os_string_list *environment,
+	const hx_os_string_list *environment, int inherited,
 	const hx_os_process_options *options, hx_os_process *process,
 	hx_os_error *error);
 

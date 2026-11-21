@@ -97,9 +97,12 @@ static hx_os_status hx_os_search_name(hx_os_file_search *search,
 static hx_os_status hx_os_search_join(hx_os_file_search *search, size_t prefix,
 	size_t name_bytes, size_t *length, hx_os_error *error)
 {
+	char joiner = '/';
 	size_t separator = prefix && search->path[prefix - 1] != '/';
 	hx_os_status status;
 #if defined(_WIN32)
+	if (prefix >= 4 && !memcmp(search->path, "\\\\?\\", 4))
+		joiner = '\\';
 	if (prefix &&
 		(search->path[prefix - 1] == ':' ||
 			search->path[prefix - 1] == '\\'))
@@ -115,7 +118,7 @@ static hx_os_status hx_os_search_join(hx_os_file_search *search, size_t prefix,
 		return status;
 
 	if (separator)
-		search->path[prefix++] = '/';
+		search->path[prefix++] = joiner;
 
 	memcpy(search->path + prefix, search->name, name_bytes);
 	--*length;

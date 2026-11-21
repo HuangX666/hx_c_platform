@@ -50,9 +50,11 @@ static size_t hx_os_process_quote(wchar_t *out, const wchar_t *input)
 
 static int hx_os_process_env_compare(const void *left, const void *right)
 {
-	return CompareStringOrdinal(*(const wchar_t *const *)left, -1,
-		       *(const wchar_t *const *)right, -1, TRUE) -
-		CSTR_EQUAL;
+	const wchar_t *a = *(const wchar_t *const *)left;
+	const wchar_t *b = *(const wchar_t *const *)right;
+
+	return CompareStringOrdinal(a, (int)wcscspn(a, L"="), b,
+		       (int)wcscspn(b, L"="), TRUE) - CSTR_EQUAL;
 }
 
 static hx_os_status hx_os_process_wide_list(hx_os_context *context,
@@ -107,7 +109,7 @@ static hx_os_status hx_os_process_wide_list(hx_os_context *context,
 
 hx_os_status hx_os_i_process_spawn(hx_os_context *context, const char *path,
 	const hx_os_string_list *arguments,
-	const hx_os_string_list *environment,
+	const hx_os_string_list *environment, int inherited,
 	const hx_os_process_options *options, hx_os_process *process,
 	hx_os_error *error)
 {
@@ -170,7 +172,9 @@ hx_os_status hx_os_i_process_spawn(hx_os_context *context, const char *path,
 	if (status != HX_OS_OK)
 		goto done;
 
-	qsort(env, environment->count, sizeof(*env), hx_os_process_env_compare);
+	if (!inherited)
+		qsort(env, environment->count, sizeof(*env),
+			hx_os_process_env_compare);
 
 	for (i = 0; i < environment->count; ++i) {
 		// Inherited Windows blocks include hidden =C: drive entries.
@@ -182,7 +186,7 @@ hx_os_status hx_os_i_process_spawn(hx_os_context *context, const char *path,
 			goto done;
 		}
 
-		if (i) {
+		if (i && !inherited) {
 			size_t name = (size_t)(equal - env[i]) + 1;
 
 			if (wcslen(env[i - 1]) >= name &&

@@ -4,6 +4,8 @@
 
 typedef struct request_state {
 	hx_os_coro_http *service;
+	hx_os_coro_runtime *runtime;
+	hx_os_coro *task;
 	const char *url;
 	hx_os_http_response response;
 	int step;
@@ -29,13 +31,43 @@ static hx_os_status fetch(hx_os_coro *self, void *user, hx_os_error *error)
 	return hx_os_coro_complete(status, error);
 }
 
+static hx_os_status finish(request_state *state, hx_os_deadline deadline)
+{
+	hx_os_status status;
+
+	if (state->task) {
+		hx_os_coro_cancel(state->task);
+		status = hx_os_coro_wait_until(state->task, deadline, NULL,
+			NULL);
+		if (status != HX_OS_OK)
+			return status;
+		hx_os_coro_release(state->task);
+		state->task = NULL;
+	}
+	if (state->service) {
+		status = hx_os_coro_http_close_until(&state->service, deadline,
+			NULL);
+		if (status != HX_OS_OK)
+			return status;
+	}
+	if (state->runtime) {
+		status = hx_os_coro_runtime_close_until(state->runtime,
+			deadline, NULL);
+		if (status != HX_OS_OK)
+			return status;
+		status = hx_os_coro_runtime_destroy(&state->runtime, NULL);
+		if (status != HX_OS_OK)
+			return status;
+	}
+	hx_os_http_response_destroy(&state->response);
+	return HX_OS_OK;
+}
+
 int main(int argc, char **argv)
 {
-	hx_os_coro_runtime *runtime = NULL;
-	hx_os_coro *task = NULL;
 	hx_os_error work = {0};
 	hx_os_status status, closed;
-	request_state state = {0};
+	static request_state state;
 
 	if ((argc != 2 && argc != 3) ||
 		(argc == 3 && strcmp(argv[2], "--cancellable-dns"))) {
@@ -44,39 +76,30 @@ int main(int argc, char **argv)
 	}
 	state.url = argv[1];
 	hx_os_http_response_init(&state.response, NULL);
-	status = hx_os_coro_runtime_create(NULL, NULL, &runtime, NULL);
+	status = hx_os_coro_runtime_create(NULL, NULL, &state.runtime, NULL);
 	if (status == HX_OS_OK)
 		status = hx_os_coro_http_create(
-			runtime, 0, 0, 0, &state.service, NULL);
+			state.runtime, 0, 0, 0, &state.service, NULL);
 	if (status == HX_OS_OK && argc == 3)
 		status = hx_os_coro_http_use_cancellable_dns(
 			state.service, NULL, NULL);
 	if (status == HX_OS_OK)
-		status = hx_os_coro_go(runtime, HX_OS_CORO_STACKLESS, fetch,
-			&state, NULL, &task, NULL);
+		status = hx_os_coro_go(state.runtime, HX_OS_CORO_STACKLESS,
+			fetch, &state, NULL, &state.task, NULL);
 	if (status == HX_OS_OK)
 		status = hx_os_coro_wait_until(
-			task, hx_os_deadline_after_ms(6000), &work, NULL);
+			state.task, hx_os_deadline_after_ms(6000), &work, NULL);
 	if (status != HX_OS_OK || work.status != HX_OS_OK) {
 		fprintf(stderr, "HTTP coroutine: %s\n",
 			hx_os_status_name(
 				status != HX_OS_OK ? status : work.status));
-		hx_os_coro_cancel(task);
 	}
 
-	closed = hx_os_coro_http_close_until(
-		&state.service, hx_os_deadline_after_ms(2000), NULL);
+	closed = finish(&state, hx_os_deadline_after_ms(500));
 	if (closed != HX_OS_OK) {
-		fprintf(stderr, "HTTP close: %s; keep owner to retry\n",
+		fprintf(stderr, "Cleanup pending: %s\n",
 			hx_os_status_name(closed));
 		return 1;
 	}
-	if (runtime &&
-		hx_os_coro_runtime_close_until(runtime,
-			hx_os_deadline_after_ms(2000), NULL) != HX_OS_OK)
-		return 1;
-	hx_os_coro_release(task);
-	(void)hx_os_coro_runtime_destroy(&runtime, NULL);
-	hx_os_http_response_destroy(&state.response);
 	return status == HX_OS_OK && work.status == HX_OS_OK ? 0 : 1;
 }

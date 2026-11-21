@@ -35,11 +35,12 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_process_options_init(
  *
  * \details arguments excludes argv[0], which is supplied from path; NULL is an
  * empty argument list. UTF-8 arguments/environment are copied for spawn.
- * environment=NULL takes a native snapshot; {NULL} means empty. Entries are
- * name=value, names nonempty and unique (case-insensitive on Windows). 4
- * MiB/65536 entries per list; Windows also enforces its native command-line
- * length. NULL streams inherit the parent's standard stream (Windows missing
- * streams use NUL). Explicit streams are borrowed only during spawn. No host
+ * A NULL environment preserves the native snapshot, including duplicate names.
+ * An explicit list uses name=value with nonempty, unique names (Windows ignores
+ * case). {NULL} means empty. Each list permits 4 MiB and 65536 entries.
+ * Windows also enforces its native command-line length. NULL streams inherit
+ * the parent's standard stream (missing Windows streams use NUL). Explicit
+ * streams are borrowed only during spawn. No host
  * cwd/environment change. POSIX host descriptors without CLOEXEC remain
  * inherited; the host must coordinate unrelated descriptor/spawn operations.
  * Windows uses a handle allowlist; external broad-inheritance spawns must be

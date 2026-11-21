@@ -130,8 +130,9 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_regex_matches(const char *pattern,
  * \brief Replace all: $0..$64, dollar-braced names, $$; unknown syntax is
  * invalid.
  *
- * \details Uses out's allocator; failure preserves out. Empty matches advance a
- * code point after replacement. Results <=max_subject_bytes, at most 64 MiB.
+ * \details Uses out's allocator and preserves out on failure. Advance one code
+ * point only when the match consumed no input. Results fit max_subject_bytes
+ * and at most 64 MiB.
  */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_regex_replace(const hx_os_regex *regex,
 	hx_string_view subject, hx_string_view replacement,

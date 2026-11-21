@@ -20,7 +20,7 @@ static int hx_os_cfg_toml_lines(hx_os_cfg_toml_native *state)
 		return hx_os_cfg_reject(
 			parser, HX_OS_LIMIT, "Too many TOML lines");
 
-	state->lines = hx_os_cfg_alloc(parser, count * sizeof(size_t));
+	state->lines = hx_os_cfg_vendor_malloc(count * sizeof(size_t));
 	if (!state->lines)
 		return 0;
 
@@ -96,7 +96,7 @@ static int hx_os_cfg_toml_native_value(hx_os_cfg_toml_native *state,
 						   : value.u.tab.size;
 
 		for (i = 0; i < count; ++i) {
-			hx_os_config_node *child;
+			hx_os_config_node *child = NULL;
 			toml_datum_t item = kind == HX_OS_CONFIG_ARRAY
 				? value.u.arr.elem[i]
 				: value.u.tab.value[i];
@@ -162,10 +162,11 @@ int hx_os_cfg_tomlc(hx_os_cfg_parser *parser, hx_os_config_node **out)
 
 	memset(&state, 0, sizeof(state));
 	state.parser = parser;
-	if (!hx_os_cfg_toml_lines(&state))
-		return 0;
-
 	previous = hx_os_cfg_vendor_enter(parser);
+	if (!hx_os_cfg_toml_lines(&state)) {
+		hx_os_cfg_vendor_leave(parser, previous);
+		return 0;
+	}
 
 	result = toml_parse(parser->text, (int)parser->length);
 	if (result.ok)

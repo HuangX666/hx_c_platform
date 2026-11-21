@@ -372,6 +372,12 @@ template <typename T> struct FrameJob;
  * \details Only library awaiters are accepted: foreign executors cannot resume
  * this pinned frame. co_return supplies a value, Result<T>, or Result<void>().
  */
+/**
+ * \brief Cooperative coroutine returning a value or an explicit failure.
+ *
+ * \note For Routine<void>, end each successful path with
+ * `co_return hx::Result<void>();`. Falling off the end is undefined.
+ */
 template <typename T = void> class Routine {
 public:
 	struct promise_type {

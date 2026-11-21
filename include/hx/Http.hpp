@@ -96,7 +96,8 @@ public:
 
 	~Http() noexcept
 	{
-		(void)hx_os_http_close(&m_http_, NULL);
+		if (m_http_ && hx_os_http_close(&m_http_, NULL) != HX_OS_OK)
+			(void)hx_os_http_close_keep_file(&m_http_, NULL);
 	}
 
 	static Result<Http> create(hx_os_context *context = NULL) noexcept
@@ -183,6 +184,14 @@ public:
 	const char *pendingFile() const noexcept
 	{
 		return hx_os_http_pending_file(m_http_);
+	}
+
+	hx_os_http *release() noexcept
+	{
+		hx_os_http *owner = m_http_;
+
+		m_http_ = NULL;
+		return owner;
 	}
 
 	Result<void> close() noexcept

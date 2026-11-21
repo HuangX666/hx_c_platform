@@ -253,8 +253,18 @@ static hx_os_config_node *hx_os_codec_encode_object(hx_os_cfg_parser *p,
 		const hx_os_codec_field *f = schema->fields + i;
 		int attr = xml && (f->flags & HX_OS_CODEC_XML_ATTRIBUTE);
 
-		child = hx_os_codec_encode_value(p, &f->type,
-			(const unsigned char *)object + f->offset, format,
+		const unsigned char *field = (const unsigned char *)object +
+			f->offset;
+
+		if ((f->flags & HX_OS_CODEC_OPTIONAL) &&
+			f->type.kind == HX_OS_CODEC_NODE) {
+			const hx_os_config_node *source;
+
+			memcpy(&source, field, sizeof(source));
+			if (!source)
+				continue;
+		}
+		child = hx_os_codec_encode_value(p, &f->type, field, format,
 			f->name, depth + 1, attr);
 		if (attr && !node->attributes)
 			node->attributes =

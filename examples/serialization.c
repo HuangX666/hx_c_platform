@@ -25,7 +25,8 @@ int main(int argc, char **argv)
 			if (!strcmp(argv[1], hx_os_config_format_name(i)))
 				break;
 
-		if (i > HX_OS_CONFIG_PROPERTIES) {
+		if (argc != 2 || i > HX_OS_CONFIG_TOML ||
+			i == HX_OS_CONFIG_INI) {
 			fputs("Usage: hx_os_serialization "
 			      "[json|yaml|xml|toml]\n",
 				stderr);

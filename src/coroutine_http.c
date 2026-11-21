@@ -1,5 +1,6 @@
 #include "coroutine_private.h"
 #include "hx_os_coro_http.h"
+#include "http_private.h"
 
 #if HX_OS_ENABLE_COROUTINES && HX_OS_ENABLE_THREAD_POOL && HX_OS_HAVE_HTTP
 typedef struct hx_coro_http_job hx_coro_http_job;
@@ -25,7 +26,7 @@ struct hx_coro_http_job {
 	hx_os_error error;
 	const char *method, *url, *headers[64];
 	const unsigned char *body;
-	size_t body_bytes, offset, header_count, budget;
+	size_t body_bytes, header_count, budget;
 	unsigned char storage[];
 };
 
@@ -87,19 +88,6 @@ static hx_os_status HX_OS_CALL hx_coro_http_progress(
 		0, 0);
 }
 
-static hx_os_status HX_OS_CALL hx_coro_http_read(void *user, void *data,
-	size_t capacity, size_t *completed, hx_os_error *error)
-{
-	hx_coro_http_job *job = user;
-	size_t remaining = job->body_bytes - job->offset;
-
-	*completed = remaining < capacity ? remaining : capacity;
-	if (*completed)
-		memcpy(data, job->body + job->offset, *completed);
-	job->offset += *completed;
-	return hx_coro_http_progress(job, 0, 0, error);
-}
-
 static hx_os_status HX_OS_CALL hx_coro_http_run(hx_os_task *task, void *user)
 {
 	hx_coro_http_job *job = user;
@@ -111,10 +99,6 @@ static hx_os_status HX_OS_CALL hx_coro_http_run(hx_os_task *task, void *user)
 	options.request = job->options;
 	options.progress = hx_coro_http_progress;
 	options.user = job;
-	if (job->body_bytes) {
-		options.upload_bytes = job->body_bytes;
-		options.read = hx_coro_http_read;
-	}
 	status = hx_coro_http_progress(job, 0, 0, &job->error);
 	if (status == HX_OS_OK)
 		status = hx_os_http_create(
@@ -126,9 +110,10 @@ static hx_os_status HX_OS_CALL hx_coro_http_run(hx_os_task *task, void *user)
 				: NULL,
 			&job->error);
 	if (status == HX_OS_OK)
-		status = hx_os_http_request_stream(http, job->method, job->url,
-			job->headers, job->header_count, &options,
-			&job->response, NULL, &job->error);
+		status = hx_os_i_http_request(http, job->method, job->url,
+			(hx_os_bytes_view){job->body, job->body_bytes},
+			job->headers, job->header_count, &options.request,
+			&options, NULL, 0, &job->response, &job->error);
 	(void)hx_os_http_close(&http, NULL);
 	job->error.status = status;
 	return status;

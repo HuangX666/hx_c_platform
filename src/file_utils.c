@@ -493,7 +493,7 @@ hx_os_status hx_os_directory_remove_recursive_with_options(
 
 	base = path + length;
 
-	while (base > path && !hx_os_file_native_separator(base[-1]))
+	while (base > path + root && !hx_os_file_native_separator(base[-1]))
 		--base;
 
 	if (length == root || (path + length - base == 1 && base[0] == '.') ||
@@ -505,6 +505,14 @@ hx_os_status hx_os_directory_remove_recursive_with_options(
 		status = hx_string_assign(&trimmed, view, error);
 	}
 
+#if defined(_WIN32)
+	if (status == HX_OS_OK)
+		status = hx_os_i_path_full(hx_string_c_str(&trimmed), &trimmed,
+			error);
+	if (status == HX_OS_OK &&
+		hx_os_i_path_root(trimmed.data) == trimmed.size)
+		status = hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+#endif
 	if (status == HX_OS_OK)
 		status = hx_os_i_remove_tree(
 			hx_string_c_str(&trimmed), &options, error);

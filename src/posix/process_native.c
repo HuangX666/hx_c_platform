@@ -11,7 +11,7 @@ static int hx_os_process_env_compare(const void *left, const void *right)
 
 hx_os_status hx_os_i_process_spawn(hx_os_context *context, const char *path,
 	const hx_os_string_list *arguments,
-	const hx_os_string_list *environment,
+	const hx_os_string_list *environment, int inherited,
 	const hx_os_process_options *options, hx_os_process *process,
 	hx_os_error *error)
 {
@@ -31,9 +31,11 @@ hx_os_status hx_os_i_process_spawn(hx_os_context *context, const char *path,
 
 	memcpy(env, environment->items,
 		(environment->count + 1) * sizeof(*env));
-	qsort(env, environment->count, sizeof(*env), hx_os_process_env_compare);
+	if (!inherited)
+		qsort(env, environment->count, sizeof(*env),
+			hx_os_process_env_compare);
 
-	for (index = 1; index < environment->count; ++index) {
+	for (index = 1; !inherited && index < environment->count; ++index) {
 		const char *separator = strchr(env[index - 1], '=');
 		if (separator &&
 			!strncmp(env[index - 1], env[index],

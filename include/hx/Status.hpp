@@ -12,19 +12,20 @@ struct Failure {
 	hx_os_error detail;
 
 	explicit Failure(hx_os_status status) noexcept
-	    : detail{status, HX_OS_ERROR_NONE, 0, 0}
+	    : detail{status == HX_OS_OK ? HX_OS_INVALID : status,
+		      HX_OS_ERROR_NONE, 0, 0}
 	{
 	}
 
 	explicit Failure(const hx_os_error &error) noexcept
-	    : detail(error)
+	    : Failure(error.status, error)
 	{
 	}
 
 	Failure(hx_os_status status, const hx_os_error &error) noexcept
 	    : detail(error)
 	{
-		detail.status = status;
+		detail.status = status == HX_OS_OK ? HX_OS_INVALID : status;
 	}
 };
 

@@ -129,7 +129,7 @@ typedef struct hx_os_rx_budget {
 	hx_os_regex_limits limits;
 	uint64_t steps;
 	const char *validated_data;
-	size_t validated_size;
+	size_t validated_size, match_start;
 	int validated;
 } hx_os_rx_budget;
 

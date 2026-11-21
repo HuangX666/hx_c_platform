@@ -45,8 +45,8 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_registry_open_user(
 	hx_os_registry **out, hx_os_error *error);
 
 /**
- * \brief REG_SZ/REG_EXPAND_SZ are returned literally, with optional native
- * terminator removed.
+ * \brief REG_SZ/REG_EXPAND_SZ are returned literally after trimming trailing
+ * UTF-16 NUL units.
  *
  * \details Embedded NUL, odd UTF-16 length and invalid encoding fail. Native
  * string values are bounded to 1 MiB, including a terminator when writing.

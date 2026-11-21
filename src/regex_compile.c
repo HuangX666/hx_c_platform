@@ -9,7 +9,7 @@ typedef struct hx_os_rx_compiler {
 	hx_os_error *error;
 	hx_os_rx_width widths[HX_OS_REGEX_MAX_CAPTURES + 1];
 	hx_os_status status;
-	uint32_t depth;
+	uint32_t depth, offset;
 	unsigned char width_states[HX_OS_REGEX_MAX_CAPTURES + 1];
 } hx_os_rx_compiler;
 
@@ -25,12 +25,39 @@ static uint32_t hx_os_rx_mul_width(uint32_t a, uint32_t b)
 	return a > UINT32_MAX / b ? HX_OS_RX_INFINITY : a * b;
 }
 
+// An empty interval has minimum > maximum.
+static hx_os_rx_width hx_os_rx_width_union(hx_os_rx_width a, hx_os_rx_width b)
+{
+	hx_os_rx_width width = {
+		a.minimum < b.minimum ? a.minimum : b.minimum,
+		a.maximum > b.maximum ? a.maximum : b.maximum};
+
+	return width;
+}
+
+static hx_os_rx_width hx_os_rx_width_sum(hx_os_rx_width a, hx_os_rx_width b)
+{
+	if (a.minimum > a.maximum)
+		return a;
+	if (b.minimum > b.maximum)
+		return b;
+	a.minimum = hx_os_rx_add_width(a.minimum, b.minimum);
+	a.maximum = hx_os_rx_add_width(a.maximum, b.maximum);
+	return a;
+}
+
+// The return interval reaches the next node. *accepted ends this branch
+// early at (*ACCEPT), so concatenation cannot add its trailing nodes.
 static hx_os_rx_width hx_os_rx_width_of(
-	hx_os_rx_compiler *compiler, uint32_t index, unsigned depth)
+	hx_os_rx_compiler *compiler, uint32_t index, unsigned depth,
+	hx_os_rx_width *accepted)
 {
 	const hx_os_rx_node *node =
 		(const hx_os_rx_node *)compiler->regex->nodes.data + index;
-	hx_os_rx_width result = {0, 0}, left, right;
+	const hx_os_rx_width empty = {HX_OS_RX_INFINITY, 0};
+	hx_os_rx_width result = {0, 0}, left, right, left_end, right_end;
+
+	*accepted = empty;
 
 	if (compiler->status == HX_OS_OK)
 		compiler->status = hx_os_i_regex_compile_work(
@@ -58,35 +85,46 @@ static hx_os_rx_width hx_os_rx_width_of(
 	case HX_OS_RX_CONCAT:
 	case HX_OS_RX_ALT:
 	case HX_OS_RX_CONDITION:
-		left = hx_os_rx_width_of(compiler, node->left, depth + 1);
-		right = hx_os_rx_width_of(compiler, node->right, depth + 1);
+		left = hx_os_rx_width_of(
+			compiler, node->left, depth + 1, &left_end);
+		right = hx_os_rx_width_of(
+			compiler, node->right, depth + 1, &right_end);
 		if (node->type == HX_OS_RX_CONCAT) {
-			result.minimum =
-				hx_os_rx_add_width(left.minimum, right.minimum);
-			result.maximum =
-				hx_os_rx_add_width(left.maximum, right.maximum);
+			result = hx_os_rx_width_sum(left, right);
+			*accepted = hx_os_rx_width_union(left_end,
+				hx_os_rx_width_sum(left, right_end));
 		}
 		else {
-			result.minimum = left.minimum < right.minimum
-				? left.minimum
-				: right.minimum;
-			result.maximum = left.maximum > right.maximum
-				? left.maximum
-				: right.maximum;
+			result = hx_os_rx_width_union(left, right);
+			*accepted = hx_os_rx_width_union(left_end, right_end);
 		}
 		break;
+	case HX_OS_RX_ACCEPT:
+		*accepted = result;
+		return empty;
 	case HX_OS_RX_REPEAT:
 		if (!node->maximum)
 			break;
-		left = hx_os_rx_width_of(compiler, node->left, depth + 1);
+		left = hx_os_rx_width_of(
+			compiler, node->left, depth + 1, &left_end);
+		*accepted = left_end;
+		if (left.minimum > left.maximum)
+			return node->minimum ? empty : result;
 		result.minimum =
 			hx_os_rx_mul_width(left.minimum, node->minimum);
 		result.maximum =
 			hx_os_rx_mul_width(left.maximum, node->maximum);
+		if (left_end.minimum <= left_end.maximum) {
+			uint32_t prior = node->maximum == HX_OS_RX_INFINITY
+				? HX_OS_RX_INFINITY : node->maximum - 1;
+			accepted->maximum = hx_os_rx_add_width(left_end.maximum,
+				hx_os_rx_mul_width(left.maximum, prior));
+		}
 		break;
 	case HX_OS_RX_GROUP:
 	case HX_OS_RX_ATOMIC:
-		result = hx_os_rx_width_of(compiler, node->left, depth + 1);
+		result = hx_os_rx_width_of(
+			compiler, node->left, depth + 1, accepted);
 		break;
 	case HX_OS_RX_CALL:
 	case HX_OS_RX_BACKREF:
@@ -101,7 +139,9 @@ static hx_os_rx_width hx_os_rx_width_of(
 		// A visiting group is recursive; finished widths are reusable.
 		compiler->width_states[node->value] = 1;
 		result = hx_os_rx_width_of(compiler,
-			compiler->regex->groups[node->value].node, depth + 1);
+			compiler->regex->groups[node->value].node, depth + 1,
+			&left_end);
+		result = hx_os_rx_width_union(result, left_end);
 		compiler->widths[node->value] = result;
 		compiler->width_states[node->value] = 2;
 		break;
@@ -121,12 +161,12 @@ static uint32_t hx_os_rx_emit(hx_os_rx_compiler *compiler, uint32_t type,
 	if (compiler->status != HX_OS_OK)
 		return HX_OS_RX_NONE;
 	compiler->status = hx_os_i_regex_compile_work(
-		compiler->regex, 1, 0, compiler->error);
+		compiler->regex, 1, compiler->offset, compiler->error);
 	if (compiler->status == HX_OS_OK)
 		compiler->status = hx_os_i_regex_append(compiler->regex,
 			&compiler->regex->code,
 			(hx_os_bytes_view){&instruction, sizeof(instruction)},
-			0, compiler->error);
+			compiler->offset, compiler->error);
 	return compiler->status == HX_OS_OK ? index : HX_OS_RX_NONE;
 }
 
@@ -165,7 +205,8 @@ static uint32_t hx_os_rx_compile_repeat(
 
 		if (compiler->regex->slots == HX_OS_RX_SLOTS) {
 			compiler->status = hx_os_i_regex_error(compiler->error,
-				HX_OS_LIMIT, HX_OS_RX_MEMORY_LIMIT, 0);
+				HX_OS_LIMIT, HX_OS_RX_MEMORY_LIMIT,
+				node->offset);
 			return HX_OS_RX_NONE;
 		}
 		slot = compiler->regex->slots++;
@@ -205,20 +246,23 @@ static uint32_t hx_os_rx_compile_node(
 {
 	hx_os_rx_node node;
 	uint32_t left, right, entry = HX_OS_RX_NONE;
+	uint32_t parent_offset = compiler->offset;
 
 	if (compiler->status != HX_OS_OK || index == HX_OS_RX_NONE)
 		return HX_OS_RX_NONE;
+	node = ((hx_os_rx_node *)compiler->regex->nodes.data)[index];
+	compiler->offset = node.offset;
 	compiler->status = hx_os_i_regex_compile_work(
-		compiler->regex, 1, 0, compiler->error);
+		compiler->regex, 1, compiler->offset, compiler->error);
 	if (compiler->status != HX_OS_OK)
 		return HX_OS_RX_NONE;
 	if (++compiler->depth > compiler->regex->options.max_nesting * 4 + 64) {
 		compiler->status = hx_os_i_regex_error(
-			compiler->error, HX_OS_LIMIT, HX_OS_RX_DEPTH_LIMIT, 0);
+			compiler->error, HX_OS_LIMIT, HX_OS_RX_DEPTH_LIMIT,
+			node.offset);
 		--compiler->depth;
 		return HX_OS_RX_NONE;
 	}
-	node = ((hx_os_rx_node *)compiler->regex->nodes.data)[index];
 	switch (node.type) {
 	case HX_OS_RX_EMPTY:
 		entry = next;
@@ -260,7 +304,11 @@ static uint32_t hx_os_rx_compile_node(
 				compiler, branches.right, next);
 		}
 		if (node.flags & HX_OS_RX_BEHIND) {
-			width = hx_os_rx_width_of(compiler, node.left, 0);
+			hx_os_rx_width accepted;
+
+			width = hx_os_rx_width_of(compiler, node.left, 0,
+				&accepted);
+			width = hx_os_rx_width_union(width, accepted);
 			if (compiler->status != HX_OS_OK)
 				break;
 			if (width.maximum == HX_OS_RX_INFINITY ||
@@ -268,7 +316,7 @@ static uint32_t hx_os_rx_compile_node(
 							.max_lookbehind) {
 				compiler->status = hx_os_i_regex_error(
 					compiler->error, HX_OS_SYNTAX,
-					HX_OS_RX_BEHIND_LIMIT, 0);
+					HX_OS_RX_BEHIND_LIMIT, node.offset);
 				break;
 			}
 		}
@@ -322,6 +370,7 @@ static uint32_t hx_os_rx_compile_node(
 		entry = hx_os_rx_emit(compiler, HX_OS_RX_MARK, entry, 0,
 			compiler->regex->marks[node.value].slot, node.flags);
 	--compiler->depth;
+	compiler->offset = parent_offset;
 	return entry;
 }
 

@@ -81,7 +81,8 @@ hx_os_status hx_os_i_special_path(int kind, hx_string *out, hx_os_error *error)
 	switch (kind) {
 	case HX_OS_I_PATH_HOME: {
 		hx_os_status status =
-			hx_os_i_env_get_string("USERPROFILE", out, error);
+			hx_os_i_env_get_string("USERPROFILE", out, SIZE_MAX,
+				error);
 
 		if (status != HX_OS_OK && status != HX_OS_NOT_FOUND)
 			return status;

@@ -251,7 +251,12 @@ public:
 	{
 	}
 
-	Result<void> create(hx_os_context *context = NULL,
+	Result<void> create() noexcept
+	{
+		return create(m_context_);
+	}
+
+	Result<void> create(hx_os_context *context,
 		const hx_os_signal_options *options = NULL) noexcept
 	{
 		if (*m_owner_)

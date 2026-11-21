@@ -20,14 +20,14 @@ static void hx_os_watch_apple_events(ConstFSEventStreamRef stream, void *user,
 	char **names = paths;
 
 	size_t root_length = strlen(watch->root), i;
+	int overflow = count >
+		watch->options.buffer_bytes / sizeof(hx_os_watch_event);
+
 	(void)stream;
 	(void)identifiers;
-	if (count > watch->options.buffer_bytes / sizeof(hx_os_watch_event)) {
+	if (overflow)
 		hx_os_i_watch_emit(
 			watch, HX_OS_WATCH_OVERFLOW, NULL, NULL, 0, NULL);
-
-		return;
-	}
 
 	for (i = 0; i < count && !hx_os_i_watch_stopping(watch); ++i) {
 		const char *relative;
@@ -43,6 +43,8 @@ static void hx_os_watch_apple_events(ConstFSEventStreamRef stream, void *user,
 			return;
 		}
 
+		if (overflow)
+			continue;
 		if (flags[i] &
 			(kFSEventStreamEventFlagMustScanSubDirs |
 				kFSEventStreamEventFlagUserDropped |

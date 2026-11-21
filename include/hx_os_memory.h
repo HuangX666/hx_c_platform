@@ -45,6 +45,7 @@ HX_OS_API hx_os_status HX_OS_CALL hx_os_memory_pool_alloc(
 	hx_os_memory_pool *pool, size_t bytes, size_t alignment, void **out,
 	hx_os_error *error);
 
+/** \brief Zero bytes frees any existing allocation and clears *memory. */
 HX_OS_API hx_os_status HX_OS_CALL hx_os_memory_pool_realloc(
 	hx_os_memory_pool *pool, void **memory, size_t bytes,
 	hx_os_error *error);

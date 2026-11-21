@@ -1,4 +1,5 @@
 #include <hx_os.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -10,7 +11,7 @@ int main(int argc, char **argv)
 {
 	const char *address = argc > 1 ? argv[1] : "local://demo";
 
-	unsigned long count = argc > 2 ? strtoul(argv[2], NULL, 10) : 1;
+	unsigned long count = 1;
 
 	hx_ipc *server = NULL;
 	hx_string actual = HX_STRING_INIT;
@@ -18,8 +19,17 @@ int main(int argc, char **argv)
 	hx_os_status status;
 	unsigned long received = 0;
 
-	if (!count || count > 100000)
+	if (argc > 3)
 		return 2;
+	if (argc == 3) {
+		char *end;
+
+		errno = 0;
+		count = strtoul(argv[2], &end, 10);
+		if (argv[2][0] < '0' || argv[2][0] > '9' || errno || *end ||
+			!count || count > 100000)
+			return 2;
+	}
 
 	status = hx_ipc_listen(address, &server, &error);
 	if (status == HX_OS_OK)

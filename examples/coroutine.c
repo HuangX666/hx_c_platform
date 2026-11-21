@@ -30,11 +30,11 @@ static hx_os_status count(hx_os_coro *self, void *user, hx_os_error *error)
 
 int main(void)
 {
-	hx_os_coro_runtime *runtime = NULL;
-	hx_os_coro *task = NULL;
+	static hx_os_coro_runtime *runtime = NULL;
+	static hx_os_coro *task = NULL;
 	hx_os_error result = {HX_OS_OK, 0, 0, 0};
 	hx_os_status status, closed;
-	counter_state state = {0, 0};
+	static counter_state state = {0, 0};
 	hx_os_deadline deadline;
 
 	if (!(hx_os_capabilities() & HX_OS_CAP_COROUTINES)) {
@@ -49,7 +49,7 @@ int main(void)
 			hx_os_status_name(status));
 		if (runtime) {
 			closed = hx_os_coro_runtime_close_until(runtime,
-				hx_os_deadline_after_ms(2000), NULL);
+				hx_os_deadline_after_ms(500), NULL);
 			if (closed == HX_OS_OK)
 				(void)hx_os_coro_runtime_destroy(
 					&runtime, NULL);
@@ -70,13 +70,12 @@ int main(void)
 		fprintf(stderr, "Task: %s\n", hx_os_status_name(
 			status != HX_OS_OK ? status : result.status));
 
+	if (status != HX_OS_OK)
+		hx_os_coro_cancel(task);
 	hx_os_coro_release(task);
+	task = NULL;
 
-	// The host chooses its shutdown budget. If timed join is unavailable,
-	// this finite demo explicitly joins its cooperative workers.
-	deadline = hx_os_capabilities() & HX_OS_CAP_TIMED_JOIN
-		? hx_os_deadline_after_ms(2000)
-		: HX_OS_DEADLINE_INFINITE;
+	deadline = hx_os_deadline_after_ms(500);
 	closed = hx_os_coro_runtime_close_until(runtime, deadline, NULL);
 	if (closed != HX_OS_OK) {
 		fprintf(stderr, "Close: %s; keep owner to retry\n",
@@ -85,7 +84,8 @@ int main(void)
 		return 1;
 	}
 
-	(void)hx_os_coro_runtime_destroy(&runtime, NULL);
+	if (hx_os_coro_runtime_destroy(&runtime, NULL) != HX_OS_OK)
+		return 1;
 
 	return status == HX_OS_OK && result.status == HX_OS_OK ? 0 : 1;
 }

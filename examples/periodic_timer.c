@@ -15,10 +15,11 @@ static void tick(hx_os_timer *timer, const hx_os_error *error, void *user)
 
 int main(void)
 {
-	hx_os_loop *loop = NULL;
-	hx_os_timer *timer = NULL;
+	static hx_os_loop *loop;
+	static hx_os_timer *timer;
 	hx_os_status status;
-	unsigned count = 0;
+	static unsigned count;
+	hx_os_deadline deadline;
 
 	if (hx_os_loop_create_local(NULL, NULL, &loop, NULL) != HX_OS_OK)
 		return 1;
@@ -29,12 +30,14 @@ int main(void)
 		status = hx_os_loop_run_until(
 			loop, hx_os_deadline_after_ms(2000), NULL);
 
-	if (timer)
-		(void)hx_os_timer_close_until(&timer, HX_OS_DEADLINE_NOW, NULL);
-
-	(void)hx_os_loop_close_until(loop, HX_OS_DEADLINE_NOW, NULL);
-
-	(void)hx_os_loop_destroy(&loop, NULL);
+	deadline = hx_os_deadline_after_ms(500);
+	if (timer &&
+		hx_os_timer_close_until(&timer, deadline, NULL) != HX_OS_OK)
+		return 1;
+	if (hx_os_loop_close_until(loop, deadline, NULL) != HX_OS_OK)
+		return 1;
+	if (hx_os_loop_destroy(&loop, NULL) != HX_OS_OK)
+		return 1;
 
 	return status == HX_OS_OK && count == 3 ? 0 : 1;
 }

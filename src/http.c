@@ -1,5 +1,5 @@
 #include "internal.h"
-#include "hx_os_http.h"
+#include "http_private.h"
 #include "hx_os_temp.h"
 #include "file_utils_private.h"
 #include "resolver_private.h"
@@ -346,7 +346,7 @@ void hx_os_http_response_destroy(hx_os_http_response *response)
 	response->status_code = 0;
 }
 
-static hx_os_status hx_os_http_request_impl(hx_os_http *http,
+hx_os_status hx_os_i_http_request(hx_os_http *http,
 	const char *method, const char *url, hx_os_bytes_view body,
 	const char *const *headers, size_t header_count,
 	const hx_os_http_options *options,
@@ -585,7 +585,7 @@ hx_os_status hx_os_http_request(hx_os_http *http, const char *method,
 	size_t header_count, const hx_os_http_options *options,
 	hx_os_http_response *out, hx_os_error *error)
 {
-	return hx_os_http_request_impl(http, method, url, body, headers,
+	return hx_os_i_http_request(http, method, url, body, headers,
 		header_count, options, NULL, NULL, 0, out, error);
 }
 
@@ -601,7 +601,7 @@ hx_os_status hx_os_http_request_stream(hx_os_http *http, const char *method,
 		options = &defaults;
 	if (options->size < sizeof(*options) || options->version != 1)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
-	return hx_os_http_request_impl(http, method, url,
+	return hx_os_i_http_request(http, method, url,
 		(hx_os_bytes_view){NULL, 0}, headers, header_count,
 		&options->request, options, metrics, 0, out, error);
 }
@@ -709,7 +709,7 @@ hx_os_status hx_os_http_download_file(hx_os_http *http, const char *url,
 		stream.user = &transfer;
 		if (stream.progress)
 			stream.progress = hx_os_http_file_progress;
-		status = hx_os_http_request_impl(http, "GET", url,
+		status = hx_os_i_http_request(http, "GET", url,
 			(hx_os_bytes_view){NULL, 0}, NULL, 0, &stream.request,
 			&stream, NULL, 1, out, error);
 		if (status == HX_OS_OK &&
@@ -771,7 +771,7 @@ hx_os_status hx_os_http_upload_file(hx_os_http *http, const char *method,
 			stream.write = hx_os_http_file_response;
 		if (stream.progress)
 			stream.progress = hx_os_http_file_progress;
-		status = hx_os_http_request_impl(http, method, url,
+		status = hx_os_i_http_request(http, method, url,
 			(hx_os_bytes_view){NULL, 0}, headers, header_count,
 			&stream.request, &stream, NULL, 1, out, error);
 	}
@@ -848,7 +848,8 @@ hx_os_status hx_os_http_response_text(
 		error);
 }
 
-hx_os_status hx_os_http_close(hx_os_http **http, hx_os_error *error)
+static hx_os_status hx_os_http_close_impl(
+	hx_os_http **http, int keep_file, hx_os_error *error)
 {
 #if HX_OS_HAVE_HTTP
 	hx_os_http *value;
@@ -861,8 +862,11 @@ hx_os_status hx_os_http_close(hx_os_http **http, hx_os_error *error)
 	if (hx_os_atomic_load(&value->owner, HX_OS_ACQUIRE))
 		return hx_os_i_error(error, HX_OS_BUSY, 0, 0);
 	if (value->pending_file) {
-		hx_os_status status =
-			hx_os_temp_close(&value->pending_file, error);
+		hx_os_status status;
+
+		if (keep_file)
+			(void)hx_os_temp_keep(value->pending_file, NULL);
+		status = hx_os_temp_close(&value->pending_file, error);
 
 		if (status != HX_OS_OK)
 			return status;
@@ -877,6 +881,17 @@ hx_os_status hx_os_http_close(hx_os_http **http, hx_os_error *error)
 	return hx_os_i_error(error, HX_OS_OK, 0, 0);
 #else
 	(void)http;
+	(void)keep_file;
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 #endif
+}
+
+hx_os_status hx_os_http_close(hx_os_http **http, hx_os_error *error)
+{
+	return hx_os_http_close_impl(http, 0, error);
+}
+
+hx_os_status hx_os_http_close_keep_file(hx_os_http **http, hx_os_error *error)
+{
+	return hx_os_http_close_impl(http, 1, error);
 }

@@ -95,6 +95,7 @@ function(hx_parser_vendor name)
 		set(includes "${root}")
 		set(definitions INI_API= INI_USE_STACK=0 INI_ALLOW_REALLOC=1
 			INI_MAX_LINE=1048579 INI_ALLOW_MULTILINE=0
+			INI_ALLOW_INLINE_COMMENTS=0
 			INI_HANDLER_LINENO=1 INI_STOP_ON_FIRST_ERROR=1
 			INI_CALL_HANDLER_ON_NEW_SECTION=1)
 		set(license "${root}/LICENSE.txt")

@@ -96,6 +96,8 @@ void hx_os_cfg_skip(hx_os_cfg_parser *parser, int newlines, int comments);
 int hx_os_cfg_equal(hx_os_config_slice value, const char *literal);
 
 hx_os_config_slice hx_os_cfg_trim(hx_os_config_slice value);
+hx_os_config_slice hx_os_cfg_inline_comment(
+	hx_os_config_slice value, char comment);
 
 int hx_os_cfg_quoted(
 	hx_os_cfg_parser *parser, int mode, hx_os_config_slice *out);

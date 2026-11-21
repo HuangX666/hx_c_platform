@@ -29,10 +29,12 @@ static void *worker(void *user)
 
 int main(void)
 {
-	shared_settings settings = {NULL, 0};
-	hx_os_thread *threads[4] = {NULL};
+	static shared_settings settings = {NULL, 0};
+	static hx_os_thread *threads[4] = {NULL};
 	hx_os_status status = hx_os_once_create(NULL, &settings.once, NULL);
+	hx_os_deadline deadline;
 	size_t started = 0, i;
+	int active = 0;
 
 	while (status == HX_OS_OK && started < 4) {
 		status = hx_os_thread_create(
@@ -40,14 +42,17 @@ int main(void)
 		if (status == HX_OS_OK)
 			++started;
 	}
+	deadline = hx_os_deadline_after_ms(500);
 	for (i = 0; i < started; ++i) {
 		hx_os_status joined = hx_os_thread_join_until(
-			threads[i], HX_OS_DEADLINE_INFINITE, NULL, NULL);
-
+			threads[i], deadline, NULL, NULL);
+		if (joined == HX_OS_OK)
+			joined = hx_os_thread_destroy(&threads[i], NULL);
 		if (joined != HX_OS_OK)
-			return 1;
-		(void)hx_os_thread_destroy(&threads[i], NULL);
+			active = 1;
 	}
-	(void)hx_os_once_destroy(&settings.once, NULL);
+	if (active || hx_os_once_destroy(&settings.once, NULL) != HX_OS_OK)
+		return 1;
+
 	return status == HX_OS_OK ? 0 : 1;
 }

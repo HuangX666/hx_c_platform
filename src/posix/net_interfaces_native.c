@@ -70,9 +70,12 @@ hx_os_status hx_os_i_interfaces_native(hx_os_context *context,
 				item->ifa_addr, &address.address))
 			continue;
 
+		errno = 0;
 		index = if_nametoindex(item->ifa_name);
 		if (!index) {
-			status = hx_os_i_errno(error, errno ? errno : ENODEV);
+			if (!errno || errno == ENODEV || errno == ENXIO)
+				continue;
+			status = hx_os_i_errno(error, errno);
 			break;
 		}
 

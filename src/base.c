@@ -51,7 +51,7 @@ hx_os_status hx_os_i_errno(hx_os_error *error, int code)
 	hx_os_status status = HX_OS_IO_ERROR;
 
 	if (!code)
-		return hx_os_i_error(error, HX_OS_OK, HX_OS_ERROR_ERRNO, 0);
+		return hx_os_i_error(error, HX_OS_OK, HX_OS_ERROR_NONE, 0);
 
 	switch (code) {
 	case ENOMEM:
@@ -107,11 +107,12 @@ hx_os_status hx_os_i_errno(hx_os_error *error, int code)
 hx_os_status hx_os_i_win32(hx_os_error *error, uint32_t code)
 {
 	hx_os_status status = HX_OS_IO_ERROR;
+
+	if (!code)
+		return hx_os_i_error(error, HX_OS_OK, HX_OS_ERROR_NONE, 0);
+
 #if defined(_WIN32)
 	switch (code) {
-	case ERROR_SUCCESS:
-		status = HX_OS_OK;
-		break;
 	case ERROR_NOT_ENOUGH_MEMORY:
 	case ERROR_OUTOFMEMORY:
 		status = HX_OS_NO_MEMORY;

@@ -1,5 +1,5 @@
 #include <hx_os.h>
-#include <stdio.h>
+#include "network_demo.h"
 
 int main(void)
 {
@@ -44,9 +44,7 @@ int main(void)
 	else
 		fprintf(stderr, "UDP: %s\n", hx_os_status_name(status));
 
-	if (hx_os_socket_close(&socket, NULL) != HX_OS_OK)
-		return 1;
-	if (hx_os_network_destroy(&network, NULL) != HX_OS_OK)
+	if (!net_demo_close(&socket, &network))
 		return 1;
 	return status == HX_OS_OK ? 0 : 1;
 }

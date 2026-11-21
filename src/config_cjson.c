@@ -19,6 +19,7 @@ int hx_os_cfg_cjson(hx_os_cfg_parser *parser, hx_os_config_node **out)
 	hx_os_cfg_parser *previous;
 	cJSON *native;
 	const char *end = NULL;
+	size_t start = parser->position;
 	int outer;
 
 	// The shared materializer retains exact integers and embedded NULs;
@@ -46,7 +47,7 @@ int hx_os_cfg_cjson(hx_os_cfg_parser *parser, hx_os_config_node **out)
 	// All calls that write cJSON's private global error state are
 	// serialized.
 	native = cJSON_ParseWithLengthOpts(
-		parser->text, parser->length, &end, 0);
+		parser->text + start, parser->length - start, &end, 0);
 	--hx_os_cfg_json_nesting;
 	if (outer) {
 #if defined(_WIN32)

@@ -637,7 +637,10 @@ hx_os_status hx_os_message_queue_size(
 hx_os_status hx_os_message_queue_destroy(
 	hx_os_message_queue **queue, hx_os_error *error)
 {
-	(void)queue;
+	if (!queue)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (!*queue)
+		return hx_os_i_error(error, HX_OS_OK, 0, 0);
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 
@@ -701,7 +704,10 @@ int hx_os_ring_queue_is_lock_free(const hx_os_ring_queue *queue)
 hx_os_status hx_os_ring_queue_destroy(
 	hx_os_ring_queue **queue, hx_os_error *error)
 {
-	(void)queue;
+	if (!queue)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
+	if (!*queue)
+		return hx_os_i_error(error, HX_OS_OK, 0, 0);
 	return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
 }
 

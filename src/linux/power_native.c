@@ -76,7 +76,8 @@ static int hx_os_desktop_bind(hx_os_desktop_power *native)
 static hx_os_status hx_os_desktop_status(int code, hx_os_error *error)
 {
 	if (code == ENOENT || code == ENXIO || code == ENOSYS ||
-		code == ENOMEDIUM || code == ECONNREFUSED || code == EBADR)
+		code == ENOMEDIUM || code == ECONNREFUSED || code == EBADR ||
+		code == EHOSTUNREACH)
 		return hx_os_i_error(
 			error, HX_OS_NOT_SUPPORTED, HX_OS_ERROR_ERRNO, code);
 
@@ -124,27 +125,31 @@ hx_os_status hx_os_i_power_open(hx_os_i_power *power, hx_os_error *error)
 #endif
 }
 
-static hx_os_status hx_os_desktop_address(hx_os_error *error)
+static hx_os_status hx_os_desktop_address(
+	hx_os_context *context, hx_os_error *error)
 {
-	const char *address = getenv("DBUS_SESSION_BUS_ADDRESS");
-	size_t length = 0, offset = 0;
+	hx_string address;
+	size_t offset = 0;
+	hx_os_status status;
 
-	if (!address || !*address)
-		return HX_OS_OK;
-	while (length <= 16384 && address[length])
-		++length;
-	if (length > 16384)
-		return hx_os_i_error(error, HX_OS_LIMIT, 0, 0);
-
-	while (offset < length) {
-		if (length - offset < 5 || memcmp(address + offset, "unix:", 5))
-			return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
-		while (offset < length && address[offset] != ';')
+	hx_string_init(&address, context);
+	status = hx_os_i_env_get_string(
+		"DBUS_SESSION_BUS_ADDRESS", &address, 16384, error);
+	if (status == HX_OS_NOT_FOUND)
+		status = hx_os_i_error(error, HX_OS_OK, 0, 0);
+	while (status == HX_OS_OK && offset < address.size) {
+		if (address.size - offset < 5 ||
+			memcmp(address.data + offset, "unix:", 5)) {
+			status = hx_os_i_error(
+				error, HX_OS_NOT_SUPPORTED, 0, 0);
+			break;
+		}
+		while (offset < address.size && address.data[offset] != ';')
 			++offset;
 		++offset;
 	}
-
-	return HX_OS_OK;
+	hx_string_destroy(&address);
+	return status;
 }
 
 static void hx_os_desktop_application(char out[256])
@@ -254,7 +259,7 @@ hx_os_status hx_os_i_power_set(
 		return hx_os_i_error(error, HX_OS_OK, 0, 0);
 	}
 
-	status = hx_os_desktop_address(error);
+	status = hx_os_desktop_address(power->reason.context, error);
 	if (status != HX_OS_OK)
 		return status;
 	deadline = hx_os_deadline_after_ms(1000);

@@ -30,6 +30,8 @@ static hx_os_status hx_os_temp_create(hx_os_context *context,
 	*out = NULL;
 	if (!HX_OS_HAVE_TEMP)
 		return hx_os_i_error(error, HX_OS_NOT_SUPPORTED, 0, 0);
+	if (parent && !*parent)
+		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 	if (!prefix)
 		prefix = "hx";
 	bytes = strlen(prefix);

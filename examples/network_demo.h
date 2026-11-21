@@ -37,7 +37,8 @@ static inline uint16_t net_demo_port(const char *text)
 
 	errno = 0;
 	value = strtoul(text, &end, 10);
-	if (errno || end == text || *end || value > 65535) {
+	if (text[0] < '0' || text[0] > '9' || errno || *end ||
+		value > 65535) {
 		fputs("Port must be in 0..65535.\n", stderr);
 		exit(2);
 	}
@@ -110,10 +111,20 @@ static inline int net_demo_close(hx_os_socket **socket, hx_os_network **network)
 {
 	hx_os_error error = {0};
 
-	int ok = net_demo_check(
-		hx_os_socket_close(socket, &error), &error, "socket close");
-	if (!net_demo_check(hx_os_network_destroy(network, &error), &error,
-		    "network destroy"))
+	hx_os_deadline deadline = hx_os_deadline_after_ms(500);
+	hx_os_status status;
+	int ok;
+
+	do {
+		status = hx_os_socket_close(socket, &error);
+		if (status != HX_OS_WOULD_BLOCK || !*socket ||
+			hx_os_deadline_expired(deadline))
+			break;
+		(void)hx_os_sleep_until(hx_os_deadline_after_ms(1), NULL);
+	} while (1);
+	ok = net_demo_check(status, &error, "socket close");
+	if (!*socket && !net_demo_check(hx_os_network_destroy(network, &error),
+			    &error, "network destroy"))
 		ok = 0;
 	return ok;
 }

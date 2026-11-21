@@ -17,7 +17,7 @@ static int hx_os_cfg_line_value(hx_os_cfg_parser *parser,
 		parser, object, node, parser->document->options.duplicates);
 }
 
-static hx_os_config_slice hx_os_cfg_inline_comment(
+hx_os_config_slice hx_os_cfg_inline_comment(
 	hx_os_config_slice value, char comment)
 {
 	size_t i;

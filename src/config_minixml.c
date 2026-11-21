@@ -13,7 +13,7 @@ static void hx_os_cfg_minixml_error(void *user, const char *message)
 int hx_os_cfg_minixml(hx_os_cfg_parser *parser, hx_os_config_node **out)
 {
 	hx_os_cfg_parser *previous;
-	hx_os_config_slice input;
+	char *input, *comment;
 	mxml_options_t *options;
 	mxml_node_t *container = NULL, *result = NULL;
 
@@ -22,11 +22,19 @@ int hx_os_cfg_minixml(hx_os_cfg_parser *parser, hx_os_config_node **out)
 	if (!hx_os_cfg_xml(parser, out))
 		return 0;
 
-	input = hx_os_cfg_copy(parser, parser->text, parser->length);
-	if (!input.data)
-		return 0;
-
 	previous = hx_os_cfg_vendor_enter(parser);
+	input = hx_os_cfg_vendor_malloc(parser->length + 1);
+	if (!input) {
+		hx_os_cfg_vendor_leave(parser, previous);
+		return 0;
+	}
+	memcpy(input, parser->text, parser->length);
+	input[parser->length] = 0;
+	// Mini-XML rejects empty comments. The shared tree above owns all
+	// text, including CDATA; this copy is only for native validation.
+	for (comment = input; (comment = strstr(comment, "<!---->")) != NULL;
+		comment += 7)
+		memset(comment, ' ', 7);
 	options = mxmlOptionsNew();
 	if (options) {
 		mxmlOptionsSetErrorCallback(
@@ -34,7 +42,7 @@ int hx_os_cfg_minixml(hx_os_cfg_parser *parser, hx_os_config_node **out)
 		mxmlOptionsSetTypeValue(options, MXML_TYPE_OPAQUE);
 		container = mxmlNewElement(NULL, "hx_document");
 		if (container)
-			result = mxmlLoadString(container, options, input.data);
+			result = mxmlLoadString(container, options, input);
 	}
 
 	if (!result && parser->status == HX_OS_OK)

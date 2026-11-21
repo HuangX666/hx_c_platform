@@ -29,6 +29,7 @@ struct hx_os_memory_pool {
 	hx_os_pool_page *pages;
 	size_t cached;
 	size_t operations;
+	size_t pending_bytes;
 	int closing;
 };
 
@@ -104,8 +105,8 @@ static hx_os_status hx_os_pool_page_create(hx_os_memory_pool *pool,
 	size_t count = index < HX_OS_POOL_CLASSES
 		? pool->options.block_bytes / stride
 		: 1;
-	size_t bytes;
-	size_t cost;
+	size_t bytes, cost;
+	size_t reserved = pool->stats.reserved_bytes + pool->pending_bytes;
 	size_t i;
 	unsigned char *data;
 
@@ -120,28 +121,28 @@ static hx_os_status hx_os_pool_page_create(hx_os_memory_pool *pool,
 
 	bytes = hx_os_pool_header_bytes() + stride * count;
 	cost = hx_os_i_allocation_cost(bytes, 0);
-	if (!cost || cost > SIZE_MAX - pool->stats.reserved_bytes)
+	if (!cost || cost > SIZE_MAX - reserved)
 		return HX_OS_RANGE;
 
 	if (pool->options.maximum_bytes &&
-		cost > pool->options.maximum_bytes - pool->stats.reserved_bytes)
+		cost > pool->options.maximum_bytes - reserved)
 		return HX_OS_LIMIT;
 	// Reserve under the lock, allocate outside it. The operation lease
 	// prevents destruction while an allocator callback is in flight.
-	pool->stats.reserved_bytes += cost;
-	if (pool->stats.reserved_bytes > pool->stats.peak_reserved_bytes)
-		pool->stats.peak_reserved_bytes = pool->stats.reserved_bytes;
+	pool->pending_bytes += cost;
 
 	++pool->operations;
 	(void)hx_os_mutex_unlock(pool->mutex, NULL);
 	page = hx_os_i_zero(pool->context, bytes);
 	(void)hx_os_mutex_lock(pool->mutex, NULL);
 	--pool->operations;
-	if (!page) {
-		pool->stats.reserved_bytes -= cost;
-
+	pool->pending_bytes -= cost;
+	if (!page)
 		return HX_OS_NO_MEMORY;
-	}
+
+	pool->stats.reserved_bytes += cost;
+	if (pool->stats.reserved_bytes > pool->stats.peak_reserved_bytes)
+		pool->stats.peak_reserved_bytes = pool->stats.reserved_bytes;
 
 	page->cost = cost;
 	page->stride = stride;
@@ -303,15 +304,15 @@ hx_os_status hx_os_memory_pool_realloc(hx_os_memory_pool *pool, void **memory,
 	if (!pool || !memory)
 		return hx_os_i_error(error, HX_OS_INVALID, 0, 0);
 
-	if (!*memory)
-		return hx_os_memory_pool_alloc(pool, bytes, 0, memory, error);
-
 	if (!bytes) {
 		hx_os_memory_pool_free(pool, *memory);
 		*memory = NULL;
 
 		return hx_os_i_error(error, HX_OS_OK, 0, 0);
 	}
+
+	if (!*memory)
+		return hx_os_memory_pool_alloc(pool, bytes, 0, memory, error);
 
 	chunk = ((hx_os_pool_chunk **)*memory)[-1];
 	old_bytes = chunk->requested;

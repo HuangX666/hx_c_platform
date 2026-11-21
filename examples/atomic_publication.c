@@ -18,9 +18,9 @@ static void *calculate(void *user)
 
 int main(void)
 {
-	shared_result result = {HX_OS_ATOMIC32_INIT(0), 0};
+	static shared_result result = {HX_OS_ATOMIC32_INIT(0), 0};
 
-	hx_os_thread *thread = NULL;
+	static hx_os_thread *thread = NULL;
 	hx_os_status status =
 		hx_os_thread_create(NULL, calculate, &result, &thread, NULL);
 
@@ -34,7 +34,7 @@ int main(void)
 	printf("answer: %d\n", result.answer);
 
 	status = hx_os_thread_join_until(
-		thread, HX_OS_DEADLINE_INFINITE, NULL, NULL);
+		thread, hx_os_deadline_after_ms(500), NULL, NULL);
 	if (status == HX_OS_OK)
 		status = hx_os_thread_destroy(&thread, NULL);
 

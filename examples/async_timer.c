@@ -12,12 +12,12 @@ static void timer_completed(
 
 int main(void)
 {
-	hx_os_network *network = NULL;
-	hx_os_loop *loop = NULL;
-	hx_os_request *request = NULL;
+	static hx_os_network *network;
+	static hx_os_loop *loop;
+	static hx_os_request *request;
 	hx_os_operation operation;
 	hx_os_status status;
-	int called = 0;
+	static int called;
 
 	if (!(hx_os_capabilities() & HX_OS_CAP_LOOP)) {
 		puts("The event loop is disabled in this build.");
@@ -41,7 +41,7 @@ int main(void)
 
 	if (loop) {
 		hx_os_status closed = hx_os_loop_close_until(
-			loop, hx_os_deadline_after_ms(1000), NULL);
+			loop, hx_os_deadline_after_ms(500), NULL);
 		if (closed != HX_OS_OK) {
 			fprintf(stderr, "Close incomplete: %s\n",
 				hx_os_status_name(closed));
@@ -50,11 +50,13 @@ int main(void)
 			return 2;
 		}
 
-		(void)hx_os_loop_destroy(&loop, NULL);
+		if (hx_os_loop_destroy(&loop, NULL) != HX_OS_OK)
+			return 2;
 	}
 
 	hx_os_request_release(request);
-	(void)hx_os_network_destroy(&network, NULL);
+	if (hx_os_network_destroy(&network, NULL) != HX_OS_OK)
+		return 2;
 	if (status == HX_OS_OK && called) {
 		printf("Timer completed through %s.\n", hx_os_loop_backend());
 
